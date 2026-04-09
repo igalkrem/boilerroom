@@ -1,0 +1,160 @@
+// ─── OAuth ──────────────────────────────────────────────────────────────────
+
+export interface SnapTokenResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+// ─── Ad Accounts ────────────────────────────────────────────────────────────
+
+export interface SnapAdAccount {
+  id: string;
+  name: string;
+  status: "ACTIVE" | "PAUSED" | "ARCHIVED";
+  currency: string;
+  timezone: string;
+  organization_id: string;
+}
+
+export interface SnapAdAccountsResponse {
+  adaccounts: Array<{ adaccount: SnapAdAccount }>;
+}
+
+// ─── Campaigns ──────────────────────────────────────────────────────────────
+
+export type CampaignObjective =
+  | "AWARENESS_AND_ENGAGEMENT"
+  | "SALES"
+  | "TRAFFIC"
+  | "APP_PROMOTION"
+  | "LEADS";
+
+export interface SnapCampaignPayload {
+  name: string;
+  ad_account_id: string;
+  status: "ACTIVE" | "PAUSED";
+  start_time: string; // ISO 8601
+  end_time?: string;
+  daily_budget_micro?: number;
+  objective_v2_properties: {
+    objective: CampaignObjective;
+  };
+}
+
+export interface SnapCampaign extends SnapCampaignPayload {
+  id: string;
+}
+
+// ─── Ad Squads ───────────────────────────────────────────────────────────────
+
+export type BidStrategy =
+  | "AUTO_BID"
+  | "LOWEST_COST_WITH_MAX_BID"
+  | "TARGET_COST";
+
+export type OptimizationGoal =
+  | "IMPRESSIONS"
+  | "SWIPES"
+  | "APP_INSTALLS"
+  | "LEAD_GENERATION"
+  | "PIXEL_PAGE_VIEW"
+  | "PIXEL_PURCHASE";
+
+export interface SnapAdSquadPayload {
+  campaign_id: string;
+  name: string;
+  type: "SNAP_ADS" | "LENS" | "FILTER";
+  status: "ACTIVE" | "PAUSED";
+  targeting: {
+    geo_locations: Array<{ country_code: string }>;
+  };
+  placement_v2: {
+    config: "AUTOMATIC" | "CUSTOM";
+  };
+  billing_event: "IMPRESSION";
+  optimization_goal: OptimizationGoal;
+  bid_strategy: BidStrategy;
+  bid_micro?: number;
+  daily_budget_micro: number; // minimum 5_000_000
+}
+
+export interface SnapAdSquad extends SnapAdSquadPayload {
+  id: string;
+}
+
+// ─── Creatives ───────────────────────────────────────────────────────────────
+
+export type CreativeType =
+  | "SNAP_AD"
+  | "APP_INSTALL"
+  | "WEB_VIEW"
+  | "DEEP_LINK"
+  | "LONGFORM_VIDEO";
+
+export interface SnapCreativePayload {
+  ad_account_id: string;
+  name: string;
+  type: CreativeType;
+  headline: string; // max 34 chars
+  top_snap_media_id: string;
+  call_to_action?: string;
+  brand_name?: string;
+}
+
+export interface SnapCreative extends SnapCreativePayload {
+  id: string;
+}
+
+// ─── Ads ─────────────────────────────────────────────────────────────────────
+
+export interface SnapAdPayload {
+  ad_squad_id: string;
+  creative_id: string;
+  name: string;
+  type: CreativeType;
+  status: "ACTIVE" | "PAUSED";
+}
+
+export interface SnapAd extends SnapAdPayload {
+  id: string;
+}
+
+// ─── Media ───────────────────────────────────────────────────────────────────
+
+export interface SnapMediaPayload {
+  ad_account_id: string;
+  name: string;
+  type: "IMAGE" | "VIDEO";
+}
+
+export interface SnapMediaEntity {
+  id: string;
+  upload_status: "PENDING" | "COMPLETE" | "FAILED";
+  download_link?: string;
+}
+
+// ─── Generic API response wrapper ────────────────────────────────────────────
+
+export interface SnapApiItem<T> {
+  sub_request_status: "SUCCESS" | "ERROR";
+  request_status?: string;
+  request_id?: string;
+  error?: { error_type: string; message: string };
+  campaign?: T;
+  adsquad?: T;
+  creative?: T;
+  ad?: T;
+  media?: T;
+}
+
+export interface SnapBatchResponse<T> {
+  request_status: string;
+  request_id: string;
+  campaigns?: Array<SnapApiItem<T>>;
+  adsquads?: Array<SnapApiItem<T>>;
+  creatives?: Array<SnapApiItem<T>>;
+  ads?: Array<SnapApiItem<T>>;
+  media?: Array<SnapApiItem<T>>;
+}

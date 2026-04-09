@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:developers.snap.com)",
+      "Read(//usr/local/bin/**)",
+      "Read(//Users/igalkremer/.nvm/versions/**)",
+      "Read(//opt/homebrew/**)",
+      "Bash(curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh)",
+      "Bash(bash)"
+    ]
+  }
+}
