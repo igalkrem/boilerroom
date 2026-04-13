@@ -91,7 +91,13 @@ export async function runSubmission(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ adAccountId, campaigns: campaignPayloads }),
   });
-  const campaignData = await campaignRes.json() as { results: Array<{ id?: string; error?: string }> };
+  const campaignData = await campaignRes.json() as { results: Array<{ id?: string; error?: string }>; error?: string; details?: unknown };
+  if (!campaignRes.ok && !campaignData.results) {
+    console.error("Campaigns API error:", campaignRes.status, campaignData);
+    campaigns.forEach((c) => results.campaigns.push({ clientId: c.id, snapId: "", name: c.name, error: campaignData.error ?? `HTTP ${campaignRes.status}` }));
+    onStage("done");
+    return results;
+  }
 
   // Map client ID → snap ID
   const campaignIdMap = new Map<string, string>();

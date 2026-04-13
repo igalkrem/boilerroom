@@ -15,9 +15,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
 
-  const parsed = bodySchema.safeParse(await request.json());
+  const body = await request.json().catch(() => null);
+  const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request" }, { status: 422 });
+    console.error("Ads body validation failed:", JSON.stringify(parsed.error.flatten()), "body keys:", body ? Object.keys(body) : null);
+    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
   }
   const { adSquadId, ads } = parsed.data as unknown as {
     adSquadId: string;
