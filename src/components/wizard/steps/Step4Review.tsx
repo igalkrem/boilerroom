@@ -60,7 +60,11 @@ export function Step4Review() {
             <div key={c.id} className="px-5 py-3">
               <p className="font-medium text-gray-900 text-sm">{c.name || `Campaign #${i + 1}`}</p>
               <p className="text-xs text-gray-500 mt-0.5">
-                {c.objective} · ${c.dailyBudgetUsd}/day · {c.status} · {c.startDate}
+                {c.objective} ·{" "}
+                {c.spendCapType === "DAILY_BUDGET"
+                  ? `$${c.dailyBudgetUsd}/day`
+                  : `$${c.lifetimeBudgetUsd} lifetime`}{" "}
+                · {c.status} · {c.startDate}
                 {c.endDate ? ` – ${c.endDate}` : ""}
               </p>
             </div>
@@ -74,14 +78,29 @@ export function Step4Review() {
           <h3 className="font-semibold text-gray-800">Ad Sets ({adSquads.length})</h3>
         </div>
         <div className="divide-y divide-gray-100">
-          {adSquads.map((s, i) => (
-            <div key={s.id} className="px-5 py-3">
-              <p className="font-medium text-gray-900 text-sm">{s.name || `Ad Set #${i + 1}`}</p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {s.bidStrategy} · ${s.dailyBudgetUsd}/day · {s.geoCountryCode} · → {campaignMap[s.campaignId] ?? "—"}
-              </p>
-            </div>
-          ))}
+          {adSquads.map((s, i) => {
+            const targetingParts: string[] = [];
+            if (s.targetingAgeMin || s.targetingAgeMax) {
+              targetingParts.push(`Ages ${s.targetingAgeMin ?? 13}–${s.targetingAgeMax ?? "50+"}`);
+            }
+            if (s.targetingGender && s.targetingGender !== "ALL") targetingParts.push(s.targetingGender);
+            if (s.targetingDeviceType && s.targetingDeviceType !== "ALL") targetingParts.push(s.targetingDeviceType);
+            return (
+              <div key={s.id} className="px-5 py-3">
+                <p className="font-medium text-gray-900 text-sm">{s.name || `Ad Set #${i + 1}`}</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {s.bidStrategy} ·{" "}
+                  {s.spendCapType === "DAILY_BUDGET"
+                    ? `$${s.dailyBudgetUsd}/day`
+                    : `$${s.lifetimeBudgetUsd} lifetime`}{" "}
+                  · {s.geoCountryCode} · {s.pacingType} · {s.placementConfig}
+                  {targetingParts.length > 0 ? ` · ${targetingParts.join(", ")}` : ""}
+                  {s.frequencyCapMaxImpressions ? ` · Cap: ${s.frequencyCapMaxImpressions}/${s.frequencyCapTimePeriod}` : ""}
+                  {" · →"} {campaignMap[s.campaignId] ?? "—"}
+                </p>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -97,7 +116,9 @@ export function Step4Review() {
                 {cr.mediaFileName ? `🎬 ${cr.mediaFileName}` : `Creative #${i + 1}`}
               </p>
               <p className="text-xs text-gray-500 mt-0.5">
-                &quot;{cr.headline}&quot; · → {adSquadMap[cr.adSquadId] ?? "—"}
+                &quot;{cr.headline}&quot; · {cr.interactionType} · {cr.adStatus}
+                {cr.shareable ? " · Shareable" : ""}
+                {" · →"} {adSquadMap[cr.adSquadId] ?? "—"}
               </p>
             </div>
           ))}

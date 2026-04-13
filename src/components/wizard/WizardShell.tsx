@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useWizardStore } from "@/hooks/useWizardStore";
 import { StepIndicator } from "./StepIndicator";
 import { Step1Campaigns } from "./steps/Step1Campaigns";
@@ -8,6 +8,7 @@ import { Step2AdSets } from "./steps/Step2AdSets";
 import { Step3Creatives } from "./steps/Step3Creatives";
 import { Step4Review } from "./steps/Step4Review";
 import { SubmissionProgress } from "./SubmissionProgress";
+import { LoadPresetBanner } from "./LoadPresetBanner";
 import Link from "next/link";
 
 const STEP_TITLES = [
@@ -18,7 +19,10 @@ const STEP_TITLES = [
 ];
 
 export function WizardShell({ adAccountId }: { adAccountId: string }) {
-  const { currentStep, setAdAccountId, submissionStatus } = useWizardStore();
+  const { currentStep, campaigns, setAdAccountId, submissionStatus } = useWizardStore();
+  // presetKey forces a remount of step components after a preset is loaded,
+  // so react-hook-form re-reads defaultValues from the freshly-populated store.
+  const [presetKey, setPresetKey] = useState("fresh");
 
   useEffect(() => {
     setAdAccountId(adAccountId);
@@ -49,12 +53,17 @@ export function WizardShell({ adAccountId }: { adAccountId: string }) {
         </div>
       )}
 
+      {/* Show preset banner on Step 1 when wizard is fresh (no campaigns yet) */}
+      {!isSubmitting && currentStep === 1 && campaigns.length === 0 && (
+        <LoadPresetBanner onLoad={(id) => setPresetKey(id)} />
+      )}
+
       {isSubmitting ? (
         <SubmissionProgress />
       ) : currentStep === 1 ? (
-        <Step1Campaigns />
+        <Step1Campaigns key={presetKey} />
       ) : currentStep === 2 ? (
-        <Step2AdSets />
+        <Step2AdSets key={presetKey} />
       ) : currentStep === 3 ? (
         <Step3Creatives adAccountId={adAccountId} />
       ) : (

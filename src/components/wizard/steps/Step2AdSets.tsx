@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useWizardStore } from "@/hooks/useWizardStore";
 import { adSquadsFormSchema } from "@/lib/validations/adsquad.schema";
@@ -41,29 +41,303 @@ const COUNTRY_OPTIONS = [
   { value: "IL", label: "Israel" },
 ];
 
+const SPEND_CAP_OPTIONS = [
+  { value: "DAILY_BUDGET", label: "Daily Budget" },
+  { value: "LIFETIME_BUDGET", label: "Lifetime Budget" },
+];
+
+const PACING_OPTIONS = [
+  { value: "STANDARD", label: "Standard" },
+  { value: "ACCELERATED", label: "Accelerated" },
+];
+
+const PLACEMENT_OPTIONS = [
+  { value: "AUTOMATIC", label: "Automatic" },
+  { value: "CONTENT", label: "Content" },
+];
+
+const FREQUENCY_PERIOD_OPTIONS = [
+  { value: "", label: "— None —" },
+  { value: "HOURS_1", label: "1 Hour" },
+  { value: "HOURS_6", label: "6 Hours" },
+  { value: "HOURS_12", label: "12 Hours" },
+  { value: "DAY_1", label: "1 Day" },
+  { value: "DAY_7", label: "7 Days" },
+  { value: "MONTH_1", label: "1 Month" },
+];
+
+const GENDER_OPTIONS = [
+  { value: "ALL", label: "All Genders" },
+  { value: "MALE", label: "Male" },
+  { value: "FEMALE", label: "Female" },
+];
+
+const DEVICE_OPTIONS = [
+  { value: "ALL", label: "All Devices" },
+  { value: "MOBILE", label: "Mobile" },
+  { value: "WEB", label: "Web" },
+];
+
+function defaultAdSquad(campaignId: string): AdSquadFormData {
+  return {
+    id: uuid(),
+    campaignId,
+    name: "",
+    type: "SNAP_ADS",
+    geoCountryCode: "US",
+    optimizationGoal: "SWIPES",
+    bidStrategy: "AUTO_BID",
+    spendCapType: "DAILY_BUDGET",
+    dailyBudgetUsd: 5,
+    status: "PAUSED",
+    pacingType: "STANDARD",
+    placementConfig: "AUTOMATIC",
+    targetingGender: "ALL",
+    targetingDeviceType: "ALL",
+  };
+}
+
+function AdSetCard({
+  index,
+  control,
+  register,
+  errors,
+  setValue,
+  campaignOptions,
+  canRemove,
+  onRemove,
+  onDuplicate,
+}: {
+  index: number;
+  control: ReturnType<typeof useForm<{ adSquads: AdSquadFormData[] }>>["control"];
+  register: ReturnType<typeof useForm<{ adSquads: AdSquadFormData[] }>>["register"];
+  errors: ReturnType<typeof useForm<{ adSquads: AdSquadFormData[] }>>["formState"]["errors"];
+  setValue: ReturnType<typeof useForm<{ adSquads: AdSquadFormData[] }>>["setValue"];
+  campaignOptions: Array<{ value: string; label: string }>;
+  canRemove: boolean;
+  onRemove: () => void;
+  onDuplicate: () => void;
+}) {
+  const bidStrategy = useWatch({ control, name: `adSquads.${index}.bidStrategy` });
+  const spendCapType = useWatch({ control, name: `adSquads.${index}.spendCapType` });
+  const squadErrors = errors.adSquads?.[index];
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-gray-800">Ad Set #{index + 1}</h3>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onDuplicate}>
+            ⎘ Duplicate
+          </Button>
+          {canRemove && (
+            <Button type="button" variant="ghost" size="sm" onClick={onRemove}>
+              ✕ Remove
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Name + Campaign */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Input
+          label="Ad Set Name"
+          placeholder="Retargeting - US"
+          {...register(`adSquads.${index}.name`)}
+          error={squadErrors?.name?.message}
+        />
+        <Select
+          label="Campaign"
+          options={campaignOptions}
+          placeholder="Select campaign"
+          {...register(`adSquads.${index}.campaignId`)}
+          error={squadErrors?.campaignId?.message}
+        />
+      </div>
+
+      {/* Geo + Optimization goal */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Select
+          label="Geo Targeting"
+          options={COUNTRY_OPTIONS}
+          {...register(`adSquads.${index}.geoCountryCode`)}
+          error={squadErrors?.geoCountryCode?.message}
+        />
+        <Select
+          label="Optimization Goal"
+          options={OPTIMIZATION_OPTIONS}
+          {...register(`adSquads.${index}.optimizationGoal`)}
+        />
+      </div>
+
+      {/* Bid strategy + bid amount + status */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Select
+          label="Bid Strategy"
+          options={BID_STRATEGY_OPTIONS}
+          {...register(`adSquads.${index}.bidStrategy`, {
+            onChange: () => setValue(`adSquads.${index}.bidAmountUsd`, undefined),
+          })}
+        />
+        {bidStrategy !== "AUTO_BID" && (
+          <Input
+            label="Bid Amount (USD)"
+            type="number"
+            min={0.01}
+            step={0.01}
+            {...register(`adSquads.${index}.bidAmountUsd`, { valueAsNumber: true })}
+            error={squadErrors?.bidAmountUsd?.message}
+          />
+        )}
+        <Select
+          label="Status"
+          options={STATUS_OPTIONS}
+          {...register(`adSquads.${index}.status`)}
+        />
+      </div>
+
+      {/* Budget type + budget + pacing */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Select
+          label="Budget Type"
+          options={SPEND_CAP_OPTIONS}
+          {...register(`adSquads.${index}.spendCapType`, {
+            onChange: () => {
+              setValue(`adSquads.${index}.dailyBudgetUsd`, undefined);
+              setValue(`adSquads.${index}.lifetimeBudgetUsd`, undefined);
+            },
+          })}
+        />
+        {spendCapType === "DAILY_BUDGET" || !spendCapType ? (
+          <Input
+            label="Daily Budget (USD)"
+            type="number"
+            min={5}
+            step={1}
+            {...register(`adSquads.${index}.dailyBudgetUsd`, { valueAsNumber: true })}
+            error={squadErrors?.dailyBudgetUsd?.message}
+          />
+        ) : (
+          <Input
+            label="Lifetime Budget (USD)"
+            type="number"
+            min={5}
+            step={1}
+            {...register(`adSquads.${index}.lifetimeBudgetUsd`, { valueAsNumber: true })}
+            error={squadErrors?.lifetimeBudgetUsd?.message}
+          />
+        )}
+        <Select
+          label="Pacing"
+          options={PACING_OPTIONS}
+          {...register(`adSquads.${index}.pacingType`)}
+        />
+      </div>
+
+      {/* Placement + ad-set dates */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Select
+          label="Placement"
+          options={PLACEMENT_OPTIONS}
+          {...register(`adSquads.${index}.placementConfig`)}
+        />
+        <Input
+          label="Ad Set Start Date (optional)"
+          type="date"
+          {...register(`adSquads.${index}.startDate`)}
+        />
+        <Input
+          label="Ad Set End Date (optional)"
+          type="date"
+          {...register(`adSquads.${index}.endDate`)}
+        />
+      </div>
+
+      {/* Frequency cap */}
+      <div className="border-t border-gray-100 pt-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+          Frequency Cap <span className="font-normal normal-case">(optional)</span>
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            label="Max Impressions per User"
+            type="number"
+            min={1}
+            step={1}
+            placeholder="e.g. 3"
+            {...register(`adSquads.${index}.frequencyCapMaxImpressions`, { valueAsNumber: true })}
+            error={squadErrors?.frequencyCapMaxImpressions?.message}
+          />
+          <Select
+            label="Per Time Period"
+            options={FREQUENCY_PERIOD_OPTIONS}
+            {...register(`adSquads.${index}.frequencyCapTimePeriod`)}
+            error={squadErrors?.frequencyCapTimePeriod?.message}
+          />
+        </div>
+      </div>
+
+      {/* Audience targeting */}
+      <div className="border-t border-gray-100 pt-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+          Audience Targeting <span className="font-normal normal-case">(optional)</span>
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Input
+            label="Min Age"
+            type="number"
+            min={13}
+            max={50}
+            step={1}
+            placeholder="13"
+            {...register(`adSquads.${index}.targetingAgeMin`, { valueAsNumber: true })}
+            error={squadErrors?.targetingAgeMin?.message}
+          />
+          <Input
+            label="Max Age"
+            type="number"
+            min={13}
+            max={50}
+            step={1}
+            placeholder="50"
+            {...register(`adSquads.${index}.targetingAgeMax`, { valueAsNumber: true })}
+            error={squadErrors?.targetingAgeMax?.message}
+          />
+          <Select
+            label="Gender"
+            options={GENDER_OPTIONS}
+            {...register(`adSquads.${index}.targetingGender`)}
+          />
+          <Select
+            label="Device"
+            options={DEVICE_OPTIONS}
+            {...register(`adSquads.${index}.targetingDeviceType`)}
+          />
+        </div>
+      </div>
+
+      <input type="hidden" {...register(`adSquads.${index}.id`)} />
+      <input type="hidden" {...register(`adSquads.${index}.type`)} value="SNAP_ADS" />
+    </div>
+  );
+}
+
 export function Step2AdSets() {
   const { campaigns, adSquads, setAdSquads, setStep } = useWizardStore();
 
-  const campaignOptions = campaigns.map((c) => ({ value: c.id, label: c.name || `Campaign #${campaigns.indexOf(c) + 1}` }));
+  const campaignOptions = campaigns.map((c, idx) => ({
+    value: c.id,
+    label: c.name || `Campaign #${idx + 1}`,
+  }));
 
-  const { register, control, handleSubmit, formState: { errors } } = useForm<{
+  const { register, control, handleSubmit, getValues, setValue, formState: { errors } } = useForm<{
     adSquads: AdSquadFormData[];
   }>({
     resolver: zodResolver(adSquadsFormSchema),
     defaultValues: {
       adSquads: adSquads.length > 0
         ? adSquads
-        : [{
-            id: uuid(),
-            campaignId: campaigns[0]?.id ?? "",
-            name: "",
-            type: "SNAP_ADS",
-            geoCountryCode: "US",
-            optimizationGoal: "PIXEL_PURCHASE",
-            bidStrategy: "TARGET_COST",
-            dailyBudgetUsd: 5,
-            status: "PAUSED",
-          }],
+        : [defaultAdSquad(campaigns[0]?.id ?? "")],
     },
   });
 
@@ -77,88 +351,26 @@ export function Step2AdSets() {
   return (
     <form onSubmit={handleSubmit(onNext)} className="space-y-6">
       {fields.map((field, i) => (
-        <div key={field.id} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-gray-800">Ad Set #{i + 1}</h3>
-            {fields.length > 1 && (
-              <Button type="button" variant="ghost" size="sm" onClick={() => remove(i)}>
-                ✕ Remove
-              </Button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Ad Set Name"
-              placeholder="Retargeting - US"
-              {...register(`adSquads.${i}.name`)}
-              error={errors.adSquads?.[i]?.name?.message}
-            />
-            <Select
-              label="Campaign"
-              options={campaignOptions}
-              placeholder="Select campaign"
-              {...register(`adSquads.${i}.campaignId`)}
-              error={errors.adSquads?.[i]?.campaignId?.message}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Select
-              label="Geo Targeting"
-              options={COUNTRY_OPTIONS}
-              {...register(`adSquads.${i}.geoCountryCode`)}
-              error={errors.adSquads?.[i]?.geoCountryCode?.message}
-            />
-            <Select
-              label="Optimization Goal"
-              options={OPTIMIZATION_OPTIONS}
-              {...register(`adSquads.${i}.optimizationGoal`)}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Select
-              label="Bid Strategy"
-              options={BID_STRATEGY_OPTIONS}
-              {...register(`adSquads.${i}.bidStrategy`)}
-            />
-            <Input
-              label="Daily Budget (USD)"
-              type="number"
-              min={5}
-              step={1}
-              {...register(`adSquads.${i}.dailyBudgetUsd`, { valueAsNumber: true })}
-              error={errors.adSquads?.[i]?.dailyBudgetUsd?.message}
-            />
-            <Select
-              label="Status"
-              options={STATUS_OPTIONS}
-              {...register(`adSquads.${i}.status`)}
-            />
-          </div>
-
-          <input type="hidden" {...register(`adSquads.${i}.id`)} />
-          <input type="hidden" {...register(`adSquads.${i}.type`)} value="SNAP_ADS" />
-        </div>
+        <AdSetCard
+          key={field.id}
+          index={i}
+          control={control}
+          register={register}
+          errors={errors}
+          setValue={setValue}
+          campaignOptions={campaignOptions}
+          canRemove={fields.length > 1}
+          onRemove={() => remove(i)}
+          onDuplicate={() =>
+            append({ ...getValues(`adSquads.${i}`), id: uuid() })
+          }
+        />
       ))}
 
       <Button
         type="button"
         variant="secondary"
-        onClick={() =>
-          append({
-            id: uuid(),
-            campaignId: campaigns[0]?.id ?? "",
-            name: "",
-            type: "SNAP_ADS",
-            geoCountryCode: "US",
-            optimizationGoal: "PIXEL_PURCHASE",
-            bidStrategy: "TARGET_COST",
-            dailyBudgetUsd: 5,
-            status: "PAUSED",
-          })
-        }
+        onClick={() => append(defaultAdSquad(campaigns[0]?.id ?? ""))}
       >
         + Add Another Ad Set
       </Button>
