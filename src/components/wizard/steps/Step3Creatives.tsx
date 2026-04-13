@@ -422,14 +422,21 @@ function CreativeCard({
         />
       </div>
 
-      {/* Brand + CTA + Ad Set */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Brand + Profile ID + CTA + Ad Set */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input
           label="Brand Name (optional)"
           placeholder="Acme Corp"
           maxLength={25}
           {...register(`creatives.${index}.brandName`)}
         />
+        <Input
+          label="Public Profile ID (optional)"
+          placeholder="e.g. abc123..."
+          {...register(`creatives.${index}.profileId`)}
+        />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
           label="Call to Action"
           options={CTA_OPTIONS}
@@ -486,6 +493,7 @@ function defaultCreative(adSquadId: string) {
     interactionType: "SWIPE_TO_OPEN" as const,
     shareable: false,
     adStatus: "ACTIVE" as const,
+    profileId: "",
   };
 }
 

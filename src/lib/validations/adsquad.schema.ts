@@ -43,6 +43,7 @@ export const adSquadSchema = z
     targetingDeviceType: z.enum(["WEB", "MOBILE", "ALL"]).optional(),
     // Tracking
     pixelId: z.string().min(1, "Select a pixel"),
+    pixelConversionEvent: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     // Budget
@@ -92,6 +93,17 @@ export const adSquadSchema = z
         path: ["frequencyCapMaxImpressions"],
         message: "Enter max impressions for the frequency cap",
       });
+    }
+
+    // Pixel conversion event required for pixel-based goals
+    if (data.optimizationGoal === "PIXEL_PAGE_VIEW" || data.optimizationGoal === "PIXEL_PURCHASE") {
+      if (!data.pixelConversionEvent) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["pixelConversionEvent"],
+          message: "Select a conversion event",
+        });
+      }
     }
 
     // Age range

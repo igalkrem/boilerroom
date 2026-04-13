@@ -26,6 +26,7 @@ export const creativeSchema = z
     shareable: z.boolean().optional(),
     // Ad settings
     adStatus: z.enum(["ACTIVE", "PAUSED"]),
+    profileId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.interactionType === "WEB_VIEW") {
@@ -37,7 +38,14 @@ export const creativeSchema = z
         });
       } else {
         try {
-          new URL(data.webViewUrl);
+          const parsed = new URL(data.webViewUrl);
+          if (!/^https?:$/.test(parsed.protocol)) {
+            ctx.addIssue({
+              code: "custom",
+              path: ["webViewUrl"],
+              message: "URL must use http or https",
+            });
+          }
         } catch {
           ctx.addIssue({
             code: "custom",
@@ -56,6 +64,12 @@ export const creativeSchema = z
           code: "custom",
           path: ["deepLinkUrl"],
           message: "Deep link URL is required",
+        });
+      } else if (/^(javascript|data):/i.test(data.deepLinkUrl.trim())) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["deepLinkUrl"],
+          message: "Invalid URL scheme",
         });
       }
     }

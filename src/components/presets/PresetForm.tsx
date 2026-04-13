@@ -76,6 +76,7 @@ const presetAdSquadSchema = z
     targetingGender: z.enum(["ALL", "MALE", "FEMALE"]).optional(),
     targetingDeviceType: z.enum(["WEB", "MOBILE", "ALL"]).optional(),
     pixelId: z.string().optional(),
+    pixelConversionEvent: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (!data.startImmediate && (!data.startDate || data.startDate.length === 0)) {
@@ -192,6 +193,20 @@ const DEVICE_OPTIONS = [
   { value: "WEB", label: "Web" },
 ];
 
+const CONVERSION_EVENT_OPTIONS = [
+  { value: "", label: "— None —" },
+  { value: "PAGE_VIEW", label: "Page View" },
+  { value: "PURCHASE", label: "Purchase" },
+  { value: "ADD_TO_CART", label: "Add to Cart" },
+  { value: "VIEW_CONTENT", label: "View Content" },
+  { value: "SUBSCRIBE", label: "Subscribe" },
+  { value: "SIGN_UP", label: "Sign Up" },
+  { value: "SAVE", label: "Save" },
+  { value: "SEARCH", label: "Search" },
+  { value: "START_CHECKOUT", label: "Start Checkout" },
+  { value: "AD_CLICK", label: "Ad Click" },
+];
+
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -212,6 +227,7 @@ function defaultAdSquad(): PresetFormValues["adSquads"][number] {
     targetingGender: "ALL",
     targetingDeviceType: "ALL",
     pixelId: undefined,
+    pixelConversionEvent: undefined,
   };
 }
 
@@ -243,6 +259,8 @@ function AdSquadCard({
   const spendCapType = useWatch({ control, name: `adSquads.${index}.spendCapType` });
   const startImmediate = useWatch({ control, name: `adSquads.${index}.startImmediate` });
   const hasEndDate = useWatch({ control, name: `adSquads.${index}.hasEndDate` });
+  const optimizationGoal = useWatch({ control, name: `adSquads.${index}.optimizationGoal` });
+  const isPixelGoal = optimizationGoal === "PIXEL_PAGE_VIEW" || optimizationGoal === "PIXEL_PURCHASE";
   const squadErrors = errors.adSquads?.[index];
 
   return (
@@ -275,6 +293,16 @@ function AdSquadCard({
           error={squadErrors?.optimizationGoal?.message}
         />
       </div>
+
+      {isPixelGoal && (
+        <div className="max-w-sm">
+          <Select
+            label="Conversion Event (optional)"
+            options={CONVERSION_EVENT_OPTIONS}
+            {...register(`${prefix}.pixelConversionEvent`)}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
@@ -529,6 +557,7 @@ export function PresetForm({ preset }: PresetFormProps) {
             targetingGender: sq.targetingGender,
             targetingDeviceType: sq.targetingDeviceType,
             pixelId: sq.pixelId,
+            pixelConversionEvent: sq.pixelConversionEvent,
           })),
         }
       : {
@@ -568,6 +597,7 @@ export function PresetForm({ preset }: PresetFormProps) {
         startDate: startImmediate ? undefined : sq.startDate,
         endDate: hasEndDate ? sq.endDate : undefined,
         pixelId: sq.pixelId || undefined,
+        pixelConversionEvent: sq.pixelConversionEvent || undefined,
       })),
     };
     upsertPreset(saved);

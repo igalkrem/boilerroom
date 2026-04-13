@@ -82,6 +82,19 @@ const DEVICE_OPTIONS = [
   { value: "WEB", label: "Web" },
 ];
 
+const CONVERSION_EVENT_OPTIONS = [
+  { value: "PAGE_VIEW", label: "Page View" },
+  { value: "PURCHASE", label: "Purchase" },
+  { value: "ADD_TO_CART", label: "Add to Cart" },
+  { value: "VIEW_CONTENT", label: "View Content" },
+  { value: "SUBSCRIBE", label: "Subscribe" },
+  { value: "SIGN_UP", label: "Sign Up" },
+  { value: "SAVE", label: "Save" },
+  { value: "SEARCH", label: "Search" },
+  { value: "START_CHECKOUT", label: "Start Checkout" },
+  { value: "AD_CLICK", label: "Ad Click" },
+];
+
 function defaultAdSquad(campaignId: string): AdSquadFormData {
   return {
     id: uuid(),
@@ -99,6 +112,7 @@ function defaultAdSquad(campaignId: string): AdSquadFormData {
     targetingGender: "ALL",
     targetingDeviceType: "ALL",
     pixelId: "",
+    pixelConversionEvent: undefined,
   };
 }
 
@@ -127,6 +141,8 @@ function AdSetCard({
 }) {
   const bidStrategy = useWatch({ control, name: `adSquads.${index}.bidStrategy` });
   const spendCapType = useWatch({ control, name: `adSquads.${index}.spendCapType` });
+  const optimizationGoal = useWatch({ control, name: `adSquads.${index}.optimizationGoal` });
+  const isPixelGoal = optimizationGoal === "PIXEL_PAGE_VIEW" || optimizationGoal === "PIXEL_PURCHASE";
   const squadErrors = errors.adSquads?.[index];
 
   return (
@@ -176,6 +192,19 @@ function AdSetCard({
           {...register(`adSquads.${index}.optimizationGoal`)}
         />
       </div>
+
+      {/* Conversion event — only for pixel-based goals */}
+      {isPixelGoal && (
+        <div className="max-w-sm">
+          <Select
+            label="Conversion Event"
+            options={CONVERSION_EVENT_OPTIONS}
+            placeholder="Select event"
+            {...register(`adSquads.${index}.pixelConversionEvent`)}
+            error={squadErrors?.pixelConversionEvent?.message}
+          />
+        </div>
+      )}
 
       {/* Bid strategy + bid amount + status */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
