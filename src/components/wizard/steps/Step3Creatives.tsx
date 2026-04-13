@@ -34,46 +34,74 @@ async function safeJson(res: Response) {
   }
 }
 
-interface VideoMeta { width: number; height: number; duration: number }
+import type { FFmpeg } from "@ffmpeg/ffmpeg";
 
-/** Read basic metadata from a video file using a hidden <video> element. */
-function getVideoMeta(file: File): Promise<VideoMeta> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const vid = document.createElement("video");
-    vid.preload = "metadata";
-    vid.onloadedmetadata = () => {
-      URL.revokeObjectURL(url);
-      resolve({ width: vid.videoWidth, height: vid.videoHeight, duration: vid.duration });
-    };
-    vid.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Could not read video metadata")); };
-    vid.src = url;
+let ffmpegCache: FFmpeg | null = null;
+
+async function getFFmpeg(onProgress: (msg: string) => void): Promise<FFmpeg> {
+  if (ffmpegCache?.loaded) return ffmpegCache;
+
+  onProgress("Loading video processor (one-time download ~30 MB)...");
+
+  const { FFmpeg: FFmpegClass } = await import("@ffmpeg/ffmpeg");
+  const { toBlobURL } = await import("@ffmpeg/util");
+
+  const base = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+  const ffmpeg = new FFmpegClass();
+
+  await ffmpeg.load({
+    coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
+    wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm"),
   });
+
+  ffmpegCache = ffmpeg;
+  return ffmpeg;
 }
 
 /**
- * Validate a video against Snapchat's ad requirements.
- * Returns an array of human-readable error strings (empty = valid).
+ * Transcode any video to 720×1280 H.264 MP4 with black letterboxing.
+ * Runs entirely in the browser via ffmpeg.wasm.
  */
-async function validateVideoForSnap(file: File): Promise<string[]> {
-  const errors: string[] = [];
-  try {
-    const { width, height, duration } = await getVideoMeta(file);
-    const ratio = width / height;
-    // Snapchat requires 9:16 portrait (≤ 0.6) — allow a small tolerance
-    if (ratio > 0.6) {
-      errors.push(`Wrong aspect ratio (${width}×${height} = ${ratio.toFixed(2)}:1). Snapchat requires 9:16 portrait (0.5625:1). Rotate or crop to vertical.`);
-    }
-    // Minimum 720×1280
-    if (width < 720 || height < 1280) {
-      errors.push(`Resolution too low (${width}×${height}). Minimum is 720×1280.`);
-    }
-    if (duration < 3) errors.push(`Video too short (${duration.toFixed(1)}s). Minimum is 3 seconds.`);
-    if (duration > 180) errors.push(`Video too long (${duration.toFixed(1)}s). Maximum is 180 seconds.`);
-  } catch {
-    // Can't read metadata — let Snapchat validate server-side
-  }
-  return errors;
+async function transcodeVideoForSnap(file: File, onProgress: (msg: string) => void): Promise<File> {
+  const ffmpeg = await getFFmpeg(onProgress);
+  const { fetchFile } = await import("@ffmpeg/util");
+
+  const ext = file.name.split(".").pop() ?? "mp4";
+  const inputName = `input.${ext}`;
+  const outputName = "output.mp4";
+
+  onProgress("Transcoding video to 720×1280 H.264...");
+
+  ffmpeg.on("progress", ({ progress }: { progress: number }) => {
+    if (progress > 0) onProgress(`Transcoding: ${Math.round(progress * 100)}%...`);
+  });
+
+  await ffmpeg.writeFile(inputName, await fetchFile(file));
+
+  await ffmpeg.exec([
+    "-i", inputName,
+    "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2:black",
+    "-c:v", "libx264",
+    "-preset", "fast",
+    "-crf", "23",
+    "-c:a", "aac",
+    "-b:a", "192k",
+    "-movflags", "+faststart",
+    outputName,
+  ]);
+
+  const data = await ffmpeg.readFile(outputName) as Uint8Array;
+  await ffmpeg.deleteFile(inputName);
+  await ffmpeg.deleteFile(outputName);
+
+  // Copy into a plain ArrayBuffer so Blob/File constructors accept it
+  const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+
+  return new File(
+    [buffer],
+    file.name.replace(/\.[^.]+$/, ".mp4"),
+    { type: "video/mp4" }
+  );
 }
 
 /** Resize any image to 1080×1920 (9:16) with black letterboxing, returns a JPEG File. */
@@ -179,13 +207,9 @@ function MediaDropzone({
       const isVideo = file.type.startsWith("video/");
       const mediaType = isVideo ? "VIDEO" : "IMAGE";
 
-      // Validate video requirements before starting the upload
+      // Transcode videos to 720×1280 H.264 MP4 before uploading
       if (isVideo) {
-        setProgress("Checking video requirements...");
-        const videoErrors = await validateVideoForSnap(file);
-        if (videoErrors.length > 0) {
-          throw new Error("Video does not meet Snapchat requirements:\n• " + videoErrors.join("\n• "));
-        }
+        file = await transcodeVideoForSnap(file, (msg) => setProgress(msg));
       }
 
       // Auto-resize images to 1080×1920 to meet Snapchat's requirements
