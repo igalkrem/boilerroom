@@ -194,10 +194,10 @@ export async function runSubmission(
       name: cr.name,
       type: creativeType,
       headline: cr.headline,
-      brand_name: cr.brandName,
-      call_to_action: cr.callToAction,
+      brand_name: cr.brandName || undefined,
+      call_to_action: cr.callToAction || undefined,
       top_snap_media_id: cr.mediaId ?? "",
-      shareable: cr.shareable,
+      shareable: cr.shareable ?? undefined,
       interaction_zone_properties:
         cr.interactionType === "WEB_VIEW"
           ? { web_view_url: cr.webViewUrl }
