@@ -5,7 +5,7 @@ export async function createMediaEntity(
   payload: SnapMediaPayload
 ): Promise<{ mediaId: string; uploadUrl: string | null }> {
   const data = await snapFetch<{
-    media: Array<{ media: SnapMediaEntity & { upload_url?: string } }>;
+    media: Array<{ sub_request_status: string; media: SnapMediaEntity & { upload_url?: string } }>;
   }>(`/adaccounts/${payload.ad_account_id}/media`, {
     method: "POST",
     body: JSON.stringify({ media: [payload] }),
@@ -21,7 +21,7 @@ export async function createMediaEntity(
     throw new Error(`Media entity has no ID. sub_status=${rawItem?.sub_request_status} response=${JSON.stringify(data)}`);
   }
 
-  return { mediaId: item.id, uploadUrl: (item as Record<string, unknown>).upload_url as string | null ?? null };
+  return { mediaId: item.id, uploadUrl: item.upload_url ?? null };
 }
 
 export async function pollMediaStatus(
