@@ -21,6 +21,10 @@ const STATUS_OPTIONS = [
   { value: "PAUSED", label: "Paused" },
 ];
 
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function Step1Campaigns() {
   const { campaigns, setCampaigns, setStep } = useWizardStore();
 
@@ -31,7 +35,7 @@ export function Step1Campaigns() {
     defaultValues: {
       campaigns: campaigns.length > 0
         ? campaigns
-        : [{ id: uuid(), name: "", objective: "AWARENESS_AND_ENGAGEMENT", status: "ACTIVE", startDate: "", endDate: "", dailyBudgetUsd: 100 }],
+        : [{ id: uuid(), name: "", objective: "SALES", status: "PAUSED", startDate: todayIso(), endDate: "", dailyBudgetUsd: 5 }],
     },
   });
 
@@ -112,11 +116,11 @@ export function Step1Campaigns() {
           append({
             id: uuid(),
             name: "",
-            objective: "AWARENESS_AND_ENGAGEMENT",
-            status: "ACTIVE",
-            startDate: "",
+            objective: "SALES",
+            status: "PAUSED",
+            startDate: todayIso(),
             endDate: "",
-            dailyBudgetUsd: 100,
+            dailyBudgetUsd: 5,
           })
         }
       >
