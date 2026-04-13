@@ -10,10 +10,11 @@ export function TopNav() {
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+    <header className="bg-gray-950 border-b border-gray-800 px-6 py-3 flex items-center justify-between">
       <Link href="/dashboard" className="flex items-center gap-2">
-        <span className="text-2xl">👻</span>
-        <span className="font-bold text-gray-900 text-lg">SnapAds Manager</span>
+        <span className="text-xl font-black tracking-tight bg-gradient-to-r from-cyan-300 to-cyan-500 bg-clip-text text-transparent">
+          BoilerRoom
+        </span>
       </Link>
       <Button variant="secondary" size="sm" onClick={handleLogout}>
         Disconnect

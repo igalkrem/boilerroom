@@ -17,7 +17,7 @@ export function StepIndicator({ currentStep }: { currentStep: number }) {
                 className={clsx(
                   "w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition-colors",
                   {
-                    "bg-yellow-400 border-yellow-400 text-gray-900": done || active,
+                    "bg-cyan-500 border-cyan-500 text-gray-950": done || active,
                     "bg-white border-gray-300 text-gray-400": !done && !active,
                   }
                 )}
@@ -26,7 +26,7 @@ export function StepIndicator({ currentStep }: { currentStep: number }) {
               </div>
               <span
                 className={clsx("text-xs mt-1 font-medium", {
-                  "text-yellow-600": active,
+                  "text-cyan-500": active,
                   "text-gray-500": !active,
                 })}
               >
@@ -36,7 +36,7 @@ export function StepIndicator({ currentStep }: { currentStep: number }) {
             {i < STEPS.length - 1 && (
               <div
                 className={clsx("h-0.5 w-16 mx-1 mb-5 transition-colors", {
-                  "bg-yellow-400": done,
+                  "bg-cyan-500": done,
                   "bg-gray-200": !done,
                 })}
               />
