@@ -24,6 +24,16 @@ const CTA_OPTIONS = [
   { value: "WATCH", label: "Watch" },
 ];
 
+/** Parse response as JSON; if the body isn't JSON (e.g. "Request Entity Too Large"), throw a readable error. */
+async function safeJson(res: Response) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(text.slice(0, 200) || `HTTP ${res.status}`);
+  }
+}
+
 /** Resize any image to 1080×1920 (9:16) with black letterboxing, returns a JPEG File. */
 async function resizeImageForSnap(file: File): Promise<File> {
   return new Promise((resolve, reject) => {
@@ -70,6 +80,14 @@ function MediaDropzone({
     let file = accepted[0];
     if (!file) return;
 
+    // Vercel serverless functions have a ~4.5 MB body limit
+    const MAX_BYTES = 4 * 1024 * 1024;
+    if (file.size > MAX_BYTES && !file.type.startsWith("image/")) {
+      setStatus("error");
+      setProgress(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Videos must be under 4 MB to upload via this platform.`);
+      return;
+    }
+
     setStatus("uploading");
 
     try {
@@ -90,12 +108,13 @@ function MediaDropzone({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ adAccountId, name: file.name, type: mediaType }),
       });
-      const { mediaId, uploadUrl, error: entityError } = await entityRes.json();
-      if (entityError) throw new Error(entityError);
+      const entityData = await safeJson(entityRes);
+      if (entityData.error) throw new Error(entityData.error);
+      const { mediaId, uploadUrl } = entityData;
 
       setProgress("Uploading file...");
 
-      // Step 2: Upload file — use Snapchat's upload_url (S3) if provided, else largefile endpoint
+      // Step 2: Upload file to Snapchat
       const form = new FormData();
       form.append("file", file);
       form.append("mediaId", mediaId);
@@ -106,7 +125,7 @@ function MediaDropzone({
         method: "POST",
         body: form,
       });
-      const uploadData = await uploadRes.json();
+      const uploadData = await safeJson(uploadRes);
       if (uploadData.error) throw new Error(uploadData._debug ? `${uploadData.error} | debug: ${JSON.stringify(uploadData._debug)}` : uploadData.error);
 
       setStatus("done");
