@@ -14,24 +14,34 @@ export async function POST(request: NextRequest) {
   const file = formData.get("file") as File | null;
   const mediaId = formData.get("mediaId") as string | null;
   const adAccountId = formData.get("adAccountId") as string | null;
+  const uploadUrl = formData.get("uploadUrl") as string | null;
 
   if (!file || !mediaId || !adAccountId) {
     return NextResponse.json({ error: "missing_params" }, { status: 400 });
   }
 
-  // Upload the file directly to Snapchat's media upload endpoint
-  const uploadEndpoint = `${BASE_URL}/adaccounts/${adAccountId}/media/${mediaId}/upload`;
+  let uploadRes: Response;
 
-  const uploadForm = new FormData();
-  uploadForm.append("file", file);
+  if (uploadUrl) {
+    // Snapchat returned a pre-signed S3 URL — PUT the raw file to it
+    uploadRes = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type },
+      body: await file.arrayBuffer(),
+    });
+  } else {
+    // No upload_url in the creation response — use Snapchat's largefile endpoint
+    const largeFileUrl = `${BASE_URL}/adaccounts/${adAccountId}/media/largefile`;
+    const uploadForm = new FormData();
+    uploadForm.append("media_id", mediaId);
+    uploadForm.append("file", file);
 
-  const uploadRes = await fetch(uploadEndpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${session.accessToken}`,
-    },
-    body: uploadForm,
-  });
+    uploadRes = await fetch(largeFileUrl, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+      body: uploadForm,
+    });
+  }
 
   if (!uploadRes.ok) {
     const errText = await uploadRes.text();
