@@ -73,7 +73,7 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
   setSubmissionStatus: (submissionStatus) => set({ submissionStatus }),
   setSubmissionStage: (submissionStage) => set({ submissionStage }),
   setSubmissionResults: (submissionResults) => set({ submissionResults }),
-  reset: () => set(initialState),
+  reset: () => set((state) => ({ ...initialState, adAccountId: state.adAccountId })),
 
   duplicateCampaign: (id) => {
     const { campaigns } = get();
