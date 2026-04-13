@@ -198,11 +198,17 @@ export async function runSubmission(
       call_to_action: cr.callToAction || undefined,
       top_snap_media_id: cr.mediaId ?? "",
       shareable: cr.shareable ?? undefined,
-      interaction_zone_properties:
-        cr.interactionType === "WEB_VIEW"
-          ? { web_view_url: cr.webViewUrl }
-          : cr.interactionType === "DEEP_LINK" || cr.interactionType === "APP_INSTALL"
+      web_view_properties:
+        cr.interactionType === "WEB_VIEW" && cr.webViewUrl
+          ? { url: cr.webViewUrl }
+          : undefined,
+      deep_link_properties:
+        cr.interactionType === "DEEP_LINK" && cr.deepLinkUrl
           ? { deep_link_url: cr.deepLinkUrl }
+          : undefined,
+      app_install_properties:
+        cr.interactionType === "APP_INSTALL" && cr.deepLinkUrl
+          ? { app_link_url: cr.deepLinkUrl }
           : undefined,
       profile_properties: cr.profileId ? { profile_id: cr.profileId } : undefined,
     };

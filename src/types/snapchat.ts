@@ -132,10 +132,9 @@ export interface SnapCreativePayload {
   call_to_action?: string;
   brand_name?: string;
   shareable?: boolean;
-  interaction_zone_properties?: {
-    web_view_url?: string;
-    deep_link_url?: string;
-  };
+  web_view_properties?: { url: string };
+  deep_link_properties?: { deep_link_url: string };
+  app_install_properties?: { app_link_url: string };
   profile_properties?: { profile_id: string };
 }
 
