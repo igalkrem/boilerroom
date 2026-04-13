@@ -261,6 +261,14 @@ export async function runSubmission(
         name: cr.name,
         type: INTERACTION_TYPE_MAP[cr.interactionType] ?? "SNAP_AD",
         status: cr.adStatus ?? "ACTIVE",
+        web_view_properties:
+          cr.interactionType === "WEB_VIEW" && cr.webViewUrl
+            ? { url: cr.webViewUrl }
+            : undefined,
+        deep_link_properties:
+          (cr.interactionType === "DEEP_LINK" || cr.interactionType === "APP_INSTALL") && cr.deepLinkUrl
+            ? { deep_link_uri: cr.deepLinkUrl }
+            : undefined,
       }));
 
     if (adPayloads.length === 0) continue;
