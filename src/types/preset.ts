@@ -31,6 +31,7 @@ export interface AdSquadPresetData {
   targetingAgeMax?: number;
   targetingGender?: "ALL" | "MALE" | "FEMALE";
   targetingDeviceType?: "WEB" | "MOBILE" | "ALL";
+  pixelId?: string;
 }
 
 export interface CampaignPreset {

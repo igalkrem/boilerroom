@@ -49,6 +49,8 @@ export interface AdSquadFormData {
   targetingAgeMax?: number;
   targetingGender?: "ALL" | "MALE" | "FEMALE";
   targetingDeviceType?: "WEB" | "MOBILE" | "ALL";
+  // Tracking
+  pixelId: string;
 }
 
 export type InteractionType =

@@ -18,6 +18,12 @@ export function TopNav() {
       </Link>
       <div className="flex items-center gap-4">
         <Link
+          href="/dashboard/pixels"
+          className="text-sm text-gray-400 hover:text-white transition-colors"
+        >
+          Pixels
+        </Link>
+        <Link
           href="/dashboard/presets"
           className="text-sm text-gray-400 hover:text-white transition-colors"
         >

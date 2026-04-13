@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -7,7 +8,9 @@ import { useRouter } from "next/navigation";
 import { v4 as uuid } from "uuid";
 import { Input, Select, Button } from "@/components/ui";
 import { upsertPreset } from "@/lib/presets";
+import { loadPixels } from "@/lib/pixels";
 import type { CampaignPreset } from "@/types/preset";
+import type { SavedPixel } from "@/types/pixel";
 
 // ─── Zod schema for the preset form ─────────────────────────────────────────
 
@@ -72,6 +75,7 @@ const presetAdSquadSchema = z
     targetingAgeMax: z.number().int().min(13).max(50).optional(),
     targetingGender: z.enum(["ALL", "MALE", "FEMALE"]).optional(),
     targetingDeviceType: z.enum(["WEB", "MOBILE", "ALL"]).optional(),
+    pixelId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (!data.startImmediate && (!data.startDate || data.startDate.length === 0)) {
@@ -207,6 +211,7 @@ function defaultAdSquad(): PresetFormValues["adSquads"][number] {
     placementConfig: "AUTOMATIC",
     targetingGender: "ALL",
     targetingDeviceType: "ALL",
+    pixelId: undefined,
   };
 }
 
@@ -218,6 +223,7 @@ function AdSquadCard({
   register,
   errors,
   setValue,
+  pixelOptions,
   canRemove,
   onRemove,
   onDuplicate,
@@ -227,6 +233,7 @@ function AdSquadCard({
   register: ReturnType<typeof useForm<PresetFormValues>>["register"];
   errors: ReturnType<typeof useForm<PresetFormValues>>["formState"]["errors"];
   setValue: ReturnType<typeof useForm<PresetFormValues>>["setValue"];
+  pixelOptions: Array<{ value: string; label: string }>;
   canRemove: boolean;
   onRemove: () => void;
   onDuplicate: () => void;
@@ -388,6 +395,18 @@ function AdSquadCard({
         )}
       </div>
 
+      {/* Tracking */}
+      <div className="border-t border-gray-100 pt-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Tracking (optional)</p>
+        <div className="max-w-sm">
+          <Select
+            label="Snap Pixel"
+            options={[{ value: "", label: "— None —" }, ...pixelOptions]}
+            {...register(`${prefix}.pixelId`)}
+          />
+        </div>
+      </div>
+
       <div className="border-t border-gray-100 pt-4">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Frequency Cap (optional)</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -456,6 +475,13 @@ interface PresetFormProps {
 
 export function PresetForm({ preset }: PresetFormProps) {
   const router = useRouter();
+  const [pixels, setPixels] = useState<SavedPixel[]>([]);
+
+  useEffect(() => {
+    setPixels(loadPixels());
+  }, []);
+
+  const pixelOptions = pixels.map((p) => ({ value: p.pixelId, label: p.name }));
 
   const {
     register,
@@ -502,6 +528,7 @@ export function PresetForm({ preset }: PresetFormProps) {
             targetingAgeMax: sq.targetingAgeMax,
             targetingGender: sq.targetingGender,
             targetingDeviceType: sq.targetingDeviceType,
+            pixelId: sq.pixelId,
           })),
         }
       : {
@@ -540,6 +567,7 @@ export function PresetForm({ preset }: PresetFormProps) {
         ...sq,
         startDate: startImmediate ? undefined : sq.startDate,
         endDate: hasEndDate ? sq.endDate : undefined,
+        pixelId: sq.pixelId || undefined,
       })),
     };
     upsertPreset(saved);
@@ -672,6 +700,7 @@ export function PresetForm({ preset }: PresetFormProps) {
             register={register}
             errors={errors}
             setValue={setValue}
+            pixelOptions={pixelOptions}
             canRemove={fields.length > 1}
             onRemove={() => remove(i)}
             onDuplicate={() => append({ ...getValues(`adSquads.${i}`) })}
