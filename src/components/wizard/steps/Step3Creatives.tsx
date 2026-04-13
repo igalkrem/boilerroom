@@ -66,6 +66,57 @@ async function resizeImageForSnap(file: File): Promise<File> {
   });
 }
 
+const CHUNK_SIZE = 3 * 1024 * 1024; // 3 MB — fits within Vercel's 4.5 MB body limit
+
+async function uploadVideoChunked(
+  file: File,
+  mediaId: string,
+  onProgress: (msg: string) => void
+): Promise<void> {
+  const numChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+  // INIT
+  onProgress("Initializing chunked upload...");
+  const initRes = await fetch("/api/snapchat/media/upload-init", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mediaId, fileName: file.name, fileSize: file.size, numberOfParts: numChunks }),
+  });
+  const initData = await safeJson(initRes);
+  if (initData.error) throw new Error(initData.error);
+  const { upload_id, add_path, finalize_path } = initData;
+
+  // ADD each chunk sequentially
+  for (let i = 0; i < numChunks; i++) {
+    onProgress(`Uploading part ${i + 1} of ${numChunks}...`);
+    const start = i * CHUNK_SIZE;
+    const chunk = file.slice(start, start + CHUNK_SIZE);
+
+    const chunkForm = new FormData();
+    chunkForm.append("chunk", new File([chunk], file.name));
+    chunkForm.append("partNumber", String(i + 1));
+    chunkForm.append("uploadId", upload_id);
+    chunkForm.append("addPath", add_path);
+
+    const chunkRes = await fetch("/api/snapchat/media/upload-chunk", {
+      method: "POST",
+      body: chunkForm,
+    });
+    const chunkData = await safeJson(chunkRes);
+    if (chunkData.error) throw new Error(chunkData.error);
+  }
+
+  // FINALIZE
+  onProgress("Finalizing upload...");
+  const finalRes = await fetch("/api/snapchat/media/upload-finalize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uploadId: upload_id, finalizePath: finalize_path }),
+  });
+  const finalData = await safeJson(finalRes);
+  if (finalData.error) throw new Error(finalData.error);
+}
+
 function MediaDropzone({
   adAccountId,
   onUploaded,
@@ -80,14 +131,6 @@ function MediaDropzone({
     let file = accepted[0];
     if (!file) return;
 
-    // Vercel serverless functions have a ~4.5 MB body limit
-    const MAX_BYTES = 4 * 1024 * 1024;
-    if (file.size > MAX_BYTES && !file.type.startsWith("image/")) {
-      setStatus("error");
-      setProgress(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Videos must be under 4 MB to upload via this platform.`);
-      return;
-    }
-
     setStatus("uploading");
 
     try {
@@ -101,8 +144,6 @@ function MediaDropzone({
       }
 
       setProgress("Creating media entity...");
-
-      // Step 1: Create media entity
       const entityRes = await fetch("/api/snapchat/media", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -110,23 +151,25 @@ function MediaDropzone({
       });
       const entityData = await safeJson(entityRes);
       if (entityData.error) throw new Error(entityData.error);
-      const { mediaId, uploadUrl } = entityData;
+      const { mediaId } = entityData;
 
-      setProgress("Uploading file...");
-
-      // Step 2: Upload file to Snapchat
-      const form = new FormData();
-      form.append("file", file);
-      form.append("mediaId", mediaId);
-      form.append("adAccountId", adAccountId);
-      if (uploadUrl) form.append("uploadUrl", uploadUrl);
-
-      const uploadRes = await fetch("/api/snapchat/media/upload", {
-        method: "POST",
-        body: form,
-      });
-      const uploadData = await safeJson(uploadRes);
-      if (uploadData.error) throw new Error(uploadData._debug ? `${uploadData.error} | debug: ${JSON.stringify(uploadData._debug)}` : uploadData.error);
+      if (isVideo) {
+        // Videos: chunked multipart upload to bypass Vercel's 4.5 MB body limit
+        await uploadVideoChunked(file, mediaId, (msg) => setProgress(msg));
+      } else {
+        // Images: single-shot upload (already resized to ~1 MB JPEG)
+        setProgress("Uploading image...");
+        const form = new FormData();
+        form.append("file", file);
+        form.append("mediaId", mediaId);
+        form.append("adAccountId", adAccountId);
+        const uploadRes = await fetch("/api/snapchat/media/upload", {
+          method: "POST",
+          body: form,
+        });
+        const uploadData = await safeJson(uploadRes);
+        if (uploadData.error) throw new Error(uploadData._debug ? `${uploadData.error} | debug: ${JSON.stringify(uploadData._debug)}` : uploadData.error);
+      }
 
       setStatus("done");
       setProgress("");
@@ -159,7 +202,7 @@ function MediaDropzone({
           <>
             <div className="text-3xl mb-2">↑</div>
             <p className="text-sm text-gray-600">Drag & drop image or video here, or click to browse</p>
-            <p className="text-xs text-gray-400 mt-1">PNG, JPG (auto-resized to 1080×1920) · MP4/MOV 9:16 · max 50MB</p>
+            <p className="text-xs text-gray-400 mt-1">PNG/JPG (auto-resized to 1080×1920) · MP4/MOV any size · chunked upload</p>
           </>
         )}
         {status === "uploading" && (
