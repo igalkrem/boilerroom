@@ -20,28 +20,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "missing_params" }, { status: 400 });
   }
 
-  let uploadRes: Response;
+  // Correct Snapchat upload endpoint: /media/{media_id}/upload (no /adaccounts/ prefix)
+  const snapUploadUrl = `${BASE_URL}/media/${mediaId}/upload`;
 
-  if (uploadUrl) {
-    // Snapchat returned a pre-signed S3 URL — PUT the raw file to it
-    uploadRes = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": file.type },
-      body: await file.arrayBuffer(),
-    });
-  } else {
-    // No upload_url in the creation response — use Snapchat's largefile endpoint
-    const largeFileUrl = `${BASE_URL}/adaccounts/${adAccountId}/media/largefile`;
-    const uploadForm = new FormData();
-    uploadForm.append("media_id", mediaId);
-    uploadForm.append("file", file);
+  const uploadForm = new FormData();
+  uploadForm.append("file", file);
 
-    uploadRes = await fetch(largeFileUrl, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${session.accessToken}` },
-      body: uploadForm,
-    });
-  }
+  const uploadRes = await fetch(snapUploadUrl, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session.accessToken}` },
+    body: uploadForm,
+  });
 
   if (!uploadRes.ok) {
     const errText = await uploadRes.text();
