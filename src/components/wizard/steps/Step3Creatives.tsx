@@ -196,11 +196,10 @@ function MediaDropzone({
 }) {
   const [status, setStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
   const [progress, setProgress] = useState<string>("");
+  const [lastFile, setLastFile] = useState<File | null>(null);
 
-  const onDrop = async (accepted: File[]) => {
-    let file = accepted[0];
-    if (!file) return;
-
+  const runUpload = async (file: File) => {
+    setLastFile(file);
     setStatus("uploading");
 
     try {
@@ -255,6 +254,9 @@ function MediaDropzone({
     }
   };
 
+  const onDrop = (accepted: File[]) => { if (accepted[0]) runUpload(accepted[0]); };
+  const retry = () => { if (lastFile) runUpload(lastFile); };
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { "image/*": [], "video/*": [] },
@@ -288,7 +290,12 @@ function MediaDropzone({
         )}
       </div>
       {status === "error" && (
-        <Alert type="error" className="mt-2">{progress}</Alert>
+        <div className="mt-2 space-y-2">
+          <Alert type="error">{progress}</Alert>
+          <Button type="button" variant="secondary" size="sm" onClick={retry}>
+            ↺ Retry upload
+          </Button>
+        </div>
       )}
     </div>
   );
