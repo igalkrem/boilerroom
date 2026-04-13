@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createCampaigns } from "@/lib/snapchat/campaigns";
 import { getSession, isSessionValid } from "@/lib/session";
 import type { SnapCampaignPayload } from "@/types/snapchat";
+import { z } from "zod";
+
+const bodySchema = z.object({
+  adAccountId: z.string().min(1),
+  campaigns: z.array(z.record(z.string(), z.unknown())).min(1),
+});
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -9,7 +15,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
 
-  const { adAccountId, campaigns } = (await request.json()) as {
+  const parsed = bodySchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 422 });
+  }
+  const { adAccountId, campaigns } = parsed.data as unknown as {
     adAccountId: string;
     campaigns: SnapCampaignPayload[];
   };

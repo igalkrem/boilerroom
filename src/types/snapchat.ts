@@ -56,6 +56,18 @@ export type BidStrategy =
   | "LOWEST_COST_WITH_MAX_BID"
   | "TARGET_COST";
 
+export type PixelConversionEvent =
+  | "PAGE_VIEW"
+  | "PURCHASE"
+  | "ADD_TO_CART"
+  | "VIEW_CONTENT"
+  | "SUBSCRIBE"
+  | "SIGN_UP"
+  | "SAVE"
+  | "SEARCH"
+  | "START_CHECKOUT"
+  | "AD_CLICK";
+
 export type OptimizationGoal =
   | "IMPRESSIONS"
   | "SWIPES"
@@ -95,6 +107,7 @@ export interface SnapAdSquadPayload {
   frequency_cap_max_impressions?: number;
   frequency_cap_time_period?: string;
   pixel_id?: string;
+  pixel_conversion_event?: PixelConversionEvent;
 }
 
 export interface SnapAdSquad extends SnapAdSquadPayload {
@@ -123,6 +136,7 @@ export interface SnapCreativePayload {
     web_view_url?: string;
     deep_link_url?: string;
   };
+  profile_properties?: { profile_id: string };
 }
 
 export interface SnapCreative extends SnapCreativePayload {

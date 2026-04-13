@@ -147,6 +147,7 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
       targetingGender: sq.targetingGender,
       targetingDeviceType: sq.targetingDeviceType,
       pixelId: sq.pixelId ?? "",
+      pixelConversionEvent: sq.pixelConversionEvent,
     }));
 
     set({ campaigns: [campaign], adSquads });

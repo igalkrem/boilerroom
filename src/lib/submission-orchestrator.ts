@@ -11,6 +11,7 @@ import type {
   SnapCreativePayload,
   SnapAdPayload,
   CreativeType,
+  PixelConversionEvent,
 } from "@/types/snapchat";
 
 type OnStageChange = (stage: SubmissionStage) => void;
@@ -161,6 +162,7 @@ export async function runSubmission(
       frequency_cap_max_impressions: sq.frequencyCapMaxImpressions,
       frequency_cap_time_period: sq.frequencyCapTimePeriod,
       pixel_id: sq.pixelId || undefined,
+      pixel_conversion_event: sq.pixelConversionEvent as PixelConversionEvent | undefined || undefined,
     }));
 
     const sqRes = await fetch("/api/snapchat/adsquads", {
@@ -202,6 +204,7 @@ export async function runSubmission(
           : cr.interactionType === "DEEP_LINK" || cr.interactionType === "APP_INSTALL"
           ? { deep_link_url: cr.deepLinkUrl }
           : undefined,
+      profile_properties: cr.profileId ? { profile_id: cr.profileId } : undefined,
     };
   });
 

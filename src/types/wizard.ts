@@ -51,6 +51,7 @@ export interface AdSquadFormData {
   targetingDeviceType?: "WEB" | "MOBILE" | "ALL";
   // Tracking
   pixelId: string;
+  pixelConversionEvent?: string;
 }
 
 export type InteractionType =
@@ -77,6 +78,7 @@ export interface CreativeFormData {
   shareable?: boolean;
   // Ad settings
   adStatus: "ACTIVE" | "PAUSED";
+  profileId?: string;
 }
 
 // ─── Submission results ────────────────────────────────────────────────────
