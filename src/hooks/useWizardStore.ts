@@ -113,10 +113,10 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
 
     const campaign: CampaignFormData = {
       id: newCampaignId,
-      name: campaignData.name,
+      name: "",
       objective: campaignData.objective,
       status: campaignData.status,
-      startDate: ensureFutureDate(campaignData.startDate),
+      startDate: campaignData.startDate ? ensureFutureDate(campaignData.startDate) : todayIso(),
       endDate: campaignData.endDate,
       spendCapType: campaignData.spendCapType,
       dailyBudgetUsd: campaignData.dailyBudgetUsd,
@@ -126,7 +126,7 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
     const adSquads: AdSquadFormData[] = preset.adSquads.map((sq) => ({
       id: uuid(),
       campaignId: newCampaignId,
-      name: sq.name,
+      name: "",
       type: sq.type,
       geoCountryCode: sq.geoCountryCode,
       optimizationGoal: sq.optimizationGoal,

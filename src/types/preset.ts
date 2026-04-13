@@ -2,10 +2,9 @@ import type { CampaignObjective, BidStrategy, OptimizationGoal } from "./snapcha
 import type { FrequencyCapTimePeriod } from "./wizard";
 
 export interface CampaignPresetData {
-  name: string;
   objective: CampaignObjective;
   status: "ACTIVE" | "PAUSED";
-  startDate: string; // YYYY-MM-DD
+  startDate?: string; // YYYY-MM-DD; undefined = launch immediately
   endDate?: string;
   spendCapType: "DAILY_BUDGET" | "LIFETIME_BUDGET";
   dailyBudgetUsd?: number;
@@ -13,7 +12,6 @@ export interface CampaignPresetData {
 }
 
 export interface AdSquadPresetData {
-  name: string;
   type: "SNAP_ADS";
   geoCountryCode: string;
   optimizationGoal: OptimizationGoal;
