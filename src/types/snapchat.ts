@@ -39,7 +39,7 @@ export interface SnapCampaignPayload {
   end_time?: string;
   daily_budget_micro?: number;
   objective_v2_properties: {
-    objective: CampaignObjective;
+    objective_v2_type: CampaignObjective;
   };
 }
 

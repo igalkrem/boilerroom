@@ -46,7 +46,7 @@ export async function runSubmission(
     start_time: toIso(c.startDate),
     end_time: c.endDate ? toIso(c.endDate) : undefined,
     daily_budget_micro: usdToMicro(c.dailyBudgetUsd),
-    objective_v2_properties: { objective: c.objective },
+    objective_v2_properties: { objective_v2_type: c.objective },
   }));
 
   const campaignRes = await fetch("/api/snapchat/campaigns", {
