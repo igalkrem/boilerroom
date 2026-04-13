@@ -59,10 +59,10 @@ export function Step2AdSets() {
             name: "",
             type: "SNAP_ADS",
             geoCountryCode: "US",
-            optimizationGoal: "IMPRESSIONS",
-            bidStrategy: "AUTO_BID",
-            dailyBudgetUsd: 50,
-            status: "ACTIVE",
+            optimizationGoal: "PIXEL_PURCHASE",
+            bidStrategy: "TARGET_COST",
+            dailyBudgetUsd: 5,
+            status: "PAUSED",
           }],
     },
   });
@@ -153,10 +153,10 @@ export function Step2AdSets() {
             name: "",
             type: "SNAP_ADS",
             geoCountryCode: "US",
-            optimizationGoal: "IMPRESSIONS",
-            bidStrategy: "AUTO_BID",
-            dailyBudgetUsd: 50,
-            status: "ACTIVE",
+            optimizationGoal: "PIXEL_PURCHASE",
+            bidStrategy: "TARGET_COST",
+            dailyBudgetUsd: 5,
+            status: "PAUSED",
           })
         }
       >
