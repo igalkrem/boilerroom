@@ -35,12 +35,12 @@ export interface SnapCampaignPayload {
   name: string;
   ad_account_id: string;
   status: "ACTIVE" | "PAUSED";
+  buy_model: "AUCTION" | "RESERVED";
   start_time: string; // ISO 8601
   end_time?: string;
   daily_budget_micro?: number;
-  lifetime_budget_micro?: number;
-  spend_cap_type?: "DAILY_BUDGET" | "LIFETIME_BUDGET";
-  objective_v2_properties: {
+  lifetime_spend_cap_micro?: number; // campaign-level lifetime budget (not lifetime_budget_micro)
+  objective_v2_properties?: {
     objective_v2_type: CampaignObjective;
   };
 }
