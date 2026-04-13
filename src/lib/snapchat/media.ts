@@ -11,10 +11,17 @@ export async function createMediaEntity(
     body: JSON.stringify({ media: [payload] }),
   });
 
-  const item = data.media?.[0]?.media;
-  if (!item) throw new Error("No media entity returned");
+  const rawItem = data.media?.[0];
+  const item = rawItem?.media;
 
-  return { mediaId: item.id, uploadUrl: item.upload_url ?? null };
+  if (!item) {
+    throw new Error(`No media entity in response: ${JSON.stringify(data)}`);
+  }
+  if (!item.id) {
+    throw new Error(`Media entity has no ID. sub_status=${rawItem?.sub_request_status} response=${JSON.stringify(data)}`);
+  }
+
+  return { mediaId: item.id, uploadUrl: (item as Record<string, unknown>).upload_url as string | null ?? null };
 }
 
 export async function pollMediaStatus(

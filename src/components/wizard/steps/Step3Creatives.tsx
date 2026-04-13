@@ -68,7 +68,7 @@ function MediaDropzone({
         body: form,
       });
       const uploadData = await uploadRes.json();
-      if (uploadData.error) throw new Error(uploadData.error);
+      if (uploadData.error) throw new Error(uploadData._debug ? `${uploadData.error} | debug: ${JSON.stringify(uploadData._debug)}` : uploadData.error);
 
       setStatus("done");
       setProgress("");

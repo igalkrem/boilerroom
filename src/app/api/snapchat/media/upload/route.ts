@@ -17,11 +17,16 @@ export async function POST(request: NextRequest) {
   const uploadUrl = formData.get("uploadUrl") as string | null;
 
   if (!file || !mediaId || !adAccountId) {
-    return NextResponse.json({ error: "missing_params" }, { status: 400 });
+    return NextResponse.json({
+      error: "missing_params",
+      _debug: { hasFile: !!file, mediaId, adAccountId },
+    }, { status: 400 });
   }
 
   // Correct Snapchat upload endpoint: /media/{media_id}/upload (no /adaccounts/ prefix)
   const snapUploadUrl = `${BASE_URL}/media/${mediaId}/upload`;
+
+  console.log("[media/upload] Uploading to:", snapUploadUrl, "| mediaId:", mediaId, "| file:", file.name, file.size);
 
   const uploadForm = new FormData();
   uploadForm.append("file", file);
@@ -34,8 +39,9 @@ export async function POST(request: NextRequest) {
 
   if (!uploadRes.ok) {
     const errText = await uploadRes.text();
+    console.error("[media/upload] Failed:", snapUploadUrl, uploadRes.status, errText);
     return NextResponse.json(
-      { error: `Upload failed: ${uploadRes.status} - ${errText}` },
+      { error: `Upload failed: ${uploadRes.status} - ${errText}`, _debug: { snapUploadUrl, mediaId } },
       { status: 500 }
     );
   }
