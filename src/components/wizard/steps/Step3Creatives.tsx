@@ -24,6 +24,38 @@ const CTA_OPTIONS = [
   { value: "WATCH", label: "Watch" },
 ];
 
+/** Resize any image to 1080×1920 (9:16) with black letterboxing, returns a JPEG File. */
+async function resizeImageForSnap(file: File): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      const W = 1080, H = 1920;
+      const canvas = document.createElement("canvas");
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, W, H);
+      const scale = Math.min(W / img.width, H / img.height);
+      const sw = img.width * scale;
+      const sh = img.height * scale;
+      ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh);
+      URL.revokeObjectURL(objectUrl);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { reject(new Error("Canvas resize failed")); return; }
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }));
+        },
+        "image/jpeg",
+        0.92
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Image load failed")); };
+    img.src = objectUrl;
+  });
+}
+
 function MediaDropzone({
   adAccountId,
   onUploaded,
@@ -35,15 +67,22 @@ function MediaDropzone({
   const [progress, setProgress] = useState<string>("");
 
   const onDrop = async (accepted: File[]) => {
-    const file = accepted[0];
+    let file = accepted[0];
     if (!file) return;
 
     setStatus("uploading");
-    setProgress("Creating media entity...");
 
     try {
       const isVideo = file.type.startsWith("video/");
       const mediaType = isVideo ? "VIDEO" : "IMAGE";
+
+      // Auto-resize images to 1080×1920 to meet Snapchat's requirements
+      if (!isVideo) {
+        setProgress("Resizing image to 1080×1920...");
+        file = await resizeImageForSnap(file);
+      }
+
+      setProgress("Creating media entity...");
 
       // Step 1: Create media entity
       const entityRes = await fetch("/api/snapchat/media", {
@@ -101,7 +140,7 @@ function MediaDropzone({
           <>
             <div className="text-3xl mb-2">↑</div>
             <p className="text-sm text-gray-600">Drag & drop image or video here, or click to browse</p>
-            <p className="text-xs text-gray-400 mt-1">PNG, JPG, MP4 · max 50MB</p>
+            <p className="text-xs text-gray-400 mt-1">PNG, JPG (auto-resized to 1080×1920) · MP4/MOV 9:16 · max 50MB</p>
           </>
         )}
         {status === "uploading" && (
