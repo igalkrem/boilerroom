@@ -71,14 +71,14 @@ export async function runSubmission(
     name: c.name,
     ad_account_id: adAccountId,
     status: c.status,
+    buy_model: "AUCTION",
     start_time: toIso(c.startDate),
     end_time: c.endDate ? toIso(c.endDate) : undefined,
-    spend_cap_type: c.spendCapType,
     daily_budget_micro:
       c.spendCapType === "DAILY_BUDGET" && c.dailyBudgetUsd
         ? usdToMicro(c.dailyBudgetUsd)
         : undefined,
-    lifetime_budget_micro:
+    lifetime_spend_cap_micro:
       c.spendCapType === "LIFETIME_BUDGET" && c.lifetimeBudgetUsd
         ? usdToMicro(c.lifetimeBudgetUsd)
         : undefined,
