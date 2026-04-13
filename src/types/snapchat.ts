@@ -151,6 +151,8 @@ export interface SnapAdPayload {
   name: string;
   type: CreativeType;
   status: "ACTIVE" | "PAUSED";
+  web_view_properties?: { url: string };
+  deep_link_properties?: { deep_link_uri: string };
 }
 
 export interface SnapAd extends SnapAdPayload {
