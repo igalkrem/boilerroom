@@ -34,6 +34,48 @@ async function safeJson(res: Response) {
   }
 }
 
+interface VideoMeta { width: number; height: number; duration: number }
+
+/** Read basic metadata from a video file using a hidden <video> element. */
+function getVideoMeta(file: File): Promise<VideoMeta> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const vid = document.createElement("video");
+    vid.preload = "metadata";
+    vid.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: vid.videoWidth, height: vid.videoHeight, duration: vid.duration });
+    };
+    vid.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Could not read video metadata")); };
+    vid.src = url;
+  });
+}
+
+/**
+ * Validate a video against Snapchat's ad requirements.
+ * Returns an array of human-readable error strings (empty = valid).
+ */
+async function validateVideoForSnap(file: File): Promise<string[]> {
+  const errors: string[] = [];
+  try {
+    const { width, height, duration } = await getVideoMeta(file);
+    const ratio = width / height;
+    // Snapchat requires 9:16 portrait (≤ 0.6) — allow a small tolerance
+    if (ratio > 0.6) {
+      errors.push(`Wrong aspect ratio (${width}×${height} = ${ratio.toFixed(2)}:1). Snapchat requires 9:16 portrait (0.5625:1). Rotate or crop to vertical.`);
+    }
+    // Minimum 720×1280
+    if (width < 720 || height < 1280) {
+      errors.push(`Resolution too low (${width}×${height}). Minimum is 720×1280.`);
+    }
+    if (duration < 3) errors.push(`Video too short (${duration.toFixed(1)}s). Minimum is 3 seconds.`);
+    if (duration > 180) errors.push(`Video too long (${duration.toFixed(1)}s). Maximum is 180 seconds.`);
+  } catch {
+    // Can't read metadata — let Snapchat validate server-side
+  }
+  return errors;
+}
+
 /** Resize any image to 1080×1920 (9:16) with black letterboxing, returns a JPEG File. */
 async function resizeImageForSnap(file: File): Promise<File> {
   return new Promise((resolve, reject) => {
@@ -136,6 +178,15 @@ function MediaDropzone({
     try {
       const isVideo = file.type.startsWith("video/");
       const mediaType = isVideo ? "VIDEO" : "IMAGE";
+
+      // Validate video requirements before starting the upload
+      if (isVideo) {
+        setProgress("Checking video requirements...");
+        const videoErrors = await validateVideoForSnap(file);
+        if (videoErrors.length > 0) {
+          throw new Error("Video does not meet Snapchat requirements:\n• " + videoErrors.join("\n• "));
+        }
+      }
 
       // Auto-resize images to 1080×1920 to meet Snapchat's requirements
       if (!isVideo) {
