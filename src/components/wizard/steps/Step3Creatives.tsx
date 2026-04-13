@@ -490,7 +490,7 @@ function defaultCreative(adSquadId: string) {
     mediaId: "",
     mediaFileName: "",
     uploadStatus: "idle" as const,
-    interactionType: "SWIPE_TO_OPEN" as const,
+    interactionType: "WEB_VIEW" as const,
     shareable: false,
     adStatus: "ACTIVE" as const,
     profileId: "",
