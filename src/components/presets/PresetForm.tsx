@@ -13,7 +13,8 @@ import type { CampaignPreset } from "@/types/preset";
 
 const presetCampaignSchema = z
   .object({
-    name: z.string().min(1, "Name is required").max(375),
+    startImmediate: z.boolean(),
+    hasEndDate: z.boolean(),
     objective: z.enum([
       "AWARENESS_AND_ENGAGEMENT",
       "SALES",
@@ -22,13 +23,19 @@ const presetCampaignSchema = z
       "LEADS",
     ]),
     status: z.enum(["ACTIVE", "PAUSED"]),
-    startDate: z.string().min(1, "Start date is required"),
+    startDate: z.string().optional(),
     endDate: z.string().optional(),
     spendCapType: z.enum(["DAILY_BUDGET", "LIFETIME_BUDGET"]),
     dailyBudgetUsd: z.number().optional(),
     lifetimeBudgetUsd: z.number().optional(),
   })
   .superRefine((data, ctx) => {
+    if (!data.startImmediate && (!data.startDate || data.startDate.length === 0)) {
+      ctx.addIssue({ code: "custom", path: ["startDate"], message: "Start date is required" });
+    }
+    if (data.hasEndDate && (!data.endDate || data.endDate.length === 0)) {
+      ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date is required" });
+    }
     if (data.spendCapType === "DAILY_BUDGET") {
       if (!data.dailyBudgetUsd || data.dailyBudgetUsd < 1) {
         ctx.addIssue({ code: "custom", path: ["dailyBudgetUsd"], message: "Must be at least $1" });
@@ -42,7 +49,8 @@ const presetCampaignSchema = z
 
 const presetAdSquadSchema = z
   .object({
-    name: z.string().min(1, "Name is required").max(375),
+    startImmediate: z.boolean(),
+    hasEndDate: z.boolean(),
     type: z.literal("SNAP_ADS"),
     geoCountryCode: z.string().min(2, "Select a country"),
     optimizationGoal: z.enum([
@@ -66,6 +74,12 @@ const presetAdSquadSchema = z
     targetingDeviceType: z.enum(["WEB", "MOBILE", "ALL"]).optional(),
   })
   .superRefine((data, ctx) => {
+    if (!data.startImmediate && (!data.startDate || data.startDate.length === 0)) {
+      ctx.addIssue({ code: "custom", path: ["startDate"], message: "Start date is required" });
+    }
+    if (data.hasEndDate && (!data.endDate || data.endDate.length === 0)) {
+      ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date is required" });
+    }
     if (data.spendCapType === "DAILY_BUDGET") {
       if (!data.dailyBudgetUsd || data.dailyBudgetUsd < 5) {
         ctx.addIssue({ code: "custom", path: ["dailyBudgetUsd"], message: "Minimum $5" });
@@ -180,7 +194,8 @@ function todayIso() {
 
 function defaultAdSquad(): PresetFormValues["adSquads"][number] {
   return {
-    name: "",
+    startImmediate: true,
+    hasEndDate: false,
     type: "SNAP_ADS",
     geoCountryCode: "US",
     optimizationGoal: "SWIPES",
@@ -219,6 +234,8 @@ function AdSquadCard({
   const prefix = `adSquads.${index}` as const;
   const bidStrategy = useWatch({ control, name: `adSquads.${index}.bidStrategy` });
   const spendCapType = useWatch({ control, name: `adSquads.${index}.spendCapType` });
+  const startImmediate = useWatch({ control, name: `adSquads.${index}.startImmediate` });
+  const hasEndDate = useWatch({ control, name: `adSquads.${index}.hasEndDate` });
   const squadErrors = errors.adSquads?.[index];
 
   return (
@@ -238,27 +255,21 @@ function AdSquadCard({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Input
-          label="Ad Set Name"
-          placeholder="My Ad Set"
-          {...register(`${prefix}.name`)}
-          error={squadErrors?.name?.message}
-        />
         <Select
           label="Geo Targeting"
           options={GEO_OPTIONS}
           {...register(`${prefix}.geoCountryCode`)}
           error={squadErrors?.geoCountryCode?.message}
         />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
           label="Optimization Goal"
           options={OPTIMIZATION_GOAL_OPTIONS}
           {...register(`${prefix}.optimizationGoal`)}
           error={squadErrors?.optimizationGoal?.message}
         />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
           label="Bid Strategy"
           options={BID_STRATEGY_OPTIONS}
@@ -269,10 +280,7 @@ function AdSquadCard({
           })}
           error={squadErrors?.bidStrategy?.message}
         />
-      </div>
-
-      {bidStrategy !== "AUTO_BID" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {bidStrategy !== "AUTO_BID" && (
           <Input
             label="Bid Amount (USD)"
             type="number"
@@ -281,8 +289,8 @@ function AdSquadCard({
             {...register(`${prefix}.bidAmountUsd`, { valueAsNumber: true })}
             error={squadErrors?.bidAmountUsd?.message}
           />
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Select
@@ -321,30 +329,63 @@ function AdSquadCard({
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
           label="Placement"
           options={PLACEMENT_OPTIONS}
           {...register(`${prefix}.placementConfig`)}
         />
-        <Input
-          label="Start Date (optional)"
-          type="date"
-          {...register(`${prefix}.startDate`)}
-        />
-        <Input
-          label="End Date (optional)"
-          type="date"
-          {...register(`${prefix}.endDate`)}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
           label="Status"
           options={STATUS_OPTIONS}
           {...register(`${prefix}.status`)}
         />
+      </div>
+
+      {/* Start date */}
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
+            {...register(`${prefix}.startImmediate`, {
+              onChange: (e) => {
+                if (!e.target.checked) {
+                  setValue(`adSquads.${index}.startDate`, todayIso());
+                }
+              },
+            })}
+          />
+          <span className="text-sm font-medium text-gray-700">Launch immediately</span>
+        </label>
+        {!startImmediate && (
+          <Input
+            label="Start Date"
+            type="date"
+            {...register(`${prefix}.startDate`)}
+            error={squadErrors?.startDate?.message}
+          />
+        )}
+      </div>
+
+      {/* End date */}
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
+            {...register(`${prefix}.hasEndDate`)}
+          />
+          <span className="text-sm font-medium text-gray-700">Set an end date</span>
+        </label>
+        {hasEndDate && (
+          <Input
+            label="End Date"
+            type="date"
+            {...register(`${prefix}.endDate`)}
+            error={squadErrors?.endDate?.message}
+          />
+        )}
       </div>
 
       <div className="border-t border-gray-100 pt-4">
@@ -428,16 +469,48 @@ export function PresetForm({ preset }: PresetFormProps) {
     defaultValues: preset
       ? {
           presetName: preset.name,
-          campaign: preset.campaign,
-          adSquads: preset.adSquads,
+          campaign: {
+            startImmediate: !preset.campaign.startDate,
+            hasEndDate: !!preset.campaign.endDate,
+            objective: preset.campaign.objective,
+            status: preset.campaign.status,
+            startDate: preset.campaign.startDate,
+            endDate: preset.campaign.endDate,
+            spendCapType: preset.campaign.spendCapType,
+            dailyBudgetUsd: preset.campaign.dailyBudgetUsd,
+            lifetimeBudgetUsd: preset.campaign.lifetimeBudgetUsd,
+          },
+          adSquads: preset.adSquads.map((sq) => ({
+            startImmediate: !sq.startDate,
+            hasEndDate: !!sq.endDate,
+            type: sq.type,
+            geoCountryCode: sq.geoCountryCode,
+            optimizationGoal: sq.optimizationGoal,
+            bidStrategy: sq.bidStrategy,
+            bidAmountUsd: sq.bidAmountUsd,
+            spendCapType: sq.spendCapType,
+            dailyBudgetUsd: sq.dailyBudgetUsd,
+            lifetimeBudgetUsd: sq.lifetimeBudgetUsd,
+            status: sq.status,
+            startDate: sq.startDate,
+            endDate: sq.endDate,
+            pacingType: sq.pacingType,
+            placementConfig: sq.placementConfig,
+            frequencyCapMaxImpressions: sq.frequencyCapMaxImpressions,
+            frequencyCapTimePeriod: sq.frequencyCapTimePeriod,
+            targetingAgeMin: sq.targetingAgeMin,
+            targetingAgeMax: sq.targetingAgeMax,
+            targetingGender: sq.targetingGender,
+            targetingDeviceType: sq.targetingDeviceType,
+          })),
         }
       : {
           presetName: "",
           campaign: {
-            name: "",
+            startImmediate: true,
+            hasEndDate: false,
             objective: "SALES",
             status: "PAUSED",
-            startDate: todayIso(),
             spendCapType: "DAILY_BUDGET",
             dailyBudgetUsd: 50,
           },
@@ -448,14 +521,26 @@ export function PresetForm({ preset }: PresetFormProps) {
   const { fields, append, remove } = useFieldArray({ control, name: "adSquads" });
 
   const campaignSpendCapType = useWatch({ control, name: "campaign.spendCapType" });
+  const campaignStartImmediate = useWatch({ control, name: "campaign.startImmediate" });
+  const campaignHasEndDate = useWatch({ control, name: "campaign.hasEndDate" });
 
   const onSubmit = (data: PresetFormValues) => {
+    const { startImmediate: csi, hasEndDate: ched, ...campaignRest } = data.campaign;
+
     const saved: CampaignPreset = {
       id: preset?.id ?? uuid(),
       name: data.presetName,
       createdAt: preset?.createdAt ?? new Date().toISOString(),
-      campaign: data.campaign,
-      adSquads: data.adSquads,
+      campaign: {
+        ...campaignRest,
+        startDate: csi ? undefined : campaignRest.startDate,
+        endDate: ched ? campaignRest.endDate : undefined,
+      },
+      adSquads: data.adSquads.map(({ startImmediate, hasEndDate, ...sq }) => ({
+        ...sq,
+        startDate: startImmediate ? undefined : sq.startDate,
+        endDate: hasEndDate ? sq.endDate : undefined,
+      })),
     };
     upsertPreset(saved);
     router.push("/dashboard/presets");
@@ -481,37 +566,63 @@ export function PresetForm({ preset }: PresetFormProps) {
         <h3 className="font-semibold text-gray-800">Campaign Defaults</h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            label="Campaign Name"
-            placeholder="Summer Sale 2026"
-            {...register("campaign.name")}
-            error={errors.campaign?.name?.message}
-          />
           <Select
             label="Objective"
             options={OBJECTIVE_OPTIONS}
             {...register("campaign.objective")}
             error={errors.campaign?.objective?.message}
           />
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Input
-            label="Start Date"
-            type="date"
-            {...register("campaign.startDate")}
-            error={errors.campaign?.startDate?.message}
-          />
-          <Input
-            label="End Date (optional)"
-            type="date"
-            {...register("campaign.endDate")}
-          />
           <Select
             label="Status"
             options={STATUS_OPTIONS}
             {...register("campaign.status")}
           />
+        </div>
+
+        {/* Start date */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
+              {...register("campaign.startImmediate", {
+                onChange: (e) => {
+                  if (!e.target.checked) {
+                    setValue("campaign.startDate", todayIso());
+                  }
+                },
+              })}
+            />
+            <span className="text-sm font-medium text-gray-700">Launch immediately</span>
+          </label>
+          {!campaignStartImmediate && (
+            <Input
+              label="Start Date"
+              type="date"
+              {...register("campaign.startDate")}
+              error={errors.campaign?.startDate?.message}
+            />
+          )}
+        </div>
+
+        {/* End date */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
+              {...register("campaign.hasEndDate")}
+            />
+            <span className="text-sm font-medium text-gray-700">Set an end date</span>
+          </label>
+          {campaignHasEndDate && (
+            <Input
+              label="End Date"
+              type="date"
+              {...register("campaign.endDate")}
+              error={errors.campaign?.endDate?.message}
+            />
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
