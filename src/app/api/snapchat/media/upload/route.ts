@@ -14,7 +14,6 @@ export async function POST(request: NextRequest) {
   const file = formData.get("file") as File | null;
   const mediaId = formData.get("mediaId") as string | null;
   const adAccountId = formData.get("adAccountId") as string | null;
-  const uploadUrl = formData.get("uploadUrl") as string | null;
 
   if (!file || !mediaId || !adAccountId) {
     return NextResponse.json({
