@@ -15,8 +15,8 @@ export async function POST(request: NextRequest) {
   };
 
   try {
-    const { mediaId } = await createMediaEntity({ ad_account_id: adAccountId, name, type });
-    return NextResponse.json({ mediaId });
+    const { mediaId, uploadUrl } = await createMediaEntity({ ad_account_id: adAccountId, name, type });
+    return NextResponse.json({ mediaId, uploadUrl });
   } catch (err) {
     console.error("Create media entity error:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });

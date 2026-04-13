@@ -51,16 +51,17 @@ function MediaDropzone({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ adAccountId, name: file.name, type: mediaType }),
       });
-      const { mediaId, error: entityError } = await entityRes.json();
+      const { mediaId, uploadUrl, error: entityError } = await entityRes.json();
       if (entityError) throw new Error(entityError);
 
       setProgress("Uploading file...");
 
-      // Step 2: Upload file directly to Snapchat's upload endpoint
+      // Step 2: Upload file — use Snapchat's upload_url (S3) if provided, else largefile endpoint
       const form = new FormData();
       form.append("file", file);
       form.append("mediaId", mediaId);
       form.append("adAccountId", adAccountId);
+      if (uploadUrl) form.append("uploadUrl", uploadUrl);
 
       const uploadRes = await fetch("/api/snapchat/media/upload", {
         method: "POST",

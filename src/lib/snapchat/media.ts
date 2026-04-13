@@ -3,9 +3,9 @@ import type { SnapMediaPayload, SnapMediaEntity } from "@/types/snapchat";
 
 export async function createMediaEntity(
   payload: SnapMediaPayload
-): Promise<{ mediaId: string }> {
+): Promise<{ mediaId: string; uploadUrl: string | null }> {
   const data = await snapFetch<{
-    media: Array<{ media: SnapMediaEntity }>;
+    media: Array<{ media: SnapMediaEntity & { upload_url?: string } }>;
   }>(`/adaccounts/${payload.ad_account_id}/media`, {
     method: "POST",
     body: JSON.stringify({ media: [payload] }),
@@ -14,7 +14,7 @@ export async function createMediaEntity(
   const item = data.media?.[0]?.media;
   if (!item) throw new Error("No media entity returned");
 
-  return { mediaId: item.id };
+  return { mediaId: item.id, uploadUrl: item.upload_url ?? null };
 }
 
 export async function pollMediaStatus(
