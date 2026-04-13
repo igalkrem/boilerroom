@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SnapAds Manager",
+  title: "BoilerRoom",
   description: "Bulk Snapchat ad campaign creation platform",
 };
 

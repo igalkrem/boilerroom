@@ -17,7 +17,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
       <select
         ref={ref}
         className={clsx(
-          "block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400",
+          "block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500",
           error && "border-red-400 focus:border-red-400 focus:ring-red-400",
           className
         )}
