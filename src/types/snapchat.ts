@@ -38,6 +38,8 @@ export interface SnapCampaignPayload {
   start_time: string; // ISO 8601
   end_time?: string;
   daily_budget_micro?: number;
+  lifetime_budget_micro?: number;
+  spend_cap_type?: "DAILY_BUDGET" | "LIFETIME_BUDGET";
   objective_v2_properties: {
     objective_v2_type: CampaignObjective;
   };
@@ -69,15 +71,29 @@ export interface SnapAdSquadPayload {
   status: "ACTIVE" | "PAUSED";
   targeting: {
     geo_locations: Array<{ country_code: string }>;
+    demographics?: Array<{
+      min_age?: number;
+      max_age?: number;
+      genders?: Array<"MALE" | "FEMALE">;
+    }>;
+    devices?: Array<{
+      device_type?: "MOBILE" | "WEB";
+    }>;
   };
   placement_v2: {
-    config: "AUTOMATIC" | "CUSTOM";
+    config: "AUTOMATIC" | "CONTENT" | "CUSTOM";
   };
   billing_event: "IMPRESSION";
   optimization_goal: OptimizationGoal;
   bid_strategy: BidStrategy;
   bid_micro?: number;
-  daily_budget_micro: number; // minimum 5_000_000
+  daily_budget_micro?: number; // minimum 5_000_000
+  lifetime_budget_micro?: number;
+  pacing_type?: "STANDARD" | "ACCELERATED";
+  start_time?: string;
+  end_time?: string;
+  frequency_cap_max_impressions?: number;
+  frequency_cap_time_period?: string;
 }
 
 export interface SnapAdSquad extends SnapAdSquadPayload {
@@ -101,6 +117,11 @@ export interface SnapCreativePayload {
   top_snap_media_id: string;
   call_to_action?: string;
   brand_name?: string;
+  shareable?: boolean;
+  interaction_zone_properties?: {
+    web_view_url?: string;
+    deep_link_url?: string;
+  };
 }
 
 export interface SnapCreative extends SnapCreativePayload {

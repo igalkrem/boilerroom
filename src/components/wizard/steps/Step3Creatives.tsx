@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { useForm, useFieldArray, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useWizardStore } from "@/hooks/useWizardStore";
 import { creativesFormSchema } from "@/lib/validations/creative.schema";
@@ -22,9 +22,27 @@ const CTA_OPTIONS = [
   { value: "DOWNLOAD", label: "Download" },
   { value: "INSTALL_NOW", label: "Install Now" },
   { value: "WATCH", label: "Watch" },
+  { value: "GET_NOW", label: "Get Now" },
+  { value: "ORDER_NOW", label: "Order Now" },
+  { value: "BOOK_NOW", label: "Book Now" },
+  { value: "PLAY_GAME", label: "Play Game" },
+  { value: "APPLY_NOW", label: "Apply Now" },
+  { value: "BUY_NOW", label: "Buy Now" },
 ];
 
-/** Parse response as JSON; if the body isn't JSON (e.g. "Request Entity Too Large"), throw a readable error. */
+const INTERACTION_TYPE_OPTIONS = [
+  { value: "SWIPE_TO_OPEN", label: "Swipe to Open" },
+  { value: "WEB_VIEW", label: "Web View" },
+  { value: "DEEP_LINK", label: "Deep Link" },
+  { value: "APP_INSTALL", label: "App Install" },
+];
+
+const AD_STATUS_OPTIONS = [
+  { value: "ACTIVE", label: "Active" },
+  { value: "PAUSED", label: "Paused" },
+];
+
+/** Parse response as JSON; if the body isn't JSON, throw a readable error. */
 async function safeJson(res: Response) {
   const text = await res.text();
   try {
@@ -58,10 +76,6 @@ async function getFFmpeg(onProgress: (msg: string) => void): Promise<FFmpeg> {
   return ffmpeg;
 }
 
-/**
- * Transcode any video to 720×1280 H.264 MP4 with black letterboxing.
- * Runs entirely in the browser via ffmpeg.wasm.
- */
 async function transcodeVideoForSnap(file: File, onProgress: (msg: string) => void): Promise<File> {
   const ffmpeg = await getFFmpeg(onProgress);
   const { fetchFile } = await import("@ffmpeg/util");
@@ -94,7 +108,6 @@ async function transcodeVideoForSnap(file: File, onProgress: (msg: string) => vo
   await ffmpeg.deleteFile(inputName);
   await ffmpeg.deleteFile(outputName);
 
-  // Copy into a plain ArrayBuffer so Blob/File constructors accept it
   const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
 
   return new File(
@@ -104,7 +117,6 @@ async function transcodeVideoForSnap(file: File, onProgress: (msg: string) => vo
   );
 }
 
-/** Resize any image to 1080×1920 (9:16) with black letterboxing, returns a JPEG File. */
 async function resizeImageForSnap(file: File): Promise<File> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -136,7 +148,7 @@ async function resizeImageForSnap(file: File): Promise<File> {
   });
 }
 
-const CHUNK_SIZE = 3 * 1024 * 1024; // 3 MB — fits within Vercel's 4.5 MB body limit
+const CHUNK_SIZE = 3 * 1024 * 1024;
 
 async function uploadVideoChunked(
   file: File,
@@ -145,7 +157,6 @@ async function uploadVideoChunked(
 ): Promise<void> {
   const numChunks = Math.ceil(file.size / CHUNK_SIZE);
 
-  // INIT
   onProgress("Initializing chunked upload...");
   const initRes = await fetch("/api/snapchat/media/upload-init", {
     method: "POST",
@@ -156,7 +167,6 @@ async function uploadVideoChunked(
   if (initData.error) throw new Error(initData.error);
   const { upload_id, add_path, finalize_path } = initData;
 
-  // ADD each chunk sequentially
   for (let i = 0; i < numChunks; i++) {
     onProgress(`Uploading part ${i + 1} of ${numChunks}...`);
     const start = i * CHUNK_SIZE;
@@ -176,7 +186,6 @@ async function uploadVideoChunked(
     if (chunkData.error) throw new Error(chunkData.error);
   }
 
-  // FINALIZE
   onProgress("Finalizing upload...");
   const finalRes = await fetch("/api/snapchat/media/upload-finalize", {
     method: "POST",
@@ -206,12 +215,10 @@ function MediaDropzone({
       const isVideo = file.type.startsWith("video/");
       const mediaType = isVideo ? "VIDEO" : "IMAGE";
 
-      // Transcode videos to 720×1280 H.264 MP4 before uploading
       if (isVideo) {
         file = await transcodeVideoForSnap(file, (msg) => setProgress(msg));
       }
 
-      // Auto-resize images to 1080×1920 to meet Snapchat's requirements
       if (!isVideo) {
         setProgress("Resizing image to 1080×1920...");
         file = await resizeImageForSnap(file);
@@ -228,10 +235,8 @@ function MediaDropzone({
       const { mediaId } = entityData;
 
       if (isVideo) {
-        // Videos: chunked multipart upload to bypass Vercel's 4.5 MB body limit
         await uploadVideoChunked(file, mediaId, (msg) => setProgress(msg));
       } else {
-        // Images: single-shot upload (already resized to ~1 MB JPEG)
         setProgress("Uploading image...");
         const form = new FormData();
         form.append("file", file);
@@ -301,6 +306,189 @@ function MediaDropzone({
   );
 }
 
+function CreativeCard({
+  index,
+  adAccountId,
+  adSquadOptions,
+  control,
+  register,
+  errors,
+  setValue,
+  canRemove,
+  onRemove,
+  onDuplicate,
+}: {
+  index: number;
+  adAccountId: string;
+  adSquadOptions: Array<{ value: string; label: string }>;
+  control: ReturnType<typeof useForm<CreativesFormValues>>["control"];
+  register: ReturnType<typeof useForm<CreativesFormValues>>["register"];
+  errors: ReturnType<typeof useForm<CreativesFormValues>>["formState"]["errors"];
+  setValue: ReturnType<typeof useForm<CreativesFormValues>>["setValue"];
+  canRemove: boolean;
+  onRemove: () => void;
+  onDuplicate: () => void;
+}) {
+  const interactionType = useWatch({ control, name: `creatives.${index}.interactionType` });
+  const creativeErrors = errors.creatives?.[index];
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-gray-800">Creative #{index + 1}</h3>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onDuplicate}
+            title="Duplicate (media will need re-uploading)"
+          >
+            ⎘ Duplicate
+          </Button>
+          {canRemove && (
+            <Button type="button" variant="ghost" size="sm" onClick={onRemove}>
+              ✕ Remove
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Media upload */}
+      <Controller
+        control={control}
+        name={`creatives.${index}.mediaId`}
+        render={({ field: f }) => (
+          <div>
+            <MediaDropzone
+              adAccountId={adAccountId}
+              onUploaded={(mediaId, fileName) => {
+                f.onChange(mediaId);
+                setValue(`creatives.${index}.mediaFileName`, fileName);
+                setValue(`creatives.${index}.uploadStatus`, "done");
+              }}
+            />
+            {creativeErrors?.mediaId && (
+              <p className="text-xs text-red-600 mt-1">
+                {creativeErrors.mediaId.message}
+              </p>
+            )}
+          </div>
+        )}
+      />
+
+      {/* Interaction type */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Select
+          label="Interaction Type"
+          options={INTERACTION_TYPE_OPTIONS}
+          {...register(`creatives.${index}.interactionType`)}
+        />
+      </div>
+
+      {/* Conditional URL fields */}
+      {interactionType === "WEB_VIEW" && (
+        <Input
+          label="Web View URL"
+          placeholder="https://example.com/landing"
+          type="url"
+          {...register(`creatives.${index}.webViewUrl`)}
+          error={creativeErrors?.webViewUrl?.message}
+        />
+      )}
+      {(interactionType === "DEEP_LINK" || interactionType === "APP_INSTALL") && (
+        <Input
+          label={interactionType === "APP_INSTALL" ? "App Deep Link URL" : "Deep Link URL"}
+          placeholder="myapp://page or https://apps.apple.com/..."
+          {...register(`creatives.${index}.deepLinkUrl`)}
+          error={creativeErrors?.deepLinkUrl?.message}
+        />
+      )}
+
+      {/* Name + Headline */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Input
+          label="Creative Name"
+          placeholder="Summer Banner"
+          {...register(`creatives.${index}.name`)}
+          error={creativeErrors?.name?.message}
+        />
+        <Input
+          label="Headline (max 34 chars)"
+          placeholder="Shop the Sale Now"
+          maxLength={34}
+          {...register(`creatives.${index}.headline`)}
+          error={creativeErrors?.headline?.message}
+        />
+      </div>
+
+      {/* Brand + CTA + Ad Set */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Input
+          label="Brand Name (optional)"
+          placeholder="Acme Corp"
+          maxLength={25}
+          {...register(`creatives.${index}.brandName`)}
+        />
+        <Select
+          label="Call to Action"
+          options={CTA_OPTIONS}
+          {...register(`creatives.${index}.callToAction`)}
+        />
+        <Select
+          label="Ad Set"
+          options={adSquadOptions}
+          placeholder="Select ad set"
+          {...register(`creatives.${index}.adSquadId`)}
+          error={creativeErrors?.adSquadId?.message}
+        />
+      </div>
+
+      {/* Ad status + shareable */}
+      <div className="flex items-center gap-6">
+        <div className="w-40">
+          <Select
+            label="Ad Status"
+            options={AD_STATUS_OPTIONS}
+            {...register(`creatives.${index}.adStatus`)}
+          />
+        </div>
+        <div className="flex items-center gap-2 pt-5">
+          <input
+            id={`shareable-${index}`}
+            type="checkbox"
+            className="h-4 w-4 rounded border-gray-300 text-cyan-500 focus:ring-cyan-500"
+            {...register(`creatives.${index}.shareable`)}
+          />
+          <label htmlFor={`shareable-${index}`} className="text-sm text-gray-700 select-none">
+            Shareable
+          </label>
+        </div>
+      </div>
+
+      <input type="hidden" {...register(`creatives.${index}.id`)} />
+      <input type="hidden" {...register(`creatives.${index}.uploadStatus`)} />
+    </div>
+  );
+}
+
+function defaultCreative(adSquadId: string) {
+  return {
+    id: uuid(),
+    adSquadId,
+    name: "",
+    headline: "",
+    brandName: "",
+    callToAction: "",
+    mediaId: "",
+    mediaFileName: "",
+    uploadStatus: "idle" as const,
+    interactionType: "SWIPE_TO_OPEN" as const,
+    shareable: false,
+    adStatus: "ACTIVE" as const,
+  };
+}
+
 export function Step3Creatives({ adAccountId }: { adAccountId: string }) {
   const { adSquads, creatives, setCreatives, setStep } = useWizardStore();
 
@@ -309,22 +497,12 @@ export function Step3Creatives({ adAccountId }: { adAccountId: string }) {
     label: sq.name || `Ad Set #${i + 1}`,
   }));
 
-  const { register, control, handleSubmit, setValue, formState: { errors } } = useForm<CreativesFormValues>({
+  const { register, control, handleSubmit, getValues, setValue, formState: { errors } } = useForm<CreativesFormValues>({
     resolver: zodResolver(creativesFormSchema),
     defaultValues: {
       creatives: creatives.length > 0
         ? creatives
-        : [{
-            id: uuid(),
-            adSquadId: adSquads[0]?.id ?? "",
-            name: "",
-            headline: "",
-            brandName: "",
-            callToAction: "",
-            mediaId: "",
-            mediaFileName: "",
-            uploadStatus: "idle",
-          }],
+        : [defaultCreative(adSquads[0]?.id ?? "")],
     },
   });
 
@@ -338,96 +516,35 @@ export function Step3Creatives({ adAccountId }: { adAccountId: string }) {
   return (
     <form onSubmit={handleSubmit(onNext)} className="space-y-6">
       {fields.map((field, i) => (
-        <div key={field.id} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-gray-800">Creative #{i + 1}</h3>
-            {fields.length > 1 && (
-              <Button type="button" variant="ghost" size="sm" onClick={() => remove(i)}>
-                ✕ Remove
-              </Button>
-            )}
-          </div>
-
-          <Controller
-            control={control}
-            name={`creatives.${i}.mediaId`}
-            render={({ field: f }) => (
-              <div>
-                <MediaDropzone
-                  adAccountId={adAccountId}
-                  onUploaded={(mediaId, fileName) => {
-                    f.onChange(mediaId);
-                    setValue(`creatives.${i}.mediaFileName`, fileName);
-                    setValue(`creatives.${i}.uploadStatus`, "done");
-                  }}
-                />
-                {errors.creatives?.[i]?.mediaId && (
-                  <p className="text-xs text-red-600 mt-1">
-                    {errors.creatives[i]?.mediaId?.message}
-                  </p>
-                )}
-              </div>
-            )}
-          />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Creative Name"
-              placeholder="Summer Banner"
-              {...register(`creatives.${i}.name`)}
-              error={errors.creatives?.[i]?.name?.message}
-            />
-            <Input
-              label={`Headline (max 34 chars)`}
-              placeholder="Shop the Sale Now"
-              maxLength={34}
-              {...register(`creatives.${i}.headline`)}
-              error={errors.creatives?.[i]?.headline?.message}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Input
-              label="Brand Name (optional)"
-              placeholder="Acme Corp"
-              maxLength={25}
-              {...register(`creatives.${i}.brandName`)}
-            />
-            <Select
-              label="Call to Action"
-              options={CTA_OPTIONS}
-              {...register(`creatives.${i}.callToAction`)}
-            />
-            <Select
-              label="Ad Set"
-              options={adSquadOptions}
-              placeholder="Select ad set"
-              {...register(`creatives.${i}.adSquadId`)}
-              error={errors.creatives?.[i]?.adSquadId?.message}
-            />
-          </div>
-
-          <input type="hidden" {...register(`creatives.${i}.id`)} />
-          <input type="hidden" {...register(`creatives.${i}.uploadStatus`)} />
-        </div>
+        <CreativeCard
+          key={field.id}
+          index={i}
+          adAccountId={adAccountId}
+          adSquadOptions={adSquadOptions}
+          control={control}
+          register={register}
+          errors={errors}
+          setValue={setValue}
+          canRemove={fields.length > 1}
+          onRemove={() => remove(i)}
+          onDuplicate={() => {
+            const current = getValues(`creatives.${i}`);
+            append({
+              ...current,
+              id: uuid(),
+              // Reset media — each creative needs its own upload
+              mediaId: "",
+              mediaFileName: "",
+              uploadStatus: "idle",
+            });
+          }}
+        />
       ))}
 
       <Button
         type="button"
         variant="secondary"
-        onClick={() =>
-          append({
-            id: uuid(),
-            adSquadId: adSquads[0]?.id ?? "",
-            name: "",
-            headline: "",
-            brandName: "",
-            callToAction: "",
-            mediaId: "",
-            mediaFileName: "",
-            uploadStatus: "idle",
-          })
-        }
+        onClick={() => append(defaultCreative(adSquads[0]?.id ?? ""))}
       >
         + Add Another Creative
       </Button>

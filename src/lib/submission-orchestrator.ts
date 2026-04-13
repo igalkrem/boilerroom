@@ -10,6 +10,7 @@ import type {
   SnapAdSquadPayload,
   SnapCreativePayload,
   SnapAdPayload,
+  CreativeType,
 } from "@/types/snapchat";
 
 type OnStageChange = (stage: SubmissionStage) => void;
@@ -20,6 +21,33 @@ function usdToMicro(usd: number): number {
 
 function toIso(date: string): string {
   return new Date(date).toISOString();
+}
+
+const INTERACTION_TYPE_MAP: Record<string, CreativeType> = {
+  SWIPE_TO_OPEN: "SNAP_AD",
+  WEB_VIEW: "WEB_VIEW",
+  DEEP_LINK: "DEEP_LINK",
+  APP_INSTALL: "APP_INSTALL",
+};
+
+function buildDemographics(sq: AdSquadFormData): Pick<SnapAdSquadPayload["targeting"], "demographics" | "devices"> {
+  const out: Pick<SnapAdSquadPayload["targeting"], "demographics" | "devices"> = {};
+
+  const hasAge = sq.targetingAgeMin !== undefined || sq.targetingAgeMax !== undefined;
+  const hasGender = sq.targetingGender && sq.targetingGender !== "ALL";
+  if (hasAge || hasGender) {
+    out.demographics = [{
+      min_age: sq.targetingAgeMin,
+      max_age: sq.targetingAgeMax,
+      genders: hasGender ? [sq.targetingGender as "MALE" | "FEMALE"] : undefined,
+    }];
+  }
+
+  if (sq.targetingDeviceType && sq.targetingDeviceType !== "ALL") {
+    out.devices = [{ device_type: sq.targetingDeviceType as "MOBILE" | "WEB" }];
+  }
+
+  return out;
 }
 
 export async function runSubmission(
@@ -45,7 +73,15 @@ export async function runSubmission(
     status: c.status,
     start_time: toIso(c.startDate),
     end_time: c.endDate ? toIso(c.endDate) : undefined,
-    daily_budget_micro: usdToMicro(c.dailyBudgetUsd),
+    spend_cap_type: c.spendCapType,
+    daily_budget_micro:
+      c.spendCapType === "DAILY_BUDGET" && c.dailyBudgetUsd
+        ? usdToMicro(c.dailyBudgetUsd)
+        : undefined,
+    lifetime_budget_micro:
+      c.spendCapType === "LIFETIME_BUDGET" && c.lifetimeBudgetUsd
+        ? usdToMicro(c.lifetimeBudgetUsd)
+        : undefined,
     objective_v2_properties: { objective_v2_type: c.objective },
   }));
 
@@ -72,7 +108,6 @@ export async function runSubmission(
   // ── Step 2: Create Ad Squads (grouped by campaign) ────────────────────────
   onStage("adSquads");
 
-  // Group ad squads by campaign client ID
   const squadsByCampaignClientId: Record<string, AdSquadFormData[]> = {};
   for (const sq of adSquads) {
     if (!squadsByCampaignClientId[sq.campaignId]) {
@@ -103,13 +138,28 @@ export async function runSubmission(
       name: sq.name,
       type: sq.type,
       status: sq.status,
-      targeting: { geo_locations: [{ country_code: sq.geoCountryCode }] },
-      placement_v2: { config: "AUTOMATIC" },
+      targeting: {
+        geo_locations: [{ country_code: sq.geoCountryCode }],
+        ...buildDemographics(sq),
+      },
+      placement_v2: { config: sq.placementConfig ?? "AUTOMATIC" },
       billing_event: "IMPRESSION",
       optimization_goal: sq.optimizationGoal,
       bid_strategy: sq.bidStrategy,
       bid_micro: sq.bidAmountUsd ? usdToMicro(sq.bidAmountUsd) : undefined,
-      daily_budget_micro: usdToMicro(sq.dailyBudgetUsd),
+      daily_budget_micro:
+        sq.spendCapType === "DAILY_BUDGET" && sq.dailyBudgetUsd
+          ? usdToMicro(sq.dailyBudgetUsd)
+          : undefined,
+      lifetime_budget_micro:
+        sq.spendCapType === "LIFETIME_BUDGET" && sq.lifetimeBudgetUsd
+          ? usdToMicro(sq.lifetimeBudgetUsd)
+          : undefined,
+      pacing_type: sq.pacingType,
+      start_time: sq.startDate ? toIso(sq.startDate) : undefined,
+      end_time: sq.endDate ? toIso(sq.endDate) : undefined,
+      frequency_cap_max_impressions: sq.frequencyCapMaxImpressions,
+      frequency_cap_time_period: sq.frequencyCapTimePeriod,
     }));
 
     const sqRes = await fetch("/api/snapchat/adsquads", {
@@ -134,15 +184,25 @@ export async function runSubmission(
   // ── Step 3: Create Creatives ──────────────────────────────────────────────
   onStage("creatives");
 
-  const creativePayloads: SnapCreativePayload[] = creatives.map((cr: CreativeFormData) => ({
-    ad_account_id: adAccountId,
-    name: cr.name,
-    type: "SNAP_AD",
-    headline: cr.headline,
-    brand_name: cr.brandName,
-    call_to_action: cr.callToAction,
-    top_snap_media_id: cr.mediaId ?? "",
-  }));
+  const creativePayloads: SnapCreativePayload[] = creatives.map((cr: CreativeFormData) => {
+    const creativeType: CreativeType = INTERACTION_TYPE_MAP[cr.interactionType] ?? "SNAP_AD";
+    return {
+      ad_account_id: adAccountId,
+      name: cr.name,
+      type: creativeType,
+      headline: cr.headline,
+      brand_name: cr.brandName,
+      call_to_action: cr.callToAction,
+      top_snap_media_id: cr.mediaId ?? "",
+      shareable: cr.shareable,
+      interaction_zone_properties:
+        cr.interactionType === "WEB_VIEW"
+          ? { web_view_url: cr.webViewUrl }
+          : cr.interactionType === "DEEP_LINK" || cr.interactionType === "APP_INSTALL"
+          ? { deep_link_url: cr.deepLinkUrl }
+          : undefined,
+    };
+  });
 
   const crRes = await fetch("/api/snapchat/creatives", {
     method: "POST",
@@ -166,7 +226,6 @@ export async function runSubmission(
   // ── Step 4: Create Ads (one per creative, linked to its ad squad) ─────────
   onStage("ads");
 
-  // Group creatives by ad squad
   const creativesBySquadId: Record<string, CreativeFormData[]> = {};
   for (const cr of creatives) {
     if (!creativesBySquadId[cr.adSquadId]) {
@@ -196,8 +255,8 @@ export async function runSubmission(
         ad_squad_id: snapSquadId,
         creative_id: creativeIdMap.get(cr.id)!,
         name: cr.name,
-        type: "SNAP_AD",
-        status: "ACTIVE",
+        type: INTERACTION_TYPE_MAP[cr.interactionType] ?? "SNAP_AD",
+        status: cr.adStatus ?? "ACTIVE",
       }));
 
     if (adPayloads.length === 0) continue;

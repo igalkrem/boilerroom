@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { v4 as uuid } from "uuid";
 import type {
   CampaignFormData,
   AdSquadFormData,
@@ -9,6 +10,15 @@ import type {
   SubmissionStatus,
   SubmissionStage,
 } from "@/types/wizard";
+import type { CampaignPreset } from "@/types/preset";
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function ensureFutureDate(date: string): string {
+  return date < todayIso() ? todayIso() : date;
+}
 
 interface WizardStore {
   currentStep: 1 | 2 | 3 | 4;
@@ -30,6 +40,11 @@ interface WizardStore {
   setSubmissionStage: (stage: SubmissionStage | null) => void;
   setSubmissionResults: (results: SubmissionResults) => void;
   reset: () => void;
+
+  duplicateCampaign: (id: string) => void;
+  duplicateAdSquad: (id: string) => void;
+  duplicateCreative: (id: string) => void;
+  loadPreset: (preset: CampaignPreset) => void;
 }
 
 const initialState = {
@@ -43,7 +58,7 @@ const initialState = {
   submissionResults: null as SubmissionResults | null,
 };
 
-export const useWizardStore = create<WizardStore>((set) => ({
+export const useWizardStore = create<WizardStore>((set, get) => ({
   ...initialState,
 
   setAdAccountId: (id) => set({ adAccountId: id }),
@@ -59,4 +74,80 @@ export const useWizardStore = create<WizardStore>((set) => ({
   setSubmissionStage: (submissionStage) => set({ submissionStage }),
   setSubmissionResults: (submissionResults) => set({ submissionResults }),
   reset: () => set(initialState),
+
+  duplicateCampaign: (id) => {
+    const { campaigns } = get();
+    const item = campaigns.find((c) => c.id === id);
+    if (!item) return;
+    const clone = structuredClone(item);
+    clone.id = uuid();
+    set({ campaigns: [...campaigns, clone] });
+  },
+
+  duplicateAdSquad: (id) => {
+    const { adSquads } = get();
+    const item = adSquads.find((s) => s.id === id);
+    if (!item) return;
+    const clone = structuredClone(item);
+    clone.id = uuid();
+    set({ adSquads: [...adSquads, clone] });
+  },
+
+  duplicateCreative: (id) => {
+    const { creatives } = get();
+    const item = creatives.find((c) => c.id === id);
+    if (!item) return;
+    const clone = structuredClone(item);
+    clone.id = uuid();
+    // Reset media state — each creative needs its own upload
+    clone.mediaId = undefined;
+    clone.mediaFileName = undefined;
+    clone.mediaPreviewUrl = undefined;
+    clone.uploadStatus = "idle";
+    set({ creatives: [...creatives, clone] });
+  },
+
+  loadPreset: (preset) => {
+    const newCampaignId = uuid();
+    const campaignData = preset.campaign;
+
+    const campaign: CampaignFormData = {
+      id: newCampaignId,
+      name: campaignData.name,
+      objective: campaignData.objective,
+      status: campaignData.status,
+      startDate: ensureFutureDate(campaignData.startDate),
+      endDate: campaignData.endDate,
+      spendCapType: campaignData.spendCapType,
+      dailyBudgetUsd: campaignData.dailyBudgetUsd,
+      lifetimeBudgetUsd: campaignData.lifetimeBudgetUsd,
+    };
+
+    const adSquads: AdSquadFormData[] = preset.adSquads.map((sq) => ({
+      id: uuid(),
+      campaignId: newCampaignId,
+      name: sq.name,
+      type: sq.type,
+      geoCountryCode: sq.geoCountryCode,
+      optimizationGoal: sq.optimizationGoal,
+      bidStrategy: sq.bidStrategy,
+      bidAmountUsd: sq.bidAmountUsd,
+      spendCapType: sq.spendCapType,
+      dailyBudgetUsd: sq.dailyBudgetUsd,
+      lifetimeBudgetUsd: sq.lifetimeBudgetUsd,
+      status: sq.status,
+      startDate: sq.startDate ? ensureFutureDate(sq.startDate) : undefined,
+      endDate: sq.endDate,
+      pacingType: sq.pacingType,
+      placementConfig: sq.placementConfig,
+      frequencyCapMaxImpressions: sq.frequencyCapMaxImpressions,
+      frequencyCapTimePeriod: sq.frequencyCapTimePeriod,
+      targetingAgeMin: sq.targetingAgeMin,
+      targetingAgeMax: sq.targetingAgeMax,
+      targetingGender: sq.targetingGender,
+      targetingDeviceType: sq.targetingDeviceType,
+    }));
+
+    set({ campaigns: [campaign], adSquads });
+  },
 }));

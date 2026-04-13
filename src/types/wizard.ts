@@ -1,5 +1,13 @@
 import type { CampaignObjective, BidStrategy, OptimizationGoal } from "./snapchat";
 
+export type FrequencyCapTimePeriod =
+  | "HOURS_1"
+  | "HOURS_6"
+  | "HOURS_12"
+  | "DAY_1"
+  | "DAY_7"
+  | "MONTH_1";
+
 // ─── Form data shapes (filled by wizard steps) ───────────────────────────────
 
 export interface CampaignFormData {
@@ -9,7 +17,9 @@ export interface CampaignFormData {
   status: "ACTIVE" | "PAUSED";
   startDate: string; // YYYY-MM-DD
   endDate?: string;
-  dailyBudgetUsd: number;
+  spendCapType: "DAILY_BUDGET" | "LIFETIME_BUDGET";
+  dailyBudgetUsd?: number;
+  lifetimeBudgetUsd?: number;
 }
 
 export interface AdSquadFormData {
@@ -21,9 +31,31 @@ export interface AdSquadFormData {
   optimizationGoal: OptimizationGoal;
   bidStrategy: BidStrategy;
   bidAmountUsd?: number;
-  dailyBudgetUsd: number;
+  spendCapType: "DAILY_BUDGET" | "LIFETIME_BUDGET";
+  dailyBudgetUsd?: number;
+  lifetimeBudgetUsd?: number;
   status: "ACTIVE" | "PAUSED";
+  // Ad-set-level scheduling
+  startDate?: string;
+  endDate?: string;
+  // Delivery
+  pacingType: "STANDARD" | "ACCELERATED";
+  placementConfig: "AUTOMATIC" | "CONTENT";
+  // Frequency cap
+  frequencyCapMaxImpressions?: number;
+  frequencyCapTimePeriod?: FrequencyCapTimePeriod;
+  // Targeting
+  targetingAgeMin?: number;
+  targetingAgeMax?: number;
+  targetingGender?: "ALL" | "MALE" | "FEMALE";
+  targetingDeviceType?: "WEB" | "MOBILE" | "ALL";
 }
+
+export type InteractionType =
+  | "SWIPE_TO_OPEN"
+  | "WEB_VIEW"
+  | "DEEP_LINK"
+  | "APP_INSTALL";
 
 export interface CreativeFormData {
   id: string; // client-side UUID
@@ -36,6 +68,13 @@ export interface CreativeFormData {
   mediaFileName?: string;
   mediaPreviewUrl?: string;
   uploadStatus: "idle" | "uploading" | "done" | "error";
+  // Interaction
+  interactionType: InteractionType;
+  webViewUrl?: string;
+  deepLinkUrl?: string;
+  shareable?: boolean;
+  // Ad settings
+  adStatus: "ACTIVE" | "PAUSED";
 }
 
 // ─── Submission results ────────────────────────────────────────────────────
