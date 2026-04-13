@@ -160,6 +160,7 @@ export async function runSubmission(
       end_time: sq.endDate ? toIso(sq.endDate) : undefined,
       frequency_cap_max_impressions: sq.frequencyCapMaxImpressions,
       frequency_cap_time_period: sq.frequencyCapTimePeriod,
+      pixel_id: sq.pixelId || undefined,
     }));
 
     const sqRes = await fetch("/api/snapchat/adsquads", {

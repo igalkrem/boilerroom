@@ -41,6 +41,8 @@ export const adSquadSchema = z
     targetingAgeMax: z.number().int().min(13).max(50).optional(),
     targetingGender: z.enum(["ALL", "MALE", "FEMALE"]).optional(),
     targetingDeviceType: z.enum(["WEB", "MOBILE", "ALL"]).optional(),
+    // Tracking
+    pixelId: z.string().min(1, "Select a pixel"),
   })
   .superRefine((data, ctx) => {
     // Budget

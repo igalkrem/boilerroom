@@ -1,12 +1,16 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useWizardStore } from "@/hooks/useWizardStore";
 import { adSquadsFormSchema } from "@/lib/validations/adsquad.schema";
+import { loadPixels } from "@/lib/pixels";
 import { Input, Select, Button } from "@/components/ui";
 import { v4 as uuid } from "uuid";
+import Link from "next/link";
 import type { AdSquadFormData } from "@/types/wizard";
+import type { SavedPixel } from "@/types/pixel";
 
 const OPTIMIZATION_OPTIONS = [
   { value: "IMPRESSIONS", label: "Impressions" },
@@ -94,6 +98,7 @@ function defaultAdSquad(campaignId: string): AdSquadFormData {
     placementConfig: "AUTOMATIC",
     targetingGender: "ALL",
     targetingDeviceType: "ALL",
+    pixelId: "",
   };
 }
 
@@ -104,6 +109,7 @@ function AdSetCard({
   errors,
   setValue,
   campaignOptions,
+  pixelOptions,
   canRemove,
   onRemove,
   onDuplicate,
@@ -114,6 +120,7 @@ function AdSetCard({
   errors: ReturnType<typeof useForm<{ adSquads: AdSquadFormData[] }>>["formState"]["errors"];
   setValue: ReturnType<typeof useForm<{ adSquads: AdSquadFormData[] }>>["setValue"];
   campaignOptions: Array<{ value: string; label: string }>;
+  pixelOptions: Array<{ value: string; label: string }>;
   canRemove: boolean;
   onRemove: () => void;
   onDuplicate: () => void;
@@ -253,6 +260,32 @@ function AdSetCard({
         />
       </div>
 
+      {/* Tracking */}
+      <div className="border-t border-gray-100 pt-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+          Tracking
+        </p>
+        {pixelOptions.length === 0 ? (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            No pixels configured.{" "}
+            <Link href="/dashboard/pixels" className="underline font-medium">
+              Add a pixel
+            </Link>{" "}
+            before creating ad sets.
+          </p>
+        ) : (
+          <div className="max-w-sm">
+            <Select
+              label="Snap Pixel"
+              options={pixelOptions}
+              placeholder="Select a pixel"
+              {...register(`adSquads.${index}.pixelId`)}
+              error={squadErrors?.pixelId?.message}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Frequency cap */}
       <div className="border-t border-gray-100 pt-4">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
@@ -324,6 +357,13 @@ function AdSetCard({
 
 export function Step2AdSets() {
   const { campaigns, adSquads, setAdSquads, setStep } = useWizardStore();
+  const [pixels, setPixels] = useState<SavedPixel[]>([]);
+
+  useEffect(() => {
+    setPixels(loadPixels());
+  }, []);
+
+  const pixelOptions = pixels.map((p) => ({ value: p.pixelId, label: p.name }));
 
   const campaignOptions = campaigns.map((c, idx) => ({
     value: c.id,
@@ -359,6 +399,7 @@ export function Step2AdSets() {
           errors={errors}
           setValue={setValue}
           campaignOptions={campaignOptions}
+          pixelOptions={pixelOptions}
           canRemove={fields.length > 1}
           onRemove={() => remove(i)}
           onDuplicate={() =>

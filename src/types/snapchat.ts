@@ -94,6 +94,7 @@ export interface SnapAdSquadPayload {
   end_time?: string;
   frequency_cap_max_impressions?: number;
   frequency_cap_time_period?: string;
+  pixel_id?: string;
 }
 
 export interface SnapAdSquad extends SnapAdSquadPayload {
