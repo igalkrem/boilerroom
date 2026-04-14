@@ -65,7 +65,7 @@ export function WizardShell({ adAccountId }: { adAccountId: string }) {
       ) : currentStep === 2 ? (
         <Step2AdSets key={presetKey} />
       ) : currentStep === 3 ? (
-        <Step3Creatives adAccountId={adAccountId} />
+        <Step3Creatives />
       ) : (
         <Step4Review />
       )}

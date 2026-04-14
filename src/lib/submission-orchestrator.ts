@@ -5,6 +5,7 @@ import type {
   SubmissionResults,
   SubmissionStage,
 } from "@/types/wizard";
+import { uploadMediaToSnapchat } from "@/lib/uploadMediaToSnapchat";
 import type {
   SnapCampaignPayload,
   SnapAdSquadPayload,
@@ -59,11 +60,36 @@ export async function runSubmission(
   onStage: OnStageChange
 ): Promise<SubmissionResults> {
   const results: SubmissionResults = {
+    uploadMedia: [],
     campaigns: [],
     adSquads: [],
     creatives: [],
     ads: [],
   };
+
+  // ── Step 0: Upload all media files in parallel ────────────────────────────
+  onStage("uploadMedia");
+
+  // mediaIdMap resolves each creative's client UUID → Snapchat media ID.
+  // Creatives that already have a mediaId (e.g. re-submission) skip the upload.
+  const mediaIdMap = new Map<string, string>();
+
+  await Promise.all(
+    creatives.map(async (cr) => {
+      if (!cr.mediaFile) {
+        if (cr.mediaId) mediaIdMap.set(cr.id, cr.mediaId);
+        return;
+      }
+      const mediaType = cr.mediaFile.type.startsWith("video/") ? "VIDEO" : "IMAGE";
+      try {
+        const mediaId = await uploadMediaToSnapchat(cr.mediaFile, adAccountId, mediaType);
+        mediaIdMap.set(cr.id, mediaId);
+        results.uploadMedia.push({ clientId: cr.id, snapId: mediaId, name: cr.name });
+      } catch (err) {
+        results.uploadMedia.push({ clientId: cr.id, snapId: "", name: cr.name, error: String(err) });
+      }
+    })
+  );
 
   // ── Step 1: Create Campaigns ──────────────────────────────────────────────
   onStage("campaigns");
@@ -207,7 +233,15 @@ export async function runSubmission(
   // ── Step 3: Create Creatives ──────────────────────────────────────────────
   onStage("creatives");
 
-  const creativePayloads: SnapCreativePayload[] = creatives.map((cr) => {
+  // Only submit creatives whose media uploaded successfully
+  const uploadedCreatives = creatives.filter((cr) => mediaIdMap.has(cr.id));
+  creatives
+    .filter((cr) => !mediaIdMap.has(cr.id))
+    .forEach((cr) =>
+      results.creatives.push({ clientId: cr.id, snapId: "", name: cr.name, error: "Media upload failed" })
+    );
+
+  const creativePayloads: SnapCreativePayload[] = uploadedCreatives.map((cr) => {
     const creativeType: CreativeType = INTERACTION_TYPE_MAP[cr.interactionType] ?? "SNAP_AD";
     return {
       ad_account_id: adAccountId,
@@ -216,7 +250,7 @@ export async function runSubmission(
       headline: cr.headline,
       brand_name: cr.brandName || undefined,
       call_to_action: cr.callToAction || undefined,
-      top_snap_media_id: cr.mediaId ?? "",
+      top_snap_media_id: mediaIdMap.get(cr.id) ?? cr.mediaId ?? "",
       shareable: cr.shareable ?? undefined,
       web_view_properties:
         cr.interactionType === "WEB_VIEW" && cr.webViewUrl
@@ -244,7 +278,7 @@ export async function runSubmission(
   // CR-2: handle top-level HTTP failure
   if (!crRes.ok && !crData.results) {
     console.error("Creatives API error:", crRes.status, crData);
-    creatives.forEach((cr) =>
+    uploadedCreatives.forEach((cr) =>
       results.creatives.push({ clientId: cr.id, snapId: "", name: cr.name, error: crData.error ?? `HTTP ${crRes.status}` })
     );
     onStage("done");
@@ -252,7 +286,7 @@ export async function runSubmission(
   }
 
   const creativeIdMap = new Map<string, string>();
-  creatives.forEach((cr, i) => {
+  uploadedCreatives.forEach((cr, i) => {
     const snap = crData.results?.[i];
     results.creatives.push({
       clientId: cr.id,
@@ -267,7 +301,7 @@ export async function runSubmission(
   onStage("ads");
 
   const creativesBySquadId: Record<string, CreativeFormData[]> = {};
-  for (const cr of creatives) {
+  for (const cr of uploadedCreatives) {
     if (!creativesBySquadId[cr.adSquadId]) {
       creativesBySquadId[cr.adSquadId] = [];
     }

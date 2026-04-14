@@ -67,7 +67,8 @@ export interface CreativeFormData {
   headline: string; // max 34 chars
   brandName?: string;
   callToAction?: string;
-  mediaId?: string; // resolved after upload
+  mediaId?: string; // resolved at submission time by uploadMedia stage
+  mediaFile?: File; // transcoded/resized file stored in Step 3, uploaded in Step 4
   mediaFileName?: string;
   mediaPreviewUrl?: string;
   uploadStatus: "idle" | "uploading" | "done" | "error";
@@ -108,6 +109,7 @@ export interface CreatedAd {
 }
 
 export interface SubmissionResults {
+  uploadMedia: Array<{ clientId: string; snapId: string; name: string; error?: string }>;
   campaigns: Array<CreatedCampaign & { error?: string }>;
   adSquads: Array<CreatedAdSquad & { error?: string }>;
   creatives: Array<CreatedCreative & { error?: string }>;
@@ -117,6 +119,7 @@ export interface SubmissionResults {
 export type SubmissionStatus = "idle" | "running" | "done" | "error";
 
 export type SubmissionStage =
+  | "uploadMedia"
   | "campaigns"
   | "adSquads"
   | "creatives"

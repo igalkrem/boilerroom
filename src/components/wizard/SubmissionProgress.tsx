@@ -6,6 +6,7 @@ import { clsx } from "clsx";
 import type { SubmissionStage, SubmissionResults } from "@/types/wizard";
 
 const STAGES: Array<{ key: SubmissionStage; label: string }> = [
+  { key: "uploadMedia", label: "Uploading Media" },
   { key: "campaigns", label: "Creating Campaigns" },
   { key: "adSquads", label: "Creating Ad Sets" },
   { key: "creatives", label: "Creating Creatives" },
@@ -19,7 +20,7 @@ function StageRow({ stage, currentStage, results }: {
   currentStage: SubmissionStage | null;
   results: SubmissionResults | null;
 }) {
-  const stageOrder = ["campaigns", "adSquads", "creatives", "ads", "done"];
+  const stageOrder = ["uploadMedia", "campaigns", "adSquads", "creatives", "ads", "done"];
   const currentIdx = stageOrder.indexOf(currentStage ?? "");
   const stageIdx = stageOrder.indexOf(stage.key);
   const isPast = currentIdx > stageIdx;
@@ -27,7 +28,9 @@ function StageRow({ stage, currentStage, results }: {
   const isPending = currentIdx < stageIdx;
 
   const resultItems: ResultItem[] = results
-    ? stage.key === "campaigns"
+    ? stage.key === "uploadMedia"
+      ? results.uploadMedia
+      : stage.key === "campaigns"
       ? results.campaigns
       : stage.key === "adSquads"
       ? results.adSquads
@@ -57,7 +60,7 @@ function StageRow({ stage, currentStage, results }: {
           </span>
           {isPast && (
             <span className="text-xs text-gray-500">
-              {successCount}/{resultItems.length} created
+              {successCount}/{resultItems.length} {stage.key === "uploadMedia" ? "uploaded" : "created"}
               {errorCount > 0 && <span className="text-red-600 ml-1">({errorCount} failed)</span>}
             </span>
           )}
@@ -91,6 +94,7 @@ export function SubmissionProgress() {
 
   if (isDone && submissionResults) {
     const hasErrors = [
+      ...submissionResults.uploadMedia,
       ...submissionResults.campaigns,
       ...submissionResults.adSquads,
       ...submissionResults.creatives,
@@ -110,8 +114,9 @@ export function SubmissionProgress() {
         </div>
         {hasErrors && (
           <div className="text-left space-y-1 max-w-sm mx-auto">
-            {[...submissionResults.campaigns, ...submissionResults.adSquads,
-              ...submissionResults.creatives, ...submissionResults.ads]
+            {[...submissionResults.uploadMedia, ...submissionResults.campaigns,
+              ...submissionResults.adSquads, ...submissionResults.creatives,
+              ...submissionResults.ads]
               .filter((r) => r.error)
               .map((r) => (
                 <p key={r.clientId} className="text-xs text-red-600">{r.name}: {r.error}</p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm, useFieldArray, useWatch, Controller } from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useWizardStore } from "@/hooks/useWizardStore";
 import { creativesFormSchema } from "@/lib/validations/creative.schema";
@@ -42,15 +42,12 @@ const AD_STATUS_OPTIONS = [
   { value: "PAUSED", label: "Paused" },
 ];
 
-/** Parse response as JSON; if the body isn't JSON, throw a readable error. */
-async function safeJson(res: Response) {
-  const text = await res.text();
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(text.slice(0, 200) || `HTTP ${res.status}`);
-  }
-}
+/**
+ * Module-level map of creative id → processed File (transcoded/resized).
+ * Populated in Step 3, consumed by the submission orchestrator in Step 4.
+ * Keyed by the creative's UUID so duplicates (which get new IDs) start fresh.
+ */
+const pendingMediaFiles = new Map<string, File>();
 
 import type { FFmpeg } from "@ffmpeg/ffmpeg";
 
@@ -183,129 +180,40 @@ async function resizeImageForSnap(file: File): Promise<File> {
   });
 }
 
-const CHUNK_SIZE = 3 * 1024 * 1024;
-
-async function uploadVideoChunked(
-  file: File,
-  mediaId: string,
-  onProgress: (msg: string) => void
-): Promise<void> {
-  const numChunks = Math.ceil(file.size / CHUNK_SIZE);
-
-  onProgress("Initializing chunked upload...");
-  const initRes = await fetch("/api/snapchat/media/upload-init", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mediaId, fileName: file.name, fileSize: file.size, numberOfParts: numChunks }),
-  });
-  const initData = await safeJson(initRes);
-  if (initData.error) throw new Error(initData.error);
-  const { upload_id, add_path, finalize_path } = initData;
-
-  for (let i = 0; i < numChunks; i++) {
-    onProgress(`Uploading part ${i + 1} of ${numChunks}...`);
-    const start = i * CHUNK_SIZE;
-    const chunk = file.slice(start, start + CHUNK_SIZE);
-
-    const chunkForm = new FormData();
-    chunkForm.append("chunk", new File([chunk], file.name));
-    chunkForm.append("partNumber", String(i + 1));
-    chunkForm.append("uploadId", upload_id);
-    chunkForm.append("addPath", add_path);
-
-    const chunkRes = await fetch("/api/snapchat/media/upload-chunk", {
-      method: "POST",
-      body: chunkForm,
-    });
-    const chunkData = await safeJson(chunkRes);
-    if (chunkData.error) throw new Error(chunkData.error);
-  }
-
-  onProgress("Finalizing upload...");
-  const finalRes = await fetch("/api/snapchat/media/upload-finalize", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ uploadId: upload_id, finalizePath: finalize_path }),
-  });
-  const finalData = await safeJson(finalRes);
-  if (finalData.error) throw new Error(finalData.error);
-}
-
 function MediaDropzone({
-  adAccountId,
-  onUploaded,
+  onFileReady,
 }: {
-  adAccountId: string;
-  onUploaded: (mediaId: string, fileName: string) => void;
+  onFileReady: (file: File, fileName: string) => void;
 }) {
   const [status, setStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
   const [progress, setProgress] = useState<string>("");
   const [lastFile, setLastFile] = useState<File | null>(null);
 
-  const runUpload = async (file: File) => {
+  const processFile = async (file: File) => {
     setLastFile(file);
     setStatus("uploading");
 
     try {
       const isVideo = file.type.startsWith("video/");
-      const mediaType = isVideo ? "VIDEO" : "IMAGE";
 
       if (isVideo) {
         file = await transcodeVideoForSnap(file, (msg) => setProgress(msg));
-      }
-
-      if (!isVideo) {
+      } else {
         setProgress("Resizing image to 1080×1920...");
         file = await resizeImageForSnap(file);
       }
 
-      setProgress("Creating media entity...");
-      const entityRes = await fetch("/api/snapchat/media", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adAccountId, name: file.name, type: mediaType }),
-      });
-      const entityData = await safeJson(entityRes);
-      if (entityData.error) throw new Error(entityData.error);
-      const { mediaId } = entityData;
-
-      if (isVideo) {
-        await uploadVideoChunked(file, mediaId, (msg) => setProgress(msg));
-        // Snapchat processes video asynchronously after finalize — poll until COMPLETE
-        // before marking ready, otherwise creative creation will fail with PENDING media.
-        setProgress("Waiting for Snapchat to process video...");
-        const pollRes = await fetch("/api/snapchat/media/poll", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mediaId, adAccountId }),
-        });
-        const pollData = await safeJson(pollRes);
-        if (pollData.error) throw new Error(pollData.error);
-      } else {
-        setProgress("Uploading image...");
-        const form = new FormData();
-        form.append("file", file);
-        form.append("mediaId", mediaId);
-        form.append("adAccountId", adAccountId);
-        const uploadRes = await fetch("/api/snapchat/media/upload", {
-          method: "POST",
-          body: form,
-        });
-        const uploadData = await safeJson(uploadRes);
-        if (uploadData.error) throw new Error(uploadData._debug ? `${uploadData.error} | debug: ${JSON.stringify(uploadData._debug)}` : uploadData.error);
-      }
-
       setStatus("done");
       setProgress("");
-      onUploaded(mediaId, file.name);
+      onFileReady(file, file.name);
     } catch (err) {
       setStatus("error");
       setProgress(String(err));
     }
   };
 
-  const onDrop = (accepted: File[]) => { if (accepted[0]) runUpload(accepted[0]); };
-  const retry = () => { if (lastFile) runUpload(lastFile); };
+  const onDrop = (accepted: File[]) => { if (accepted[0]) processFile(accepted[0]); };
+  const retry = () => { if (lastFile) processFile(lastFile); };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -329,14 +237,14 @@ function MediaDropzone({
           <>
             <div className="text-3xl mb-2">↑</div>
             <p className="text-sm text-gray-600">Drag & drop image or video here, or click to browse</p>
-            <p className="text-xs text-gray-400 mt-1">PNG/JPG (auto-resized to 1080×1920) · MP4/MOV any size · chunked upload</p>
+            <p className="text-xs text-gray-400 mt-1">PNG/JPG (auto-resized to 1080×1920) · MP4/MOV (transcoded locally) · uploaded on submit</p>
           </>
         )}
         {status === "uploading" && (
           <p className="text-sm text-gray-600 animate-pulse">{progress}</p>
         )}
         {status === "done" && (
-          <p className="text-sm text-green-600 font-medium">✅ Upload complete</p>
+          <p className="text-sm text-green-600 font-medium">✅ Ready — will upload on submit</p>
         )}
       </div>
       {status === "error" && (
@@ -353,7 +261,7 @@ function MediaDropzone({
 
 function CreativeCard({
   index,
-  adAccountId,
+  creativeId,
   adSquadOptions,
   control,
   register,
@@ -364,7 +272,7 @@ function CreativeCard({
   onDuplicate,
 }: {
   index: number;
-  adAccountId: string;
+  creativeId: string;
   adSquadOptions: Array<{ value: string; label: string }>;
   control: ReturnType<typeof useForm<CreativesFormValues>>["control"];
   register: ReturnType<typeof useForm<CreativesFormValues>>["register"];
@@ -400,27 +308,20 @@ function CreativeCard({
       </div>
 
       {/* Media upload */}
-      <Controller
-        control={control}
-        name={`creatives.${index}.mediaId`}
-        render={({ field: f }) => (
-          <div>
-            <MediaDropzone
-              adAccountId={adAccountId}
-              onUploaded={(mediaId, fileName) => {
-                f.onChange(mediaId);
-                setValue(`creatives.${index}.mediaFileName`, fileName);
-                setValue(`creatives.${index}.uploadStatus`, "done");
-              }}
-            />
-            {creativeErrors?.mediaId && (
-              <p className="text-xs text-red-600 mt-1">
-                {creativeErrors.mediaId.message}
-              </p>
-            )}
-          </div>
+      <div>
+        <MediaDropzone
+          onFileReady={(file, fileName) => {
+            pendingMediaFiles.set(creativeId, file);
+            setValue(`creatives.${index}.mediaFileName`, fileName);
+            setValue(`creatives.${index}.uploadStatus`, "done");
+          }}
+        />
+        {creativeErrors?.mediaId && (
+          <p className="text-xs text-red-600 mt-1">
+            {creativeErrors.mediaId.message}
+          </p>
         )}
-      />
+      </div>
 
       {/* Interaction type */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -542,7 +443,7 @@ function defaultCreative(adSquadId: string) {
   };
 }
 
-export function Step3Creatives({ adAccountId }: { adAccountId: string }) {
+export function Step3Creatives() {
   const { adSquads, creatives, setCreatives, setStep } = useWizardStore();
 
   const adSquadOptions = adSquads.map((sq, i) => ({
@@ -562,7 +463,14 @@ export function Step3Creatives({ adAccountId }: { adAccountId: string }) {
   const { fields, append, remove } = useFieldArray({ control, name: "creatives" });
 
   const onNext = (data: CreativesFormValues) => {
-    setCreatives(data.creatives as CreativeFormData[]);
+    // Merge transcoded File objects (stored in pendingMediaFiles) into the creatives
+    // before handing off to the store — they aren't form fields so react-hook-form
+    // doesn't carry them, but the submission orchestrator needs them.
+    const withFiles = (data.creatives as CreativeFormData[]).map((cr) => ({
+      ...cr,
+      mediaFile: pendingMediaFiles.get(cr.id),
+    }));
+    setCreatives(withFiles);
     setStep(4);
   };
 
@@ -572,7 +480,7 @@ export function Step3Creatives({ adAccountId }: { adAccountId: string }) {
         <CreativeCard
           key={field.id}
           index={i}
-          adAccountId={adAccountId}
+          creativeId={field.id}
           adSquadOptions={adSquadOptions}
           control={control}
           register={register}
