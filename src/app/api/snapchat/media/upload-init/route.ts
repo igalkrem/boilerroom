@@ -32,5 +32,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Init failed: ${res.status} - ${text}` }, { status: 500 });
   }
 
-  return NextResponse.json(JSON.parse(text));
+  const data = JSON.parse(text) as { upload_id?: string; add_path?: string; finalize_path?: string };
+
+  // Snapchat may return full URLs or relative paths — normalize to relative /v1/... paths
+  // so the SSRF validation in upload-chunk and upload-finalize always passes.
+  function toRelativePath(p: string | undefined): string | undefined {
+    if (!p) return p;
+    try {
+      const url = new URL(p);
+      return url.pathname + url.search;
+    } catch {
+      return p; // already a relative path
+    }
+  }
+
+  return NextResponse.json({
+    ...data,
+    add_path: toRelativePath(data.add_path),
+    finalize_path: toRelativePath(data.finalize_path),
+  });
 }
