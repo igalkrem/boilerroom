@@ -92,17 +92,52 @@ async function transcodeVideoForSnap(file: File, onProgress: (msg: string) => vo
 
   await ffmpeg.writeFile(inputName, await fetchFile(file));
 
-  await ffmpeg.exec([
+  // First attempt: transcode with source audio (works when input has an audio track)
+  let exitCode = await ffmpeg.exec([
     "-i", inputName,
     "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2:black",
     "-c:v", "libx264",
     "-preset", "fast",
     "-crf", "23",
+    "-pix_fmt", "yuv420p",      // required by Snapchat (yuv420p only)
+    "-profile:v", "main",       // H.264 Main profile for broad compatibility
+    "-level", "4.0",
     "-c:a", "aac",
     "-b:a", "192k",
+    "-ar", "44100",
+    "-ac", "2",
     "-movflags", "+faststart",
     outputName,
   ]);
+
+  // If source had no audio track, ffmpeg exits non-zero; retry with a silent audio track
+  if (exitCode !== 0) {
+    onProgress("No audio track detected — adding silence...");
+    exitCode = await ffmpeg.exec([
+      "-i", inputName,
+      "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+      "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2:black",
+      "-c:v", "libx264",
+      "-preset", "fast",
+      "-crf", "23",
+      "-pix_fmt", "yuv420p",
+      "-profile:v", "main",
+      "-level", "4.0",
+      "-map", "0:v:0",
+      "-map", "1:a:0",
+      "-c:a", "aac",
+      "-b:a", "192k",
+      "-ar", "44100",
+      "-ac", "2",
+      "-shortest",
+      "-movflags", "+faststart",
+      outputName,
+    ]);
+  }
+
+  if (exitCode !== 0) {
+    throw new Error("Video transcoding failed. Please check the file is a valid video.");
+  }
 
   const data = await ffmpeg.readFile(outputName) as Uint8Array;
   await ffmpeg.deleteFile(inputName);
