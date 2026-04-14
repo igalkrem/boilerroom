@@ -6,6 +6,7 @@ import { z } from "zod";
 const BASE_URL = process.env.SNAPCHAT_API_BASE_URL ?? "https://adsapi.snapchat.com/v1";
 
 const bodySchema = z.object({
+  adAccountId: z.string().min(1),
   mediaId: z.string().min(1),
   fileName: z.string().min(1),
   fileSize: z.number().int().positive().max(500_000_000),
@@ -25,14 +26,14 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
   }
-  const { mediaId, fileName, fileSize, numberOfParts } = parsed.data;
+  const { adAccountId, mediaId, fileName, fileSize, numberOfParts } = parsed.data;
 
   const form = new FormData();
   form.append("file_name", fileName);
   form.append("file_size", String(fileSize));
   form.append("number_of_parts", String(numberOfParts));
 
-  const res = await rateLimitedCall(() => fetch(`${BASE_URL}/media/${mediaId}/multipart-upload-v2?action=INIT`, {
+  const res = await rateLimitedCall(() => fetch(`${BASE_URL}/adaccounts/${adAccountId}/media/${mediaId}/multipart-upload-v2?action=INIT`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}` },
     body: form,

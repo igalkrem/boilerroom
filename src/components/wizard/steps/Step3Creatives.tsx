@@ -187,6 +187,7 @@ const CHUNK_SIZE = 3 * 1024 * 1024;
 
 async function uploadVideoChunked(
   file: File,
+  adAccountId: string,
   mediaId: string,
   onProgress: (msg: string) => void
 ): Promise<void> {
@@ -196,7 +197,7 @@ async function uploadVideoChunked(
   const initRes = await fetch("/api/snapchat/media/upload-init", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mediaId, fileName: file.name, fileSize: file.size, numberOfParts: numChunks }),
+    body: JSON.stringify({ adAccountId, mediaId, fileName: file.name, fileSize: file.size, numberOfParts: numChunks }),
   });
   const initData = await safeJson(initRes);
   if (initData.error) throw new Error(initData.error);
@@ -270,7 +271,7 @@ function MediaDropzone({
       const { mediaId } = entityData;
 
       if (isVideo) {
-        await uploadVideoChunked(file, mediaId, (msg) => setProgress(msg));
+        await uploadVideoChunked(file, adAccountId, mediaId, (msg) => setProgress(msg));
         // Snapchat processes video asynchronously after finalize — poll until COMPLETE
         // before marking ready, otherwise creative creation will fail with PENDING media.
         setProgress("Waiting for Snapchat to process video...");
