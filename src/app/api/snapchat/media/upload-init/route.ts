@@ -47,14 +47,21 @@ export async function POST(request: NextRequest) {
 
   // Snapchat may return full URLs or relative paths — normalize to relative /v1/... paths
   // so the SSRF validation in upload-chunk and upload-finalize always passes.
+  // Paths may be relative to the server root (/v1/media/...) OR relative to the /v1 base
+  // (/media/...) — both are normalized to start with /v1/.
   function toRelativePath(p: string | undefined): string | undefined {
     if (!p) return p;
+    let path: string;
     try {
       const url = new URL(p);
-      return url.pathname + url.search;
+      path = url.pathname + url.search;
     } catch {
-      return p; // already a relative path
+      path = p; // already a relative path
     }
+    if (!path.startsWith("/v1/")) {
+      path = path.startsWith("/") ? `/v1${path}` : `/v1/${path}`;
+    }
+    return path;
   }
 
   return NextResponse.json({
