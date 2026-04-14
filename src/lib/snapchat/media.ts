@@ -30,9 +30,20 @@ export async function pollMediaStatus(
   maxAttempts = 30
 ): Promise<void> {
   for (let i = 0; i < maxAttempts; i++) {
-    const data = await snapFetch<{
-      media: Array<{ media: SnapMediaEntity }>;
-    }>(`/adaccounts/${adAccountId}/media/${mediaId}`);
+    let data: { media: Array<{ media: SnapMediaEntity }> } | null = null;
+    try {
+      data = await snapFetch<{ media: Array<{ media: SnapMediaEntity }> }>(
+        `/adaccounts/${adAccountId}/media/${mediaId}`
+      );
+    } catch (err) {
+      // Snapchat may return 404 briefly after finalize while the media is
+      // being registered — treat it as PENDING and keep polling.
+      if (String(err).includes("404")) {
+        await new Promise((r) => setTimeout(r, 2000));
+        continue;
+      }
+      throw err;
+    }
 
     const status = data.media?.[0]?.media?.upload_status;
     if (status === "COMPLETE") return;
