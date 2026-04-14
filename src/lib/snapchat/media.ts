@@ -27,7 +27,7 @@ export async function createMediaEntity(
 export async function pollMediaStatus(
   mediaId: string,
   adAccountId: string,
-  maxAttempts = 30
+  maxAttempts = 90
 ): Promise<void> {
   for (let i = 0; i < maxAttempts; i++) {
     let data: { media: Array<{ media: SnapMediaEntity }> } | null = null;

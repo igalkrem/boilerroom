@@ -29,8 +29,8 @@ export const creativeSchema = z
     profileId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
-    // Media upload must be complete before the form can be submitted
-    if (!data.mediaId || data.uploadStatus !== "done") {
+    // File must be selected and processed (mediaId is resolved at submission time)
+    if (data.uploadStatus !== "done") {
       ctx.addIssue({
         code: "custom",
         path: ["mediaId"],
