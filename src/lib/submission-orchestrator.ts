@@ -99,7 +99,6 @@ export async function runSubmission(
     return results;
   }
 
-  // Map client ID → snap ID
   const campaignIdMap = new Map<string, string>();
   campaigns.forEach((c, i) => {
     const snap = campaignData.results?.[i];
@@ -112,7 +111,7 @@ export async function runSubmission(
     if (snap?.id) campaignIdMap.set(c.id, snap.id);
   });
 
-  // ── Step 2: Create Ad Squads (grouped by campaign) ────────────────────────
+  // ── Step 2: Create Ad Squads (parallel per campaign + error check) ────────
   onStage("adSquads");
 
   const squadsByCampaignClientId: Record<string, AdSquadFormData[]> = {};
@@ -125,75 +124,90 @@ export async function runSubmission(
 
   const squadIdMap = new Map<string, string>();
 
-  for (const clientCampaignId of Object.keys(squadsByCampaignClientId)) {
-    const squads: AdSquadFormData[] = squadsByCampaignClientId[clientCampaignId];
-    const snapCampaignId = campaignIdMap.get(clientCampaignId);
-    if (!snapCampaignId) {
-      squads.forEach((sq: AdSquadFormData) =>
+  // CR-7: run each campaign's ad squad batch in parallel
+  await Promise.all(
+    Object.entries(squadsByCampaignClientId).map(async ([clientCampaignId, squads]) => {
+      const snapCampaignId = campaignIdMap.get(clientCampaignId);
+      if (!snapCampaignId) {
+        squads.forEach((sq) =>
+          results.adSquads.push({
+            clientId: sq.id,
+            snapId: "",
+            name: sq.name,
+            error: "Parent campaign failed to create",
+          })
+        );
+        return;
+      }
+
+      const payloads: SnapAdSquadPayload[] = squads.map((sq) => ({
+        campaign_id: snapCampaignId,
+        name: sq.name,
+        type: sq.type,
+        status: sq.status,
+        targeting: {
+          geo_locations: [{ country_code: sq.geoCountryCode }],
+          ...buildDemographics(sq),
+        },
+        placement_v2: { config: sq.placementConfig ?? "AUTOMATIC" },
+        billing_event: "IMPRESSION",
+        optimization_goal: sq.optimizationGoal,
+        bid_strategy: sq.bidStrategy,
+        bid_micro: sq.bidAmountUsd ? usdToMicro(sq.bidAmountUsd) : undefined,
+        daily_budget_micro:
+          sq.spendCapType === "DAILY_BUDGET" && sq.dailyBudgetUsd
+            ? usdToMicro(sq.dailyBudgetUsd)
+            : undefined,
+        lifetime_budget_micro:
+          sq.spendCapType === "LIFETIME_BUDGET" && sq.lifetimeBudgetUsd
+            ? usdToMicro(sq.lifetimeBudgetUsd)
+            : undefined,
+        pacing_type: sq.pacingType,
+        start_time: sq.startDate ? toIso(sq.startDate) : undefined,
+        end_time: sq.endDate ? toIso(sq.endDate) : undefined,
+        frequency_cap_max_impressions: sq.frequencyCapMaxImpressions,
+        frequency_cap_time_period: sq.frequencyCapTimePeriod,
+        pixel_id: sq.pixelId || undefined,
+        pixel_conversion_event: sq.pixelConversionEvent as PixelConversionEvent | undefined || undefined,
+      }));
+
+      const sqRes = await fetch("/api/snapchat/adsquads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ campaignId: snapCampaignId, adsquads: payloads }),
+      });
+      const sqData = await sqRes.json() as { results: Array<{ id?: string; error?: string }>; error?: string };
+
+      // CR-2: handle top-level HTTP failure (no results array)
+      if (!sqRes.ok && !sqData.results) {
+        squads.forEach((sq) =>
+          results.adSquads.push({
+            clientId: sq.id,
+            snapId: "",
+            name: sq.name,
+            error: sqData.error ?? `HTTP ${sqRes.status}`,
+          })
+        );
+        return;
+      }
+
+      squads.forEach((sq, i) => {
+        const snap = sqData.results?.[i];
         results.adSquads.push({
           clientId: sq.id,
-          snapId: "",
+          snapId: snap?.id ?? "",
           name: sq.name,
-          error: "Parent campaign failed to create",
-        })
-      );
-      continue;
-    }
-
-    const payloads: SnapAdSquadPayload[] = squads.map((sq: AdSquadFormData) => ({
-      campaign_id: snapCampaignId,
-      name: sq.name,
-      type: sq.type,
-      status: sq.status,
-      targeting: {
-        geo_locations: [{ country_code: sq.geoCountryCode }],
-        ...buildDemographics(sq),
-      },
-      placement_v2: { config: sq.placementConfig ?? "AUTOMATIC" },
-      billing_event: "IMPRESSION",
-      optimization_goal: sq.optimizationGoal,
-      bid_strategy: sq.bidStrategy,
-      bid_micro: sq.bidAmountUsd ? usdToMicro(sq.bidAmountUsd) : undefined,
-      daily_budget_micro:
-        sq.spendCapType === "DAILY_BUDGET" && sq.dailyBudgetUsd
-          ? usdToMicro(sq.dailyBudgetUsd)
-          : undefined,
-      lifetime_budget_micro:
-        sq.spendCapType === "LIFETIME_BUDGET" && sq.lifetimeBudgetUsd
-          ? usdToMicro(sq.lifetimeBudgetUsd)
-          : undefined,
-      pacing_type: sq.pacingType,
-      start_time: sq.startDate ? toIso(sq.startDate) : undefined,
-      end_time: sq.endDate ? toIso(sq.endDate) : undefined,
-      frequency_cap_max_impressions: sq.frequencyCapMaxImpressions,
-      frequency_cap_time_period: sq.frequencyCapTimePeriod,
-      pixel_id: sq.pixelId || undefined,
-      pixel_conversion_event: sq.pixelConversionEvent as PixelConversionEvent | undefined || undefined,
-    }));
-
-    const sqRes = await fetch("/api/snapchat/adsquads", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ campaignId: snapCampaignId, adsquads: payloads }),
-    });
-    const sqData = await sqRes.json() as { results: Array<{ id?: string; error?: string }> };
-
-    squads.forEach((sq: AdSquadFormData, i: number) => {
-      const snap = sqData.results?.[i];
-      results.adSquads.push({
-        clientId: sq.id,
-        snapId: snap?.id ?? "",
-        name: sq.name,
-        error: snap?.error,
+          error: snap?.error,
+        });
+        if (snap?.id) squadIdMap.set(sq.id, snap.id);
       });
-      if (snap?.id) squadIdMap.set(sq.id, snap.id);
-    });
-  }
+    })
+  );
 
   // ── Step 3: Create Creatives ──────────────────────────────────────────────
   onStage("creatives");
 
-  const creativePayloads: SnapCreativePayload[] = creatives.map((cr: CreativeFormData) => {
+  const creativePayloads: SnapCreativePayload[] = creatives.map((cr) => {
     const creativeType: CreativeType = INTERACTION_TYPE_MAP[cr.interactionType] ?? "SNAP_AD";
     return {
       ad_account_id: adAccountId,
@@ -225,10 +239,20 @@ export async function runSubmission(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ adAccountId, creatives: creativePayloads }),
   });
-  const crData = await crRes.json() as { results: Array<{ id?: string; error?: string }> };
+  const crData = await crRes.json() as { results: Array<{ id?: string; error?: string }>; error?: string };
+
+  // CR-2: handle top-level HTTP failure
+  if (!crRes.ok && !crData.results) {
+    console.error("Creatives API error:", crRes.status, crData);
+    creatives.forEach((cr) =>
+      results.creatives.push({ clientId: cr.id, snapId: "", name: cr.name, error: crData.error ?? `HTTP ${crRes.status}` })
+    );
+    onStage("done");
+    return results;
+  }
 
   const creativeIdMap = new Map<string, string>();
-  creatives.forEach((cr: CreativeFormData, i: number) => {
+  creatives.forEach((cr, i) => {
     const snap = crData.results?.[i];
     results.creatives.push({
       clientId: cr.id,
@@ -239,7 +263,7 @@ export async function runSubmission(
     if (snap?.id) creativeIdMap.set(cr.id, snap.id);
   });
 
-  // ── Step 4: Create Ads (one per creative, linked to its ad squad) ─────────
+  // ── Step 4: Create Ads (parallel per ad squad + error check + fixed index mapping) ──
   onStage("ads");
 
   const creativesBySquadId: Record<string, CreativeFormData[]> = {};
@@ -250,24 +274,39 @@ export async function runSubmission(
     creativesBySquadId[cr.adSquadId].push(cr);
   }
 
-  for (const clientSquadId of Object.keys(creativesBySquadId)) {
-    const squadCreatives: CreativeFormData[] = creativesBySquadId[clientSquadId];
-    const snapSquadId = squadIdMap.get(clientSquadId);
-    if (!snapSquadId) {
-      squadCreatives.forEach((cr: CreativeFormData) =>
-        results.ads.push({
-          clientId: cr.id,
-          snapId: "",
-          name: cr.name,
-          error: "Parent ad set failed to create",
-        })
-      );
-      continue;
-    }
+  // CR-7: run each ad squad's ad batch in parallel
+  await Promise.all(
+    Object.entries(creativesBySquadId).map(async ([clientSquadId, squadCreatives]) => {
+      const snapSquadId = squadIdMap.get(clientSquadId);
+      if (!snapSquadId) {
+        squadCreatives.forEach((cr) =>
+          results.ads.push({
+            clientId: cr.id,
+            snapId: "",
+            name: cr.name,
+            error: "Parent ad set failed to create",
+          })
+        );
+        return;
+      }
 
-    const adPayloads: SnapAdPayload[] = squadCreatives
-      .filter((cr: CreativeFormData) => creativeIdMap.has(cr.id))
-      .map((cr: CreativeFormData) => ({
+      // CR-1: separate successfully-created creatives from failed ones so result
+      // indices align with the payload array, not the full squadCreatives array.
+      const adCreatives = squadCreatives.filter((cr) => creativeIdMap.has(cr.id));
+      squadCreatives
+        .filter((cr) => !creativeIdMap.has(cr.id))
+        .forEach((cr) =>
+          results.ads.push({
+            clientId: cr.id,
+            snapId: "",
+            name: cr.name,
+            error: "Parent creative failed to create",
+          })
+        );
+
+      if (adCreatives.length === 0) return;
+
+      const adPayloads: SnapAdPayload[] = adCreatives.map((cr) => ({
         ad_squad_id: snapSquadId,
         creative_id: creativeIdMap.get(cr.id)!,
         name: cr.name,
@@ -283,25 +322,38 @@ export async function runSubmission(
             : undefined,
       }));
 
-    if (adPayloads.length === 0) continue;
-
-    const adRes = await fetch("/api/snapchat/ads", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ adSquadId: snapSquadId, ads: adPayloads }),
-    });
-    const adData = await adRes.json() as { results: Array<{ id?: string; error?: string }> };
-
-    squadCreatives.forEach((cr: CreativeFormData, i: number) => {
-      const snap = adData.results?.[i];
-      results.ads.push({
-        clientId: cr.id,
-        snapId: snap?.id ?? "",
-        name: cr.name,
-        error: snap?.error,
+      const adRes = await fetch("/api/snapchat/ads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adSquadId: snapSquadId, ads: adPayloads }),
       });
-    });
-  }
+      const adData = await adRes.json() as { results: Array<{ id?: string; error?: string }>; error?: string };
+
+      // CR-2: handle top-level HTTP failure
+      if (!adRes.ok && !adData.results) {
+        adCreatives.forEach((cr) =>
+          results.ads.push({
+            clientId: cr.id,
+            snapId: "",
+            name: cr.name,
+            error: adData.error ?? `HTTP ${adRes.status}`,
+          })
+        );
+        return;
+      }
+
+      // CR-1: iterate adCreatives (not squadCreatives) so index i aligns with adData.results[i]
+      adCreatives.forEach((cr, i) => {
+        const snap = adData.results?.[i];
+        results.ads.push({
+          clientId: cr.id,
+          snapId: snap?.id ?? "",
+          name: cr.name,
+          error: snap?.error,
+        });
+      });
+    })
+  );
 
   onStage("done");
   return results;

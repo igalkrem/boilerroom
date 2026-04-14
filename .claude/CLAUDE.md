@@ -114,7 +114,7 @@ src/
 - Campaign lifetime budget: `lifetime_spend_cap_micro` (NOT `lifetime_budget_micro` — that's ad squad only)
 - `spend_cap_type` is an ad squad field only, not valid on campaigns
 - Ad squad pixel tracking: `pixel_id` + `pixel_conversion_event` (required for pixel-based goals)
-- Creative destination URL: `interaction_zone_properties.web_view_url` (for WEB_VIEW) or `deep_link_url` (for DEEP_LINK/APP_INSTALL)
+- Creative destination URL: `web_view_properties.url` (for WEB_VIEW) or `deep_link_properties.deep_link_url` (for DEEP_LINK/APP_INSTALL)
 - Ad destination URL: `web_view_properties.url` (for WEB_VIEW) or `deep_link_properties.deep_link_uri` — sent on the Ad payload in addition to the Creative
 - Creative public profile: `profile_properties.profile_id` (optional)
 - Ad `type` mirrors the creative type (SNAP_AD, WEB_VIEW, APP_INSTALL, DEEP_LINK)

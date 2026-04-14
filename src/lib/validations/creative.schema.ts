@@ -11,7 +11,7 @@ export const creativeSchema = z
       .max(34, "Max 34 characters"),
     brandName: z.string().max(25).optional(),
     callToAction: z.string().optional(),
-    mediaId: z.string().min(1, "Upload a media file"),
+    mediaId: z.string(),
     mediaFileName: z.string().optional(),
     uploadStatus: z.enum(["idle", "uploading", "done", "error"]),
     // Interaction
@@ -29,6 +29,15 @@ export const creativeSchema = z
     profileId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
+    // Media upload must be complete before the form can be submitted
+    if (!data.mediaId || data.uploadStatus !== "done") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["mediaId"],
+        message: "Upload a media file",
+      });
+    }
+
     if (data.interactionType === "WEB_VIEW") {
       if (!data.webViewUrl || data.webViewUrl.trim() === "") {
         ctx.addIssue({

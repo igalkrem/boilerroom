@@ -5,6 +5,19 @@ const CLIENT_ID = process.env.SNAPCHAT_CLIENT_ID!;
 const CLIENT_SECRET = process.env.SNAPCHAT_CLIENT_SECRET!;
 const REDIRECT_URI = process.env.SNAPCHAT_REDIRECT_URI!;
 
+if (!TOKEN_URL || !CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
+  throw new Error(
+    `Missing required Snapchat OAuth env vars: ${[
+      !TOKEN_URL && "SNAPCHAT_TOKEN_URL",
+      !CLIENT_ID && "SNAPCHAT_CLIENT_ID",
+      !CLIENT_SECRET && "SNAPCHAT_CLIENT_SECRET",
+      !REDIRECT_URI && "SNAPCHAT_REDIRECT_URI",
+    ]
+      .filter(Boolean)
+      .join(", ")}`
+  );
+}
+
 export function buildAuthUrl(state: string): string {
   const params = new URLSearchParams({
     client_id: CLIENT_ID,

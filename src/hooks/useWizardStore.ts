@@ -150,6 +150,6 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
       pixelConversionEvent: sq.pixelConversionEvent,
     }));
 
-    set({ campaigns: [campaign], adSquads });
+    set({ campaigns: [campaign], adSquads, creatives: [] });
   },
 }));

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCampaigns } from "@/lib/snapchat/campaigns";
-import { getSession, isSessionValid } from "@/lib/session";
+import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
 import type { SnapCampaignPayload } from "@/types/snapchat";
 import { z } from "zod";
 
@@ -25,6 +25,10 @@ export async function POST(request: NextRequest) {
     adAccountId: string;
     campaigns: SnapCampaignPayload[];
   };
+
+  if (!isAdAccountAllowed(session, adAccountId)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   try {
     const results = await createCampaigns(adAccountId, campaigns);

@@ -10,6 +10,12 @@ export async function GET() {
 
   try {
     const accounts = await getAdAccounts();
+
+    // Cache the user's allowed ad account IDs so other routes can verify
+    // ownership without making an additional Snapchat API call.
+    session.allowedAdAccountIds = accounts.map((a) => a.id);
+    await session.save();
+
     return NextResponse.json({ accounts });
   } catch (err) {
     console.error("Ad accounts error:", err);

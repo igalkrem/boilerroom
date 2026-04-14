@@ -236,6 +236,16 @@ function MediaDropzone({
 
       if (isVideo) {
         await uploadVideoChunked(file, mediaId, (msg) => setProgress(msg));
+        // Snapchat processes video asynchronously after finalize — poll until COMPLETE
+        // before marking ready, otherwise creative creation will fail with PENDING media.
+        setProgress("Waiting for Snapchat to process video...");
+        const pollRes = await fetch("/api/snapchat/media/poll", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mediaId, adAccountId }),
+        });
+        const pollData = await safeJson(pollRes);
+        if (pollData.error) throw new Error(pollData.error);
       } else {
         setProgress("Uploading image...");
         const form = new FormData();
@@ -552,7 +562,12 @@ export function Step3Creatives({ adAccountId }: { adAccountId: string }) {
       <Button
         type="button"
         variant="secondary"
-        onClick={() => append(defaultCreative(adSquads[0]?.id ?? ""))}
+        onClick={() => {
+          const lastAdSquadId = fields.length > 0
+            ? getValues(`creatives.${fields.length - 1}.adSquadId`)
+            : (adSquads[0]?.id ?? "");
+          append(defaultCreative(lastAdSquadId));
+        }}
       >
         + Add Another Creative
       </Button>

@@ -7,7 +7,7 @@ const BASE_URL = "https://adsapi.snapchat.com/v1";
 // Refresh token proactively if it expires within 5 minutes
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
-async function getValidAccessToken(): Promise<string> {
+export async function getValidAccessToken(): Promise<string> {
   const session = await getSession();
 
   if (!isSessionValid(session)) {
