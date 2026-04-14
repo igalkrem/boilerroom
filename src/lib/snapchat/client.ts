@@ -1,7 +1,8 @@
 import { getSession, isSessionValid } from "@/lib/session";
 import { refreshAccessToken } from "@/lib/snapchat/auth";
+import { rateLimitedCall } from "@/lib/rate-limiter";
 
-const BASE_URL = process.env.SNAPCHAT_API_BASE_URL || "https://adsapi.snapchat.com/v1";
+const BASE_URL = "https://adsapi.snapchat.com/v1";
 
 // Refresh token proactively if it expires within 5 minutes
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
@@ -34,14 +35,14 @@ export async function snapFetch<T>(
 
   const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
 
-  const res = await fetch(url, {
+  const res = await rateLimitedCall(() => fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
       ...options.headers,
     },
-  });
+  }));
 
   // On 401, try refreshing once and retry
   if (res.status === 401) {
@@ -54,14 +55,14 @@ export async function snapFetch<T>(
     session.expiresAt = Date.now() + tokens.expires_in * 1000;
     await session.save();
 
-    const retry = await fetch(url, {
+    const retry = await rateLimitedCall(() => fetch(url, {
       ...options,
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${tokens.access_token}`,
         ...options.headers,
       },
-    });
+    }));
 
     if (!retry.ok) {
       const body = await retry.text();

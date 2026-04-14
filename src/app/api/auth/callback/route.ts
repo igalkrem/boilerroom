@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
 
   // Validate CSRF state
   const session = await getSession();
-  const storedState = (session as unknown as Record<string, string>).oauthState;
-  if (storedState !== state) {
+  const storedState = session.oauthState;
+  if (!storedState || storedState !== state) {
     return NextResponse.redirect(`${appUrl}/login?error=invalid_state`);
   }
 
@@ -31,8 +31,7 @@ export async function GET(request: NextRequest) {
     session.accessToken = tokens.access_token;
     session.refreshToken = tokens.refresh_token;
     session.expiresAt = Date.now() + tokens.expires_in * 1000;
-    // snapUserId can be fetched separately; use a placeholder until we have it
-    session.snapUserId = "";
+    session.oauthState = undefined; // Clear after use to prevent replay
     await session.save();
 
     return NextResponse.redirect(`${appUrl}/dashboard`);

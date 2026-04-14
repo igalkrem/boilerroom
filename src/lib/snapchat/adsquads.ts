@@ -13,11 +13,18 @@ export async function createAdSquads(
     }
   );
 
-  return (data.adsquads ?? []).map((item) => ({
-    ...(item.adsquad ?? ({} as SnapAdSquad)),
-    error:
-      item.sub_request_status !== "SUCCESS"
-        ? item.error?.message ?? "Unknown error"
-        : undefined,
-  }));
+  return (data.adsquads ?? []).map((item) => {
+    if (item.sub_request_status !== "SUCCESS") {
+      const msg = item.message ?? item.error?.message;
+      const detail = item.error_type ?? item.error?.error_type;
+      console.error("Ad squad create failed:", { error_type: detail, message: msg, raw: item });
+    }
+    return {
+      ...(item.adsquad ?? ({} as SnapAdSquad)),
+      error:
+        item.sub_request_status !== "SUCCESS"
+          ? [item.error_type ?? item.error?.error_type, item.message ?? item.error?.message].filter(Boolean).join(": ") || "Unknown error"
+          : undefined,
+    };
+  });
 }

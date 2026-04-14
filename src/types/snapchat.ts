@@ -178,6 +178,8 @@ export interface SnapApiItem<T> {
   sub_request_status: "SUCCESS" | "ERROR";
   request_status?: string;
   request_id?: string;
+  error_type?: string;
+  message?: string;
   error?: { error_type: string; message: string };
   campaign?: T;
   adsquad?: T;

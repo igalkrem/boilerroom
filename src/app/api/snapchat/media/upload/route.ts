@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { pollMediaStatus } from "@/lib/snapchat/media";
 import { getSession, isSessionValid } from "@/lib/session";
 
-const BASE_URL = process.env.SNAPCHAT_API_BASE_URL ?? "https://adsapi.snapchat.com/v1";
+const BASE_URL = "https://adsapi.snapchat.com/v1";
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -16,16 +16,16 @@ export async function POST(request: NextRequest) {
   const adAccountId = formData.get("adAccountId") as string | null;
 
   if (!file || !mediaId || !adAccountId) {
-    return NextResponse.json({
-      error: "missing_params",
-      _debug: { hasFile: !!file, mediaId, adAccountId },
-    }, { status: 400 });
+    return NextResponse.json({ error: "missing_params" }, { status: 400 });
+  }
+
+  const ALLOWED_MIME_TYPES = ["video/mp4", "image/jpeg", "image/png", "image/gif"];
+  if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+    return NextResponse.json({ error: "unsupported_file_type" }, { status: 400 });
   }
 
   // Correct Snapchat upload endpoint: /media/{media_id}/upload (no /adaccounts/ prefix)
   const snapUploadUrl = `${BASE_URL}/media/${mediaId}/upload`;
-
-  console.log("[media/upload] Uploading to:", snapUploadUrl, "| mediaId:", mediaId, "| file:", file.name, file.size);
 
   const uploadForm = new FormData();
   uploadForm.append("file", file);
@@ -38,11 +38,8 @@ export async function POST(request: NextRequest) {
 
   if (!uploadRes.ok) {
     const errText = await uploadRes.text();
-    console.error("[media/upload] Failed:", snapUploadUrl, uploadRes.status, errText);
-    return NextResponse.json(
-      { error: `Upload failed: ${uploadRes.status} - ${errText}`, _debug: { snapUploadUrl, mediaId } },
-      { status: 500 }
-    );
+    console.error("[media/upload] Failed:", uploadRes.status, errText);
+    return NextResponse.json({ error: `Upload failed: ${uploadRes.status}` }, { status: 500 });
   }
 
   // Poll until COMPLETE

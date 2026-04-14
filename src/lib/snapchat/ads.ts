@@ -13,11 +13,18 @@ export async function createAds(
     }
   );
 
-  return (data.ads ?? []).map((item) => ({
-    ...(item.ad ?? ({} as SnapAd)),
-    error:
-      item.sub_request_status !== "SUCCESS"
-        ? item.error?.message ?? "Unknown error"
-        : undefined,
-  }));
+  return (data.ads ?? []).map((item) => {
+    if (item.sub_request_status !== "SUCCESS") {
+      const msg = item.message ?? item.error?.message;
+      const detail = item.error_type ?? item.error?.error_type;
+      console.error("Ad create failed:", { error_type: detail, message: msg, raw: item });
+    }
+    return {
+      ...(item.ad ?? ({} as SnapAd)),
+      error:
+        item.sub_request_status !== "SUCCESS"
+          ? [item.error_type ?? item.error?.error_type, item.message ?? item.error?.message].filter(Boolean).join(": ") || "Unknown error"
+          : undefined,
+    };
+  });
 }

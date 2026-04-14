@@ -12,6 +12,17 @@ export async function POST(request: NextRequest) {
     finalizePath: string;
   };
 
+  // Validate path to prevent SSRF: must start with /v1/, no traversal or protocol injection
+  if (
+    typeof finalizePath !== "string" ||
+    !finalizePath.startsWith("/v1/") ||
+    finalizePath.includes("..") ||
+    finalizePath.includes("://") ||
+    finalizePath.includes("@")
+  ) {
+    return NextResponse.json({ error: "invalid_path" }, { status: 400 });
+  }
+
   const finalizeUrl = `https://adsapi.snapchat.com${finalizePath}`;
 
   const form = new FormData();
