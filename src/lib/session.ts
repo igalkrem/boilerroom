@@ -24,3 +24,14 @@ export async function getSession(): Promise<IronSession<SessionData>> {
 export function isSessionValid(session: Partial<SessionData>): session is SessionData {
   return !!(session.accessToken && session.refreshToken && session.expiresAt);
 }
+
+/**
+ * Returns true if the adAccountId is among the user's known accounts.
+ * If the allowed list has not been populated yet (e.g. the user hit an API
+ * route directly without visiting the dashboard first), the check is skipped
+ * and Snapchat's own OAuth enforcement acts as the backstop.
+ */
+export function isAdAccountAllowed(session: SessionData, adAccountId: string): boolean {
+  if (!session.allowedAdAccountIds?.length) return true;
+  return session.allowedAdAccountIds.includes(adAccountId);
+}

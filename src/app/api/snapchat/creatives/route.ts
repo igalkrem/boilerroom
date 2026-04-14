@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCreatives } from "@/lib/snapchat/creatives";
-import { getSession, isSessionValid } from "@/lib/session";
+import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
 import type { SnapCreativePayload } from "@/types/snapchat";
 import { z } from "zod";
 
@@ -25,6 +25,10 @@ export async function POST(request: NextRequest) {
     adAccountId: string;
     creatives: SnapCreativePayload[];
   };
+
+  if (!isAdAccountAllowed(session, adAccountId)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   try {
     const results = await createCreatives(adAccountId, creatives);

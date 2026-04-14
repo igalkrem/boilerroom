@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pollMediaStatus } from "@/lib/snapchat/media";
-import { getSession, isSessionValid } from "@/lib/session";
+import { getValidAccessToken } from "@/lib/snapchat/client";
+import { rateLimitedCall } from "@/lib/rate-limiter";
 
 const BASE_URL = "https://adsapi.snapchat.com/v1";
 
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!isSessionValid(session)) {
+  let accessToken: string;
+  try {
+    accessToken = await getValidAccessToken();
+  } catch {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
 
@@ -30,11 +33,11 @@ export async function POST(request: NextRequest) {
   const uploadForm = new FormData();
   uploadForm.append("file", file);
 
-  const uploadRes = await fetch(snapUploadUrl, {
+  const uploadRes = await rateLimitedCall(() => fetch(snapUploadUrl, {
     method: "POST",
-    headers: { Authorization: `Bearer ${session.accessToken}` },
+    headers: { Authorization: `Bearer ${accessToken}` },
     body: uploadForm,
-  });
+  }));
 
   if (!uploadRes.ok) {
     const errText = await uploadRes.text();

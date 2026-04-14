@@ -1,31 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, isSessionValid } from "@/lib/session";
+import { getValidAccessToken } from "@/lib/snapchat/client";
+import { rateLimitedCall } from "@/lib/rate-limiter";
+import { z } from "zod";
 
 const BASE_URL = process.env.SNAPCHAT_API_BASE_URL ?? "https://adsapi.snapchat.com/v1";
 
+const bodySchema = z.object({
+  mediaId: z.string().min(1),
+  fileName: z.string().min(1),
+  fileSize: z.number().int().positive().max(500_000_000),
+  numberOfParts: z.number().int().min(1).max(1000),
+});
+
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!isSessionValid(session)) {
+  let accessToken: string;
+  try {
+    accessToken = await getValidAccessToken();
+  } catch {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
 
-  const { mediaId, fileName, fileSize, numberOfParts } = await request.json() as {
-    mediaId: string;
-    fileName: string;
-    fileSize: number;
-    numberOfParts: number;
-  };
+  const body = await request.json().catch(() => null);
+  const parsed = bodySchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
+  }
+  const { mediaId, fileName, fileSize, numberOfParts } = parsed.data;
 
   const form = new FormData();
   form.append("file_name", fileName);
   form.append("file_size", String(fileSize));
   form.append("number_of_parts", String(numberOfParts));
 
-  const res = await fetch(`${BASE_URL}/media/${mediaId}/multipart-upload-v2?action=INIT`, {
+  const res = await rateLimitedCall(() => fetch(`${BASE_URL}/media/${mediaId}/multipart-upload-v2?action=INIT`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${session.accessToken}` },
+    headers: { Authorization: `Bearer ${accessToken}` },
     body: form,
-  });
+  }));
 
   const text = await res.text();
   if (!res.ok) {

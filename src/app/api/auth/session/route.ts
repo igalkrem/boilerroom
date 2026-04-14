@@ -9,6 +9,5 @@ export async function GET() {
   return NextResponse.json({
     authenticated: true,
     snapUserId: session.snapUserId,
-    expiresAt: session.expiresAt,
   });
 }

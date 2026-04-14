@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, isSessionValid } from "@/lib/session";
+import { getValidAccessToken } from "@/lib/snapchat/client";
+import { rateLimitedCall } from "@/lib/rate-limiter";
 
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!isSessionValid(session)) {
+  let accessToken: string;
+  try {
+    accessToken = await getValidAccessToken();
+  } catch {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
 
@@ -34,11 +37,11 @@ export async function POST(request: NextRequest) {
   uploadForm.append("part_number", partNumber);
   uploadForm.append("upload_id", uploadId);
 
-  const res = await fetch(addUrl, {
+  const res = await rateLimitedCall(() => fetch(addUrl, {
     method: "POST",
-    headers: { Authorization: `Bearer ${session.accessToken}` },
+    headers: { Authorization: `Bearer ${accessToken}` },
     body: uploadForm,
-  });
+  }));
 
   const text = await res.text();
   if (!res.ok) {
