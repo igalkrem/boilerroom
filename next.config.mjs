@@ -20,7 +20,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob:",
               "media-src 'self' blob:",
-              "connect-src 'self' https://adsapi.snapchat.com https://accounts.snapchat.com",
+              "connect-src 'self' https://adsapi.snapchat.com https://accounts.snapchat.com https://unpkg.com",
               "worker-src 'self' blob:",
               "frame-ancestors 'none'",
             ].join("; "),
