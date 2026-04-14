@@ -8,7 +8,7 @@ export async function GET() {
 
   // Store state in session to validate on callback (CSRF protection)
   const session = await getSession();
-  (session as unknown as Record<string, string>).oauthState = state;
+  session.oauthState = state;
   await session.save();
 
   const url = buildAuthUrl(state);

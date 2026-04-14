@@ -2,18 +2,22 @@ import { getIronSession, IronSession } from "iron-session";
 import { cookies } from "next/headers";
 import type { SessionData } from "@/types/session";
 
-const sessionOptions = {
-  cookieName: process.env.SESSION_COOKIE_NAME || "snap_ads_session",
-  password: process.env.SESSION_SECRET || "fallback_secret_change_in_production_min_32_chars",
-  cookieOptions: {
-    secure: process.env.NODE_ENV === "production",
-    httpOnly: true,
-    sameSite: "lax" as const,
-  },
-};
-
 export async function getSession(): Promise<IronSession<SessionData>> {
-  const session = await getIronSession<SessionData>(await cookies(), sessionOptions);
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error("SESSION_SECRET env var must be set to at least 32 characters");
+  }
+  const session = await getIronSession<SessionData>(await cookies(), {
+    cookieName: process.env.SESSION_COOKIE_NAME || "snap_ads_session",
+    password: secret,
+    cookieOptions: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      // "lax" is required: Snapchat OAuth redirects back to this app cross-site,
+      // which would be blocked by "strict".
+      sameSite: "lax" as const,
+    },
+  });
   return session;
 }
 
