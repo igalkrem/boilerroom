@@ -241,6 +241,11 @@ export async function runSubmission(
       results.creatives.push({ clientId: cr.id, snapId: "", name: cr.name, error: "Media upload failed" })
     );
 
+  if (uploadedCreatives.length === 0) {
+    onStage("done");
+    return results;
+  }
+
   const creativePayloads: SnapCreativePayload[] = uploadedCreatives.map((cr) => {
     const creativeType: CreativeType = INTERACTION_TYPE_MAP[cr.interactionType] ?? "SNAP_AD";
     return {
