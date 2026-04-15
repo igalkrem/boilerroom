@@ -105,10 +105,6 @@ export async function runSubmission(
       c.spendCapType === "DAILY_BUDGET" && c.dailyBudgetUsd
         ? usdToMicro(c.dailyBudgetUsd)
         : undefined,
-    lifetime_spend_cap_micro:
-      c.spendCapType === "LIFETIME_BUDGET" && c.lifetimeBudgetUsd
-        ? usdToMicro(c.lifetimeBudgetUsd)
-        : undefined,
     objective_v2_properties: { objective_v2_type: c.objective },
   }));
 
