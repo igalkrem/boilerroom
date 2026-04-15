@@ -28,7 +28,7 @@ const presetCampaignSchema = z
     status: z.enum(["ACTIVE", "PAUSED"]),
     startDate: z.string().optional(),
     endDate: z.string().optional(),
-    spendCapType: z.enum(["DAILY_BUDGET", "LIFETIME_BUDGET"]),
+    spendCapType: z.enum(["DAILY_BUDGET", "LIFETIME_BUDGET", "NO_BUDGET"]),
     dailyBudgetUsd: z.number().optional(),
     lifetimeBudgetUsd: z.number().optional(),
   })
@@ -40,12 +40,12 @@ const presetCampaignSchema = z
       ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date is required" });
     }
     if (data.spendCapType === "DAILY_BUDGET") {
-      if (!data.dailyBudgetUsd || data.dailyBudgetUsd < 1) {
-        ctx.addIssue({ code: "custom", path: ["dailyBudgetUsd"], message: "Must be at least $1" });
+      if (!data.dailyBudgetUsd || data.dailyBudgetUsd < 20) {
+        ctx.addIssue({ code: "custom", path: ["dailyBudgetUsd"], message: "Must be at least $20" });
       }
-    } else {
-      if (!data.lifetimeBudgetUsd || data.lifetimeBudgetUsd < 1) {
-        ctx.addIssue({ code: "custom", path: ["lifetimeBudgetUsd"], message: "Must be at least $1" });
+    } else if (data.spendCapType === "LIFETIME_BUDGET") {
+      if (!data.lifetimeBudgetUsd || data.lifetimeBudgetUsd < 20) {
+        ctx.addIssue({ code: "custom", path: ["lifetimeBudgetUsd"], message: "Must be at least $20" });
       }
     }
   });
@@ -127,6 +127,12 @@ const OBJECTIVE_OPTIONS = [
 const STATUS_OPTIONS = [
   { value: "ACTIVE", label: "Active" },
   { value: "PAUSED", label: "Paused" },
+];
+
+const CAMPAIGN_SPEND_CAP_OPTIONS = [
+  { value: "NO_BUDGET", label: "No Campaign Budget" },
+  { value: "DAILY_BUDGET", label: "Daily Budget" },
+  { value: "LIFETIME_BUDGET", label: "Lifetime Budget" },
 ];
 
 const SPEND_CAP_OPTIONS = [
@@ -567,8 +573,7 @@ export function PresetForm({ preset }: PresetFormProps) {
             hasEndDate: false,
             objective: "SALES",
             status: "PAUSED",
-            spendCapType: "DAILY_BUDGET",
-            dailyBudgetUsd: 50,
+            spendCapType: "NO_BUDGET",
           },
           adSquads: [defaultAdSquad()],
         },
@@ -686,7 +691,7 @@ export function PresetForm({ preset }: PresetFormProps) {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Select
             label="Budget Type"
-            options={SPEND_CAP_OPTIONS}
+            options={CAMPAIGN_SPEND_CAP_OPTIONS}
             {...register("campaign.spendCapType", {
               onChange: () => {
                 setValue("campaign.dailyBudgetUsd", undefined);
@@ -694,21 +699,24 @@ export function PresetForm({ preset }: PresetFormProps) {
               },
             })}
           />
-          {campaignSpendCapType === "DAILY_BUDGET" ? (
+          {campaignSpendCapType === "DAILY_BUDGET" && (
             <Input
               label="Daily Budget (USD)"
               type="number"
-              min={1}
+              min={20}
               step={1}
+              placeholder="Min $20"
               {...register("campaign.dailyBudgetUsd", { valueAsNumber: true })}
               error={errors.campaign?.dailyBudgetUsd?.message}
             />
-          ) : (
+          )}
+          {campaignSpendCapType === "LIFETIME_BUDGET" && (
             <Input
               label="Lifetime Budget (USD)"
               type="number"
-              min={1}
+              min={20}
               step={1}
+              placeholder="Min $20"
               {...register("campaign.lifetimeBudgetUsd", { valueAsNumber: true })}
               error={errors.campaign?.lifetimeBudgetUsd?.message}
             />

@@ -6,7 +6,7 @@ export interface CampaignPresetData {
   status: "ACTIVE" | "PAUSED";
   startDate?: string; // YYYY-MM-DD; undefined = launch immediately
   endDate?: string;
-  spendCapType: "DAILY_BUDGET" | "LIFETIME_BUDGET";
+  spendCapType: "DAILY_BUDGET" | "LIFETIME_BUDGET" | "NO_BUDGET";
   dailyBudgetUsd?: number;
   lifetimeBudgetUsd?: number;
 }
