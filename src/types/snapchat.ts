@@ -180,6 +180,7 @@ export interface SnapApiItem<T> {
   request_id?: string;
   error_type?: string;
   message?: string;
+  sub_request_error_reason?: string;
   error?: { error_type: string; message: string };
   campaign?: T;
   adsquad?: T;

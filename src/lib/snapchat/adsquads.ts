@@ -23,7 +23,7 @@ export async function createAdSquads(
       ...(item.adsquad ?? ({} as SnapAdSquad)),
       error:
         item.sub_request_status !== "SUCCESS"
-          ? [item.error_type ?? item.error?.error_type, item.message ?? item.error?.message].filter(Boolean).join(": ") || "Unknown error"
+          ? [item.error_type ?? item.error?.error_type, item.message ?? item.error?.message].filter(Boolean).join(": ") || item.sub_request_error_reason || "Unknown error"
           : undefined,
     };
   });
