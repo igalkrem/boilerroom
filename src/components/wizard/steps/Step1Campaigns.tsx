@@ -22,6 +22,7 @@ const STATUS_OPTIONS = [
 ];
 
 const SPEND_CAP_OPTIONS = [
+  { value: "NO_BUDGET", label: "No Campaign Budget" },
   { value: "DAILY_BUDGET", label: "Daily Budget" },
   { value: "LIFETIME_BUDGET", label: "Lifetime Budget" },
 ];
@@ -38,8 +39,7 @@ function defaultCampaign(): CampaignFormData {
     status: "PAUSED",
     startDate: todayIso(),
     endDate: "",
-    spendCapType: "DAILY_BUDGET",
-    dailyBudgetUsd: 5,
+    spendCapType: "NO_BUDGET",
   };
 }
 
@@ -126,21 +126,24 @@ function CampaignCard({
             },
           })}
         />
-        {spendCapType === "DAILY_BUDGET" || !spendCapType ? (
+        {spendCapType === "DAILY_BUDGET" && (
           <Input
             label="Daily Budget (USD)"
             type="number"
-            min={1}
+            min={20}
             step={1}
+            placeholder="Min $20"
             {...register(`campaigns.${index}.dailyBudgetUsd`, { valueAsNumber: true })}
             error={campErrors?.dailyBudgetUsd?.message}
           />
-        ) : (
+        )}
+        {spendCapType === "LIFETIME_BUDGET" && (
           <Input
             label="Lifetime Budget (USD)"
             type="number"
-            min={1}
+            min={20}
             step={1}
+            placeholder="Min $20"
             {...register(`campaigns.${index}.lifetimeBudgetUsd`, { valueAsNumber: true })}
             error={campErrors?.lifetimeBudgetUsd?.message}
           />

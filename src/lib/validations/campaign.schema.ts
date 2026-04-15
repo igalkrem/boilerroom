@@ -14,28 +14,29 @@ export const campaignSchema = z
     status: z.enum(["ACTIVE", "PAUSED"]),
     startDate: z.string().min(1, "Start date is required"),
     endDate: z.string().optional(),
-    spendCapType: z.enum(["DAILY_BUDGET", "LIFETIME_BUDGET"]),
+    spendCapType: z.enum(["DAILY_BUDGET", "LIFETIME_BUDGET", "NO_BUDGET"]),
     dailyBudgetUsd: z.number().optional(),
     lifetimeBudgetUsd: z.number().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.spendCapType === "DAILY_BUDGET") {
-      if (!data.dailyBudgetUsd || data.dailyBudgetUsd < 1) {
+      if (!data.dailyBudgetUsd || data.dailyBudgetUsd < 20) {
         ctx.addIssue({
           code: "custom",
           path: ["dailyBudgetUsd"],
-          message: "Daily budget must be at least $1",
+          message: "Daily budget must be at least $20",
         });
       }
-    } else {
-      if (!data.lifetimeBudgetUsd || data.lifetimeBudgetUsd < 1) {
+    } else if (data.spendCapType === "LIFETIME_BUDGET") {
+      if (!data.lifetimeBudgetUsd || data.lifetimeBudgetUsd < 20) {
         ctx.addIssue({
           code: "custom",
           path: ["lifetimeBudgetUsd"],
-          message: "Lifetime budget must be at least $1",
+          message: "Lifetime budget must be at least $20",
         });
       }
     }
+    // NO_BUDGET: no validation needed
   });
 
 export type CampaignSchema = z.infer<typeof campaignSchema>;
