@@ -28,7 +28,7 @@ const presetCampaignSchema = z
     status: z.enum(["ACTIVE", "PAUSED"]),
     startDate: z.string().optional(),
     endDate: z.string().optional(),
-    spendCapType: z.enum(["DAILY_BUDGET", "LIFETIME_BUDGET", "NO_BUDGET"]),
+    spendCapType: z.enum(["DAILY_BUDGET", "NO_BUDGET"]),
     dailyBudgetUsd: z.number().optional(),
     lifetimeBudgetUsd: z.number().optional(),
   })
@@ -42,10 +42,6 @@ const presetCampaignSchema = z
     if (data.spendCapType === "DAILY_BUDGET") {
       if (!data.dailyBudgetUsd || data.dailyBudgetUsd < 20) {
         ctx.addIssue({ code: "custom", path: ["dailyBudgetUsd"], message: "Must be at least $20" });
-      }
-    } else if (data.spendCapType === "LIFETIME_BUDGET") {
-      if (!data.lifetimeBudgetUsd || data.lifetimeBudgetUsd < 20) {
-        ctx.addIssue({ code: "custom", path: ["lifetimeBudgetUsd"], message: "Must be at least $20" });
       }
     }
   });
@@ -132,7 +128,6 @@ const STATUS_OPTIONS = [
 const CAMPAIGN_SPEND_CAP_OPTIONS = [
   { value: "NO_BUDGET", label: "No Campaign Budget" },
   { value: "DAILY_BUDGET", label: "Daily Budget" },
-  { value: "LIFETIME_BUDGET", label: "Lifetime Budget" },
 ];
 
 const SPEND_CAP_OPTIONS = [
@@ -708,17 +703,6 @@ export function PresetForm({ preset }: PresetFormProps) {
               placeholder="Min $20"
               {...register("campaign.dailyBudgetUsd", { valueAsNumber: true })}
               error={errors.campaign?.dailyBudgetUsd?.message}
-            />
-          )}
-          {campaignSpendCapType === "LIFETIME_BUDGET" && (
-            <Input
-              label="Lifetime Budget (USD)"
-              type="number"
-              min={20}
-              step={1}
-              placeholder="Min $20"
-              {...register("campaign.lifetimeBudgetUsd", { valueAsNumber: true })}
-              error={errors.campaign?.lifetimeBudgetUsd?.message}
             />
           )}
         </div>
