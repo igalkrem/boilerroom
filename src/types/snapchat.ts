@@ -96,6 +96,7 @@ export interface SnapAdSquadPayload {
   bid_micro?: number;
   daily_budget_micro?: number; // minimum 5_000_000
   lifetime_budget_micro?: number;
+  conversion_window?: "SWIPE_28DAY_VIEW_1DAY" | "SWIPE_7DAY";
   pacing_type?: "STANDARD" | "ACCELERATED";
   start_time?: string;
   end_time?: string;
