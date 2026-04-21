@@ -26,6 +26,11 @@ function toIso(date: string): string {
   return d.toISOString();
 }
 
+function clampToFuture(iso: string): string {
+  const d = new Date(iso);
+  return d < new Date() ? new Date().toISOString() : iso;
+}
+
 // NOTE: WEB_VIEW creative type causes E1008 ("SNAP_AD ad does not match WEB_VIEW creative") because
 // WEB_VIEW is not a valid Ad type (E2002), so there is no valid ad type to pair with WEB_VIEW creative.
 // SNAP_AD creative + SNAP_AD ad + web_view_properties is the only valid combination for web view ads.
@@ -107,7 +112,7 @@ export async function runSubmission(
       ad_account_id: adAccountId,
       status: c.status,
       buy_model: "AUCTION",
-      start_time: toIso(c.startDate),
+      start_time: clampToFuture(toIso(c.startDate)),
       end_time: c.endDate ? toIso(c.endDate) : undefined,
       daily_budget_micro:
         c.spendCapType === "DAILY_BUDGET" && c.dailyBudgetUsd
@@ -197,8 +202,9 @@ export async function runSubmission(
           sq.spendCapType === "LIFETIME_BUDGET" && sq.lifetimeBudgetUsd
             ? usdToMicro(sq.lifetimeBudgetUsd)
             : undefined,
+        conversion_window: "SWIPE_7DAY",
         pacing_type: "STANDARD",
-        start_time: sq.startDate ? toIso(sq.startDate) : undefined,
+        start_time: sq.startDate ? clampToFuture(toIso(sq.startDate)) : undefined,
         end_time: sq.endDate ? toIso(sq.endDate) : undefined,
         pixel_id: sq.pixelId || undefined,
       }));
