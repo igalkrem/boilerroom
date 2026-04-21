@@ -8,14 +8,6 @@ import { Input, Select, Button } from "@/components/ui";
 import { v4 as uuid } from "uuid";
 import type { CampaignFormData } from "@/types/wizard";
 
-const OBJECTIVE_OPTIONS = [
-  { value: "AWARENESS_AND_ENGAGEMENT", label: "Awareness & Engagement" },
-  { value: "SALES", label: "Sales" },
-  { value: "TRAFFIC", label: "Traffic" },
-  { value: "APP_PROMOTION", label: "App Promotion" },
-  { value: "LEADS", label: "Leads" },
-];
-
 const STATUS_OPTIONS = [
   { value: "ACTIVE", label: "Active" },
   { value: "PAUSED", label: "Paused" },
@@ -87,13 +79,8 @@ function CampaignCard({
           {...register(`campaigns.${index}.name`)}
           error={campErrors?.name?.message}
         />
-        <Select
-          label="Objective"
-          options={OBJECTIVE_OPTIONS}
-          {...register(`campaigns.${index}.objective`)}
-          error={campErrors?.objective?.message}
-        />
       </div>
+      <input type="hidden" {...register(`campaigns.${index}.objective`)} value="SALES" />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Input

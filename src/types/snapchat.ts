@@ -24,12 +24,7 @@ export interface SnapAdAccountsResponse {
 
 // ─── Campaigns ──────────────────────────────────────────────────────────────
 
-export type CampaignObjective =
-  | "AWARENESS_AND_ENGAGEMENT"
-  | "SALES"
-  | "TRAFFIC"
-  | "APP_PROMOTION"
-  | "LEADS";
+export type CampaignObjective = "SALES";
 
 export interface SnapCampaignPayload {
   name: string;
@@ -39,7 +34,6 @@ export interface SnapCampaignPayload {
   start_time: string; // ISO 8601
   end_time?: string;
   daily_budget_micro?: number;
-  lifetime_spend_cap_micro?: number; // campaign-level lifetime budget (not lifetime_budget_micro)
   objective_v2_properties?: {
     objective_v2_type: CampaignObjective;
   };
@@ -69,12 +63,11 @@ export type PixelConversionEvent =
   | "AD_CLICK";
 
 export type OptimizationGoal =
-  | "IMPRESSIONS"
-  | "SWIPES"
-  | "APP_INSTALLS"
-  | "LEAD_GENERATION"
+  | "PIXEL_PURCHASE"
+  | "PIXEL_SIGNUP"
+  | "PIXEL_ADD_TO_CART"
   | "PIXEL_PAGE_VIEW"
-  | "PIXEL_PURCHASE";
+  | "LANDING_PAGE_VIEW";
 
 export interface SnapAdSquadPayload {
   campaign_id: string;
@@ -82,7 +75,7 @@ export interface SnapAdSquadPayload {
   type: "SNAP_ADS" | "LENS" | "FILTER";
   status: "ACTIVE" | "PAUSED";
   targeting: {
-    geo_locations: Array<{ country_code: string }>;
+    geos: Array<{ country_code: string }>;
     demographics?: Array<{
       min_age?: number;
       max_age?: number;
@@ -90,11 +83,13 @@ export interface SnapAdSquadPayload {
     }>;
     devices?: Array<{
       device_type?: "MOBILE" | "WEB";
+      os_type?: string;
     }>;
   };
   placement_v2: {
     config: "AUTOMATIC" | "CONTENT" | "CUSTOM";
   };
+  conversion_location?: "WEB" | "APP" | "APP_AND_WEB";
   billing_event: "IMPRESSION";
   optimization_goal: OptimizationGoal;
   bid_strategy: BidStrategy;
@@ -104,10 +99,7 @@ export interface SnapAdSquadPayload {
   pacing_type?: "STANDARD" | "ACCELERATED";
   start_time?: string;
   end_time?: string;
-  frequency_cap_max_impressions?: number;
-  frequency_cap_time_period?: string;
   pixel_id?: string;
-  pixel_conversion_event?: PixelConversionEvent;
 }
 
 export interface SnapAdSquad extends SnapAdSquadPayload {
@@ -131,11 +123,10 @@ export interface SnapCreativePayload {
   top_snap_media_id: string;
   call_to_action?: string;
   brand_name?: string;
-  shareable?: boolean;
+  profile_properties?: { profile_id: string };
   web_view_properties?: { url: string };
   deep_link_properties?: { deep_link_url: string };
   app_install_properties?: { app_link_url: string };
-  profile_properties?: { profile_id: string };
 }
 
 export interface SnapCreative extends SnapCreativePayload {
@@ -148,10 +139,8 @@ export interface SnapAdPayload {
   ad_squad_id: string;
   creative_id: string;
   name: string;
-  type: CreativeType;
+  type: "SNAP_AD";
   status: "ACTIVE" | "PAUSED";
-  web_view_properties?: { url: string };
-  deep_link_properties?: { deep_link_uri: string };
 }
 
 export interface SnapAd extends SnapAdPayload {

@@ -18,13 +18,7 @@ const presetCampaignSchema = z
   .object({
     startImmediate: z.boolean(),
     hasEndDate: z.boolean(),
-    objective: z.enum([
-      "AWARENESS_AND_ENGAGEMENT",
-      "SALES",
-      "TRAFFIC",
-      "APP_PROMOTION",
-      "LEADS",
-    ]),
+    objective: z.literal("SALES"),
     status: z.enum(["ACTIVE", "PAUSED"]),
     startDate: z.string().optional(),
     endDate: z.string().optional(),
@@ -53,7 +47,7 @@ const presetAdSquadSchema = z
     type: z.literal("SNAP_ADS"),
     geoCountryCode: z.string().min(2, "Select a country"),
     optimizationGoal: z.enum([
-      "IMPRESSIONS", "SWIPES", "APP_INSTALLS", "LEAD_GENERATION", "PIXEL_PAGE_VIEW", "PIXEL_PURCHASE",
+      "PIXEL_PURCHASE", "PIXEL_SIGNUP", "PIXEL_ADD_TO_CART", "PIXEL_PAGE_VIEW", "LANDING_PAGE_VIEW",
     ]),
     bidStrategy: z.enum(["AUTO_BID", "LOWEST_COST_WITH_MAX_BID", "TARGET_COST"]),
     bidAmountUsd: z.number().optional(),
@@ -63,16 +57,11 @@ const presetAdSquadSchema = z
     status: z.enum(["ACTIVE", "PAUSED"]),
     startDate: z.string().optional(),
     endDate: z.string().optional(),
-    pacingType: z.enum(["STANDARD", "ACCELERATED"]),
     placementConfig: z.enum(["AUTOMATIC", "CONTENT"]),
-    frequencyCapMaxImpressions: z.number().int().positive().optional(),
-    frequencyCapTimePeriod: z.enum(["HOURS_1", "HOURS_6", "HOURS_12", "DAY_1", "DAY_7", "MONTH_1"]).optional(),
-    targetingAgeMin: z.number().int().min(13).max(50).optional(),
-    targetingAgeMax: z.number().int().min(13).max(50).optional(),
     targetingGender: z.enum(["ALL", "MALE", "FEMALE"]).optional(),
     targetingDeviceType: z.enum(["WEB", "MOBILE", "ALL"]).optional(),
+    targetingOsType: z.enum(["iOS", "ANDROID"]).optional(),
     pixelId: z.string().optional(),
-    pixelConversionEvent: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (!data.startImmediate && (!data.startDate || data.startDate.length === 0)) {
@@ -93,13 +82,6 @@ const presetAdSquadSchema = z
     if (data.bidStrategy !== "AUTO_BID" && (!data.bidAmountUsd || data.bidAmountUsd <= 0)) {
       ctx.addIssue({ code: "custom", path: ["bidAmountUsd"], message: "Bid amount required" });
     }
-    const hasImpressions = !!data.frequencyCapMaxImpressions;
-    const hasPeriod = !!data.frequencyCapTimePeriod;
-    if (hasImpressions && !hasPeriod) ctx.addIssue({ code: "custom", path: ["frequencyCapTimePeriod"], message: "Select a time period" });
-    if (hasPeriod && !hasImpressions) ctx.addIssue({ code: "custom", path: ["frequencyCapMaxImpressions"], message: "Enter max impressions" });
-    if (data.targetingAgeMin !== undefined && data.targetingAgeMax !== undefined && data.targetingAgeMin > data.targetingAgeMax) {
-      ctx.addIssue({ code: "custom", path: ["targetingAgeMax"], message: "Max age must be ≥ min age" });
-    }
   });
 
 const presetFormSchema = z.object({
@@ -111,14 +93,6 @@ const presetFormSchema = z.object({
 type PresetFormValues = z.infer<typeof presetFormSchema>;
 
 // ─── Option arrays ────────────────────────────────────────────────────────────
-
-const OBJECTIVE_OPTIONS = [
-  { value: "AWARENESS_AND_ENGAGEMENT", label: "Awareness & Engagement" },
-  { value: "SALES", label: "Sales" },
-  { value: "TRAFFIC", label: "Traffic" },
-  { value: "APP_PROMOTION", label: "App Promotion" },
-  { value: "LEADS", label: "Leads" },
-];
 
 const STATUS_OPTIONS = [
   { value: "ACTIVE", label: "Active" },
@@ -149,12 +123,11 @@ const GEO_OPTIONS = [
 ];
 
 const OPTIMIZATION_GOAL_OPTIONS = [
-  { value: "IMPRESSIONS", label: "Impressions" },
-  { value: "SWIPES", label: "Swipes" },
-  { value: "APP_INSTALLS", label: "App Installs" },
-  { value: "LEAD_GENERATION", label: "Lead Generation" },
-  { value: "PIXEL_PAGE_VIEW", label: "Pixel Page View" },
   { value: "PIXEL_PURCHASE", label: "Pixel Purchase" },
+  { value: "PIXEL_SIGNUP", label: "Pixel Sign Up" },
+  { value: "PIXEL_ADD_TO_CART", label: "Pixel Add to Cart" },
+  { value: "PIXEL_PAGE_VIEW", label: "Pixel Page View" },
+  { value: "LANDING_PAGE_VIEW", label: "Landing Page View" },
 ];
 
 const BID_STRATEGY_OPTIONS = [
@@ -163,23 +136,9 @@ const BID_STRATEGY_OPTIONS = [
   { value: "TARGET_COST", label: "Target Cost" },
 ];
 
-const PACING_OPTIONS = [
-  { value: "STANDARD", label: "Standard" },
-  { value: "ACCELERATED", label: "Accelerated" },
-];
-
 const PLACEMENT_OPTIONS = [
   { value: "AUTOMATIC", label: "Automatic" },
   { value: "CONTENT", label: "Content" },
-];
-
-const FREQUENCY_PERIOD_OPTIONS = [
-  { value: "HOURS_1", label: "1 Hour" },
-  { value: "HOURS_6", label: "6 Hours" },
-  { value: "HOURS_12", label: "12 Hours" },
-  { value: "DAY_1", label: "1 Day" },
-  { value: "DAY_7", label: "7 Days" },
-  { value: "MONTH_1", label: "1 Month" },
 ];
 
 const GENDER_OPTIONS = [
@@ -194,18 +153,10 @@ const DEVICE_OPTIONS = [
   { value: "WEB", label: "Web" },
 ];
 
-const CONVERSION_EVENT_OPTIONS = [
-  { value: "", label: "— None —" },
-  { value: "PAGE_VIEW", label: "Page View" },
-  { value: "PURCHASE", label: "Purchase" },
-  { value: "ADD_TO_CART", label: "Add to Cart" },
-  { value: "VIEW_CONTENT", label: "View Content" },
-  { value: "SUBSCRIBE", label: "Subscribe" },
-  { value: "SIGN_UP", label: "Sign Up" },
-  { value: "SAVE", label: "Save" },
-  { value: "SEARCH", label: "Search" },
-  { value: "START_CHECKOUT", label: "Start Checkout" },
-  { value: "AD_CLICK", label: "Ad Click" },
+const OS_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "iOS", label: "iOS" },
+  { value: "ANDROID", label: "Android" },
 ];
 
 function todayIso() {
@@ -218,17 +169,15 @@ function defaultAdSquad(): PresetFormValues["adSquads"][number] {
     hasEndDate: false,
     type: "SNAP_ADS",
     geoCountryCode: "US",
-    optimizationGoal: "SWIPES",
+    optimizationGoal: "PIXEL_PURCHASE",
     bidStrategy: "AUTO_BID",
     spendCapType: "DAILY_BUDGET",
     dailyBudgetUsd: 20,
     status: "PAUSED",
-    pacingType: "STANDARD",
     placementConfig: "AUTOMATIC",
     targetingGender: "ALL",
     targetingDeviceType: "ALL",
     pixelId: undefined,
-    pixelConversionEvent: undefined,
   };
 }
 
@@ -260,8 +209,7 @@ function AdSquadCard({
   const spendCapType = useWatch({ control, name: `adSquads.${index}.spendCapType` });
   const startImmediate = useWatch({ control, name: `adSquads.${index}.startImmediate` });
   const hasEndDate = useWatch({ control, name: `adSquads.${index}.hasEndDate` });
-  const optimizationGoal = useWatch({ control, name: `adSquads.${index}.optimizationGoal` });
-  const isPixelGoal = optimizationGoal === "PIXEL_PAGE_VIEW" || optimizationGoal === "PIXEL_PURCHASE";
+  const deviceType = useWatch({ control, name: `adSquads.${index}.targetingDeviceType` });
   const squadErrors = errors.adSquads?.[index];
 
   return (
@@ -295,16 +243,6 @@ function AdSquadCard({
         />
       </div>
 
-      {isPixelGoal && (
-        <div className="max-w-sm">
-          <Select
-            label="Conversion Event (optional)"
-            options={CONVERSION_EVENT_OPTIONS}
-            {...register(`${prefix}.pixelConversionEvent`)}
-          />
-        </div>
-      )}
-
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
           label="Bid Strategy"
@@ -328,7 +266,7 @@ function AdSquadCard({
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
           label="Budget Type"
           options={SPEND_CAP_OPTIONS}
@@ -358,11 +296,6 @@ function AdSquadCard({
             error={squadErrors?.lifetimeBudgetUsd?.message}
           />
         )}
-        <Select
-          label="Pacing"
-          options={PACING_OPTIONS}
-          {...register(`${prefix}.pacingType`)}
-        />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -437,49 +370,8 @@ function AdSquadCard({
       </div>
 
       <div className="border-t border-gray-100 pt-4">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Frequency Cap (optional)</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            label="Max Impressions"
-            type="number"
-            min={1}
-            step={1}
-            placeholder="e.g. 3"
-            {...register(`${prefix}.frequencyCapMaxImpressions`, { valueAsNumber: true })}
-            error={squadErrors?.frequencyCapMaxImpressions?.message}
-          />
-          <Select
-            label="Per Time Period"
-            options={[{ value: "", label: "— None —" }, ...FREQUENCY_PERIOD_OPTIONS]}
-            {...register(`${prefix}.frequencyCapTimePeriod`)}
-            error={squadErrors?.frequencyCapTimePeriod?.message}
-          />
-        </div>
-      </div>
-
-      <div className="border-t border-gray-100 pt-4">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Audience Targeting (optional)</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Input
-            label="Min Age"
-            type="number"
-            min={13}
-            max={50}
-            step={1}
-            placeholder="13"
-            {...register(`${prefix}.targetingAgeMin`, { valueAsNumber: true })}
-            error={squadErrors?.targetingAgeMin?.message}
-          />
-          <Input
-            label="Max Age"
-            type="number"
-            min={13}
-            max={50}
-            step={1}
-            placeholder="50"
-            {...register(`${prefix}.targetingAgeMax`, { valueAsNumber: true })}
-            error={squadErrors?.targetingAgeMax?.message}
-          />
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <Select
             label="Gender"
             options={GENDER_OPTIONS}
@@ -488,8 +380,17 @@ function AdSquadCard({
           <Select
             label="Device"
             options={DEVICE_OPTIONS}
-            {...register(`${prefix}.targetingDeviceType`)}
+            {...register(`${prefix}.targetingDeviceType`, {
+              onChange: () => setValue(`adSquads.${index}.targetingOsType`, undefined),
+            })}
           />
+          {deviceType === "MOBILE" && (
+            <Select
+              label="OS"
+              options={OS_OPTIONS}
+              {...register(`${prefix}.targetingOsType`)}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -549,16 +450,11 @@ export function PresetForm({ preset }: PresetFormProps) {
             status: sq.status,
             startDate: sq.startDate,
             endDate: sq.endDate,
-            pacingType: sq.pacingType,
             placementConfig: sq.placementConfig,
-            frequencyCapMaxImpressions: sq.frequencyCapMaxImpressions,
-            frequencyCapTimePeriod: sq.frequencyCapTimePeriod,
-            targetingAgeMin: sq.targetingAgeMin,
-            targetingAgeMax: sq.targetingAgeMax,
             targetingGender: sq.targetingGender,
             targetingDeviceType: sq.targetingDeviceType,
+            targetingOsType: sq.targetingOsType,
             pixelId: sq.pixelId,
-            pixelConversionEvent: sq.pixelConversionEvent,
           })),
         }
       : {
@@ -597,7 +493,6 @@ export function PresetForm({ preset }: PresetFormProps) {
         startDate: startImmediate ? undefined : sq.startDate,
         endDate: hasEndDate ? sq.endDate : undefined,
         pixelId: sq.pixelId || undefined,
-        pixelConversionEvent: sq.pixelConversionEvent || undefined,
       })),
     };
     upsertPreset(saved);
@@ -623,13 +518,8 @@ export function PresetForm({ preset }: PresetFormProps) {
       <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
         <h3 className="font-semibold text-gray-800">Campaign Defaults</h3>
 
+        <input type="hidden" {...register("campaign.objective")} value="SALES" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Select
-            label="Objective"
-            options={OBJECTIVE_OPTIONS}
-            {...register("campaign.objective")}
-            error={errors.campaign?.objective?.message}
-          />
           <Select
             label="Status"
             options={STATUS_OPTIONS}
