@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getValidAccessToken } from "@/lib/snapchat/client";
 import { rateLimitedCall } from "@/lib/rate-limiter";
 
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   let accessToken: string;
   try {
@@ -20,9 +22,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "missing_params" }, { status: 400 });
   }
 
-  // Validate path to prevent SSRF: must start with /v1/, no traversal or protocol injection
+  // Validate path to prevent SSRF: must contain /v1/ (allows regional prefixes like /us/v1/...),
+  // no traversal or protocol injection.
   if (
-    !addPath.startsWith("/v1/") ||
+    !addPath.includes("/v1/") ||
     addPath.includes("..") ||
     addPath.includes("://") ||
     addPath.includes("@")

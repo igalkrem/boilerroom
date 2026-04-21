@@ -63,7 +63,7 @@ export function Step4Review() {
                 {c.objective} ·{" "}
                 {c.spendCapType === "DAILY_BUDGET"
                   ? `$${c.dailyBudgetUsd}/day`
-                  : `$${c.lifetimeBudgetUsd} lifetime`}{" "}
+                  : "No budget cap"}{" "}
                 · {c.status} · {c.startDate}
                 {c.endDate ? ` – ${c.endDate}` : ""}
               </p>
@@ -80,11 +80,11 @@ export function Step4Review() {
         <div className="divide-y divide-gray-100">
           {adSquads.map((s, i) => {
             const targetingParts: string[] = [];
-            if (s.targetingAgeMin || s.targetingAgeMax) {
-              targetingParts.push(`Ages ${s.targetingAgeMin ?? 13}–${s.targetingAgeMax ?? "50+"}`);
-            }
             if (s.targetingGender && s.targetingGender !== "ALL") targetingParts.push(s.targetingGender);
-            if (s.targetingDeviceType && s.targetingDeviceType !== "ALL") targetingParts.push(s.targetingDeviceType);
+            if (s.targetingDeviceType && s.targetingDeviceType !== "ALL") {
+              const device = s.targetingOsType ? `${s.targetingDeviceType} (${s.targetingOsType})` : s.targetingDeviceType;
+              targetingParts.push(device);
+            }
             return (
               <div key={s.id} className="px-5 py-3">
                 <p className="font-medium text-gray-900 text-sm">{s.name || `Ad Set #${i + 1}`}</p>
@@ -93,9 +93,8 @@ export function Step4Review() {
                   {s.spendCapType === "DAILY_BUDGET"
                     ? `$${s.dailyBudgetUsd}/day`
                     : `$${s.lifetimeBudgetUsd} lifetime`}{" "}
-                  · {s.geoCountryCode} · {s.pacingType} · {s.placementConfig}
+                  · {s.geoCountryCode} · {s.placementConfig}
                   {targetingParts.length > 0 ? ` · ${targetingParts.join(", ")}` : ""}
-                  {s.frequencyCapMaxImpressions ? ` · Cap: ${s.frequencyCapMaxImpressions}/${s.frequencyCapTimePeriod}` : ""}
                   {" · →"} {campaignMap[s.campaignId] ?? "—"}
                 </p>
               </div>
@@ -117,7 +116,6 @@ export function Step4Review() {
               </p>
               <p className="text-xs text-gray-500 mt-0.5">
                 &quot;{cr.headline}&quot; · {cr.interactionType} · {cr.adStatus}
-                {cr.shareable ? " · Shareable" : ""}
                 {" · →"} {adSquadMap[cr.adSquadId] ?? "—"}
               </p>
             </div>

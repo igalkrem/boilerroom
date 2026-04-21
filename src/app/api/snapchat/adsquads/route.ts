@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdSquads } from "@/lib/snapchat/adsquads";
-import { getSession, isSessionValid } from "@/lib/session";
+import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
 import type { SnapAdSquadPayload } from "@/types/snapchat";
 import { z } from "zod";
 
+export const maxDuration = 60;
+
 const bodySchema = z.object({
+  adAccountId: z.string().min(1),
   campaignId: z.string().min(1),
-  adsquads: z.array(z.record(z.string(), z.unknown())).min(1),
+  adsquads: z.array(z.record(z.string(), z.unknown())).min(1)
+    .refine(
+      (items) => { const n = items.map((i) => i.name as string).filter(Boolean); return new Set(n).size === n.length; },
+      { message: "Duplicate names in batch" }
+    ),
 });
 
 export async function POST(request: NextRequest) {
@@ -21,10 +28,15 @@ export async function POST(request: NextRequest) {
     console.error("Adsquads body validation failed:", JSON.stringify(parsed.error.flatten()), "body keys:", body ? Object.keys(body) : null);
     return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
   }
-  const { campaignId, adsquads } = parsed.data as unknown as {
+  const { adAccountId, campaignId, adsquads } = parsed.data as unknown as {
+    adAccountId: string;
     campaignId: string;
     adsquads: SnapAdSquadPayload[];
   };
+
+  if (!isAdAccountAllowed(session, adAccountId)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   try {
     const results = await createAdSquads(campaignId, adsquads);

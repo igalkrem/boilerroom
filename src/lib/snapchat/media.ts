@@ -24,32 +24,24 @@ export async function createMediaEntity(
   return { mediaId: item.id, uploadUrl: item.upload_url ?? null };
 }
 
-export async function pollMediaStatus(
+/**
+ * Single-shot status check — returns the current upload_status string.
+ * Returns "PENDING" for 404s (Snapchat may not register the media immediately).
+ * The polling loop lives in the client (uploadMediaToSnapchat.ts) so we never
+ * hold a Vercel serverless function open for minutes at a time.
+ */
+export async function checkMediaStatus(
   mediaId: string,
-  adAccountId: string,
-  maxAttempts = 90
-): Promise<void> {
-  for (let i = 0; i < maxAttempts; i++) {
-    let data: { media: Array<{ media: SnapMediaEntity }> } | null = null;
-    try {
-      data = await snapFetch<{ media: Array<{ media: SnapMediaEntity }> }>(
-        `/adaccounts/${adAccountId}/media/${mediaId}`
-      );
-    } catch (err) {
-      // Snapchat may return 404 briefly after finalize while the media is
-      // being registered — treat it as PENDING and keep polling.
-      if (String(err).includes("404")) {
-        await new Promise((r) => setTimeout(r, 2000));
-        continue;
-      }
-      throw err;
-    }
-
-    const status = data.media?.[0]?.media?.upload_status;
-    if (status === "COMPLETE") return;
-    if (status === "FAILED") throw new Error("Media upload failed on Snapchat side");
-
-    await new Promise((r) => setTimeout(r, 2000));
+  adAccountId: string
+): Promise<string> {
+  let data: { media: Array<{ media: SnapMediaEntity }> } | null = null;
+  try {
+    data = await snapFetch<{ media: Array<{ media: SnapMediaEntity }> }>(
+      `/adaccounts/${adAccountId}/media/${mediaId}`
+    );
+  } catch (err) {
+    if (String(err).includes("404")) return "PENDING";
+    throw err;
   }
-  throw new Error("Media upload timed out");
+  return data.media?.[0]?.media?.upload_status ?? "PENDING";
 }

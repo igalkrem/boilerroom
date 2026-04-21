@@ -13,7 +13,7 @@ export async function createCampaigns(
     }
   );
 
-  return (data.campaigns ?? []).map((item) => {
+  const mapped = (data.campaigns ?? []).map((item) => {
     if (item.sub_request_status !== "SUCCESS") {
       const msg = item.message ?? item.error?.message;
       const detail = item.error_type ?? item.error?.error_type;
@@ -27,4 +27,6 @@ export async function createCampaigns(
           : undefined,
     };
   });
+  console.log("[createCampaigns] results:", mapped.map((r) => ({ id: r.id ?? "MISSING", hasError: !!r.error, error: r.error })));
+  return mapped;
 }

@@ -5,6 +5,7 @@ export async function createAdSquads(
   campaignId: string,
   adsquads: SnapAdSquadPayload[]
 ): Promise<Array<SnapAdSquad & { error?: string }>> {
+  console.log("[createAdSquads] payload:", JSON.stringify({ adsquads }));
   const data = await snapFetch<SnapBatchResponse<SnapAdSquad>>(
     `/campaigns/${campaignId}/adsquads`,
     {
@@ -13,7 +14,7 @@ export async function createAdSquads(
     }
   );
 
-  return (data.adsquads ?? []).map((item) => {
+  const mapped = (data.adsquads ?? []).map((item) => {
     if (item.sub_request_status !== "SUCCESS") {
       const msg = item.message ?? item.error?.message;
       const detail = item.error_type ?? item.error?.error_type;
@@ -27,4 +28,6 @@ export async function createAdSquads(
           : undefined,
     };
   });
+  console.log("[createAdSquads] results:", mapped.map((r) => ({ id: r.id ?? "MISSING", hasError: !!r.error, error: r.error })));
+  return mapped;
 }

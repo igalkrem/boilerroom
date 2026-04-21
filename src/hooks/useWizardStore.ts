@@ -61,7 +61,12 @@ const initialState = {
 export const useWizardStore = create<WizardStore>((set, get) => ({
   ...initialState,
 
-  setAdAccountId: (id) => set({ adAccountId: id }),
+  setAdAccountId: (id) =>
+    set((state) =>
+      state.adAccountId === id
+        ? {}
+        : { ...initialState, adAccountId: id }
+    ),
   setStep: (step) => set({ currentStep: step }),
   setCampaigns: (campaigns) => set({ campaigns }),
   setAdSquads: (adSquads) => set({ adSquads }),
@@ -118,7 +123,7 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
       objective: campaignData.objective,
       status: campaignData.status,
       startDate: campaignData.startDate ? ensureFutureDate(campaignData.startDate) : todayIso(),
-      endDate: campaignData.endDate,
+      endDate: campaignData.endDate ? ensureFutureDate(campaignData.endDate) : undefined,
       spendCapType: campaignData.spendCapType,
       dailyBudgetUsd: campaignData.dailyBudgetUsd,
       lifetimeBudgetUsd: campaignData.lifetimeBudgetUsd,
@@ -138,17 +143,12 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
       lifetimeBudgetUsd: sq.lifetimeBudgetUsd,
       status: sq.status,
       startDate: sq.startDate ? ensureFutureDate(sq.startDate) : undefined,
-      endDate: sq.endDate,
-      pacingType: sq.pacingType,
+      endDate: sq.endDate ? ensureFutureDate(sq.endDate) : undefined,
       placementConfig: sq.placementConfig,
-      frequencyCapMaxImpressions: sq.frequencyCapMaxImpressions,
-      frequencyCapTimePeriod: sq.frequencyCapTimePeriod,
-      targetingAgeMin: sq.targetingAgeMin,
-      targetingAgeMax: sq.targetingAgeMax,
       targetingGender: sq.targetingGender,
       targetingDeviceType: sq.targetingDeviceType,
-      pixelId: sq.pixelId ?? "",
-      pixelConversionEvent: sq.pixelConversionEvent,
+      targetingOsType: sq.targetingOsType,
+      pixelId: sq.pixelId || undefined,
     }));
 
     set({ campaigns: [campaign], adSquads, creatives: [] });

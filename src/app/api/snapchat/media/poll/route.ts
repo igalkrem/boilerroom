@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pollMediaStatus } from "@/lib/snapchat/media";
+import { checkMediaStatus } from "@/lib/snapchat/media";
 import { getValidAccessToken } from "@/lib/snapchat/client";
 
 export async function POST(request: NextRequest) {
@@ -19,8 +19,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await pollMediaStatus(mediaId, adAccountId);
-    return NextResponse.json({ ok: true });
+    const status = await checkMediaStatus(mediaId, adAccountId);
+    return NextResponse.json({ status });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

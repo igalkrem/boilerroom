@@ -3,6 +3,8 @@ import { getValidAccessToken } from "@/lib/snapchat/client";
 import { rateLimitedCall } from "@/lib/rate-limiter";
 import { z } from "zod";
 
+export const maxDuration = 60;
+
 const BASE_URL = process.env.SNAPCHAT_API_BASE_URL ?? "https://adsapi.snapchat.com/v1";
 
 const bodySchema = z.object({
@@ -58,7 +60,9 @@ export async function POST(request: NextRequest) {
     } catch {
       path = p; // already a relative path
     }
-    if (!path.startsWith("/v1/")) {
+    // Only prepend /v1/ if the path doesn't already contain it.
+    // Regional paths like /us/v1/... must be preserved as-is.
+    if (!path.includes("/v1/")) {
       path = path.startsWith("/") ? `/v1${path}` : `/v1/${path}`;
     }
     return path;

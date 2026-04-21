@@ -4,9 +4,15 @@ import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
 import type { SnapCreativePayload } from "@/types/snapchat";
 import { z } from "zod";
 
+export const maxDuration = 60;
+
 const bodySchema = z.object({
   adAccountId: z.string().min(1),
-  creatives: z.array(z.record(z.string(), z.unknown())).min(1),
+  creatives: z.array(z.record(z.string(), z.unknown())).min(1)
+    .refine(
+      (items) => { const n = items.map((i) => i.name as string).filter(Boolean); return new Set(n).size === n.length; },
+      { message: "Duplicate names in batch" }
+    ),
 });
 
 export async function POST(request: NextRequest) {

@@ -5,6 +5,7 @@ export async function createCreatives(
   adAccountId: string,
   creatives: SnapCreativePayload[]
 ): Promise<Array<SnapCreative & { error?: string }>> {
+  console.log("[createCreatives] payload:", JSON.stringify({ creatives: creatives.map(c => ({ ...c, top_snap_media_id: c.top_snap_media_id?.slice(0, 8) + "..." })) }));
   const data = await snapFetch<SnapBatchResponse<SnapCreative>>(
     `/adaccounts/${adAccountId}/creatives`,
     {
@@ -13,11 +14,12 @@ export async function createCreatives(
     }
   );
 
-  return (data.creatives ?? []).map((item) => {
+  const mapped = (data.creatives ?? []).map((item) => {
     if (item.sub_request_status !== "SUCCESS") {
-      const msg = item.message ?? item.error?.message;
-      const detail = item.error_type ?? item.error?.error_type;
-      console.error("Creative create failed:", { error_type: detail, message: msg, raw: item });
+      const msg = item.message ?? item.error?.message ?? "";
+      const detail = item.error_type ?? item.error?.error_type ?? "";
+      const reason = item.sub_request_error_reason ?? "";
+      console.error(`Creative create failed | error_type=${detail} | message=${msg} | reason=${reason} | raw=${JSON.stringify(item)}`);
     }
     return {
       ...(item.creative ?? ({} as SnapCreative)),
@@ -27,4 +29,6 @@ export async function createCreatives(
           : undefined,
     };
   });
+  console.log("[createCreatives] results:", mapped.map((r) => ({ id: r.id ?? "MISSING", hasError: !!r.error, error: r.error })));
+  return mapped;
 }

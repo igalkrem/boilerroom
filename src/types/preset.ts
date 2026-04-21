@@ -1,5 +1,4 @@
 import type { CampaignObjective, BidStrategy, OptimizationGoal } from "./snapchat";
-import type { FrequencyCapTimePeriod } from "./wizard";
 
 export interface CampaignPresetData {
   objective: CampaignObjective;
@@ -23,16 +22,11 @@ export interface AdSquadPresetData {
   status: "ACTIVE" | "PAUSED";
   startDate?: string;
   endDate?: string;
-  pacingType: "STANDARD" | "ACCELERATED";
   placementConfig: "AUTOMATIC" | "CONTENT";
-  frequencyCapMaxImpressions?: number;
-  frequencyCapTimePeriod?: FrequencyCapTimePeriod;
-  targetingAgeMin?: number;
-  targetingAgeMax?: number;
   targetingGender?: "ALL" | "MALE" | "FEMALE";
   targetingDeviceType?: "WEB" | "MOBILE" | "ALL";
+  targetingOsType?: "iOS" | "ANDROID";
   pixelId?: string;
-  pixelConversionEvent?: string;
 }
 
 export interface CampaignPreset {

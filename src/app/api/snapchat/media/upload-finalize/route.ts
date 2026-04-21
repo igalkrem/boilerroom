@@ -3,6 +3,8 @@ import { getValidAccessToken } from "@/lib/snapchat/client";
 import { rateLimitedCall } from "@/lib/rate-limiter";
 import { z } from "zod";
 
+export const maxDuration = 60;
+
 const bodySchema = z.object({
   uploadId: z.string().min(1),
   finalizePath: z

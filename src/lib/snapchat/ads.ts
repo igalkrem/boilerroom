@@ -13,11 +13,12 @@ export async function createAds(
     }
   );
 
-  return (data.ads ?? []).map((item) => {
+  const mapped = (data.ads ?? []).map((item) => {
     if (item.sub_request_status !== "SUCCESS") {
-      const msg = item.message ?? item.error?.message;
-      const detail = item.error_type ?? item.error?.error_type;
-      console.error("Ad create failed:", { error_type: detail, message: msg, raw: item });
+      const msg = item.message ?? item.error?.message ?? "";
+      const detail = item.error_type ?? item.error?.error_type ?? "";
+      const reason = item.sub_request_error_reason ?? "";
+      console.error(`Ad create failed | error_type=${detail} | message=${msg} | reason=${reason} | raw=${JSON.stringify(item)}`);
     }
     return {
       ...(item.ad ?? ({} as SnapAd)),
@@ -27,4 +28,6 @@ export async function createAds(
           : undefined,
     };
   });
+  console.log("[createAds] results:", mapped.map((r) => ({ id: r.id ?? "MISSING", hasError: !!r.error, error: r.error })));
+  return mapped;
 }

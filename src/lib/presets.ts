@@ -1,12 +1,21 @@
+import { z } from "zod";
 import type { CampaignPreset } from "@/types/preset";
 
 const STORAGE_KEY = "boilerroom_presets_v1";
 
-function isValidPresetArray(value: unknown): value is CampaignPreset[] {
-  return Array.isArray(value) && value.every(
-    (item) => typeof item === "object" && item !== null && typeof (item as Record<string, unknown>).id === "string"
-  );
-}
+const presetSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  createdAt: z.string(),
+  campaign: z.object({
+    objective: z.string().min(1),
+    spendCapType: z.string().min(1),
+    status: z.string(),
+  }).passthrough(),
+  adSquads: z.array(
+    z.object({ optimizationGoal: z.string().min(1) }).passthrough()
+  ),
+});
 
 export function loadPresets(): CampaignPreset[] {
   if (typeof window === "undefined") return [];
@@ -14,11 +23,12 @@ export function loadPresets(): CampaignPreset[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    if (!isValidPresetArray(parsed)) {
+    if (!Array.isArray(parsed)) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
       return [];
     }
-    return parsed;
+    // Filter out corrupted entries rather than wiping the entire store.
+    return parsed.filter((item) => presetSchema.safeParse(item).success) as CampaignPreset[];
   } catch {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
     return [];

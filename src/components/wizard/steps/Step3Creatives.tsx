@@ -7,7 +7,7 @@ import { creativesFormSchema } from "@/lib/validations/creative.schema";
 import { Input, Select, Button, Alert } from "@/components/ui";
 import { useDropzone } from "react-dropzone";
 import { v4 as uuid } from "uuid";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { clsx } from "clsx";
 import { z } from "zod";
 import type { CreativeFormData } from "@/types/wizard";
@@ -17,24 +17,14 @@ type CreativesFormValues = z.infer<typeof creativesFormSchema>;
 const CTA_OPTIONS = [
   { value: "", label: "None" },
   { value: "SHOP_NOW", label: "Shop Now" },
-  { value: "LEARN_MORE", label: "Learn More" },
   { value: "SIGN_UP", label: "Sign Up" },
   { value: "DOWNLOAD", label: "Download" },
-  { value: "INSTALL_NOW", label: "Install Now" },
   { value: "WATCH", label: "Watch" },
   { value: "GET_NOW", label: "Get Now" },
   { value: "ORDER_NOW", label: "Order Now" },
   { value: "BOOK_NOW", label: "Book Now" },
-  { value: "PLAY_GAME", label: "Play Game" },
   { value: "APPLY_NOW", label: "Apply Now" },
   { value: "BUY_NOW", label: "Buy Now" },
-];
-
-const INTERACTION_TYPE_OPTIONS = [
-  { value: "SWIPE_TO_OPEN", label: "Swipe to Open" },
-  { value: "WEB_VIEW", label: "Web View" },
-  { value: "DEEP_LINK", label: "Deep Link" },
-  { value: "APP_INSTALL", label: "App Install" },
 ];
 
 const AD_STATUS_OPTIONS = [
@@ -52,6 +42,9 @@ const pendingMediaFiles = new Map<string, File>();
 import type { FFmpeg } from "@ffmpeg/ffmpeg";
 
 let ffmpegCache: FFmpeg | null = null;
+// Track the active progress handler so we can remove it before registering a new one,
+// preventing duplicate callbacks when the same FFmpeg instance handles multiple files.
+let activeProgressHandler: ((event: { progress: number }) => void) | null = null;
 
 async function getFFmpeg(onProgress: (msg: string) => void): Promise<FFmpeg> {
   if (ffmpegCache?.loaded) return ffmpegCache;
@@ -83,9 +76,12 @@ async function transcodeVideoForSnap(file: File, onProgress: (msg: string) => vo
 
   onProgress("Transcoding video to 720×1280 H.264...");
 
-  ffmpeg.on("progress", ({ progress }: { progress: number }) => {
+  // Remove stale handler from a prior call to prevent double-firing on the same FFmpeg instance
+  if (activeProgressHandler) ffmpeg.off("progress", activeProgressHandler);
+  activeProgressHandler = ({ progress }: { progress: number }) => {
     if (progress > 0) onProgress(`Transcoding: ${Math.round(progress * 100)}%...`);
-  });
+  };
+  ffmpeg.on("progress", activeProgressHandler);
 
   await ffmpeg.writeFile(inputName, await fetchFile(file));
 
@@ -323,15 +319,6 @@ function CreativeCard({
         )}
       </div>
 
-      {/* Interaction type */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Select
-          label="Interaction Type"
-          options={INTERACTION_TYPE_OPTIONS}
-          {...register(`creatives.${index}.interactionType`)}
-        />
-      </div>
-
       {/* Conditional URL fields */}
       {interactionType === "WEB_VIEW" && (
         <Input
@@ -368,18 +355,13 @@ function CreativeCard({
         />
       </div>
 
-      {/* Brand + Profile ID + CTA + Ad Set */}
+      {/* Brand + CTA + Ad Set */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input
           label="Brand Name (optional)"
           placeholder="Acme Corp"
           maxLength={25}
           {...register(`creatives.${index}.brandName`)}
-        />
-        <Input
-          label="Public Profile ID (optional)"
-          placeholder="e.g. abc123..."
-          {...register(`creatives.${index}.profileId`)}
         />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -397,26 +379,13 @@ function CreativeCard({
         />
       </div>
 
-      {/* Ad status + shareable */}
-      <div className="flex items-center gap-6">
-        <div className="w-40">
-          <Select
-            label="Ad Status"
-            options={AD_STATUS_OPTIONS}
-            {...register(`creatives.${index}.adStatus`)}
-          />
-        </div>
-        <div className="flex items-center gap-2 pt-5">
-          <input
-            id={`shareable-${index}`}
-            type="checkbox"
-            className="h-4 w-4 rounded border-gray-300 text-cyan-500 focus:ring-cyan-500"
-            {...register(`creatives.${index}.shareable`)}
-          />
-          <label htmlFor={`shareable-${index}`} className="text-sm text-gray-700 select-none">
-            Shareable
-          </label>
-        </div>
+      {/* Ad Status */}
+      <div className="w-40">
+        <Select
+          label="Ad Status"
+          options={AD_STATUS_OPTIONS}
+          {...register(`creatives.${index}.adStatus`)}
+        />
       </div>
 
       <input type="hidden" {...register(`creatives.${index}.id`)} />
@@ -431,20 +400,23 @@ function defaultCreative(adSquadId: string) {
     adSquadId,
     name: "",
     headline: "",
-    brandName: "",
-    callToAction: "",
+    brandName: "Amphy",
+    callToAction: "SHOP_NOW",
     mediaId: "",
     mediaFileName: "",
     uploadStatus: "idle" as const,
     interactionType: "WEB_VIEW" as const,
-    shareable: false,
-    adStatus: "ACTIVE" as const,
-    profileId: "",
+    webViewUrl: "https://blackbusinesswave.com/",
+    adStatus: "PAUSED" as const,
   };
 }
 
 export function Step3Creatives() {
   const { adSquads, creatives, setCreatives, setStep } = useWizardStore();
+
+  // Clear pending File references when the component unmounts (e.g. user navigates back
+  // without submitting) to release ~30 MB video buffers from memory.
+  useEffect(() => () => { pendingMediaFiles.clear(); }, []);
 
   const adSquadOptions = adSquads.map((sq, i) => ({
     value: sq.id,
@@ -470,6 +442,9 @@ export function Step3Creatives() {
       ...cr,
       mediaFile: pendingMediaFiles.get(cr.id),
     }));
+    // Release all File references — store now owns them; old entries (stale UUIDs
+    // from previous sessions or removed creatives) would otherwise leak memory.
+    pendingMediaFiles.clear();
     setCreatives(withFiles);
     setStep(4);
   };
@@ -480,7 +455,7 @@ export function Step3Creatives() {
         <CreativeCard
           key={field.id}
           index={i}
-          creativeId={field.id}
+          creativeId={getValues(`creatives.${i}.id`) as string}
           adSquadOptions={adSquadOptions}
           control={control}
           register={register}
