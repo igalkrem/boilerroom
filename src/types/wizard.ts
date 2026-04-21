@@ -1,13 +1,5 @@
 import type { CampaignObjective, BidStrategy, OptimizationGoal } from "./snapchat";
 
-export type FrequencyCapTimePeriod =
-  | "HOURS_1"
-  | "HOURS_6"
-  | "HOURS_12"
-  | "DAY_1"
-  | "DAY_7"
-  | "MONTH_1";
-
 // ─── Form data shapes (filled by wizard steps) ───────────────────────────────
 
 export interface CampaignFormData {
@@ -39,19 +31,13 @@ export interface AdSquadFormData {
   startDate?: string;
   endDate?: string;
   // Delivery
-  pacingType: "STANDARD" | "ACCELERATED";
   placementConfig: "AUTOMATIC" | "CONTENT";
-  // Frequency cap
-  frequencyCapMaxImpressions?: number;
-  frequencyCapTimePeriod?: FrequencyCapTimePeriod;
   // Targeting
-  targetingAgeMin?: number;
-  targetingAgeMax?: number;
   targetingGender?: "ALL" | "MALE" | "FEMALE";
   targetingDeviceType?: "WEB" | "MOBILE" | "ALL";
+  targetingOsType?: "iOS" | "ANDROID";
   // Tracking
-  pixelId: string;
-  pixelConversionEvent?: string;
+  pixelId?: string;
 }
 
 export type InteractionType =
@@ -76,10 +62,8 @@ export interface CreativeFormData {
   interactionType: InteractionType;
   webViewUrl?: string;
   deepLinkUrl?: string;
-  shareable?: boolean;
   // Ad settings
   adStatus: "ACTIVE" | "PAUSED";
-  profileId?: string;
 }
 
 // ─── Submission results ────────────────────────────────────────────────────

@@ -48,11 +48,11 @@ Re-read files as needed when tracing multi-file attack paths.
 
 For each OWASP category, trace the full path a real attacker would follow — not just whether a single check exists, but whether it can be bypassed:
 
-**SSRF path:** Where does a URL enter the system? Can a user control any part of a URL that gets fetched server-side? Does validation happen before or after interpolation? Can the scheme be swapped (`javascript:`, `file://`, `http://internal-host`)?
+**SSRF path:** Where does a URL enter the system? Can a user control any part of a URL that gets fetched server-side? Does validation happen before or after interpolation? Can the scheme be swapped (`javascript:`, `file://`, `http://internal-host`)? Note: `upload-chunk` validates `addPath` with `includes("/v1/")` (not `startsWith`) to allow regional Snapchat paths like `/us/v1/...` — the other SSRF guards (`..`, `://`, `@`) are still present and must not be removed.
 
 **Auth path:** Does the OAuth state param get generated, stored, verified, and cleared in the right sequence? Can a token be used after logout? Does the session cookie survive a password change or deauth event? What happens if `expiresAt` is missing or in the past?
 
-**Access control path:** When a user calls `/api/snapchat/campaigns`, does the server verify that `adAccountId` belongs to the authenticated user's Snapchat account? Or does it trust the client-supplied ID? Trace from request body → session → Snapchat API call.
+**Access control path:** All four mutation routes (campaigns, adsquads, creatives, ads) now call `isAdAccountAllowed(session, adAccountId)` and return 403 if the account is not in the session's allowed list. The adsquads and ads routes receive `adAccountId` explicitly in the POST body (added alongside `campaignId`/`adSquadId`). Verify all four routes enforce this check and that `adAccountId` is validated before any Snapchat API call is made.
 
 **Input validation path:** Is Zod validation happening server-side (in the route handler) or only client-side (in the form)? Can a request be crafted that bypasses the form and hits the API route with unvalidated data?
 

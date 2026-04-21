@@ -23,10 +23,8 @@ export const creativeSchema = z
     ]),
     webViewUrl: z.string().optional(),
     deepLinkUrl: z.string().optional(),
-    shareable: z.boolean().optional(),
     // Ad settings
     adStatus: z.enum(["ACTIVE", "PAUSED"]),
-    profileId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     // File must be selected and processed (mediaId is resolved at submission time)

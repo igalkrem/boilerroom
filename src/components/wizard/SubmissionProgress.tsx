@@ -114,13 +114,27 @@ export function SubmissionProgress() {
         </div>
         {hasErrors && (
           <div className="text-left space-y-1 max-w-sm mx-auto">
-            {[...submissionResults.uploadMedia, ...submissionResults.campaigns,
-              ...submissionResults.adSquads, ...submissionResults.creatives,
-              ...submissionResults.ads]
-              .filter((r) => r.error)
-              .map((r) => (
-                <p key={r.clientId} className="text-xs text-red-600">{r.name}: {r.error}</p>
-              ))}
+            {(() => {
+              // uploadMedia errors take precedence — deduplicate by clientId so downstream
+              // "Media upload failed" entries don't shadow the real upload error.
+              const seen = new Set<string>();
+              return [
+                ...submissionResults.uploadMedia,
+                ...submissionResults.campaigns,
+                ...submissionResults.adSquads,
+                ...submissionResults.creatives,
+                ...submissionResults.ads,
+              ]
+                .filter((r) => r.error)
+                .filter((r) => {
+                  if (seen.has(r.clientId)) return false;
+                  seen.add(r.clientId);
+                  return true;
+                })
+                .map((r) => (
+                  <p key={r.clientId} className="text-xs text-red-600">{r.name}: {r.error}</p>
+                ));
+            })()}
           </div>
         )}
         <Button onClick={reset} variant="secondary">

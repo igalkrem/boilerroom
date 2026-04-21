@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pollMediaStatus } from "@/lib/snapchat/media";
 import { getValidAccessToken } from "@/lib/snapchat/client";
 import { rateLimitedCall } from "@/lib/rate-limiter";
+
+export const maxDuration = 60;
 
 const BASE_URL = "https://adsapi.snapchat.com/v1";
 
@@ -45,11 +46,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Upload failed: ${uploadRes.status}` }, { status: 500 });
   }
 
-  // Poll until COMPLETE
-  try {
-    await pollMediaStatus(mediaId, adAccountId);
-    return NextResponse.json({ mediaId, status: "COMPLETE" });
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
-  }
+  return NextResponse.json({ mediaId, status: "COMPLETE" });
 }

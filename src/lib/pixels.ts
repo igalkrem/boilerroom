@@ -1,14 +1,14 @@
+import { z } from "zod";
 import type { SavedPixel } from "@/types/pixel";
 
 const STORAGE_KEY = "boilerroom_pixels_v1";
 
-function isValidPixelArray(value: unknown): value is SavedPixel[] {
-  return Array.isArray(value) && value.every(
-    (item) => typeof item === "object" && item !== null &&
-      typeof (item as Record<string, unknown>).id === "string" &&
-      typeof (item as Record<string, unknown>).pixelId === "string"
-  );
-}
+const pixelSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  pixelId: z.string().min(1),
+  createdAt: z.string(),
+});
 
 export function loadPixels(): SavedPixel[] {
   if (typeof window === "undefined") return [];
@@ -16,11 +16,12 @@ export function loadPixels(): SavedPixel[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    if (!isValidPixelArray(parsed)) {
+    if (!Array.isArray(parsed)) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
       return [];
     }
-    return parsed;
+    // Filter out corrupted entries rather than wiping the entire store.
+    return parsed.filter((item) => pixelSchema.safeParse(item).success) as SavedPixel[];
   } catch {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
     return [];
