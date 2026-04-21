@@ -13,12 +13,11 @@ import type { AdSquadFormData } from "@/types/wizard";
 import type { SavedPixel } from "@/types/pixel";
 
 const OPTIMIZATION_OPTIONS = [
-  { value: "IMPRESSIONS", label: "Impressions" },
-  { value: "SWIPES", label: "Swipes" },
-  { value: "APP_INSTALLS", label: "App Installs" },
-  { value: "LEAD_GENERATION", label: "Lead Generation" },
-  { value: "PIXEL_PAGE_VIEW", label: "Pixel Page View" },
   { value: "PIXEL_PURCHASE", label: "Pixel Purchase" },
+  { value: "PIXEL_SIGNUP", label: "Pixel Sign Up" },
+  { value: "PIXEL_ADD_TO_CART", label: "Pixel Add to Cart" },
+  { value: "PIXEL_PAGE_VIEW", label: "Pixel Page View" },
+  { value: "LANDING_PAGE_VIEW", label: "Landing Page View" },
 ];
 
 const BID_STRATEGY_OPTIONS = [
@@ -50,24 +49,9 @@ const SPEND_CAP_OPTIONS = [
   { value: "LIFETIME_BUDGET", label: "Lifetime Budget" },
 ];
 
-const PACING_OPTIONS = [
-  { value: "STANDARD", label: "Standard" },
-  { value: "ACCELERATED", label: "Accelerated" },
-];
-
 const PLACEMENT_OPTIONS = [
   { value: "AUTOMATIC", label: "Automatic" },
   { value: "CONTENT", label: "Content" },
-];
-
-const FREQUENCY_PERIOD_OPTIONS = [
-  { value: "", label: "— None —" },
-  { value: "HOURS_1", label: "1 Hour" },
-  { value: "HOURS_6", label: "6 Hours" },
-  { value: "HOURS_12", label: "12 Hours" },
-  { value: "DAY_1", label: "1 Day" },
-  { value: "DAY_7", label: "7 Days" },
-  { value: "MONTH_1", label: "1 Month" },
 ];
 
 const GENDER_OPTIONS = [
@@ -82,17 +66,10 @@ const DEVICE_OPTIONS = [
   { value: "WEB", label: "Web" },
 ];
 
-const CONVERSION_EVENT_OPTIONS = [
-  { value: "PAGE_VIEW", label: "Page View" },
-  { value: "PURCHASE", label: "Purchase" },
-  { value: "ADD_TO_CART", label: "Add to Cart" },
-  { value: "VIEW_CONTENT", label: "View Content" },
-  { value: "SUBSCRIBE", label: "Subscribe" },
-  { value: "SIGN_UP", label: "Sign Up" },
-  { value: "SAVE", label: "Save" },
-  { value: "SEARCH", label: "Search" },
-  { value: "START_CHECKOUT", label: "Start Checkout" },
-  { value: "AD_CLICK", label: "Ad Click" },
+const OS_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "iOS", label: "iOS" },
+  { value: "ANDROID", label: "Android" },
 ];
 
 function defaultAdSquad(campaignId: string): AdSquadFormData {
@@ -102,17 +79,15 @@ function defaultAdSquad(campaignId: string): AdSquadFormData {
     name: "",
     type: "SNAP_ADS",
     geoCountryCode: "US",
-    optimizationGoal: "SWIPES",
+    optimizationGoal: "PIXEL_PURCHASE",
     bidStrategy: "AUTO_BID",
     spendCapType: "DAILY_BUDGET",
     dailyBudgetUsd: 5,
     status: "PAUSED",
-    pacingType: "STANDARD",
     placementConfig: "AUTOMATIC",
     targetingGender: "ALL",
     targetingDeviceType: "ALL",
     pixelId: "",
-    pixelConversionEvent: undefined,
   };
 }
 
@@ -141,8 +116,7 @@ function AdSetCard({
 }) {
   const bidStrategy = useWatch({ control, name: `adSquads.${index}.bidStrategy` });
   const spendCapType = useWatch({ control, name: `adSquads.${index}.spendCapType` });
-  const optimizationGoal = useWatch({ control, name: `adSquads.${index}.optimizationGoal` });
-  const isPixelGoal = optimizationGoal === "PIXEL_PAGE_VIEW" || optimizationGoal === "PIXEL_PURCHASE";
+  const deviceType = useWatch({ control, name: `adSquads.${index}.targetingDeviceType` });
   const squadErrors = errors.adSquads?.[index];
 
   return (
@@ -193,19 +167,6 @@ function AdSetCard({
         />
       </div>
 
-      {/* Conversion event — only for pixel-based goals */}
-      {isPixelGoal && (
-        <div className="max-w-sm">
-          <Select
-            label="Conversion Event"
-            options={CONVERSION_EVENT_OPTIONS}
-            placeholder="Select event"
-            {...register(`adSquads.${index}.pixelConversionEvent`)}
-            error={squadErrors?.pixelConversionEvent?.message}
-          />
-        </div>
-      )}
-
       {/* Bid strategy + bid amount + status */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Select
@@ -232,8 +193,8 @@ function AdSetCard({
         />
       </div>
 
-      {/* Budget type + budget + pacing */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Budget type + budget */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
           label="Budget Type"
           options={SPEND_CAP_OPTIONS}
@@ -263,11 +224,6 @@ function AdSetCard({
             error={squadErrors?.lifetimeBudgetUsd?.message}
           />
         )}
-        <Select
-          label="Pacing"
-          options={PACING_OPTIONS}
-          {...register(`adSquads.${index}.pacingType`)}
-        />
       </div>
 
       {/* Placement + ad-set dates */}
@@ -315,56 +271,12 @@ function AdSetCard({
         )}
       </div>
 
-      {/* Frequency cap */}
-      <div className="border-t border-gray-100 pt-4">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-          Frequency Cap <span className="font-normal normal-case">(optional)</span>
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            label="Max Impressions per User"
-            type="number"
-            min={1}
-            step={1}
-            placeholder="e.g. 3"
-            {...register(`adSquads.${index}.frequencyCapMaxImpressions`, { valueAsNumber: true })}
-            error={squadErrors?.frequencyCapMaxImpressions?.message}
-          />
-          <Select
-            label="Per Time Period"
-            options={FREQUENCY_PERIOD_OPTIONS}
-            {...register(`adSquads.${index}.frequencyCapTimePeriod`)}
-            error={squadErrors?.frequencyCapTimePeriod?.message}
-          />
-        </div>
-      </div>
-
       {/* Audience targeting */}
       <div className="border-t border-gray-100 pt-4">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
           Audience Targeting <span className="font-normal normal-case">(optional)</span>
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Input
-            label="Min Age"
-            type="number"
-            min={13}
-            max={50}
-            step={1}
-            placeholder="13"
-            {...register(`adSquads.${index}.targetingAgeMin`, { valueAsNumber: true })}
-            error={squadErrors?.targetingAgeMin?.message}
-          />
-          <Input
-            label="Max Age"
-            type="number"
-            min={13}
-            max={50}
-            step={1}
-            placeholder="50"
-            {...register(`adSquads.${index}.targetingAgeMax`, { valueAsNumber: true })}
-            error={squadErrors?.targetingAgeMax?.message}
-          />
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <Select
             label="Gender"
             options={GENDER_OPTIONS}
@@ -373,8 +285,17 @@ function AdSetCard({
           <Select
             label="Device"
             options={DEVICE_OPTIONS}
-            {...register(`adSquads.${index}.targetingDeviceType`)}
+            {...register(`adSquads.${index}.targetingDeviceType`, {
+              onChange: () => setValue(`adSquads.${index}.targetingOsType`, undefined),
+            })}
           />
+          {deviceType === "MOBILE" && (
+            <Select
+              label="OS"
+              options={OS_OPTIONS}
+              {...register(`adSquads.${index}.targetingOsType`)}
+            />
+          )}
         </div>
       </div>
 

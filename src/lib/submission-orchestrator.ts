@@ -12,7 +12,6 @@ import type {
   SnapCreativePayload,
   SnapAdPayload,
   CreativeType,
-  PixelConversionEvent,
 } from "@/types/snapchat";
 
 type OnStageChange = (stage: SubmissionStage) => void;
@@ -22,12 +21,19 @@ function usdToMicro(usd: number): number {
 }
 
 function toIso(date: string): string {
-  return new Date(date).toISOString();
+  const d = new Date(date);
+  if (isNaN(d.getTime())) throw new Error(`Invalid date: "${date}"`);
+  return d.toISOString();
 }
 
+// NOTE: WEB_VIEW creative type causes E1008 ("SNAP_AD ad does not match WEB_VIEW creative") because
+// WEB_VIEW is not a valid Ad type (E2002), so there is no valid ad type to pair with WEB_VIEW creative.
+// SNAP_AD creative + SNAP_AD ad + web_view_properties is the only valid combination for web view ads.
+// call_to_action is not sent for SNAP_AD creatives (E2002 "call to action must be null") —
+// Snapchat renders a default "More" swipe-up label automatically.
 const INTERACTION_TYPE_MAP: Record<string, CreativeType> = {
   SWIPE_TO_OPEN: "SNAP_AD",
-  WEB_VIEW: "WEB_VIEW",
+  WEB_VIEW: "SNAP_AD",
   DEEP_LINK: "DEEP_LINK",
   APP_INSTALL: "APP_INSTALL",
 };
@@ -35,18 +41,18 @@ const INTERACTION_TYPE_MAP: Record<string, CreativeType> = {
 function buildDemographics(sq: AdSquadFormData): Pick<SnapAdSquadPayload["targeting"], "demographics" | "devices"> {
   const out: Pick<SnapAdSquadPayload["targeting"], "demographics" | "devices"> = {};
 
-  const hasAge = sq.targetingAgeMin !== undefined || sq.targetingAgeMax !== undefined;
   const hasGender = sq.targetingGender && sq.targetingGender !== "ALL";
-  if (hasAge || hasGender) {
+  if (hasGender) {
     out.demographics = [{
-      min_age: sq.targetingAgeMin,
-      max_age: sq.targetingAgeMax,
-      genders: hasGender ? [sq.targetingGender as "MALE" | "FEMALE"] : undefined,
+      genders: [sq.targetingGender as "MALE" | "FEMALE"],
     }];
   }
 
   if (sq.targetingDeviceType && sq.targetingDeviceType !== "ALL") {
-    out.devices = [{ device_type: sq.targetingDeviceType as "MOBILE" | "WEB" }];
+    out.devices = [{
+      device_type: sq.targetingDeviceType as "MOBILE" | "WEB",
+      ...(sq.targetingOsType ? { os_type: sq.targetingOsType } : {}),
+    }];
   }
 
   return out;
@@ -94,26 +100,29 @@ export async function runSubmission(
   // ── Step 1: Create Campaigns ──────────────────────────────────────────────
   onStage("campaigns");
 
-  const campaignPayloads: SnapCampaignPayload[] = campaigns.map((c) => ({
-    name: c.name,
-    ad_account_id: adAccountId,
-    status: c.status,
-    buy_model: "AUCTION",
-    start_time: toIso(c.startDate),
-    end_time: c.endDate ? toIso(c.endDate) : undefined,
-    daily_budget_micro:
-      c.spendCapType === "DAILY_BUDGET" && c.dailyBudgetUsd
-        ? usdToMicro(c.dailyBudgetUsd)
-        : undefined,
-    objective_v2_properties: { objective_v2_type: c.objective },
-  }));
+  const campaignPayloads: SnapCampaignPayload[] = campaigns.map((c) => {
+    if (!c.startDate) throw new Error(`Campaign "${c.name}" is missing a start date`);
+    return {
+      name: c.name,
+      ad_account_id: adAccountId,
+      status: c.status,
+      buy_model: "AUCTION",
+      start_time: toIso(c.startDate),
+      end_time: c.endDate ? toIso(c.endDate) : undefined,
+      daily_budget_micro:
+        c.spendCapType === "DAILY_BUDGET" && c.dailyBudgetUsd
+          ? usdToMicro(c.dailyBudgetUsd)
+          : undefined,
+      objective_v2_properties: { objective_v2_type: c.objective },
+    };
+  });
 
   const campaignRes = await fetch("/api/snapchat/campaigns", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ adAccountId, campaigns: campaignPayloads }),
   });
-  const campaignData = await campaignRes.json() as { results: Array<{ id?: string; error?: string }>; error?: string; details?: unknown };
+  const campaignData = await campaignRes.json() as { results: Array<{ id?: string; name?: string; error?: string }>; error?: string; details?: unknown };
   if (!campaignRes.ok && !campaignData.results) {
     console.error("Campaigns API error:", campaignRes.status, campaignData);
     campaigns.forEach((c) => results.campaigns.push({ clientId: c.id, snapId: "", name: c.name, error: campaignData.error ?? `HTTP ${campaignRes.status}` }));
@@ -123,12 +132,15 @@ export async function runSubmission(
 
   const campaignIdMap = new Map<string, string>();
   campaigns.forEach((c, i) => {
-    const snap = campaignData.results?.[i];
+    // Prefer name match (handles out-of-order responses); fall back to positional
+    // index because Snapchat does not always echo name in the response object.
+    const snap = campaignData.results?.find((r) => r.name === c.name)
+      ?? campaignData.results?.[i];
     results.campaigns.push({
       clientId: c.id,
       snapId: snap?.id ?? "",
       name: c.name,
-      error: snap?.error,
+      error: snap?.error ?? (snap === undefined ? "No result returned from API" : undefined),
     });
     if (snap?.id) campaignIdMap.set(c.id, snap.id);
   });
@@ -168,10 +180,11 @@ export async function runSubmission(
         type: sq.type,
         status: sq.status,
         targeting: {
-          geo_locations: [{ country_code: sq.geoCountryCode }],
+          geos: [{ country_code: sq.geoCountryCode.toLowerCase() }],
           ...buildDemographics(sq),
         },
         placement_v2: { config: sq.placementConfig ?? "AUTOMATIC" },
+        conversion_location: "WEB",
         billing_event: "IMPRESSION",
         optimization_goal: sq.optimizationGoal,
         bid_strategy: sq.bidStrategy,
@@ -184,21 +197,18 @@ export async function runSubmission(
           sq.spendCapType === "LIFETIME_BUDGET" && sq.lifetimeBudgetUsd
             ? usdToMicro(sq.lifetimeBudgetUsd)
             : undefined,
-        pacing_type: sq.pacingType,
+        pacing_type: "STANDARD",
         start_time: sq.startDate ? toIso(sq.startDate) : undefined,
         end_time: sq.endDate ? toIso(sq.endDate) : undefined,
-        frequency_cap_max_impressions: sq.frequencyCapMaxImpressions,
-        frequency_cap_time_period: sq.frequencyCapTimePeriod,
         pixel_id: sq.pixelId || undefined,
-        pixel_conversion_event: sq.pixelConversionEvent as PixelConversionEvent | undefined || undefined,
       }));
 
       const sqRes = await fetch("/api/snapchat/adsquads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ campaignId: snapCampaignId, adsquads: payloads }),
+        body: JSON.stringify({ adAccountId, campaignId: snapCampaignId, adsquads: payloads }),
       });
-      const sqData = await sqRes.json() as { results: Array<{ id?: string; error?: string }>; error?: string };
+      const sqData = await sqRes.json() as { results: Array<{ id?: string; name?: string; error?: string }>; error?: string };
 
       // CR-2: handle top-level HTTP failure (no results array)
       if (!sqRes.ok && !sqData.results) {
@@ -214,12 +224,14 @@ export async function runSubmission(
       }
 
       squads.forEach((sq, i) => {
-        const snap = sqData.results?.[i];
+        // Prefer name match; fall back to positional index (Snapchat may not echo name)
+        const snap = sqData.results?.find((r) => r.name === sq.name)
+          ?? sqData.results?.[i];
         results.adSquads.push({
           clientId: sq.id,
           snapId: snap?.id ?? "",
           name: sq.name,
-          error: snap?.error,
+          error: snap?.error ?? (snap === undefined ? "No result returned from API" : undefined),
         });
         if (snap?.id) squadIdMap.set(sq.id, snap.id);
       });
@@ -242,6 +254,29 @@ export async function runSubmission(
     return results;
   }
 
+  // Fetch the Snapchat Public Profile ID required in creative payloads (E2652 if absent).
+  let snapProfileId: string | null = null;
+  try {
+    const profRes = await fetch(`/api/snapchat/profiles?adAccountId=${encodeURIComponent(adAccountId)}`);
+    const profData = await profRes.json() as { profileId?: string; error?: string };
+    snapProfileId = profData.profileId ?? null;
+  } catch {
+    // fetch itself failed; snapProfileId stays null
+  }
+
+  if (!snapProfileId) {
+    uploadedCreatives.forEach((cr) =>
+      results.creatives.push({
+        clientId: cr.id,
+        snapId: "",
+        name: cr.name,
+        error: "Could not fetch Snapchat profile ID (E2652) — set SNAPCHAT_PROFILE_ID env var",
+      })
+    );
+    onStage("done");
+    return results;
+  }
+
   const creativePayloads: SnapCreativePayload[] = uploadedCreatives.map((cr) => {
     const creativeType: CreativeType = INTERACTION_TYPE_MAP[cr.interactionType] ?? "SNAP_AD";
     return {
@@ -250,9 +285,10 @@ export async function runSubmission(
       type: creativeType,
       headline: cr.headline,
       brand_name: cr.brandName || undefined,
-      call_to_action: cr.callToAction || undefined,
+      // call_to_action is not valid on SNAP_AD type creatives (E2002 "call to action must be null")
+      call_to_action: creativeType !== "SNAP_AD" && cr.callToAction ? cr.callToAction : undefined,
       top_snap_media_id: mediaIdMap.get(cr.id) ?? cr.mediaId ?? "",
-      shareable: cr.shareable ?? undefined,
+      ...(snapProfileId ? { profile_properties: { profile_id: snapProfileId } } : {}),
       web_view_properties:
         cr.interactionType === "WEB_VIEW" && cr.webViewUrl
           ? { url: cr.webViewUrl }
@@ -265,7 +301,6 @@ export async function runSubmission(
         cr.interactionType === "APP_INSTALL" && cr.deepLinkUrl
           ? { app_link_url: cr.deepLinkUrl }
           : undefined,
-      profile_properties: cr.profileId ? { profile_id: cr.profileId } : undefined,
     };
   });
 
@@ -274,7 +309,7 @@ export async function runSubmission(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ adAccountId, creatives: creativePayloads }),
   });
-  const crData = await crRes.json() as { results: Array<{ id?: string; error?: string }>; error?: string };
+  const crData = await crRes.json() as { results: Array<{ id?: string; name?: string; error?: string }>; error?: string };
 
   // CR-2: handle top-level HTTP failure
   if (!crRes.ok && !crData.results) {
@@ -288,12 +323,14 @@ export async function runSubmission(
 
   const creativeIdMap = new Map<string, string>();
   uploadedCreatives.forEach((cr, i) => {
-    const snap = crData.results?.[i];
+    // Prefer name match; fall back to positional index (Snapchat may not echo name)
+    const snap = crData.results?.find((r) => r.name === cr.name)
+      ?? crData.results?.[i];
     results.creatives.push({
       clientId: cr.id,
       snapId: snap?.id ?? "",
       name: cr.name,
-      error: snap?.error,
+      error: snap?.error ?? (snap === undefined ? "No result returned from API" : undefined),
     });
     if (snap?.id) creativeIdMap.set(cr.id, snap.id);
   });
@@ -345,24 +382,16 @@ export async function runSubmission(
         ad_squad_id: snapSquadId,
         creative_id: creativeIdMap.get(cr.id)!,
         name: cr.name,
-        type: INTERACTION_TYPE_MAP[cr.interactionType] ?? "SNAP_AD",
+        type: "SNAP_AD" as const,
         status: cr.adStatus ?? "ACTIVE",
-        web_view_properties:
-          cr.interactionType === "WEB_VIEW" && cr.webViewUrl
-            ? { url: cr.webViewUrl }
-            : undefined,
-        deep_link_properties:
-          (cr.interactionType === "DEEP_LINK" || cr.interactionType === "APP_INSTALL") && cr.deepLinkUrl
-            ? { deep_link_uri: cr.deepLinkUrl }
-            : undefined,
       }));
 
       const adRes = await fetch("/api/snapchat/ads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adSquadId: snapSquadId, ads: adPayloads }),
+        body: JSON.stringify({ adAccountId, adSquadId: snapSquadId, ads: adPayloads }),
       });
-      const adData = await adRes.json() as { results: Array<{ id?: string; error?: string }>; error?: string };
+      const adData = await adRes.json() as { results: Array<{ id?: string; name?: string; error?: string }>; error?: string };
 
       // CR-2: handle top-level HTTP failure
       if (!adRes.ok && !adData.results) {
@@ -377,14 +406,15 @@ export async function runSubmission(
         return;
       }
 
-      // CR-1: iterate adCreatives (not squadCreatives) so index i aligns with adData.results[i]
       adCreatives.forEach((cr, i) => {
-        const snap = adData.results?.[i];
+        // Prefer name match; fall back to positional index (Snapchat may not echo name)
+        const snap = adData.results?.find((r) => r.name === cr.name)
+          ?? adData.results?.[i];
         results.ads.push({
           clientId: cr.id,
           snapId: snap?.id ?? "",
           name: cr.name,
-          error: snap?.error,
+          error: snap?.error ?? (snap === undefined ? "No result returned from API" : undefined),
         });
       });
     })

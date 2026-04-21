@@ -8,12 +8,11 @@ export const adSquadSchema = z
     type: z.literal("SNAP_ADS"),
     geoCountryCode: z.string().min(2, "Select a country"),
     optimizationGoal: z.enum([
-      "IMPRESSIONS",
-      "SWIPES",
-      "APP_INSTALLS",
-      "LEAD_GENERATION",
-      "PIXEL_PAGE_VIEW",
       "PIXEL_PURCHASE",
+      "PIXEL_SIGNUP",
+      "PIXEL_ADD_TO_CART",
+      "PIXEL_PAGE_VIEW",
+      "LANDING_PAGE_VIEW",
     ]),
     bidStrategy: z.enum([
       "AUTO_BID",
@@ -29,21 +28,13 @@ export const adSquadSchema = z
     startDate: z.string().optional(),
     endDate: z.string().optional(),
     // Delivery
-    pacingType: z.enum(["STANDARD", "ACCELERATED"]),
     placementConfig: z.enum(["AUTOMATIC", "CONTENT"]),
-    // Frequency cap
-    frequencyCapMaxImpressions: z.number().int().positive().optional(),
-    frequencyCapTimePeriod: z
-      .enum(["HOURS_1", "HOURS_6", "HOURS_12", "DAY_1", "DAY_7", "MONTH_1"])
-      .optional(),
     // Targeting
-    targetingAgeMin: z.number().int().min(13).max(50).optional(),
-    targetingAgeMax: z.number().int().min(13).max(50).optional(),
     targetingGender: z.enum(["ALL", "MALE", "FEMALE"]).optional(),
     targetingDeviceType: z.enum(["WEB", "MOBILE", "ALL"]).optional(),
+    targetingOsType: z.enum(["iOS", "ANDROID"]).optional(),
     // Tracking
-    pixelId: z.string().min(1, "Select a pixel"),
-    pixelConversionEvent: z.string().optional(),
+    pixelId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     // Budget
@@ -77,47 +68,7 @@ export const adSquadSchema = z
       });
     }
 
-    // Frequency cap co-dependency
-    const hasMaxImpressions = !!data.frequencyCapMaxImpressions;
-    const hasTimePeriod = !!data.frequencyCapTimePeriod;
-    if (hasMaxImpressions && !hasTimePeriod) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["frequencyCapTimePeriod"],
-        message: "Select a time period for the frequency cap",
-      });
-    }
-    if (hasTimePeriod && !hasMaxImpressions) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["frequencyCapMaxImpressions"],
-        message: "Enter max impressions for the frequency cap",
-      });
-    }
-
-    // Pixel conversion event required for pixel-based goals
-    if (data.optimizationGoal === "PIXEL_PAGE_VIEW" || data.optimizationGoal === "PIXEL_PURCHASE") {
-      if (!data.pixelConversionEvent) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["pixelConversionEvent"],
-          message: "Select a conversion event",
-        });
-      }
-    }
-
-    // Age range
-    if (
-      data.targetingAgeMin !== undefined &&
-      data.targetingAgeMax !== undefined &&
-      data.targetingAgeMin > data.targetingAgeMax
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["targetingAgeMax"],
-        message: "Max age must be greater than or equal to min age",
-      });
-    }
+    // pixel_id is optional — sent when provided, not required for any current optimization goal
   });
 
 export type AdSquadSchema = z.infer<typeof adSquadSchema>;
