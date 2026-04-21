@@ -9,6 +9,12 @@ SnapAds Manager: a bulk Snapchat ad campaign creation platform. Users connect vi
 **Live:** https://boilerroom-two.vercel.app  
 **Deploy:** Vercel — `npx vercel --prod` (GitHub auto-deploy is unreliable; trigger manually after pushing).
 
+## Agents
+
+- **`code-reviewer`** — functional correctness: bugs, type safety, error handling, data flows. Run before any PR.
+- **`security-audit`** — auth, SSRF, access control, secrets, OWASP. Run before any deploy or when new API routes are added.
+- **`snapchat-api-auditor`** — Snapchat API spec compliance: payload field names vs live docs, forbidden fields, invalid enums. Run before any deploy or after a Snapchat API update.
+
 ## Stack
 
 - **Framework:** Next.js 14 (App Router), TypeScript, Tailwind CSS
@@ -115,7 +121,7 @@ src/
 - Campaign budget: only `daily_budget_micro` is supported (`spendCapType: "DAILY_BUDGET" | "NO_BUDGET"`). Lifetime budget is not used at the campaign level. Minimum: $20 (20,000,000 micro). Ad squads still support both daily and lifetime.
 - `lifetime_spend_cap_micro` and `lifetime_budget_micro` are NOT sent on campaigns and are NOT present on `SnapCampaignPayload`. `lifetime_budget_micro` is ad-squad only.
 - `spend_cap_type` is an ad squad field only, not valid on campaigns
-- Ad squad `conversion_location` is always `"WEB"` — hardcoded in the orchestrator, not user-facing.
+- Ad squad `delivery_constraint` is required — set to `"DAILY_BUDGET"` or `"LIFETIME_BUDGET"` based on `spendCapType`. `conversion_location` is NOT a valid ad-squad API field (causes E1001); do not add it.
 - Valid optimization goals (SALES + WEB): `PIXEL_PURCHASE`, `PIXEL_SIGNUP`, `PIXEL_ADD_TO_CART`, `PIXEL_PAGE_VIEW`, `LANDING_PAGE_VIEW`. These are the only values in the `OptimizationGoal` type and the Step 2 dropdown. Do not add goals from other objectives (SWIPES, IMPRESSIONS, etc.) — they will return E2844 with the SALES campaign objective.
 - Ad squad pixel tracking: only `pixel_id` is sent, always optional. `pixel_conversion_event` is NOT a valid Snapchat ad squad API field (causes E1001).
 - Creative destination URL: `web_view_properties.url` (for WEB_VIEW) or `deep_link_properties.deep_link_url` (for DEEP_LINK/APP_INSTALL)

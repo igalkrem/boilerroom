@@ -89,7 +89,7 @@ export interface SnapAdSquadPayload {
   placement_v2: {
     config: "AUTOMATIC" | "CONTENT" | "CUSTOM";
   };
-  conversion_location?: "WEB" | "APP" | "APP_AND_WEB";
+  delivery_constraint: "DAILY_BUDGET" | "LIFETIME_BUDGET" | "REACH_AND_FREQUENCY";
   billing_event: "IMPRESSION";
   optimization_goal: OptimizationGoal;
   bid_strategy: BidStrategy;

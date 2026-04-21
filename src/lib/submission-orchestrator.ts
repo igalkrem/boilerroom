@@ -184,7 +184,7 @@ export async function runSubmission(
           ...buildDemographics(sq),
         },
         placement_v2: { config: sq.placementConfig ?? "AUTOMATIC" },
-        conversion_location: "WEB",
+        delivery_constraint: sq.spendCapType === "LIFETIME_BUDGET" ? "LIFETIME_BUDGET" : "DAILY_BUDGET",
         billing_event: "IMPRESSION",
         optimization_goal: sq.optimizationGoal,
         bid_strategy: sq.bidStrategy,
