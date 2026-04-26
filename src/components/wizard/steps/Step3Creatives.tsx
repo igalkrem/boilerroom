@@ -11,11 +11,15 @@ import { useState, useEffect } from "react";
 import { clsx } from "clsx";
 import { z } from "zod";
 import type { CreativeFormData } from "@/types/wizard";
+import { SiloBrowser } from "@/components/silo/SiloBrowser";
+import { getSnapMediaId } from "@/lib/silo";
+import type { SiloAsset } from "@/types/silo";
 
 type CreativesFormValues = z.infer<typeof creativesFormSchema>;
 
 const CTA_OPTIONS = [
   { value: "", label: "None" },
+  { value: "MORE", label: "More" },
   { value: "SHOP_NOW", label: "Shop Now" },
   { value: "SIGN_UP", label: "Sign Up" },
   { value: "DOWNLOAD", label: "Download" },
@@ -39,111 +43,6 @@ const AD_STATUS_OPTIONS = [
  */
 const pendingMediaFiles = new Map<string, File>();
 
-import type { FFmpeg } from "@ffmpeg/ffmpeg";
-
-let ffmpegCache: FFmpeg | null = null;
-// Track the active progress handler so we can remove it before registering a new one,
-// preventing duplicate callbacks when the same FFmpeg instance handles multiple files.
-let activeProgressHandler: ((event: { progress: number }) => void) | null = null;
-
-async function getFFmpeg(onProgress: (msg: string) => void): Promise<FFmpeg> {
-  if (ffmpegCache?.loaded) return ffmpegCache;
-
-  onProgress("Loading video processor (one-time download ~30 MB)...");
-
-  const { FFmpeg: FFmpegClass } = await import("@ffmpeg/ffmpeg");
-  const { toBlobURL } = await import("@ffmpeg/util");
-
-  const base = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
-  const ffmpeg = new FFmpegClass();
-
-  await ffmpeg.load({
-    coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
-    wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm"),
-  });
-
-  ffmpegCache = ffmpeg;
-  return ffmpeg;
-}
-
-async function transcodeVideoForSnap(file: File, onProgress: (msg: string) => void): Promise<File> {
-  const ffmpeg = await getFFmpeg(onProgress);
-  const { fetchFile } = await import("@ffmpeg/util");
-
-  const ext = file.name.split(".").pop() ?? "mp4";
-  const inputName = `input.${ext}`;
-  const outputName = "output.mp4";
-
-  onProgress("Transcoding video to 720×1280 H.264...");
-
-  // Remove stale handler from a prior call to prevent double-firing on the same FFmpeg instance
-  if (activeProgressHandler) ffmpeg.off("progress", activeProgressHandler);
-  activeProgressHandler = ({ progress }: { progress: number }) => {
-    if (progress > 0) onProgress(`Transcoding: ${Math.round(progress * 100)}%...`);
-  };
-  ffmpeg.on("progress", activeProgressHandler);
-
-  await ffmpeg.writeFile(inputName, await fetchFile(file));
-
-  // First attempt: transcode with source audio (works when input has an audio track)
-  let exitCode = await ffmpeg.exec([
-    "-i", inputName,
-    "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2:black",
-    "-c:v", "libx264",
-    "-preset", "fast",
-    "-crf", "23",
-    "-pix_fmt", "yuv420p",      // required by Snapchat (yuv420p only)
-    "-profile:v", "main",       // H.264 Main profile for broad compatibility
-    "-level", "4.0",
-    "-c:a", "aac",
-    "-b:a", "192k",
-    "-ar", "44100",
-    "-ac", "2",
-    "-movflags", "+faststart",
-    outputName,
-  ]);
-
-  // If source had no audio track, ffmpeg exits non-zero; retry with a silent audio track
-  if (exitCode !== 0) {
-    onProgress("No audio track detected — adding silence...");
-    exitCode = await ffmpeg.exec([
-      "-i", inputName,
-      "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
-      "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2:black",
-      "-c:v", "libx264",
-      "-preset", "fast",
-      "-crf", "23",
-      "-pix_fmt", "yuv420p",
-      "-profile:v", "main",
-      "-level", "4.0",
-      "-map", "0:v:0",
-      "-map", "1:a:0",
-      "-c:a", "aac",
-      "-b:a", "192k",
-      "-ar", "44100",
-      "-ac", "2",
-      "-shortest",
-      "-movflags", "+faststart",
-      outputName,
-    ]);
-  }
-
-  if (exitCode !== 0) {
-    throw new Error("Video transcoding failed. Please check the file is a valid video.");
-  }
-
-  const data = await ffmpeg.readFile(outputName) as Uint8Array;
-  await ffmpeg.deleteFile(inputName);
-  await ffmpeg.deleteFile(outputName);
-
-  const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
-
-  return new File(
-    [buffer],
-    file.name.replace(/\.[^.]+$/, ".mp4"),
-    { type: "video/mp4" }
-  );
-}
 
 async function resizeImageForSnap(file: File): Promise<File> {
   return new Promise((resolve, reject) => {
@@ -190,11 +89,7 @@ function MediaDropzone({
     setStatus("uploading");
 
     try {
-      const isVideo = file.type.startsWith("video/");
-
-      if (isVideo) {
-        file = await transcodeVideoForSnap(file, (msg) => setProgress(msg));
-      } else {
+      if (!file.type.startsWith("video/")) {
         setProgress("Resizing image to 1080×1920...");
         file = await resizeImageForSnap(file);
       }
@@ -233,7 +128,7 @@ function MediaDropzone({
           <>
             <div className="text-3xl mb-2">↑</div>
             <p className="text-sm text-gray-600">Drag & drop image or video here, or click to browse</p>
-            <p className="text-xs text-gray-400 mt-1">PNG/JPG (auto-resized to 1080×1920) · MP4/MOV (transcoded locally) · uploaded on submit</p>
+            <p className="text-xs text-gray-400 mt-1">PNG/JPG (auto-resized to 1080×1920) · MP4/MOV · uploaded on submit</p>
           </>
         )}
         {status === "uploading" && (
@@ -266,6 +161,10 @@ function CreativeCard({
   canRemove,
   onRemove,
   onDuplicate,
+  siloAsset,
+  onOpenSilo,
+  onClearSilo,
+  siloLoading,
 }: {
   index: number;
   creativeId: string;
@@ -277,6 +176,10 @@ function CreativeCard({
   canRemove: boolean;
   onRemove: () => void;
   onDuplicate: () => void;
+  siloAsset?: SiloAsset;
+  onOpenSilo: () => void;
+  onClearSilo: () => void;
+  siloLoading: boolean;
 }) {
   const interactionType = useWatch({ control, name: `creatives.${index}.interactionType` });
   const creativeErrors = errors.creatives?.[index];
@@ -305,13 +208,43 @@ function CreativeCard({
 
       {/* Media upload */}
       <div>
-        <MediaDropzone
-          onFileReady={(file, fileName) => {
-            pendingMediaFiles.set(creativeId, file);
-            setValue(`creatives.${index}.mediaFileName`, fileName);
-            setValue(`creatives.${index}.uploadStatus`, "done");
-          }}
-        />
+        {siloAsset ? (
+          <div className="border-2 border-cyan-200 bg-cyan-50 rounded-xl p-4 flex items-center gap-3">
+            {siloAsset.thumbnailUrl && (
+              <img src={siloAsset.thumbnailUrl} alt={siloAsset.name} className="w-12 h-20 object-cover rounded-lg shrink-0" />
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-cyan-900 truncate">{siloAsset.name}</p>
+              <p className="text-xs text-cyan-700">{siloAsset.mediaType} · from Silo</p>
+              {siloAsset.mediaType === "VIDEO" && siloAsset.durationSeconds != null && (
+                <p className="text-xs text-cyan-600">{Math.round(siloAsset.durationSeconds)}s</p>
+              )}
+            </div>
+            <Button type="button" size="sm" variant="ghost" onClick={onClearSilo} className="shrink-0">
+              ✕ Change
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <MediaDropzone
+              onFileReady={(file, fileName) => {
+                pendingMediaFiles.set(creativeId, file);
+                setValue(`creatives.${index}.mediaFileName`, fileName);
+                setValue(`creatives.${index}.uploadStatus`, "done");
+              }}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={onOpenSilo}
+              disabled={siloLoading}
+              className="w-full"
+            >
+              {siloLoading ? "Loading…" : "📚 Select from Silo"}
+            </Button>
+          </div>
+        )}
         {creativeErrors?.mediaId && (
           <p className="text-xs text-red-600 mt-1">
             {creativeErrors.mediaId.message}
@@ -390,6 +323,7 @@ function CreativeCard({
 
       <input type="hidden" {...register(`creatives.${index}.id`)} />
       <input type="hidden" {...register(`creatives.${index}.uploadStatus`)} />
+      <input type="hidden" {...register(`creatives.${index}.siloAssetId`)} />
     </div>
   );
 }
@@ -412,7 +346,11 @@ function defaultCreative(adSquadId: string) {
 }
 
 export function Step3Creatives() {
-  const { adSquads, creatives, setCreatives, setStep } = useWizardStore();
+  const { adSquads, creatives, setCreatives, setStep, adAccountId } = useWizardStore();
+  const [siloOpenForCreativeId, setSiloOpenForCreativeId] = useState<string | null>(null);
+  const [siloLoadingForCreativeId, setSiloLoadingForCreativeId] = useState<string | null>(null);
+  // Map of creativeId → selected SiloAsset (for display only; actual file/mediaId set via setValue)
+  const [siloSelections, setSiloSelections] = useState<Map<string, SiloAsset>>(new Map());
 
   // Clear pending File references when the component unmounts (e.g. user navigates back
   // without submitting) to release ~30 MB video buffers from memory.
@@ -434,6 +372,58 @@ export function Step3Creatives() {
 
   const { fields, append, remove } = useFieldArray({ control, name: "creatives" });
 
+  async function handleSiloSelect(asset: SiloAsset) {
+    const creativeId = siloOpenForCreativeId;
+    if (!creativeId) return;
+    setSiloOpenForCreativeId(null);
+
+    // Find actual index by iterating fields
+    let creativeIndex = -1;
+    for (let i = 0; i < fields.length; i++) {
+      if (getValues(`creatives.${i}.id`) === creativeId) { creativeIndex = i; break; }
+    }
+    if (creativeIndex === -1) return;
+
+    setSiloLoadingForCreativeId(creativeId);
+    const cachedMediaId = getSnapMediaId(asset, adAccountId);
+
+    if (cachedMediaId) {
+      // Reuse cached Snapchat mediaId — no upload needed at submission
+      setValue(`creatives.${creativeIndex}.mediaId`, cachedMediaId);
+      setValue(`creatives.${creativeIndex}.mediaFileName`, asset.name);
+      setValue(`creatives.${creativeIndex}.uploadStatus`, "done");
+      setValue(`creatives.${creativeIndex}.siloAssetId`, asset.id);
+      pendingMediaFiles.delete(creativeId);
+    } else {
+      // Fetch optimized file from Blob for upload at submission time
+      try {
+        const response = await fetch(asset.optimizedUrl ?? asset.originalUrl);
+        if (!response.ok) throw new Error("Failed to fetch media from library");
+        const blob = await response.blob();
+        const file = new File([blob], asset.originalFileName, { type: asset.fileFormat });
+        pendingMediaFiles.set(creativeId, file);
+        setValue(`creatives.${creativeIndex}.mediaId`, "");
+        setValue(`creatives.${creativeIndex}.mediaFileName`, asset.name);
+        setValue(`creatives.${creativeIndex}.uploadStatus`, "done");
+        setValue(`creatives.${creativeIndex}.siloAssetId`, asset.id);
+      } catch {
+        // Leave uploadStatus as-is so validation catches it
+      }
+    }
+
+    setSiloSelections((prev) => new Map(prev).set(creativeId, asset));
+    setSiloLoadingForCreativeId(null);
+  }
+
+  function handleClearSilo(creativeId: string, creativeIndex: number) {
+    setSiloSelections((prev) => { const m = new Map(prev); m.delete(creativeId); return m; });
+    pendingMediaFiles.delete(creativeId);
+    setValue(`creatives.${creativeIndex}.mediaId`, "");
+    setValue(`creatives.${creativeIndex}.mediaFileName`, "");
+    setValue(`creatives.${creativeIndex}.uploadStatus`, "idle");
+    setValue(`creatives.${creativeIndex}.siloAssetId`, "");
+  }
+
   const onNext = (data: CreativesFormValues) => {
     // Merge transcoded File objects (stored in pendingMediaFiles) into the creatives
     // before handing off to the store — they aren't form fields so react-hook-form
@@ -451,31 +441,39 @@ export function Step3Creatives() {
 
   return (
     <form onSubmit={handleSubmit(onNext)} className="space-y-6">
-      {fields.map((field, i) => (
-        <CreativeCard
-          key={field.id}
-          index={i}
-          creativeId={getValues(`creatives.${i}.id`) as string}
-          adSquadOptions={adSquadOptions}
-          control={control}
-          register={register}
-          errors={errors}
-          setValue={setValue}
-          canRemove={fields.length > 1}
-          onRemove={() => remove(i)}
-          onDuplicate={() => {
-            const current = getValues(`creatives.${i}`);
-            append({
-              ...current,
-              id: uuid(),
-              // Reset media — each creative needs its own upload
-              mediaId: "",
-              mediaFileName: "",
-              uploadStatus: "idle",
-            });
-          }}
-        />
-      ))}
+      {fields.map((field, i) => {
+        const creativeId = getValues(`creatives.${i}.id`) as string;
+        return (
+          <CreativeCard
+            key={field.id}
+            index={i}
+            creativeId={creativeId}
+            adSquadOptions={adSquadOptions}
+            control={control}
+            register={register}
+            errors={errors}
+            setValue={setValue}
+            canRemove={fields.length > 1}
+            onRemove={() => remove(i)}
+            onDuplicate={() => {
+              const current = getValues(`creatives.${i}`);
+              append({
+                ...current,
+                id: uuid(),
+                // Reset media — each creative needs its own upload
+                mediaId: "",
+                mediaFileName: "",
+                uploadStatus: "idle",
+                siloAssetId: "",
+              });
+            }}
+            siloAsset={siloSelections.get(creativeId)}
+            onOpenSilo={() => setSiloOpenForCreativeId(creativeId)}
+            onClearSilo={() => handleClearSilo(creativeId, i)}
+            siloLoading={siloLoadingForCreativeId === creativeId}
+          />
+        );
+      })}
 
       <Button
         type="button"
@@ -498,6 +496,13 @@ export function Step3Creatives() {
           Next: Review →
         </Button>
       </div>
+
+      <SiloBrowser
+        isOpen={siloOpenForCreativeId !== null}
+        onClose={() => setSiloOpenForCreativeId(null)}
+        onSelect={handleSiloSelect}
+        adAccountId={adAccountId}
+      />
     </form>
   );
 }

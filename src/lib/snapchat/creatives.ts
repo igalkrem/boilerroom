@@ -1,5 +1,14 @@
 import { snapFetch } from "./client";
-import type { SnapCreativePayload, SnapCreative, SnapBatchResponse } from "@/types/snapchat";
+import type { SnapCreativePayload, SnapCreative, SnapBatchResponse, SnapApiItem } from "@/types/snapchat";
+
+export async function getCreative(creativeId: string): Promise<SnapCreative> {
+  const data = await snapFetch<{ creatives: Array<SnapApiItem<SnapCreative>> }>(
+    `/creatives/${creativeId}`
+  );
+  const item = data.creatives?.[0];
+  if (!item?.creative) throw new Error("Creative not found");
+  return item.creative;
+}
 
 export async function createCreatives(
   adAccountId: string,

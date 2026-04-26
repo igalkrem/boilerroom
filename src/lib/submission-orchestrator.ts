@@ -31,16 +31,21 @@ function clampToFuture(iso: string): string {
   return d < new Date() ? new Date().toISOString() : iso;
 }
 
-// NOTE: WEB_VIEW creative type causes E1008 ("SNAP_AD ad does not match WEB_VIEW creative") because
-// WEB_VIEW is not a valid Ad type (E2002), so there is no valid ad type to pair with WEB_VIEW creative.
-// SNAP_AD creative + SNAP_AD ad + web_view_properties is the only valid combination for web view ads.
-// call_to_action is not sent for SNAP_AD creatives (E2002 "call to action must be null") —
-// Snapchat renders a default "More" swipe-up label automatically.
+// WEB_VIEW creative type pairs with REMOTE_WEBPAGE ad type — confirmed via live Snapchat UI-created campaign.
+// Previously we used SNAP_AD for both (workaround after E1008 when pairing WEB_VIEW creative with SNAP_AD ad).
+// REMOTE_WEBPAGE is the correct ad type for WEB_VIEW creatives; call_to_action is valid on WEB_VIEW creatives.
 const INTERACTION_TYPE_MAP: Record<string, CreativeType> = {
   SWIPE_TO_OPEN: "SNAP_AD",
-  WEB_VIEW: "SNAP_AD",
+  WEB_VIEW: "WEB_VIEW",
   DEEP_LINK: "DEEP_LINK",
   APP_INSTALL: "APP_INSTALL",
+};
+
+const AD_TYPE_MAP: Record<string, "SNAP_AD" | "REMOTE_WEBPAGE"> = {
+  WEB_VIEW: "REMOTE_WEBPAGE",
+  SNAP_AD: "SNAP_AD",
+  DEEP_LINK: "SNAP_AD",
+  APP_INSTALL: "SNAP_AD",
 };
 
 function buildDemographics(sq: AdSquadFormData): Pick<SnapAdSquadPayload["targeting"], "demographics" | "devices"> {
@@ -384,13 +389,16 @@ export async function runSubmission(
 
       if (adCreatives.length === 0) return;
 
-      const adPayloads: SnapAdPayload[] = adCreatives.map((cr) => ({
-        ad_squad_id: snapSquadId,
-        creative_id: creativeIdMap.get(cr.id)!,
-        name: cr.name,
-        type: "SNAP_AD" as const,
-        status: cr.adStatus ?? "ACTIVE",
-      }));
+      const adPayloads: SnapAdPayload[] = adCreatives.map((cr) => {
+        const creativeType: CreativeType = INTERACTION_TYPE_MAP[cr.interactionType] ?? "SNAP_AD";
+        return {
+          ad_squad_id: snapSquadId,
+          creative_id: creativeIdMap.get(cr.id)!,
+          name: cr.name,
+          type: AD_TYPE_MAP[creativeType] ?? "SNAP_AD",
+          status: cr.adStatus ?? "ACTIVE",
+        };
+      });
 
       const adRes = await fetch("/api/snapchat/ads", {
         method: "POST",

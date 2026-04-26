@@ -140,7 +140,7 @@ export interface SnapAdPayload {
   ad_squad_id: string;
   creative_id: string;
   name: string;
-  type: "SNAP_AD";
+  type: "SNAP_AD" | "REMOTE_WEBPAGE";
   status: "ACTIVE" | "PAUSED";
 }
 
@@ -158,7 +158,7 @@ export interface SnapMediaPayload {
 
 export interface SnapMediaEntity {
   id: string;
-  upload_status: "PENDING" | "COMPLETE" | "FAILED";
+  upload_status: "PENDING_UPLOAD" | "READY"; // live API values confirmed
   download_link?: string;
 }
 

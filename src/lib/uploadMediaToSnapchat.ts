@@ -4,7 +4,7 @@
  * via our Next.js API routes. Called from the submission orchestrator's
  * "uploadMedia" stage so that all creatives upload in parallel.
  *
- * For video: multipart upload with all chunks sent in parallel (5 MB each),
+ * For video: multipart upload with all chunks sent in parallel (4 MB each),
  * then poll until Snapchat finishes processing.
  * For image: single POST to /api/snapchat/media/upload.
  */
@@ -122,7 +122,7 @@ export async function uploadMediaToSnapchat(
       });
       const pollData = await safeJson(pollRes);
       if (pollData.error) throw new Error(pollData.error);
-      if (pollData.status === "COMPLETE") break;
+      if (pollData.status === "READY") break;
       if (pollData.status === "FAILED") throw new Error("Media upload failed on Snapchat side");
       if (i === maxAttempts - 1) throw new Error("Media upload timed out");
       await new Promise((r) => setTimeout(r, 2000));

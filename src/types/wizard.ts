@@ -58,6 +58,7 @@ export interface CreativeFormData {
   mediaFileName?: string;
   mediaPreviewUrl?: string;
   uploadStatus: "idle" | "uploading" | "done" | "error";
+  siloAssetId?: string; // set when media was selected from Silo library
   // Interaction
   interactionType: InteractionType;
   webViewUrl?: string;

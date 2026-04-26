@@ -1,5 +1,14 @@
 import { snapFetch } from "./client";
-import type { SnapAdPayload, SnapAd, SnapBatchResponse } from "@/types/snapchat";
+import type { SnapAdPayload, SnapAd, SnapBatchResponse, SnapApiItem } from "@/types/snapchat";
+
+export async function getAd(adId: string): Promise<SnapAd> {
+  const data = await snapFetch<{ ads: Array<SnapApiItem<SnapAd>> }>(
+    `/ads/${adId}`
+  );
+  const item = data.ads?.[0];
+  if (!item?.ad) throw new Error("Ad not found");
+  return item.ad;
+}
 
 export async function createAds(
   adSquadId: string,

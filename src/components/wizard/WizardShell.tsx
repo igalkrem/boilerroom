@@ -10,6 +10,7 @@ import { Step4Review } from "./steps/Step4Review";
 import { SubmissionProgress } from "./SubmissionProgress";
 import { LoadPresetBanner } from "./LoadPresetBanner";
 import Link from "next/link";
+import { getAssetById, upsertAsset } from "@/lib/silo";
 
 const STEP_TITLES = [
   "Define Campaigns",
@@ -19,7 +20,7 @@ const STEP_TITLES = [
 ];
 
 export function WizardShell({ adAccountId }: { adAccountId: string }) {
-  const { currentStep, campaigns, setAdAccountId, submissionStatus } = useWizardStore();
+  const { currentStep, campaigns, creatives, setAdAccountId, submissionStatus, submissionResults } = useWizardStore();
   // presetKey forces a remount of step components after a preset is loaded,
   // so react-hook-form re-reads defaultValues from the freshly-populated store.
   const [presetKey, setPresetKey] = useState("fresh");
@@ -27,6 +28,42 @@ export function WizardShell({ adAccountId }: { adAccountId: string }) {
   useEffect(() => {
     setAdAccountId(adAccountId);
   }, [adAccountId, setAdAccountId]);
+
+  // After successful submission, cache Snapchat mediaIds and record usage in Silo assets.
+  useEffect(() => {
+    if (submissionStatus !== "done" || !submissionResults) return;
+    submissionResults.uploadMedia.forEach((result) => {
+      if (result.error || !result.snapId) return;
+      const creative = creatives.find((c) => c.id === result.clientId);
+      if (!creative?.siloAssetId) return;
+      const asset = getAssetById(creative.siloAssetId);
+      if (!asset) return;
+      const existing = asset.snapchatUploads.find((s) => s.adAccountId === adAccountId);
+      const updatedUploads = existing
+        ? asset.snapchatUploads.map((s) =>
+            s.adAccountId === adAccountId
+              ? { ...s, stage: "ready" as const, snapMediaId: result.snapId, completedAt: new Date().toISOString() }
+              : s
+          )
+        : [...asset.snapchatUploads, {
+            adAccountId,
+            adAccountName: adAccountId,
+            stage: "ready" as const,
+            snapMediaId: result.snapId,
+            completedAt: new Date().toISOString(),
+          }];
+      upsertAsset({
+        ...asset,
+        snapchatUploads: updatedUploads,
+        usageHistory: [...asset.usageHistory, {
+          adAccountId,
+          campaignName: campaigns[0]?.name ?? "Unknown",
+          creativeName: creative.name,
+          usedAt: new Date().toISOString(),
+        }],
+      });
+    });
+  }, [submissionStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isSubmitting = submissionStatus === "running" || submissionStatus === "done";
 

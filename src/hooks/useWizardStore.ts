@@ -109,6 +109,7 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
     clone.mediaFile = undefined;
     clone.mediaFileName = undefined;
     clone.mediaPreviewUrl = undefined;
+    clone.siloAssetId = undefined;
     clone.uploadStatus = "idle";
     set({ creatives: [...creatives, clone] });
   },
