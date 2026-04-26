@@ -96,11 +96,12 @@ async function processAndUpload(
   try {
     const uploadPromises: Promise<string>[] = [];
 
-    // Original
+    // Original — multipart avoids single-PUT hang for large files
     uploadPromises.push(
       upload(`silo/${assetId}/original_${safeBase}`, file, {
         access: "public",
         handleUploadUrl: "/api/silo/upload",
+        multipart: true,
         onUploadProgress: ({ percentage }) => {
           onUpdate({ progress: Math.round(percentage * 0.7) }); // original = 70% of progress
         },
@@ -114,6 +115,7 @@ async function processAndUpload(
         upload(`silo/${assetId}/optimized_${optName}`, optimizedFile, {
           access: "public",
           handleUploadUrl: "/api/silo/upload",
+          multipart: true,
         }).then((r) => r.url)
       );
     }
@@ -123,6 +125,7 @@ async function processAndUpload(
       upload(`silo/${assetId}/thumb_${safeBase.replace(/\.[^.]+$/, ".jpg")}`, thumbnailBlob, {
         access: "public",
         handleUploadUrl: "/api/silo/upload",
+        multipart: true,
       }).then((r) => r.url)
     );
 
