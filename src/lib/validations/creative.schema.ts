@@ -25,6 +25,7 @@ export const creativeSchema = z
     deepLinkUrl: z.string().optional(),
     // Ad settings
     adStatus: z.enum(["ACTIVE", "PAUSED"]),
+    siloAssetId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     // File must be selected and processed (mediaId is resolved at submission time)

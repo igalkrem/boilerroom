@@ -1,5 +1,14 @@
 import { snapFetch } from "./client";
-import type { SnapCampaignPayload, SnapCampaign, SnapBatchResponse } from "@/types/snapchat";
+import type { SnapCampaignPayload, SnapCampaign, SnapBatchResponse, SnapApiItem } from "@/types/snapchat";
+
+export async function getCampaign(campaignId: string): Promise<SnapCampaign> {
+  const data = await snapFetch<{ campaigns: Array<SnapApiItem<SnapCampaign>> }>(
+    `/campaigns/${campaignId}`
+  );
+  const item = data.campaigns?.[0];
+  if (!item?.campaign) throw new Error("Campaign not found");
+  return item.campaign;
+}
 
 export async function createCampaigns(
   adAccountId: string,

@@ -29,6 +29,12 @@ export function TopNav() {
         >
           Presets
         </Link>
+        <Link
+          href="/dashboard/silo"
+          className="text-sm text-gray-400 hover:text-white transition-colors"
+        >
+          Silo
+        </Link>
         <Button variant="secondary" size="sm" onClick={handleLogout}>
           Disconnect
         </Button>

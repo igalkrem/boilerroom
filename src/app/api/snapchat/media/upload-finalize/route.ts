@@ -10,7 +10,7 @@ const bodySchema = z.object({
   finalizePath: z
     .string()
     .min(1)
-    .refine((p) => p.startsWith("/v1/") && !p.includes("..") && !p.includes("://") && !p.includes("@"), {
+    .refine((p) => p.includes("/v1/") && !p.includes("..") && !p.includes("://") && !p.includes("@"), {
       message: "invalid_path",
     }),
 });

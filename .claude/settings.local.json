@@ -7,7 +7,65 @@
       "Read(//Users/igalkremer/.nvm/versions/**)",
       "Read(//opt/homebrew/**)",
       "Bash(curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh)",
-      "Bash(bash)"
+      "Bash(bash)",
+      "Bash(/opt/homebrew/bin/gh repo:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "Bash(node -e \"const pkg = require\\('./node_modules/react-hook-form/package.json'\\); console.log\\(pkg.version\\)\")",
+      "Bash(node -e \" const { useFieldArray } = require\\('./node_modules/react-hook-form/dist/index.cjs.js'\\); // Check what 'id' means in fields — look for mapIds or the ids generation \")",
+      "Bash(node -e ':*)",
+      "Bash(wait)",
+      "WebFetch(domain:marketingapi.snapchat.com)",
+      "mcp__claude_ai_Vercel__get_runtime_logs",
+      "mcp__vercel__get_runtime_logs",
+      "mcp__vercel__deploy_to_vercel",
+      "mcp__vercel__list_deployments",
+      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom add src/types/snapchat.ts src/lib/validations/campaign.schema.ts src/lib/validations/adsquad.schema.ts src/components/wizard/steps/Step1Campaigns.tsx src/components/wizard/steps/Step2AdSets.tsx src/lib/submission-orchestrator.ts src/components/presets/PresetForm.tsx .claude/CLAUDE.md)",
+      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom commit -m ' *)",
+      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom push origin main)",
+      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom diff HEAD src/types/preset.ts)",
+      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom status --short)",
+      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom add src/types/preset.ts src/types/wizard.ts src/hooks/useWizardStore.ts src/lib/pixels.ts src/lib/presets.ts src/lib/snapchat/ads.ts src/lib/snapchat/adsquads.ts src/lib/snapchat/campaigns.ts src/lib/snapchat/client.ts src/lib/snapchat/creatives.ts src/lib/snapchat/media.ts src/lib/snapchat/profiles.ts src/lib/uploadMediaToSnapchat.ts src/lib/validations/creative.schema.ts src/app/api/snapchat/ads/route.ts src/app/api/snapchat/adsquads/route.ts src/app/api/snapchat/campaigns/route.ts src/app/api/snapchat/creatives/route.ts src/app/api/snapchat/media/poll/route.ts src/app/api/snapchat/media/upload-chunk/route.ts src/app/api/snapchat/media/upload-finalize/route.ts src/app/api/snapchat/media/upload-init/route.ts src/app/api/snapchat/media/upload/route.ts src/app/api/snapchat/profiles/ src/components/wizard/SubmissionProgress.tsx src/components/wizard/steps/Step3Creatives.tsx src/components/wizard/steps/Step4Review.tsx README.md .claude/agents/code-reviewer.md .claude/agents/security-audit.md)",
+      "Bash(curl -s --max-time 15 \"https://developers.snap.com/api/marketing-api/Ads-API/campaigns\")",
+      "Bash(curl -s --max-time 15 \"https://developers.snap.com/api/marketing-api/Ads-API/ad-squads\")",
+      "Bash(curl -s --max-time 15 \"https://developers.snap.com/api/marketing-api/Ads-API/creatives\")",
+      "Bash(curl -s --max-time 15 \"https://developers.snap.com/api/marketing-api/Ads-API/ads\")",
+      "Bash(git commit -m ' *)",
+      "mcp__vercel__get_deployment",
+      "Bash(curl -s 'http://localhost:3001/api/snapchat/campaigns?campaignId=7c8a11f3-7475-418b-b733-9d10d262b186' -H 'Cookie: snap_ads_session=Fe26.2*1*53a0bb4de19a6964500983d0ef7517929e0d977b93fc8174a152330bcbe8cdb3*heUrdIOIS1V6MecFVVFDJg*VeNsJyH_MuiP1DoRyvrnxcsUILAeAz8KeO3_-Bf5ZRCjsaegBNJyIVO2IjDWiPqb5EQ_bZBXr4RkfP5E4hRfLw*1777969548716*343dc27672f2c49f7ecedfe299ca0816705cbf4faac38d77e2680aee9500b62a*gJpumwem5Ni8gIV5udVpvlbTBgeoVoBnbW_DGOs_aSU~2')",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s -b /tmp/snap_cookie.txt \"http://localhost:3001/api/snapchat/campaigns?campaignId=7c8a11f3-7475-418b-b733-9d10d262b186\")",
+      "Read(//private/tmp/**)",
+      "Bash(curl -s __TRACKED_VAR__/campaigns/__TRACKED_VAR__/adsquads -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(curl -s __TRACKED_VAR__/adsquads/__TRACKED_VAR__/ads -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(curl -s __TRACKED_VAR__/creatives/__TRACKED_VAR__ -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "WebFetch(domain:unpkg.com)",
+      "WebFetch(domain:app.unpkg.com)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import sys, json; d=json.load(sys.stdin); 'vercel --prod' in d.get('command','') and print('Pre-deploy: before deploying, review the pending changes for API contract drift, security issues, and correctness. Run git diff main or check git log --oneline -5. Pay special attention to Snapchat API field usage, auth routes, and any new API routes added.')\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import sys, json; d=json.load(sys.stdin); 'vercel --prod' in d.get('command','') and print('Post-deploy: review recent git changes (git log --oneline -5) and update .claude/CLAUDE.md and .claude/agents/code-reviewer.md to reflect any new patterns, API behaviors, or infrastructure changes shipped in this deploy. Only update sections that are actually stale.')\""
+          }
+        ]
+      }
     ]
   }
 }

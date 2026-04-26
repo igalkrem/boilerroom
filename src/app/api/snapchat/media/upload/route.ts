@@ -46,5 +46,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Upload failed: ${uploadRes.status}` }, { status: 500 });
   }
 
-  return NextResponse.json({ mediaId, status: "COMPLETE" });
+  return NextResponse.json({ mediaId, status: "READY" });
 }
