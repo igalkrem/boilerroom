@@ -18,9 +18,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         allowedContentTypes: ["image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/quicktime", "video/webm"],
         maximumSizeInBytes: 500 * 1024 * 1024, // 500 MB
       }),
-      onUploadCompleted: async () => {
-        // Metadata is saved client-side after upload completes
-      },
     });
     return NextResponse.json(jsonResponse);
   } catch (err) {
