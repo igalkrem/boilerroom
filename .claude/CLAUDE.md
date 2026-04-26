@@ -21,6 +21,7 @@ SnapAds Manager: a bulk Snapchat ad campaign creation platform. Users connect vi
 - **Auth:** Snapchat OAuth2 + iron-session (encrypted HttpOnly cookies)
 - **Forms:** react-hook-form + Zod
 - **State:** Zustand (`useWizardStore`)
+- **Storage:** Vercel Blob (`@vercel/blob`) — client-side uploads, public access, store: `boilerroom-silo`
 - **API:** Snapchat Marketing API v1 — all calls are server-side only, proxied through Next.js API routes
 
 ## Running Locally
@@ -53,6 +54,7 @@ SESSION_COOKIE_NAME      # snap_ads_session
 SNAPCHAT_API_BASE_URL    # https://adsapi.snapchat.com/v1
 SNAPCHAT_AUTH_URL        # https://accounts.snapchat.com/login/oauth2/authorize
 SNAPCHAT_TOKEN_URL       # https://accounts.snapchat.com/login/oauth2/access_token
+BLOB_READ_WRITE_TOKEN    # from Vercel Dashboard → Storage → boilerroom-silo → .env.local tab
 ```
 
 ## Project Structure
@@ -63,6 +65,9 @@ src/
 │   ├── (auth)/                        # Login & OAuth callback pages
 │   ├── api/
 │   │   ├── auth/                      # login, logout, refresh, session, callback
+│   │   ├── silo/
+│   │   │   ├── upload/                # Vercel Blob client-upload token endpoint (handleUpload)
+│   │   │   └── delete/                # DELETE handler — removes blobs by URL array
 │   │   └── snapchat/
 │   │       ├── campaigns/
 │   │       ├── adsquads/
@@ -70,11 +75,15 @@ src/
 │   │       ├── ads/
 │   │       ├── ad-accounts/
 │   │       ├── profiles/              # GET ?adAccountId= → first profile_id for creative payload
-│       └── media/                 # upload-init, upload-chunk, upload-finalize, upload (image), poll
+│   │       └── media/                 # upload-init, upload-chunk, upload-finalize, upload (image), poll, copy
 │   └── dashboard/
 │       ├── [adAccountId]/create/      # 4-step wizard
 │       ├── pixels/                    # Pixel CRUD UI (new/[id]/edit)
-│       └── presets/                   # Campaign preset CRUD UI (new/[id]/edit/[id]/use)
+│       ├── presets/                   # Campaign preset CRUD UI (new/[id]/edit/[id]/use)
+│       └── silo/                      # Media library
+│           ├── page.tsx               # Library grid with search/filter/delete
+│           ├── upload/                # Upload page with tag selector + SiloUploader
+│           └── tags/                  # Tag CRUD (create, edit, delete)
 ├── components/
 │   ├── wizard/
 │   │   ├── steps/                     # Step1–Step4 form components
@@ -82,6 +91,12 @@ src/
 │   │   ├── StepIndicator.tsx
 │   │   ├── SubmissionProgress.tsx
 │   │   └── LoadPresetBanner.tsx
+│   ├── silo/
+│   │   ├── SiloUploader.tsx           # Batch uploader: hash → optimize → Blob upload (3 concurrent)
+│   │   ├── SiloBrowser.tsx            # Picker modal for Step 3 wizard integration
+│   │   ├── AssetCard.tsx              # Thumbnail card with quick actions
+│   │   ├── AssetPreviewModal.tsx      # Full preview + metadata + usage history
+│   │   └── SnapchatUploadModal.tsx    # Pre-upload asset to Snapchat ad accounts (2 concurrent)
 │   ├── pixels/                        # PixelForm component
 │   └── presets/                       # Preset management components
 ├── hooks/
@@ -89,7 +104,10 @@ src/
 ├── lib/
 │   ├── snapchat/                      # Server-side API client (campaigns, adsquads, creatives, media, profiles, auth)
 │   ├── submission-orchestrator.ts     # Sequences: uploadMedia → campaigns → ad sets → creatives → ads
-│   ├── uploadMediaToSnapchat.ts       # Client-side upload pipeline (5 MB chunks, parallel); called by orchestrator
+│   ├── uploadMediaToSnapchat.ts       # Client-side upload pipeline (4 MB chunks, parallel); called by orchestrator
+│   ├── silo.ts                        # Silo asset CRUD (localStorage, key: boilerroom_silo_v1)
+│   ├── silo-tags.ts                   # Tag CRUD + auto-naming (localStorage, key: boilerroom_silo_tags_v1)
+│   ├── silo-utils.ts                  # Browser utils: hash, optimizeImage, generateThumbnail, getVideoDuration
 │   ├── presets.ts                     # Preset CRUD (localStorage, key: boilerroom_presets_v1)
 │   ├── pixels.ts                      # Pixel CRUD (localStorage, key: boilerroom_pixels_v1)
 │   ├── session.ts                     # iron-session helpers & auth validation
@@ -97,6 +115,7 @@ src/
 └── types/
     ├── wizard.ts                      # Form types (CampaignFormData, AdSquadFormData, CreativeFormData)
     ├── snapchat.ts                    # API payload types (SnapCampaignPayload, etc.)
+    ├── silo.ts                        # SiloAsset, SiloTag, SnapchatUploadStatus, SnapchatUploadStage
     ├── preset.ts                      # CampaignPreset type
     ├── pixel.ts                       # SavedPixel type
     └── session.ts
@@ -112,6 +131,7 @@ src/
 - **Duplicate buttons:** Store exposes `duplicateCampaign()`, `duplicateAdSquad()`, `duplicateCreative()`. Duplicated creatives reset `mediaId`/`mediaFile`/`uploadStatus` so media must be re-attached. `mediaFile` (the `File` object) is cleared alongside `mediaId` on duplicate.
 - **Media upload (deferred):** Step 3 resizes images locally (canvas → 1080×1920 JPEG) — no Snapchat API calls. Videos are passed through as-is (no transcoding). The actual upload happens at submission time in the `uploadMedia` stage. `lib/uploadMediaToSnapchat.ts` handles the full pipeline: `POST /api/snapchat/media` (create entity) → multipart-upload-v2 (INIT → parallel 4 MB chunks → finalize) → poll for processing. Poll timeout: 2s × 90 attempts = 3 minutes. All creatives upload in parallel across files. Chunk size is 4 MB (not 5 MB) to stay under Vercel's 4.5 MB serverless function payload limit. File names are sanitized to `[a-zA-Z0-9._\-]` before the media entity POST — Snapchat rejects names with spaces, unicode, or special chars (E1001). **Polling is client-side:** `/api/snapchat/media/poll` does a single status check per call; the retry loop (90 × 2s) lives in `uploadMediaToSnapchat.ts` — never inside a Vercel serverless function (which would time out at ~60s). Image uploads via `/api/snapchat/media/upload` do not need polling. **Videos must be uploaded as H.264 MP4** — Snapchat will reject other formats since there is no client-side transcoding.
 - **All Snapchat API calls are server-side.** Never call the Snapchat Marketing API from the browser.
+- **Silo — media library:** Users upload images/videos once to Vercel Blob and reuse them across campaigns. Asset metadata (URLs, tags, Snapchat upload state) lives in localStorage (`boilerroom_silo_v1`). Tags auto-name files with a prefix + zero-padded index (e.g. `smbs_v_001`). The upload pipeline: SHA-256 hash (duplicate detection) → canvas resize/thumbnail → `upload()` from `@vercel/blob/client` direct to Blob (bypasses Vercel's 4.5 MB serverless limit) — token issued by `/api/silo/upload`. 3 files upload concurrently. Snapchat mediaIds are cached per-ad-account in `snapchatUploads[]` on each asset — if a `ready` mediaId exists for the current ad account, Step 3 skips the Snapchat upload entirely at submission time. Cross-account reuse tries `media_copy` first (`/api/snapchat/media/copy`) — same org → instant copy, no re-upload; different org → falls back to Blob fetch + re-upload. `SnapchatUploadStage` is written to localStorage at every transition so status survives page navigation. The `SnapchatUploadModal` lets users pre-upload assets to selected ad accounts from the library (2 concurrent). WizardShell post-submission hook caches new mediaIds and records usage history in Silo assets.
 
 ## Snapchat API Field Notes
 
