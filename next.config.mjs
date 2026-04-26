@@ -16,7 +16,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://*.public.blob.vercel-storage.com",
               "media-src 'self' blob: https://*.public.blob.vercel-storage.com",
-              "connect-src 'self' https://adsapi.snapchat.com https://accounts.snapchat.com https://*.public.blob.vercel-storage.com https://blob.vercel-storage.com",
+              "connect-src 'self' https://adsapi.snapchat.com https://accounts.snapchat.com https://*.public.blob.vercel-storage.com https://blob.vercel-storage.com https://vercel.com",
               "worker-src 'none'",
               "frame-ancestors 'none'",
               "base-uri 'self'",
