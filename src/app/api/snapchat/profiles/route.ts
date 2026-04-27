@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getFirstProfileId } from "@/lib/snapchat/profiles";
-import { getSession, isSessionValid } from "@/lib/session";
+import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -13,11 +13,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "missing_adAccountId" }, { status: 400 });
   }
 
+  if (!isAdAccountAllowed(session, adAccountId)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   try {
     const profileId = await getFirstProfileId(adAccountId);
+    console.log(`[profiles route] adAccountId=${adAccountId} → profileId=${profileId}`);
     return NextResponse.json({ profileId });
   } catch (err) {
-    console.error("Get profiles error:", err);
+    console.error("[profiles route] error:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }

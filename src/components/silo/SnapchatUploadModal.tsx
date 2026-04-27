@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { updateSnapchatUpload, getAssetById } from "@/lib/silo";
-import { uploadMediaToSnapchat } from "@/lib/uploadMediaToSnapchat";
+import { uploadBlobToSnapchat, PollTimeoutError } from "@/lib/uploadMediaToSnapchat";
 import type { SiloAsset, SnapchatUploadStatus, SnapchatUploadStage } from "@/types/silo";
 import type { SnapAdAccount } from "@/types/snapchat";
 
@@ -119,28 +119,18 @@ export function SnapchatUploadModal({ asset, isOpen, onClose, onComplete }: Snap
         // Fall through to re-upload if org mismatch or copy failed
       }
 
-      // Full upload: fetch file from Blob and upload to Snapchat
-      setProgressMsg((p) => ({ ...p, [adAccountId]: "Fetching file…" }));
-      const response = await fetch(currentAsset.optimizedUrl ?? currentAsset.originalUrl);
-      if (!response.ok) throw new Error("Failed to fetch file from storage");
-      const blob = await response.blob();
-      const file = new File([blob], currentAsset.originalFileName, { type: currentAsset.fileFormat });
-
+      // Server fetches file from Vercel Blob and uploads directly to Snapchat.
+      // No client-side download needed; Snapchat marks media READY immediately.
       updateSnapchatUpload(currentAsset.id, adAccountId, { stage: "uploading_chunks" });
       setCurrentAsset({ ...getAssetById(currentAsset.id)! });
 
-      const snapMediaId = await uploadMediaToSnapchat(
-        file,
+      const blobUrl = currentAsset.optimizedUrl ?? currentAsset.originalUrl;
+      const snapMediaId = await uploadBlobToSnapchat(
+        blobUrl,
+        currentAsset.originalFileName,
         adAccountId,
         currentAsset.mediaType,
-        (msg) => {
-          // Transition to "processing" when polling starts
-          if (msg.startsWith("Processing")) {
-            updateSnapchatUpload(currentAsset.id, adAccountId, { stage: "processing" });
-            setCurrentAsset({ ...getAssetById(currentAsset.id)! });
-          }
-          setProgressMsg((p) => ({ ...p, [adAccountId]: msg }));
-        }
+        (msg) => setProgressMsg((p) => ({ ...p, [adAccountId]: msg }))
       );
 
       updateSnapchatUpload(currentAsset.id, adAccountId, {
@@ -156,11 +146,20 @@ export function SnapchatUploadModal({ asset, isOpen, onClose, onComplete }: Snap
           : a
       ));
     } catch (err) {
-      updateSnapchatUpload(currentAsset.id, adAccountId, {
-        stage: "failed",
-        error: String(err),
-        completedAt: new Date().toISOString(),
-      });
+      if (err instanceof PollTimeoutError) {
+        // File was uploaded; Snapchat just hasn't finished processing yet.
+        // Store the mediaId so the Check button can poll it later.
+        updateSnapchatUpload(currentAsset.id, adAccountId, {
+          stage: "processing",
+          snapMediaId: err.mediaId,
+        });
+      } else {
+        updateSnapchatUpload(currentAsset.id, adAccountId, {
+          stage: "failed",
+          error: String(err),
+          completedAt: new Date().toISOString(),
+        });
+      }
       setCurrentAsset({ ...getAssetById(currentAsset.id)! });
     }
     setProgressMsg((p) => { const n = { ...p }; delete n[adAccountId]; return n; });
@@ -203,7 +202,11 @@ export function SnapchatUploadModal({ asset, isOpen, onClose, onComplete }: Snap
     });
     const pollData = await pollRes.json();
     if (pollData.status === "READY") {
-      updateSnapchatUpload(currentAsset.id, account.id, { stage: "ready", completedAt: new Date().toISOString() });
+      updateSnapchatUpload(currentAsset.id, account.id, {
+        stage: "ready",
+        snapMediaId: upload.snapMediaId,
+        completedAt: new Date().toISOString(),
+      });
       setCurrentAsset({ ...getAssetById(currentAsset.id)! });
     }
   }

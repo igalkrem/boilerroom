@@ -35,6 +35,12 @@ export function TopNav() {
         >
           Silo
         </Link>
+        <Link
+          href="/dashboard/performance"
+          className="text-sm text-gray-400 hover:text-white transition-colors"
+        >
+          Performance
+        </Link>
         <Button variant="secondary" size="sm" onClick={handleLogout}>
           Disconnect
         </Button>

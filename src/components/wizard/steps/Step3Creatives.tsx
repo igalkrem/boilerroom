@@ -12,7 +12,7 @@ import { clsx } from "clsx";
 import { z } from "zod";
 import type { CreativeFormData } from "@/types/wizard";
 import { SiloBrowser } from "@/components/silo/SiloBrowser";
-import { getSnapMediaId } from "@/lib/silo";
+import { getSnapMediaId, getAssetById } from "@/lib/silo";
 import type { SiloAsset } from "@/types/silo";
 
 type CreativesFormValues = z.infer<typeof creativesFormSchema>;
@@ -42,6 +42,15 @@ const AD_STATUS_OPTIONS = [
  * Keyed by the creative's UUID so duplicates (which get new IDs) start fresh.
  */
 const pendingMediaFiles = new Map<string, File>();
+
+// Silo assets that have no cached Snapchat mediaId for the current ad account.
+// Instead of downloading to the browser, we store the blob URL here and let the
+// orchestrator call uploadBlobToSnapchat (server-side, no size limit) at submit time.
+const pendingSiloBlobUploads = new Map<string, {
+  blobUrl: string;
+  mediaType: "VIDEO" | "IMAGE";
+  originalFileName: string;
+}>();
 
 
 async function resizeImageForSnap(file: File): Promise<File> {
@@ -352,9 +361,21 @@ export function Step3Creatives() {
   // Map of creativeId → selected SiloAsset (for display only; actual file/mediaId set via setValue)
   const [siloSelections, setSiloSelections] = useState<Map<string, SiloAsset>>(new Map());
 
-  // Clear pending File references when the component unmounts (e.g. user navigates back
-  // without submitting) to release ~30 MB video buffers from memory.
-  useEffect(() => () => { pendingMediaFiles.clear(); }, []);
+  // Clear pending references when the component unmounts (e.g. user navigates back
+  // without submitting) to release memory.
+  useEffect(() => () => { pendingMediaFiles.clear(); pendingSiloBlobUploads.clear(); }, []);
+
+  // Restore siloSelections visual state when user navigates Back from Step 4 and returns here.
+  useEffect(() => {
+    const restoredSelections = new Map<string, SiloAsset>();
+    for (const cr of creatives) {
+      if (cr.siloAssetId) {
+        const asset = getAssetById(cr.siloAssetId);
+        if (asset) restoredSelections.set(cr.id, asset);
+      }
+    }
+    if (restoredSelections.size > 0) setSiloSelections(restoredSelections);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const adSquadOptions = adSquads.map((sq, i) => ({
     value: sq.id,
@@ -395,20 +416,18 @@ export function Step3Creatives() {
       setValue(`creatives.${creativeIndex}.siloAssetId`, asset.id);
       pendingMediaFiles.delete(creativeId);
     } else {
-      // Fetch optimized file from Blob for upload at submission time
-      try {
-        const response = await fetch(asset.optimizedUrl ?? asset.originalUrl);
-        if (!response.ok) throw new Error("Failed to fetch media from library");
-        const blob = await response.blob();
-        const file = new File([blob], asset.originalFileName, { type: asset.fileFormat });
-        pendingMediaFiles.set(creativeId, file);
-        setValue(`creatives.${creativeIndex}.mediaId`, "");
-        setValue(`creatives.${creativeIndex}.mediaFileName`, asset.name);
-        setValue(`creatives.${creativeIndex}.uploadStatus`, "done");
-        setValue(`creatives.${creativeIndex}.siloAssetId`, asset.id);
-      } catch {
-        // Leave uploadStatus as-is so validation catches it
-      }
+      // No cached mediaId — queue a server-side upload via blob URL at submission time.
+      // We never download the file to the browser; the orchestrator calls
+      // uploadBlobToSnapchat which fetches server-to-server (no size limit, no chunking).
+      pendingSiloBlobUploads.set(creativeId, {
+        blobUrl: asset.optimizedUrl ?? asset.originalUrl,
+        mediaType: asset.mediaType,
+        originalFileName: asset.originalFileName,
+      });
+      setValue(`creatives.${creativeIndex}.mediaId`, "");
+      setValue(`creatives.${creativeIndex}.mediaFileName`, asset.name);
+      setValue(`creatives.${creativeIndex}.uploadStatus`, "done");
+      setValue(`creatives.${creativeIndex}.siloAssetId`, asset.id);
     }
 
     setSiloSelections((prev) => new Map(prev).set(creativeId, asset));
@@ -425,16 +444,22 @@ export function Step3Creatives() {
   }
 
   const onNext = (data: CreativesFormValues) => {
-    // Merge transcoded File objects (stored in pendingMediaFiles) into the creatives
-    // before handing off to the store — they aren't form fields so react-hook-form
-    // doesn't carry them, but the submission orchestrator needs them.
-    const withFiles = (data.creatives as CreativeFormData[]).map((cr) => ({
-      ...cr,
-      mediaFile: pendingMediaFiles.get(cr.id),
-    }));
-    // Release all File references — store now owns them; old entries (stale UUIDs
-    // from previous sessions or removed creatives) would otherwise leak memory.
+    const withFiles = (data.creatives as CreativeFormData[]).map((cr) => {
+      const existingCreative = creatives.find(c => c.id === cr.id);
+      // If mediaId is set (cached Snapchat ID), clear file/blob fields — no upload needed.
+      // Otherwise fall back to pendingMediaFiles or the Zustand store (preserves across Back nav).
+      if (cr.mediaId) {
+        return { ...cr, mediaFile: undefined, siloAssetBlobUrl: undefined, siloAssetMediaType: undefined, siloAssetOriginalFileName: undefined };
+      }
+      const mediaFile = pendingMediaFiles.get(cr.id) ?? existingCreative?.mediaFile;
+      const blobUpload = pendingSiloBlobUploads.get(cr.id);
+      const siloAssetBlobUrl = blobUpload?.blobUrl ?? existingCreative?.siloAssetBlobUrl;
+      const siloAssetMediaType = blobUpload?.mediaType ?? existingCreative?.siloAssetMediaType;
+      const siloAssetOriginalFileName = blobUpload?.originalFileName ?? existingCreative?.siloAssetOriginalFileName;
+      return { ...cr, mediaFile, siloAssetBlobUrl, siloAssetMediaType, siloAssetOriginalFileName };
+    });
     pendingMediaFiles.clear();
+    pendingSiloBlobUploads.clear();
     setCreatives(withFiles);
     setStep(4);
   };

@@ -1,6 +1,15 @@
 import { snapFetch } from "./client";
 import type { SnapAdSquadPayload, SnapAdSquad, SnapBatchResponse, SnapApiItem } from "@/types/snapchat";
 
+export async function getAdSquads(campaignId: string): Promise<SnapAdSquad[]> {
+  const data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
+    `/campaigns/${campaignId}/adsquads`
+  );
+  return (data.adsquads ?? [])
+    .filter((item) => item.sub_request_status === "SUCCESS" && item.adsquad)
+    .map((item) => item.adsquad!);
+}
+
 export async function getAdSquad(adSquadId: string): Promise<SnapAdSquad> {
   const data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
     `/adsquads/${adSquadId}`

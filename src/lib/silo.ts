@@ -1,7 +1,9 @@
 import { z } from "zod";
 import type { SiloAsset, SnapchatUploadStatus } from "@/types/silo";
+import { syncToKV } from "@/lib/kv-sync";
 
 const STORAGE_KEY = "boilerroom_silo_v1";
+const KV_KEY = "br_silo_assets";
 
 const usageRecordSchema = z.object({
   adAccountId: z.string(),
@@ -42,6 +44,7 @@ const assetSchema = z.object({
 
 function saveAssets(assets: SiloAsset[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(assets));
+  syncToKV(KV_KEY, assets);
 }
 
 export function loadAssets(): SiloAsset[] {

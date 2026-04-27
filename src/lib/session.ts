@@ -27,11 +27,10 @@ export function isSessionValid(session: Partial<SessionData>): session is Sessio
 
 /**
  * Returns true if the adAccountId is among the user's known accounts.
- * If the allowed list has not been populated yet (e.g. the user hit an API
- * route directly without visiting the dashboard first), the check is skipped
- * and Snapchat's own OAuth enforcement acts as the backstop.
+ * Denies by default if the allowed list has not been populated yet — the
+ * caller must ensure the session has been bootstrapped via /api/snapchat/ad-accounts.
  */
 export function isAdAccountAllowed(session: SessionData, adAccountId: string): boolean {
-  if (!session.allowedAdAccountIds?.length) return true;
+  if (!session.allowedAdAccountIds?.length) return false;
   return session.allowedAdAccountIds.includes(adAccountId);
 }

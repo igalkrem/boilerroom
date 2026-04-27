@@ -1,7 +1,9 @@
 import { z } from "zod";
 import type { SiloTag } from "@/types/silo";
+import { syncToKV } from "@/lib/kv-sync";
 
 const STORAGE_KEY = "boilerroom_silo_tags_v1";
+const KV_KEY = "br_silo_tags";
 
 const tagSchema = z.object({
   id: z.string().min(1),
@@ -13,6 +15,7 @@ const tagSchema = z.object({
 
 function saveTags(tags: SiloTag[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tags));
+  syncToKV(KV_KEY, tags);
 }
 
 export function loadTags(): SiloTag[] {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getValidAccessToken } from "@/lib/snapchat/client";
+import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
 import { rateLimitedCall } from "@/lib/rate-limiter";
 
 export const maxDuration = 60;
@@ -7,6 +8,11 @@ export const maxDuration = 60;
 const BASE_URL = "https://adsapi.snapchat.com/v1";
 
 export async function POST(request: NextRequest) {
+  const session = await getSession();
+  if (!isSessionValid(session)) {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+  }
+
   let accessToken: string;
   try {
     accessToken = await getValidAccessToken();
@@ -21,6 +27,10 @@ export async function POST(request: NextRequest) {
 
   if (!file || !mediaId || !adAccountId) {
     return NextResponse.json({ error: "missing_params" }, { status: 400 });
+  }
+
+  if (!isAdAccountAllowed(session, adAccountId)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const ALLOWED_MIME_TYPES = ["video/mp4", "image/jpeg", "image/png", "image/gif"];

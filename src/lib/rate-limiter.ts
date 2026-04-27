@@ -15,3 +15,22 @@ export async function rateLimitedCall<T>(fn: () => Promise<T>): Promise<T> {
   lastCallTime = Date.now();
   return fn();
 }
+
+// Wraps a fetch call with rate limiting + exponential-backoff retry on 429.
+// Snapchat multipart upload routes run in separate serverless function instances
+// so the process-local rate limiter above doesn't prevent cross-instance bursts.
+export async function rateLimitedFetch(
+  fn: () => Promise<Response>,
+  maxRetries = 4
+): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      // Exponential backoff: 2s, 4s, 8s, 16s
+      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
+    }
+    const res = await rateLimitedCall(fn);
+    if (res.status !== 429) return res;
+  }
+  // Final attempt — return whatever we get
+  return rateLimitedCall(fn);
+}
