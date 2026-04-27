@@ -32,6 +32,9 @@ export async function POST(request: NextRequest) {
   if (!isAdAccountAllowed(session, destinationAdAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+  if (!isAdAccountAllowed(session, sourceAdAccountId)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   try {
     const payload = {

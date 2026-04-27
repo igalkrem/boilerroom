@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getValidAccessToken } from "@/lib/snapchat/client";
-import { rateLimitedCall } from "@/lib/rate-limiter";
+import { rateLimitedFetch } from "@/lib/rate-limiter";
 
 export const maxDuration = 60;
 
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   uploadForm.append("part_number", partNumber);
   uploadForm.append("upload_id", uploadId);
 
-  const res = await rateLimitedCall(() => fetch(addUrl, {
+  const res = await rateLimitedFetch(() => fetch(addUrl, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}` },
     body: uploadForm,

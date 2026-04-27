@@ -1,7 +1,9 @@
 import { z } from "zod";
 import type { CampaignPreset } from "@/types/preset";
+import { syncToKV } from "@/lib/kv-sync";
 
 const STORAGE_KEY = "boilerroom_presets_v1";
+const KV_KEY = "br_presets";
 
 const presetSchema = z.object({
   id: z.string().min(1),
@@ -38,6 +40,7 @@ export function loadPresets(): CampaignPreset[] {
 function savePresets(presets: CampaignPreset[]): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
+  syncToKV(KV_KEY, presets);
 }
 
 export function upsertPreset(preset: CampaignPreset): void {

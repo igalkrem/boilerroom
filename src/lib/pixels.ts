@@ -1,7 +1,9 @@
 import { z } from "zod";
 import type { SavedPixel } from "@/types/pixel";
+import { syncToKV } from "@/lib/kv-sync";
 
 const STORAGE_KEY = "boilerroom_pixels_v1";
+const KV_KEY = "br_pixels";
 
 const pixelSchema = z.object({
   id: z.string().min(1),
@@ -31,6 +33,7 @@ export function loadPixels(): SavedPixel[] {
 function savePixels(pixels: SavedPixel[]): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(pixels));
+  syncToKV(KV_KEY, pixels);
 }
 
 export function upsertPixel(pixel: SavedPixel): void {

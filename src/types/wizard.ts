@@ -59,6 +59,10 @@ export interface CreativeFormData {
   mediaPreviewUrl?: string;
   uploadStatus: "idle" | "uploading" | "done" | "error";
   siloAssetId?: string; // set when media was selected from Silo library
+  // Set when Silo asset has no cached mediaId — orchestrator calls uploadBlobToSnapchat at submission
+  siloAssetBlobUrl?: string;
+  siloAssetMediaType?: "VIDEO" | "IMAGE";
+  siloAssetOriginalFileName?: string;
   // Interaction
   interactionType: InteractionType;
   webViewUrl?: string;

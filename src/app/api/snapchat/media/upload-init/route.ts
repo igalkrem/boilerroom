@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getValidAccessToken } from "@/lib/snapchat/client";
-import { rateLimitedCall } from "@/lib/rate-limiter";
+import { rateLimitedFetch } from "@/lib/rate-limiter";
 import { z } from "zod";
 
 export const maxDuration = 60;
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   form.append("file_size", String(fileSize));
   form.append("number_of_parts", String(numberOfParts));
 
-  const res = await rateLimitedCall(() => fetch(`${BASE_URL}/media/${mediaId}/multipart-upload-v2?action=INIT`, {
+  const res = await rateLimitedFetch(() => fetch(`${BASE_URL}/media/${mediaId}/multipart-upload-v2?action=INIT`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}` },
     body: form,

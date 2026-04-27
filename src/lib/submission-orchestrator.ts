@@ -5,7 +5,7 @@ import type {
   SubmissionResults,
   SubmissionStage,
 } from "@/types/wizard";
-import { uploadMediaToSnapchat } from "@/lib/uploadMediaToSnapchat";
+import { uploadMediaToSnapchat, uploadBlobToSnapchat } from "@/lib/uploadMediaToSnapchat";
 import type {
   SnapCampaignPayload,
   SnapAdSquadPayload,
@@ -90,22 +90,53 @@ export async function runSubmission(
   // Creatives that already have a mediaId (e.g. re-submission) skip the upload.
   const mediaIdMap = new Map<string, string>();
 
+  console.log(`[orchestrator] uploadMedia: ${creatives.length} creative(s)`, creatives.map(c => ({ id: c.id, hasFile: !!c.mediaFile, mediaId: c.mediaId || null })));
+
   await Promise.all(
     creatives.map(async (cr) => {
-      if (!cr.mediaFile) {
-        if (cr.mediaId) mediaIdMap.set(cr.id, cr.mediaId);
+      // Case 1: cached Snapchat mediaId (Silo pre-upload or re-submission)
+      if (!cr.mediaFile && !cr.siloAssetBlobUrl) {
+        if (cr.mediaId) {
+          mediaIdMap.set(cr.id, cr.mediaId);
+          console.log(`[orchestrator] ${cr.name}: using cached mediaId ${cr.mediaId}`);
+        } else {
+          console.warn(`[orchestrator] ${cr.name}: no mediaFile, no blobUrl, and no mediaId — will be skipped`);
+        }
         return;
       }
-      const mediaType = cr.mediaFile.type.startsWith("video/") ? "VIDEO" : "IMAGE";
+
+      // Case 2: Silo asset without cached mediaId — server-side upload (any file size, READY immediately)
+      if (cr.siloAssetBlobUrl && !cr.mediaFile) {
+        try {
+          const mediaId = await uploadBlobToSnapchat(
+            cr.siloAssetBlobUrl,
+            cr.siloAssetOriginalFileName ?? cr.mediaFileName ?? "media",
+            adAccountId,
+            cr.siloAssetMediaType ?? "VIDEO",
+          );
+          mediaIdMap.set(cr.id, mediaId);
+          results.uploadMedia.push({ clientId: cr.id, snapId: mediaId, name: cr.name });
+        } catch (err) {
+          console.error(`[orchestrator] ${cr.name}: silo blob upload failed —`, String(err));
+          results.uploadMedia.push({ clientId: cr.id, snapId: "", name: cr.name, error: String(err) });
+        }
+        return;
+      }
+
+      // Case 3: local File (direct drop or small Silo fallback)
+      const mediaType = cr.mediaFile!.type.startsWith("video/") ? "VIDEO" : "IMAGE";
       try {
-        const mediaId = await uploadMediaToSnapchat(cr.mediaFile, adAccountId, mediaType);
+        const mediaId = await uploadMediaToSnapchat(cr.mediaFile!, adAccountId, mediaType);
         mediaIdMap.set(cr.id, mediaId);
         results.uploadMedia.push({ clientId: cr.id, snapId: mediaId, name: cr.name });
       } catch (err) {
+        console.error(`[orchestrator] ${cr.name}: upload failed —`, String(err));
         results.uploadMedia.push({ clientId: cr.id, snapId: "", name: cr.name, error: String(err) });
       }
     })
   );
+
+  console.log(`[orchestrator] mediaIdMap size: ${mediaIdMap.size}`);
 
   // ── Step 1: Create Campaigns ──────────────────────────────────────────────
   onStage("campaigns");
@@ -260,18 +291,24 @@ export async function runSubmission(
       results.creatives.push({ clientId: cr.id, snapId: "", name: cr.name, error: "Media upload failed" })
     );
 
+  console.log(`[orchestrator] uploadedCreatives: ${uploadedCreatives.length}/${creatives.length}`);
+
   if (uploadedCreatives.length === 0) {
+    console.warn("[orchestrator] all creatives failed upload — skipping profiles/creatives/ads");
     onStage("done");
     return results;
   }
 
   // Fetch the Snapchat Public Profile ID required in creative payloads (E2652 if absent).
   let snapProfileId: string | null = null;
+  console.log(`[orchestrator] fetching profile for adAccountId: ${adAccountId}`);
   try {
     const profRes = await fetch(`/api/snapchat/profiles?adAccountId=${encodeURIComponent(adAccountId)}`);
     const profData = await profRes.json() as { profileId?: string; error?: string };
     snapProfileId = profData.profileId ?? null;
-  } catch {
+    console.log(`[orchestrator] snapProfileId: ${snapProfileId}`);
+  } catch (err) {
+    console.error("[orchestrator] profiles fetch threw:", String(err));
     // fetch itself failed; snapProfileId stays null
   }
 
