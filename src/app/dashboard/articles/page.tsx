@@ -73,7 +73,7 @@ export default function ArticlesPage() {
           <p className="text-gray-500 text-sm">No articles saved yet.</p>
           {providers.length === 0 && (
             <p className="text-xs text-gray-400">
-              You'll need a{" "}
+              You&apos;ll need a{" "}
               <Link href="/dashboard/articles/feed-providers/new" className="underline text-cyan-600">
                 feed provider
               </Link>{" "}
@@ -123,7 +123,7 @@ export default function ArticlesPage() {
                           <ul className="mt-1 space-y-0.5">
                             {article.allowedHeadlines.slice(0, 3).map((h, i) => (
                               <li key={i} className="text-xs text-gray-400 truncate">
-                                "{h}"
+                                &quot;{h}&quot;
                               </li>
                             ))}
                             {article.allowedHeadlines.length > 3 && (
