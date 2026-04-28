@@ -87,7 +87,7 @@ export function ArticleForm({ article }: ArticleFormProps) {
             <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
               No feed providers yet.{" "}
               <a
-                href="/dashboard/articles/feed-providers/new"
+                href="/dashboard/feed-providers/new"
                 className="underline font-medium"
               >
                 Create one first

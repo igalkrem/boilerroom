@@ -21,7 +21,7 @@ export default function EditFeedProviderPage() {
     return (
       <div className="space-y-4">
         <p className="text-gray-500">Feed provider not found.</p>
-        <Link href="/dashboard/articles/feed-providers" className="text-sm text-cyan-600 hover:underline">
+        <Link href="/dashboard/feed-providers" className="text-sm text-cyan-600 hover:underline">
           ← Back to Feed Providers
         </Link>
       </div>
@@ -32,7 +32,7 @@ export default function EditFeedProviderPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Link
-          href="/dashboard/articles/feed-providers"
+          href="/dashboard/feed-providers"
           className="text-sm text-gray-500 hover:text-gray-700"
         >
           ← Feed Providers

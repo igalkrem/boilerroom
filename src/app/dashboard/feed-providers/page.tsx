@@ -46,7 +46,7 @@ export default function FeedProvidersPage() {
             </p>
           </div>
         </div>
-        <Button onClick={() => router.push("/dashboard/articles/feed-providers/new")}>
+        <Button onClick={() => router.push("/dashboard/feed-providers/new")}>
           + Add Feed Provider
         </Button>
       </div>
@@ -56,7 +56,7 @@ export default function FeedProvidersPage() {
           <p className="text-gray-500 text-sm">No feed providers saved yet.</p>
           <Button
             variant="secondary"
-            onClick={() => router.push("/dashboard/articles/feed-providers/new")}
+            onClick={() => router.push("/dashboard/feed-providers/new")}
           >
             Add your first feed provider
           </Button>
@@ -83,7 +83,7 @@ export default function FeedProvidersPage() {
                   variant="secondary"
                   className="flex-1"
                   onClick={() =>
-                    router.push(`/dashboard/articles/feed-providers/${provider.id}/edit`)
+                    router.push(`/dashboard/feed-providers/${provider.id}/edit`)
                   }
                 >
                   Edit

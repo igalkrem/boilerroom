@@ -88,8 +88,8 @@ src/
 │       ├── [adAccountId]/create/      # 4-step wizard
 │       ├── pixels/                    # Pixel CRUD UI (new/[id]/edit)
 │       ├── presets/                   # Campaign preset CRUD UI (new/[id]/edit/[id]/use)
-│       ├── articles/                  # Article CRUD UI (new/[id]/edit) + feed-providers/ sub-section
-│       │   └── feed-providers/        # Feed Provider CRUD UI (new/[id]/edit)
+│       ├── articles/                  # Article CRUD UI (new/[id]/edit)
+│       ├── feed-providers/            # Feed Provider CRUD UI (new/[id]/edit) — own top-nav tab
 │       ├── performance/               # Global performance dashboard (top-nav link)
 │       └── silo/                      # Media library
 │           ├── page.tsx               # Library grid with search/filter/delete
