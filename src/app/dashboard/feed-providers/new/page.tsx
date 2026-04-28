@@ -8,7 +8,7 @@ export default function NewFeedProviderPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Link
-          href="/dashboard/articles/feed-providers"
+          href="/dashboard/feed-providers"
           className="text-sm text-gray-500 hover:text-gray-700"
         >
           ← Feed Providers

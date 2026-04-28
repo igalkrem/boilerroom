@@ -36,6 +36,12 @@ export function TopNav() {
           Articles
         </Link>
         <Link
+          href="/dashboard/feed-providers"
+          className="text-sm text-gray-400 hover:text-white transition-colors"
+        >
+          Feed Providers
+        </Link>
+        <Link
           href="/dashboard/silo"
           className="text-sm text-gray-400 hover:text-white transition-colors"
         >

@@ -51,7 +51,7 @@ export function FeedProviderForm({ provider }: FeedProviderFormProps) {
       createdAt: provider?.createdAt ?? new Date().toISOString(),
     };
     upsertFeedProvider(saved);
-    router.push("/dashboard/articles/feed-providers");
+    router.push("/dashboard/feed-providers");
   };
 
   return (
@@ -87,7 +87,7 @@ export function FeedProviderForm({ provider }: FeedProviderFormProps) {
         <Button
           type="button"
           variant="ghost"
-          onClick={() => router.push("/dashboard/articles/feed-providers")}
+          onClick={() => router.push("/dashboard/feed-providers")}
         >
           Cancel
         </Button>

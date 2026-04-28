@@ -50,7 +50,14 @@
       "mcp__vercel__get_deployment_build_logs",
       "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom status)",
       "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom log --oneline -3)",
-      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom diff --stat HEAD)"
+      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom diff --stat HEAD)",
+      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom add src/app/dashboard/articles/page.tsx)",
+      "Bash(mkdir -p /Users/igalkremer/Desktop/BoilerRoom/src/app/dashboard/feed-providers/new /Users/igalkremer/Desktop/BoilerRoom/src/app/dashboard/feed-providers/\\\\[id\\\\]/edit)",
+      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom mv src/app/dashboard/articles/feed-providers/page.tsx src/app/dashboard/feed-providers/page.tsx)",
+      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom mv src/app/dashboard/articles/feed-providers/new/page.tsx src/app/dashboard/feed-providers/new/page.tsx)",
+      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom mv \"src/app/dashboard/articles/feed-providers/[id]/edit/page.tsx\" \"src/app/dashboard/feed-providers/[id]/edit/page.tsx\")",
+      "Bash(rmdir /Users/igalkremer/Desktop/BoilerRoom/src/app/dashboard/articles/feed-providers/new /Users/igalkremer/Desktop/BoilerRoom/src/app/dashboard/articles/feed-providers/\\\\[id\\\\]/edit /Users/igalkremer/Desktop/BoilerRoom/src/app/dashboard/articles/feed-providers)",
+      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom add -A)"
     ]
   },
   "hooks": {

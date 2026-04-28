@@ -55,17 +55,9 @@ export default function ArticlesPage() {
             Landing pages for paid campaigns. Each article belongs to a feed provider.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard/articles/feed-providers"
-            className="text-sm text-gray-500 hover:text-gray-700 underline underline-offset-2"
-          >
-            Manage Feed Providers
-          </Link>
-          <Button onClick={() => router.push("/dashboard/articles/new")}>
-            + Add Article
-          </Button>
-        </div>
+        <Button onClick={() => router.push("/dashboard/articles/new")}>
+          + Add Article
+        </Button>
       </div>
 
       {articles.length === 0 ? (
@@ -74,7 +66,7 @@ export default function ArticlesPage() {
           {providers.length === 0 && (
             <p className="text-xs text-gray-400">
               You&apos;ll need a{" "}
-              <Link href="/dashboard/articles/feed-providers/new" className="underline text-cyan-600">
+              <Link href="/dashboard/feed-providers/new" className="underline text-cyan-600">
                 feed provider
               </Link>{" "}
               before adding articles.
