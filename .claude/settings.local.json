@@ -41,7 +41,16 @@
       "Bash(curl -s __TRACKED_VAR__/adsquads/__TRACKED_VAR__/ads -H 'Authorization: Bearer __TRACKED_VAR__')",
       "Bash(curl -s __TRACKED_VAR__/creatives/__TRACKED_VAR__ -H 'Authorization: Bearer __TRACKED_VAR__')",
       "WebFetch(domain:unpkg.com)",
-      "WebFetch(domain:app.unpkg.com)"
+      "WebFetch(domain:app.unpkg.com)",
+      "mcp__vercel__list_teams",
+      "mcp__vercel__list_projects",
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && head -30 {}')",
+      "Bash(npx vercel *)",
+      "Bash(grep -v \"^$\")",
+      "mcp__vercel__get_deployment_build_logs",
+      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom status)",
+      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom log --oneline -3)",
+      "Bash(git -C /Users/igalkremer/Desktop/BoilerRoom diff --stat HEAD)"
     ]
   },
   "hooks": {

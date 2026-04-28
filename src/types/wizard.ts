@@ -19,7 +19,7 @@ export interface AdSquadFormData {
   campaignId: string; // references CampaignFormData.id
   name: string;
   type: "SNAP_ADS";
-  geoCountryCode: string;
+  geoCountryCodes: string[];
   optimizationGoal: OptimizationGoal;
   bidStrategy: BidStrategy;
   bidAmountUsd?: number;
@@ -67,6 +67,7 @@ export interface CreativeFormData {
   interactionType: InteractionType;
   webViewUrl?: string;
   deepLinkUrl?: string;
+  articleId?: string; // references Article.id; drives URL auto-fill + headline constraint in Step 3
   // Ad settings
   adStatus: "ACTIVE" | "PAUSED";
 }

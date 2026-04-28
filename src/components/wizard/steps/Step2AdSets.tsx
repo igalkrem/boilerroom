@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm, useFieldArray, useWatch } from "react-hook-form";
+import { useForm, useFieldArray, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useWizardStore } from "@/hooks/useWizardStore";
 import { adSquadsFormSchema } from "@/lib/validations/adsquad.schema";
 import { loadPixels } from "@/lib/pixels";
 import { Input, Select, Button } from "@/components/ui";
+import { MultiSelect } from "@/components/ui/MultiSelect";
 import { v4 as uuid } from "uuid";
 import Link from "next/link";
 import type { AdSquadFormData } from "@/types/wizard";
@@ -78,7 +79,7 @@ function defaultAdSquad(campaignId: string): AdSquadFormData {
     campaignId,
     name: "",
     type: "SNAP_ADS",
-    geoCountryCode: "US",
+    geoCountryCodes: ["US"],
     optimizationGoal: "PIXEL_PURCHASE",
     bidStrategy: "AUTO_BID",
     spendCapType: "DAILY_BUDGET",
@@ -154,11 +155,18 @@ function AdSetCard({
 
       {/* Geo + Optimization goal */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Select
-          label="Geo Targeting"
-          options={COUNTRY_OPTIONS}
-          {...register(`adSquads.${index}.geoCountryCode`)}
-          error={squadErrors?.geoCountryCode?.message}
+        <Controller
+          control={control}
+          name={`adSquads.${index}.geoCountryCodes`}
+          render={({ field }) => (
+            <MultiSelect
+              label="Geo Targeting"
+              options={COUNTRY_OPTIONS}
+              value={field.value}
+              onChange={field.onChange}
+              error={squadErrors?.geoCountryCodes?.message}
+            />
+          )}
         />
         <Select
           label="Optimization Goal"

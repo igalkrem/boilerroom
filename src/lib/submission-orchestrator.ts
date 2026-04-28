@@ -221,7 +221,7 @@ export async function runSubmission(
         type: sq.type,
         status: sq.status,
         targeting: {
-          geos: [{ country_code: sq.geoCountryCode.toLowerCase() }],
+          geos: sq.geoCountryCodes.map((c) => ({ country_code: c.toLowerCase() })),
           ...buildDemographics(sq),
         },
         placement_v2: { config: sq.placementConfig ?? "AUTOMATIC" },

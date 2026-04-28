@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm, useFieldArray, useWatch } from "react-hook-form";
+import { useForm, useFieldArray, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { v4 as uuid } from "uuid";
 import { Input, Select, Button } from "@/components/ui";
+import { MultiSelect } from "@/components/ui/MultiSelect";
 import { upsertPreset } from "@/lib/presets";
 import { loadPixels } from "@/lib/pixels";
 import type { CampaignPreset } from "@/types/preset";
@@ -45,7 +46,7 @@ const presetAdSquadSchema = z
     startImmediate: z.boolean(),
     hasEndDate: z.boolean(),
     type: z.literal("SNAP_ADS"),
-    geoCountryCode: z.string().min(2, "Select a country"),
+    geoCountryCodes: z.array(z.string().min(2)).min(1, "Select at least one country"),
     optimizationGoal: z.enum([
       "PIXEL_PURCHASE", "PIXEL_SIGNUP", "PIXEL_ADD_TO_CART", "PIXEL_PAGE_VIEW", "LANDING_PAGE_VIEW",
     ]),
@@ -168,7 +169,7 @@ function defaultAdSquad(): PresetFormValues["adSquads"][number] {
     startImmediate: true,
     hasEndDate: false,
     type: "SNAP_ADS",
-    geoCountryCode: "US",
+    geoCountryCodes: ["US"],
     optimizationGoal: "PIXEL_PURCHASE",
     bidStrategy: "AUTO_BID",
     spendCapType: "DAILY_BUDGET",
@@ -229,11 +230,18 @@ function AdSquadCard({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Select
-          label="Geo Targeting"
-          options={GEO_OPTIONS}
-          {...register(`${prefix}.geoCountryCode`)}
-          error={squadErrors?.geoCountryCode?.message}
+        <Controller
+          control={control}
+          name={`${prefix}.geoCountryCodes`}
+          render={({ field }) => (
+            <MultiSelect
+              label="Geo Targeting"
+              options={GEO_OPTIONS}
+              value={field.value}
+              onChange={field.onChange}
+              error={squadErrors?.geoCountryCodes?.message}
+            />
+          )}
         />
         <Select
           label="Optimization Goal"
@@ -440,7 +448,7 @@ export function PresetForm({ preset }: PresetFormProps) {
             startImmediate: !sq.startDate,
             hasEndDate: !!sq.endDate,
             type: sq.type,
-            geoCountryCode: sq.geoCountryCode,
+            geoCountryCodes: (sq as { geoCountryCodes?: string[]; geoCountryCode?: string }).geoCountryCodes ?? [(sq as { geoCountryCodes?: string[]; geoCountryCode?: string }).geoCountryCode ?? "US"],
             optimizationGoal: sq.optimizationGoal,
             bidStrategy: sq.bidStrategy,
             bidAmountUsd: sq.bidAmountUsd,

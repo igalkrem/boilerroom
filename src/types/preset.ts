@@ -12,7 +12,7 @@ export interface CampaignPresetData {
 
 export interface AdSquadPresetData {
   type: "SNAP_ADS";
-  geoCountryCode: string;
+  geoCountryCodes: string[];
   optimizationGoal: OptimizationGoal;
   bidStrategy: BidStrategy;
   bidAmountUsd?: number;

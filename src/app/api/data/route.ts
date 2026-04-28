@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { put, list } from "@vercel/blob";
 import { getSession, isSessionValid } from "@/lib/session";
 
-const VALID_KEYS = ["br_silo_assets", "br_silo_tags", "br_pixels", "br_presets"] as const;
+const VALID_KEYS = ["br_silo_assets", "br_silo_tags", "br_pixels", "br_presets", "br_feed_providers", "br_articles"] as const;
 type DataKey = (typeof VALID_KEYS)[number];
 
 function isValidKey(k: string): k is DataKey {

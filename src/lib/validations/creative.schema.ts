@@ -26,6 +26,7 @@ export const creativeSchema = z
     // Ad settings
     adStatus: z.enum(["ACTIVE", "PAUSED"]),
     siloAssetId: z.string().optional(),
+    articleId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     // File must be selected and processed (mediaId is resolved at submission time)
