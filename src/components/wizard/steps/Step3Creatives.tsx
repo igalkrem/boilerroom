@@ -14,6 +14,10 @@ import type { CreativeFormData } from "@/types/wizard";
 import { SiloBrowser } from "@/components/silo/SiloBrowser";
 import { getSnapMediaId, getAssetById } from "@/lib/silo";
 import type { SiloAsset } from "@/types/silo";
+import { loadArticles } from "@/lib/articles";
+import { loadFeedProviders } from "@/lib/feed-providers";
+import { buildArticleUrl } from "@/types/article";
+import type { Article, FeedProvider } from "@/types/article";
 
 type CreativesFormValues = z.infer<typeof creativesFormSchema>;
 
@@ -174,6 +178,8 @@ function CreativeCard({
   onOpenSilo,
   onClearSilo,
   siloLoading,
+  articles,
+  feedProviders,
 }: {
   index: number;
   creativeId: string;
@@ -189,9 +195,42 @@ function CreativeCard({
   onOpenSilo: () => void;
   onClearSilo: () => void;
   siloLoading: boolean;
+  articles: Article[];
+  feedProviders: FeedProvider[];
 }) {
   const interactionType = useWatch({ control, name: `creatives.${index}.interactionType` });
+  const watchedArticleId = useWatch({ control, name: `creatives.${index}.articleId` });
   const creativeErrors = errors.creatives?.[index];
+
+  const selectedArticle = articles.find((a) => a.id === watchedArticleId) ?? null;
+  const hasConstrainedHeadlines =
+    selectedArticle !== null && selectedArticle.allowedHeadlines.length > 0;
+
+  const headlineOptions =
+    selectedArticle?.allowedHeadlines.map((h) => ({ value: h, label: h })) ?? [];
+
+  const articleOptions = [
+    { value: "", label: "None (manual URL)" },
+    ...articles.map((a) => {
+      const providerName =
+        feedProviders.find((p) => p.id === a.feedProviderId)?.name ?? "Unknown";
+      return { value: a.id, label: `${providerName}: ${a.slug}` };
+    }),
+  ];
+
+  function handleArticleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const articleId = e.target.value;
+    setValue(`creatives.${index}.articleId`, articleId);
+    if (articleId) {
+      const article = articles.find((a) => a.id === articleId);
+      const provider = article
+        ? feedProviders.find((p) => p.id === article.feedProviderId)
+        : undefined;
+      if (article && provider) {
+        setValue(`creatives.${index}.webViewUrl`, buildArticleUrl(provider, article));
+      }
+    }
+  }
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
@@ -261,6 +300,30 @@ function CreativeCard({
         )}
       </div>
 
+      {/* Article picker (WEB_VIEW only) */}
+      {interactionType === "WEB_VIEW" && articles.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Article <span className="text-gray-400 font-normal">(optional — auto-fills URL &amp; headlines)</span>
+          </label>
+          <select
+            value={watchedArticleId ?? ""}
+            onChange={handleArticleChange}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+          >
+            {articleOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <input type="hidden" {...register(`creatives.${index}.articleId`)} />
+        </div>
+      )}
+      {interactionType === "WEB_VIEW" && articles.length === 0 && (
+        <input type="hidden" {...register(`creatives.${index}.articleId`)} />
+      )}
+
       {/* Conditional URL fields */}
       {interactionType === "WEB_VIEW" && (
         <Input
@@ -279,6 +342,9 @@ function CreativeCard({
           error={creativeErrors?.deepLinkUrl?.message}
         />
       )}
+      {(interactionType === "DEEP_LINK" || interactionType === "APP_INSTALL") && (
+        <input type="hidden" {...register(`creatives.${index}.articleId`)} />
+      )}
 
       {/* Name + Headline */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -288,13 +354,22 @@ function CreativeCard({
           {...register(`creatives.${index}.name`)}
           error={creativeErrors?.name?.message}
         />
-        <Input
-          label="Headline (max 34 chars)"
-          placeholder="Shop the Sale Now"
-          maxLength={34}
-          {...register(`creatives.${index}.headline`)}
-          error={creativeErrors?.headline?.message}
-        />
+        {hasConstrainedHeadlines ? (
+          <Select
+            label="Headline"
+            options={headlineOptions}
+            {...register(`creatives.${index}.headline`)}
+            error={creativeErrors?.headline?.message}
+          />
+        ) : (
+          <Input
+            label="Headline (max 34 chars)"
+            placeholder="Shop the Sale Now"
+            maxLength={34}
+            {...register(`creatives.${index}.headline`)}
+            error={creativeErrors?.headline?.message}
+          />
+        )}
       </div>
 
       {/* Brand + CTA + Ad Set */}
@@ -333,6 +408,9 @@ function CreativeCard({
       <input type="hidden" {...register(`creatives.${index}.id`)} />
       <input type="hidden" {...register(`creatives.${index}.uploadStatus`)} />
       <input type="hidden" {...register(`creatives.${index}.siloAssetId`)} />
+      {interactionType === "SWIPE_TO_OPEN" && (
+        <input type="hidden" {...register(`creatives.${index}.articleId`)} />
+      )}
     </div>
   );
 }
@@ -360,10 +438,17 @@ export function Step3Creatives() {
   const [siloLoadingForCreativeId, setSiloLoadingForCreativeId] = useState<string | null>(null);
   // Map of creativeId → selected SiloAsset (for display only; actual file/mediaId set via setValue)
   const [siloSelections, setSiloSelections] = useState<Map<string, SiloAsset>>(new Map());
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [feedProviders, setFeedProviders] = useState<FeedProvider[]>([]);
 
   // Clear pending references when the component unmounts (e.g. user navigates back
   // without submitting) to release memory.
   useEffect(() => () => { pendingMediaFiles.clear(); pendingSiloBlobUploads.clear(); }, []);
+
+  useEffect(() => {
+    setArticles(loadArticles());
+    setFeedProviders(loadFeedProviders());
+  }, []);
 
   // Restore siloSelections visual state when user navigates Back from Step 4 and returns here.
   useEffect(() => {
@@ -496,6 +581,8 @@ export function Step3Creatives() {
             onOpenSilo={() => setSiloOpenForCreativeId(creativeId)}
             onClearSilo={() => handleClearSilo(creativeId, i)}
             siloLoading={siloLoadingForCreativeId === creativeId}
+            articles={articles}
+            feedProviders={feedProviders}
           />
         );
       })}

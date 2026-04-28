@@ -8,6 +8,8 @@ const HYDRATION_KEYS = [
   { key: "br_silo_tags", storageKey: "boilerroom_silo_tags_v1" },
   { key: "br_pixels", storageKey: "boilerroom_pixels_v1" },
   { key: "br_presets", storageKey: "boilerroom_presets_v1" },
+  { key: "br_feed_providers", storageKey: "boilerroom_feed_providers_v1" },
+  { key: "br_articles", storageKey: "boilerroom_articles_v1" },
 ] as const;
 
 function mergeByIdIntoLocal(local: unknown[], remote: unknown[]): unknown[] | null {

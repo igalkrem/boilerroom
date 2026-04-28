@@ -30,6 +30,12 @@ export function TopNav() {
           Presets
         </Link>
         <Link
+          href="/dashboard/articles"
+          className="text-sm text-gray-400 hover:text-white transition-colors"
+        >
+          Articles
+        </Link>
+        <Link
           href="/dashboard/silo"
           className="text-sm text-gray-400 hover:text-white transition-colors"
         >

@@ -135,7 +135,7 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
       campaignId: newCampaignId,
       name: "",
       type: sq.type,
-      geoCountryCode: sq.geoCountryCode,
+      geoCountryCodes: (sq as { geoCountryCodes?: string[]; geoCountryCode?: string }).geoCountryCodes ?? [(sq as { geoCountryCodes?: string[]; geoCountryCode?: string }).geoCountryCode ?? "US"],
       optimizationGoal: sq.optimizationGoal,
       bidStrategy: sq.bidStrategy,
       bidAmountUsd: sq.bidAmountUsd,

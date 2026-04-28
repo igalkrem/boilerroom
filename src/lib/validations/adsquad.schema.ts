@@ -6,7 +6,7 @@ export const adSquadSchema = z
     campaignId: z.string().min(1, "Select a campaign"),
     name: z.string().min(1, "Name is required").max(375),
     type: z.literal("SNAP_ADS"),
-    geoCountryCode: z.string().min(2, "Select a country"),
+    geoCountryCodes: z.array(z.string().min(2)).min(1, "Select at least one country"),
     optimizationGoal: z.enum([
       "PIXEL_PURCHASE",
       "PIXEL_SIGNUP",

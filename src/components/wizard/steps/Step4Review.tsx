@@ -93,7 +93,7 @@ export function Step4Review() {
                   {s.spendCapType === "DAILY_BUDGET"
                     ? `$${s.dailyBudgetUsd}/day`
                     : `$${s.lifetimeBudgetUsd} lifetime`}{" "}
-                  · {s.geoCountryCode} · {s.placementConfig}
+                  · {s.geoCountryCodes.join(", ")} · {s.placementConfig}
                   {targetingParts.length > 0 ? ` · ${targetingParts.join(", ")}` : ""}
                   {" · →"} {campaignMap[s.campaignId] ?? "—"}
                 </p>
