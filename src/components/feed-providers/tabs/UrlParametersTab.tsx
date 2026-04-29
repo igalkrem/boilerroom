@@ -190,7 +190,7 @@ export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParame
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 font-mono text-xs break-all text-gray-700 leading-relaxed">
             {previewUrl ? (
               previewUrl.split(/({{[^}]+}})/).map((part, i) => {
-                if (!part.startsWith("{{")) return <span key={i}>{part}</span>;
+                if (!part.startsWith("{{")) return <span key={i} className="font-bold">{part}</span>;
                 const isSnap = MACROS.find(m => m.label.toLowerCase() === part.toLowerCase())?.source === "snap";
                 return (
                   <span key={i} className={isSnap ? "bg-yellow-100 text-yellow-700 rounded px-0.5" : "bg-blue-100 text-blue-700 rounded px-0.5"}>
