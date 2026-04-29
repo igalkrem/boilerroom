@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdSquads, getAdSquad } from "@/lib/snapchat/adsquads";
-import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
+import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import type { SnapAdSquadPayload } from "@/types/snapchat";
 import { z } from "zod";
 
@@ -21,6 +21,10 @@ export async function GET(request: NextRequest) {
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
+  if (!isSnapchatConnected(session)) {
+    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
+  }
+
 
   const adSquadId = request.nextUrl.searchParams.get("adSquadId");
   if (!adSquadId) {
@@ -32,7 +36,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ adsquad });
   } catch (err) {
     console.error("Get ad squad error:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
 
@@ -41,6 +45,10 @@ export async function POST(request: NextRequest) {
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
+  if (!isSnapchatConnected(session)) {
+    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
+  }
+
 
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
@@ -63,6 +71,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ results });
   } catch (err) {
     console.error("Create adsquads error:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }

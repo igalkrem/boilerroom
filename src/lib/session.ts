@@ -13,8 +13,7 @@ export async function getSession(): Promise<IronSession<SessionData>> {
     cookieOptions: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
-      // "lax" is required: Snapchat OAuth redirects back to this app cross-site,
-      // which would be blocked by "strict".
+      // "lax" allows cross-site OAuth redirects (Google and Snapchat both redirect back cross-site)
       sameSite: "lax" as const,
     },
   });
@@ -22,7 +21,11 @@ export async function getSession(): Promise<IronSession<SessionData>> {
 }
 
 export function isSessionValid(session: Partial<SessionData>): session is SessionData {
-  return !!(session.accessToken && session.refreshToken && session.expiresAt);
+  return !!session.googleUserId;
+}
+
+export function isSnapchatConnected(session: SessionData): boolean {
+  return !!(session.snapAccessToken && session.snapUserId);
 }
 
 /**

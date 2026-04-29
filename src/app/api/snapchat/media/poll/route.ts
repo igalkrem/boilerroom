@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkMediaStatus } from "@/lib/snapchat/media";
-import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
+import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
+  if (!isSnapchatConnected(session)) {
+    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
+  }
+
 
   const { mediaId, adAccountId } = (await request.json()) as {
     mediaId: string;

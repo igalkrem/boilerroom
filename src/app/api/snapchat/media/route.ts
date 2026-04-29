@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createMediaEntity } from "@/lib/snapchat/media";
-import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
+import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import { z } from "zod";
 
 const bodySchema = z.object({
@@ -14,6 +14,10 @@ export async function POST(request: NextRequest) {
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
+  if (!isSnapchatConnected(session)) {
+    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
+  }
+
 
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
@@ -31,6 +35,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ mediaId, uploadUrl });
   } catch (err) {
     console.error("Create media entity error:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }

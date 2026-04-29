@@ -1,4 +1,4 @@
-import { getSession, isSessionValid } from "@/lib/session";
+import { getSession, isSessionValid, isSnapchatConnected } from "@/lib/session";
 import { refreshAccessToken } from "@/lib/snapchat/auth";
 import { rateLimitedCall } from "@/lib/rate-limiter";
 
@@ -9,24 +9,24 @@ const REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 // Singleton promise prevents parallel calls from each triggering their own refresh
 // when the token is near expiry. Without this, Promise.all batches (e.g. ad squad
-// creation) each read the stale refreshToken before the first refresh saves new tokens.
+// creation) each read the stale snapRefreshToken before the first refresh saves new tokens.
 let refreshPromise: Promise<string> | null = null;
 
 export async function getValidAccessToken(): Promise<string> {
   const session = await getSession();
 
-  if (!isSessionValid(session)) {
-    throw new Error("not_authenticated");
+  if (!isSessionValid(session) || !isSnapchatConnected(session)) {
+    throw new Error("snapchat_not_connected");
   }
 
-  if (Date.now() >= session.expiresAt - REFRESH_BUFFER_MS) {
+  if (Date.now() >= (session.snapExpiresAt ?? 0) - REFRESH_BUFFER_MS) {
     if (!refreshPromise) {
       refreshPromise = (async () => {
         try {
-          const tokens = await refreshAccessToken(session.refreshToken);
-          session.accessToken = tokens.access_token;
-          if (tokens.refresh_token) session.refreshToken = tokens.refresh_token;
-          session.expiresAt = Date.now() + tokens.expires_in * 1000;
+          const tokens = await refreshAccessToken(session.snapRefreshToken!);
+          session.snapAccessToken = tokens.access_token;
+          if (tokens.refresh_token) session.snapRefreshToken = tokens.refresh_token;
+          session.snapExpiresAt = Date.now() + tokens.expires_in * 1000;
           await session.save();
           return tokens.access_token;
         } finally {
@@ -37,7 +37,7 @@ export async function getValidAccessToken(): Promise<string> {
     return refreshPromise;
   }
 
-  return session.accessToken;
+  return session.snapAccessToken!;
 }
 
 export async function snapFetch<T>(
@@ -60,12 +60,12 @@ export async function snapFetch<T>(
   // On 401, try refreshing once and retry
   if (res.status === 401) {
     const session = await getSession();
-    if (!isSessionValid(session)) throw new Error("not_authenticated");
+    if (!isSnapchatConnected(session)) throw new Error("snapchat_not_connected");
 
-    const tokens = await refreshAccessToken(session.refreshToken);
-    session.accessToken = tokens.access_token;
-    if (tokens.refresh_token) session.refreshToken = tokens.refresh_token;
-    session.expiresAt = Date.now() + tokens.expires_in * 1000;
+    const tokens = await refreshAccessToken(session.snapRefreshToken!);
+    session.snapAccessToken = tokens.access_token;
+    if (tokens.refresh_token) session.snapRefreshToken = tokens.refresh_token;
+    session.snapExpiresAt = Date.now() + tokens.expires_in * 1000;
     await session.save();
 
     const retry = await rateLimitedCall(() => fetch(url, {

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
+import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import { sql } from "@/lib/db";
 import { getEurToUsd } from "@/lib/fx-rate";
 import { getCampaigns } from "@/lib/snapchat/campaigns";
@@ -26,6 +26,10 @@ export async function GET(request: NextRequest) {
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
+  if (!isSnapchatConnected(session)) {
+    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
+  }
+
 
   const { searchParams } = request.nextUrl;
   const adAccountId = searchParams.get("adAccountId") ?? "";

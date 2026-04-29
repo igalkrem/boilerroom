@@ -10,8 +10,10 @@ import { Input, Select, Button } from "@/components/ui";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { upsertPreset } from "@/lib/presets";
 import { loadPixels } from "@/lib/pixels";
+import { loadFeedProviders } from "@/lib/feed-providers";
 import type { CampaignPreset } from "@/types/preset";
 import type { SavedPixel } from "@/types/pixel";
+import type { FeedProvider } from "@/types/feed-provider";
 
 // ─── Zod schema for the preset form ─────────────────────────────────────────
 
@@ -158,6 +160,20 @@ const OS_OPTIONS = [
   { value: "", label: "All" },
   { value: "iOS", label: "iOS" },
   { value: "ANDROID", label: "Android" },
+];
+
+const CTA_OPTIONS = [
+  { value: "", label: "— None —" },
+  { value: "MORE", label: "More" },
+  { value: "SHOP_NOW", label: "Shop Now" },
+  { value: "SIGN_UP", label: "Sign Up" },
+  { value: "DOWNLOAD", label: "Download" },
+  { value: "WATCH", label: "Watch" },
+  { value: "GET_NOW", label: "Get Now" },
+  { value: "ORDER_NOW", label: "Order Now" },
+  { value: "BOOK_NOW", label: "Book Now" },
+  { value: "APPLY_NOW", label: "Apply Now" },
+  { value: "BUY_NOW", label: "Buy Now" },
 ];
 
 function todayIso() {
@@ -414,10 +430,20 @@ interface PresetFormProps {
 export function PresetForm({ preset }: PresetFormProps) {
   const router = useRouter();
   const [pixels, setPixels] = useState<SavedPixel[]>([]);
+  const [feedProviders, setFeedProviders] = useState<FeedProvider[]>([]);
+  const [feedProviderId, setFeedProviderId] = useState<string>(preset?.feedProviderId ?? "");
+  const [comboId, setComboId] = useState<string>(preset?.comboId ?? "");
+  const [creativeDefaults, setCreativeDefaults] = useState(
+    preset?.creativeDefaults ?? { adStatus: "PAUSED" as "ACTIVE" | "PAUSED", brandName: "", callToAction: "" }
+  );
 
   useEffect(() => {
     setPixels(loadPixels());
+    setFeedProviders(loadFeedProviders());
   }, []);
+
+  const selectedProvider = feedProviders.find((p) => p.id === feedProviderId);
+  const comboOptions = selectedProvider?.combos ?? [];
 
   const pixelOptions = pixels.map((p) => ({ value: p.pixelId, label: p.name }));
 
@@ -490,6 +516,8 @@ export function PresetForm({ preset }: PresetFormProps) {
     const saved: CampaignPreset = {
       id: preset?.id ?? uuid(),
       name: data.presetName,
+      feedProviderId,
+      comboId: comboId || undefined,
       createdAt: preset?.createdAt ?? new Date().toISOString(),
       campaign: {
         ...campaignRest,
@@ -502,6 +530,11 @@ export function PresetForm({ preset }: PresetFormProps) {
         endDate: hasEndDate ? sq.endDate : undefined,
         pixelId: sq.pixelId || undefined,
       })),
+      creativeDefaults: {
+        adStatus: creativeDefaults.adStatus,
+        brandName: creativeDefaults.brandName || undefined,
+        callToAction: creativeDefaults.callToAction || undefined,
+      },
     };
     upsertPreset(saved);
     router.push("/dashboard/presets");
@@ -512,13 +545,49 @@ export function PresetForm({ preset }: PresetFormProps) {
       {/* Preset identity */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
         <h3 className="font-semibold text-gray-800">Preset Identity</h3>
-        <div className="max-w-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
           <Input
             label="Preset Name"
             placeholder="My Default Campaign Template"
             {...register("presetName")}
             error={errors.presetName?.message}
           />
+        </div>
+
+        {/* Feed Provider */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Feed Provider</label>
+            <select
+              value={feedProviderId}
+              onChange={(e) => { setFeedProviderId(e.target.value); setComboId(""); }}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">— Select provider —</option>
+              {feedProviders.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            {!feedProviderId && (
+              <p className="text-xs text-amber-600 mt-1">Assign a feed provider so this preset appears in the wizard.</p>
+            )}
+          </div>
+
+          {comboOptions.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Combo (optional)</label>
+              <select
+                value={comboId}
+                onChange={(e) => setComboId(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">— None —</option>
+                {comboOptions.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -603,6 +672,44 @@ export function PresetForm({ preset }: PresetFormProps) {
               error={errors.campaign?.dailyBudgetUsd?.message}
             />
           )}
+        </div>
+      </div>
+
+      {/* Creative defaults */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+        <h3 className="font-semibold text-gray-800">Creative Defaults</h3>
+        <p className="text-xs text-gray-500">Applied to every creative when using this preset in the wizard.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Ad Status</label>
+            <select
+              value={creativeDefaults.adStatus}
+              onChange={(e) => setCreativeDefaults((d) => ({ ...d, adStatus: e.target.value as "ACTIVE" | "PAUSED" }))}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="PAUSED">Paused</option>
+              <option value="ACTIVE">Active</option>
+            </select>
+          </div>
+          <Input
+            label="Brand Name"
+            placeholder="e.g. Amphy"
+            maxLength={25}
+            value={creativeDefaults.brandName ?? ""}
+            onChange={(e) => setCreativeDefaults((d) => ({ ...d, brandName: e.target.value }))}
+          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Call to Action</label>
+            <select
+              value={creativeDefaults.callToAction ?? ""}
+              onChange={(e) => setCreativeDefaults((d) => ({ ...d, callToAction: e.target.value }))}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {CTA_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

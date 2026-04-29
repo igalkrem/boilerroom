@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
+import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import { getValidAccessToken } from "@/lib/snapchat/client";
 import { z } from "zod";
 
@@ -28,6 +28,10 @@ export async function POST(request: NextRequest) {
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
+  if (!isSnapchatConnected(session)) {
+    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
+  }
+
 
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);

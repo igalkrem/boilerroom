@@ -5,6 +5,7 @@ import type {
   SubmissionResults,
   SubmissionStage,
 } from "@/types/wizard";
+import type { FeedProvider } from "@/types/feed-provider";
 import { uploadMediaToSnapchat, uploadBlobToSnapchat } from "@/lib/uploadMediaToSnapchat";
 import type {
   SnapCampaignPayload,
@@ -73,7 +74,8 @@ export async function runSubmission(
   campaigns: CampaignFormData[],
   adSquads: AdSquadFormData[],
   creatives: CreativeFormData[],
-  onStage: OnStageChange
+  onStage: OnStageChange,
+  provider?: FeedProvider
 ): Promise<SubmissionResults> {
   const results: SubmissionResults = {
     uploadMedia: [],
@@ -81,6 +83,7 @@ export async function runSubmission(
     adSquads: [],
     creatives: [],
     ads: [],
+    patchCreatives: [],
   };
 
   // ── Step 0: Upload all media files in parallel ────────────────────────────
@@ -137,6 +140,34 @@ export async function runSubmission(
   );
 
   console.log(`[orchestrator] mediaIdMap size: ${mediaIdMap.size}`);
+
+  // ── Channel Assignment (provider-supplied channels only) ──────────────────
+  let channelId: string | null = null;
+  if (provider?.channelConfig.type === "provider-supplied") {
+    try {
+      const assignRes = await fetch("/api/feed-providers/channels/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedProviderId: provider.id, campaignSnapId: "", adAccountId }),
+      });
+      if (assignRes.ok) {
+        const assignData = await assignRes.json() as { channelId?: string | null };
+        channelId = assignData.channelId ?? null;
+        console.log(`[orchestrator] channel assigned: ${channelId}`);
+      } else {
+        console.warn("[orchestrator] channel assignment failed:", assignRes.status);
+      }
+    } catch (err) {
+      console.warn("[orchestrator] channel assignment threw:", String(err));
+    }
+
+    // Optionally append channel ID to all names
+    if (channelId && provider.channelConfig.addChannelIdToCampaignName) {
+      campaigns = campaigns.map((c) => ({ ...c, name: `${c.name}-${channelId}` }));
+      adSquads = adSquads.map((sq) => ({ ...sq, name: `${sq.name}-${channelId}` }));
+      creatives = creatives.map((cr) => ({ ...cr, name: `${cr.name}-${channelId}` }));
+    }
+  }
 
   // ── Step 1: Create Campaigns ──────────────────────────────────────────────
   onStage("campaigns");
@@ -279,6 +310,26 @@ export async function runSubmission(
       });
     })
   );
+
+  // ── Resolve dynamic URL macros (campaign.id, adSet.id, channel.id) ─────────
+  // Static macros (article.slug, article.query, creative.headline, organization_id)
+  // were resolved earlier in buildUrlTemplate(). Only dynamic Snapchat IDs need
+  // runtime resolution here.
+  creatives = creatives.map((cr) => {
+    if (!cr.webViewUrl) return cr;
+
+    const sq = adSquads.find((s) => s.id === cr.adSquadId);
+    const snapCampaignId = sq ? campaignIdMap.get(sq.campaignId) ?? "" : "";
+    const snapSquadId = sq ? squadIdMap.get(sq.id) ?? "" : "";
+
+    const resolvedUrl = cr.webViewUrl
+      .replace(/\{\{campaign\.id\}\}/gi, snapCampaignId)
+      .replace(/\{\{adSet\.id\}\}/gi, snapSquadId)
+      .replace(/\{\{adset\.id\}\}/gi, snapSquadId)
+      .replace(/\{\{channel\.id\}\}/gi, channelId ?? "");
+
+    return { ...cr, webViewUrl: resolvedUrl };
+  });
 
   // ── Step 3: Create Creatives ──────────────────────────────────────────────
   onStage("creatives");
@@ -470,6 +521,53 @@ export async function runSubmission(
       });
     })
   );
+
+  // ── Step 5: PATCH creatives whose URL still contains {{ad.id}} ──────────────
+  // Collect creative→ad ID mapping from Stage 4 results
+  const adIdByCreativeClientId = new Map<string, string>();
+  results.ads.forEach((a) => {
+    if (a.snapId && !a.error) {
+      // Find the creative client ID that matches this ad result
+      const cr = uploadedCreatives.find((c) => c.name === a.name);
+      if (cr) adIdByCreativeClientId.set(cr.id, a.snapId);
+    }
+  });
+
+  const needsPatch = uploadedCreatives.filter(
+    (cr) => creativeIdMap.has(cr.id) && cr.webViewUrl?.includes("{{ad.id}}")
+  );
+
+  if (needsPatch.length > 0) {
+    onStage("patchCreatives");
+
+    await Promise.all(
+      needsPatch.map(async (cr) => {
+        const snapCreativeId = creativeIdMap.get(cr.id)!;
+        const snapAdId = adIdByCreativeClientId.get(cr.id) ?? "";
+        const resolvedUrl = (cr.webViewUrl ?? "").replace(/\{\{ad\.id\}\}/gi, snapAdId);
+
+        try {
+          const patchRes = await fetch(`/api/snapchat/creatives/${snapCreativeId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ adAccountId, url: resolvedUrl }),
+          });
+          const patchData = await patchRes.json() as { error?: string };
+          if (!patchRes.ok) {
+            results.patchCreatives.push({
+              snapCreativeId,
+              name: cr.name,
+              error: patchData.error ?? `HTTP ${patchRes.status}`,
+            });
+          } else {
+            results.patchCreatives.push({ snapCreativeId, name: cr.name });
+          }
+        } catch (err) {
+          results.patchCreatives.push({ snapCreativeId, name: cr.name, error: String(err) });
+        }
+      })
+    );
+  }
 
   onStage("done");
   return results;

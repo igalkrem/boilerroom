@@ -42,7 +42,7 @@ export function PixelForm({ pixel }: PixelFormProps) {
       createdAt: pixel?.createdAt ?? new Date().toISOString(),
     };
     upsertPixel(saved);
-    router.push("/dashboard/pixels");
+    router.push("/dashboard/traffic-sources");
   };
 
   return (
@@ -71,7 +71,7 @@ export function PixelForm({ pixel }: PixelFormProps) {
         <Button
           type="button"
           variant="ghost"
-          onClick={() => router.push("/dashboard/pixels")}
+          onClick={() => router.push("/dashboard/traffic-sources")}
         >
           Cancel
         </Button>

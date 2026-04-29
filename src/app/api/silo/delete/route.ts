@@ -39,7 +39,7 @@ export async function DELETE(request: NextRequest) {
   try {
     await del(urls);
     return NextResponse.json({ ok: true });
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }

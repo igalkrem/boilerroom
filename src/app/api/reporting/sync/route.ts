@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
+import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import { runMigrations, sql } from "@/lib/db";
 import { fetchKingsRoadReport } from "@/lib/kingsroad";
 import { getCampaigns } from "@/lib/snapchat/campaigns";
@@ -57,6 +57,10 @@ export async function POST(request: NextRequest) {
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
+  if (!isSnapchatConnected(session)) {
+    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
+  }
+
 
   const body = await request.json() as { adAccountId?: string; startDate?: string; endDate?: string };
   const { adAccountId, startDate, endDate } = body;

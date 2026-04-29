@@ -104,6 +104,7 @@ export interface SubmissionResults {
   adSquads: Array<CreatedAdSquad & { error?: string }>;
   creatives: Array<CreatedCreative & { error?: string }>;
   ads: Array<CreatedAd & { error?: string }>;
+  patchCreatives: Array<{ snapCreativeId: string; name: string; error?: string }>;
 }
 
 export type SubmissionStatus = "idle" | "running" | "done" | "error";
@@ -114,4 +115,33 @@ export type SubmissionStage =
   | "adSquads"
   | "creatives"
   | "ads"
+  | "patchCreatives"
   | "done";
+
+// ─── Canvas store types ────────────────────────────────────────────────────
+
+export interface CanvasEdges {
+  creativeToProvider: Array<{ creativeId: string; feedProviderId: string }>;
+  providerToArticle: Array<{
+    feedProviderId: string;
+    articleId: string;
+    headline: string;
+    callToAction: string;
+  }>;
+  articleToPreset: Array<{
+    articleId: string;
+    presetId: string;
+    duplications: number;
+  }>;
+}
+
+export interface CampaignBuildItem {
+  adAccountId: string;
+  creativeId: string;
+  feedProviderId: string;
+  articleId: string;
+  presetId: string;
+  duplicationIndex: number; // 0-based within the duplication count
+  headline: string;
+  callToAction: string;
+}
