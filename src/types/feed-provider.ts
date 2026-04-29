@@ -8,6 +8,7 @@ export interface UrlParameter {
 export interface FeedProviderDomain {
   id: string;
   baseDomain: string;
+  baseUrl?: string; // per-domain base URL for URL template building
   trafficSources: string[]; // e.g. ["Snap"]
 }
 

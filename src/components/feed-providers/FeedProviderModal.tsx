@@ -7,19 +7,18 @@ import type { FeedProvider } from "@/types/feed-provider";
 import { emptyFeedProvider } from "@/types/feed-provider";
 import { upsertFeedProvider } from "@/lib/feed-providers";
 import { SnapTab } from "./tabs/SnapTab";
-import { UrlParametersTab } from "./tabs/UrlParametersTab";
 import { ChannelsTab } from "./tabs/ChannelsTab";
 import { DomainsTab } from "./tabs/DomainsTab";
 import { CombosTab } from "./tabs/CombosTab";
 
-type Tab = "snap" | "url" | "channels" | "domains" | "combos";
+type Tab = "snap" | "channels" | "domains" | "combos" | "facebook";
 
 const TABS: Array<{ id: Tab; label: string }> = [
-  { id: "snap", label: "Snap" },
-  { id: "url", label: "URL Parameters" },
+  { id: "snap",     label: "Snap" },
   { id: "channels", label: "Channels" },
-  { id: "domains", label: "Domains" },
-  { id: "combos", label: "Combos" },
+  { id: "domains",  label: "Domains" },
+  { id: "combos",   label: "Combos" },
+  { id: "facebook", label: "Facebook" },
 ];
 
 interface FeedProviderModalProps {
@@ -113,12 +112,8 @@ export function FeedProviderModal({ provider, onClose, onSaved }: FeedProviderMo
             <SnapTab
               snapConfig={data.snapConfig}
               onChange={(snapConfig) => setData((d) => ({ ...d, snapConfig }))}
-            />
-          )}
-          {activeTab === "url" && (
-            <UrlParametersTab
               urlConfig={data.urlConfig}
-              onChange={(urlConfig) => setData((d) => ({ ...d, urlConfig }))}
+              onUrlConfigChange={(urlConfig) => setData((d) => ({ ...d, urlConfig }))}
             />
           )}
           {activeTab === "channels" && (
@@ -141,6 +136,11 @@ export function FeedProviderModal({ provider, onClose, onSaved }: FeedProviderMo
               domains={data.domains}
               onChange={(combos) => setData((d) => ({ ...d, combos }))}
             />
+          )}
+          {activeTab === "facebook" && (
+            <div className="flex items-center justify-center h-32 text-sm text-gray-400 italic">
+              Coming soon
+            </div>
           )}
         </div>
 

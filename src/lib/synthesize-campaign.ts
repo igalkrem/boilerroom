@@ -111,7 +111,8 @@ export function synthesizeCampaign(
 function buildUrlTemplate(provider: FeedProvider, article: Article, headline: string, rac: string): string {
   // Build the URL with macros still in place for dynamic ones (campaign.id, adSet.id, ad.id)
   // Static ones (article.name, article.query, creative.headline, creative.rac) are substituted now.
-  const base = provider.urlConfig.baseUrl.replace(/\/$/, "");
+  const domain = provider.domains.find((d) => d.baseDomain === article.domain);
+  const base = (domain?.baseUrl ?? provider.urlConfig.baseUrl ?? "").replace(/\/$/, "");
   const params = provider.urlConfig.parameters
     .map((p) => {
       const resolved = p.value
