@@ -122,12 +122,12 @@ src/
 │   │   ├── SubmissionProgress.tsx
 │   │   └── LoadPresetBanner.tsx
 │   ├── feed-providers/
-│   │   ├── FeedProviderModal.tsx      # Large modal (max-w-3xl) with 5 tabs
+│   │   ├── FeedProviderModal.tsx      # Large modal (max-w-3xl) with 5 tabs: Snap | Channels | Domains | Combos | Facebook
 │   │   └── tabs/
-│   │       ├── SnapTab.tsx            # Ad accounts, pixels, Snapchat org ID
-│   │       ├── UrlParametersTab.tsx   # Base URL, parameter rows, macro chip toolbar, live preview
+│   │       ├── SnapTab.tsx            # Org ID, ad accounts, pixels + URL Parameters section at bottom
+│   │       ├── UrlParametersTab.tsx   # Parameter rows, always-visible filtered macro chips, live preview; hideBaseUrl prop
 │   │       ├── ChannelsTab.tsx        # CSV upload, status table, lifecycle controls
-│   │       ├── DomainsTab.tsx         # Domain rows with traffic source checkboxes
+│   │       ├── DomainsTab.tsx         # Domain rows (baseDomain + baseUrl + traffic source checkboxes)
 │   │       └── CombosTab.tsx          # Named combos (pixel + domain + channel config)
 │   ├── silo/
 │   │   ├── SiloUploader.tsx           # Batch uploader: hash → optimize → Blob upload (3 concurrent)
@@ -223,13 +223,18 @@ src/
   | `{{channel.id}}` | assigned channel from Postgres | after channel assignment |
   | `{{ad.id}}` | Snapchat ad ID | PATCH after ads stage |
 
-- **Feed Providers (v2):** Full sell-side provider management. `FeedProvider` type lives in `src/types/feed-provider.ts` (not `article.ts`). Key fields:
+- **Feed Providers (v3):** Full sell-side provider management. `FeedProvider` type lives in `src/types/feed-provider.ts` (not `article.ts`). Key fields:
   - `snapConfig` — `organizationId` (resolves `{{organization_id}}`), `allowedAdAccountIds[]`, `allowedPixelIds[]`
-  - `urlConfig` — `baseUrl` + `parameters: UrlParameter[]` (key/value with macro support)
+  - `urlConfig` — `parameters: UrlParameter[]` (key/value with macro support). `baseUrl` is retained in the stored shape as a backward-compat fallback but is no longer shown in the UI — base URLs are now per-domain.
   - `channelConfig` — `type: "provider-supplied" | "parameter-based"`, `addChannelIdToCampaignName?`, `channelParamKey?`
-  - `domains[]` — `FeedProviderDomain` (baseDomain + trafficSources)
+  - `domains[]` — `FeedProviderDomain` (`id`, `baseDomain`, `baseUrl?`, `trafficSources[]`). Each domain carries its own `baseUrl`. `buildUrlTemplate()` resolves base URL as `domain.baseUrl ?? provider.urlConfig.baseUrl ?? ""` (latter is the fallback for old records).
   - `combos[]` — `FeedProviderCombo` (named preset of pixel + domain + channel settings)
-  Legacy records (only had `name`, `parameterName`, `baseUrl`) are up-cast by `upcast()` in `feed-providers.ts` — all new fields default to empty/sensible values. The board UI is a card grid; clicking a card or "New" opens `FeedProviderModal` (5 tabs). No separate `/new` or `/[id]/edit` route pages — everything is in the modal.
+
+  **Modal tabs:** Snap | Channels | Domains | Combos | Facebook (coming soon). The "URL Parameters" standalone tab was removed — URL parameter configuration now lives at the bottom of the Snap tab (rendered via `UrlParametersTab` with `hideBaseUrl`). Facebook tab is a placeholder.
+
+  **`UrlParametersTab` behaviour:** macro chips are always visible above the preview URL (not a focus-gated popup). Chips are filtered to only show macros not already present in any parameter value. Clicking a chip inserts into the last-focused value input (tracked via `lastActiveIndexRef`).
+
+  Legacy records (only had `name`, `parameterName`, `baseUrl`) are up-cast by `upcast()` in `feed-providers.ts` — all new fields default to empty/sensible values. The board UI is a card grid; clicking a card or "New" opens `FeedProviderModal`. No separate `/new` or `/[id]/edit` route pages — everything is in the modal.
 
 - **Feed provider channels:** Postgres table `feed_provider_channels` tracks channel lifecycle: `available → in-use → cooldown → available`. Lifecycle promotion is lazy (runs on every read via `normalizeChannelStatuses(feedProviderId)`, no cron). Thresholds: `in-use` > 24h → cooldown; `cooldown` > 24h → available. Channels are imported via CSV upload in the Channels tab. `assignChannel()` picks the oldest available channel and marks it `in-use`. `releaseChannel()` moves a channel from `in-use` to `cooldown`.
 
