@@ -56,6 +56,15 @@ export function ArticleForm({ article }: ArticleFormProps) {
     setProviders(loadFeedProviders());
   }, []);
 
+  // Re-apply saved domain after providers load — HTML select can't select an option
+  // that doesn't exist in the DOM at mount time (providers are empty on first render).
+  useEffect(() => {
+    if (providers.length > 0 && article?.domain) {
+      setValue("domain", article.domain);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providers.length]);
+
   const providerOptions = [
     { value: "", label: "Select feed provider" },
     ...providers.map((p) => ({ value: p.id, label: p.name })),
@@ -66,6 +75,7 @@ export function ArticleForm({ article }: ArticleFormProps) {
     control,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<ArticleFormValues>({
     resolver: zodResolver(articleFormSchema),
@@ -225,45 +235,39 @@ export function ArticleForm({ article }: ArticleFormProps) {
             No headlines added — the headline field in the wizard will accept any text.
           </p>
         ) : (
-          <div className="space-y-2">
-            {/* Column labels */}
-            <div className="flex items-center gap-2 px-1">
-              <span className="flex-1 text-xs text-gray-400 font-medium">Headline text</span>
-              <span className="w-36 text-xs text-gray-400 font-medium">RAC</span>
-              <span className="w-6" />
-            </div>
+          <div className="space-y-3 max-w-md">
             {fields.map((field, i) => (
-              <div key={field.id} className="flex items-start gap-2">
-                <div className="flex-1">
+              <div key={field.id} className="space-y-1">
+                {/* Headline text row with remove button */}
+                <div className="flex items-center gap-2">
                   <input
                     placeholder="Enter headline (max 34 chars)"
                     maxLength={34}
                     {...register(`allowedHeadlines.${i}.text`)}
-                    className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400 ${
+                    className={`flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400 ${
                       errors.allowedHeadlines?.[i]?.text ? "border-red-400" : "border-gray-200"
                     }`}
                   />
-                  {errors.allowedHeadlines?.[i]?.text && (
-                    <p className="text-xs text-red-500 mt-0.5">{errors.allowedHeadlines[i]?.text?.message}</p>
-                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-400 hover:text-red-600 shrink-0"
+                    onClick={() => remove(i)}
+                  >
+                    ✕
+                  </Button>
                 </div>
-                <div className="w-36">
-                  <input
-                    placeholder="RAC value"
-                    maxLength={100}
-                    {...register(`allowedHeadlines.${i}.rac`)}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="mt-1 text-red-500 hover:text-red-700 shrink-0"
-                  onClick={() => remove(i)}
-                >
-                  ✕
-                </Button>
+                {errors.allowedHeadlines?.[i]?.text && (
+                  <p className="text-xs text-red-500">{errors.allowedHeadlines[i]?.text?.message}</p>
+                )}
+                {/* RAC field — muted, clearly subordinate */}
+                <input
+                  placeholder="RAC"
+                  maxLength={100}
+                  {...register(`allowedHeadlines.${i}.rac`)}
+                  className="w-full px-3 py-1.5 text-xs text-gray-400 placeholder-gray-300 border border-gray-100 bg-gray-50 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-300 focus:border-cyan-300"
+                />
               </div>
             ))}
           </div>
