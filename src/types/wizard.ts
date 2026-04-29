@@ -104,7 +104,6 @@ export interface SubmissionResults {
   adSquads: Array<CreatedAdSquad & { error?: string }>;
   creatives: Array<CreatedCreative & { error?: string }>;
   ads: Array<CreatedAd & { error?: string }>;
-  patchCreatives: Array<{ snapCreativeId: string; name: string; error?: string }>;
 }
 
 export type SubmissionStatus = "idle" | "running" | "done" | "error";
@@ -115,7 +114,6 @@ export type SubmissionStage =
   | "adSquads"
   | "creatives"
   | "ads"
-  | "patchCreatives"
   | "done";
 
 // ─── Canvas store types ────────────────────────────────────────────────────
