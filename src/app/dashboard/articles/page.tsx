@@ -9,6 +9,21 @@ import { loadFeedProviders } from "@/lib/feed-providers";
 import type { Article } from "@/types/article";
 import type { FeedProvider } from "@/types/feed-provider";
 
+const PROVIDER_COLORS = ["#3b82f6", "#f97316", "#8b5cf6", "#10b981", "#ec4899", "#f59e0b"];
+
+const LOCALES: Record<string, string> = {
+  de_DE: "German - Germany",
+  en_AU: "English - Australia",
+  en_CA: "English - Canada",
+  en_GB: "English - UK",
+  es_AR: "Spanish - Argentina",
+  es_ES: "Spanish - Spain",
+  pt_BR: "Portuguese - Brazil",
+  fr_FR: "French - France",
+  it_IT: "Italian - Italy",
+  en_US: "English - US",
+};
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
     year: "numeric",
@@ -17,19 +32,15 @@ function formatDate(iso: string) {
   });
 }
 
-function providerColor(id: string): string {
-  let h = 0;
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360;
-  return `hsl(${h},65%,45%)`;
-}
-
-type SortCol = "provider" | "slug" | "query" | "headlines" | "date";
+type SortCol = "provider" | "slug" | "headlines" | "date";
 type SortDir = "asc" | "desc";
 
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   if (!active) return <span className="ml-1 text-gray-300">↕</span>;
   return <span className="ml-1 text-cyan-500">{dir === "asc" ? "↑" : "↓"}</span>;
 }
+
+const TOTAL_COLS = 7;
 
 export default function ArticlesPage() {
   const router = useRouter();
@@ -39,11 +50,23 @@ export default function ArticlesPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [search, setSearch] = useState("");
   const [filterProvider, setFilterProvider] = useState("all");
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setArticles(loadArticles());
     setProviders(loadFeedProviders());
   }, []);
+
+  const providerColorMap = useMemo(() => {
+    const sorted = [...providers].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+    const map: Record<string, string> = {};
+    sorted.forEach((p, i) => {
+      map[p.id] = PROVIDER_COLORS[i % PROVIDER_COLORS.length];
+    });
+    return map;
+  }, [providers]);
 
   const providerMap = useMemo(
     () => Object.fromEntries(providers.map((p) => [p.id, p])),
@@ -63,6 +86,18 @@ export default function ArticlesPage() {
       setSortCol(col);
       setSortDir("asc");
     }
+  }
+
+  function toggleExpand(id: string) {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   }
 
   const filtered = useMemo(() => {
@@ -88,9 +123,6 @@ export default function ArticlesPage() {
         case "slug":
           cmp = a.slug.localeCompare(b.slug);
           break;
-        case "query":
-          cmp = (a.query ?? "").localeCompare(b.query ?? "");
-          break;
         case "headlines":
           cmp = a.allowedHeadlines.length - b.allowedHeadlines.length;
           break;
@@ -106,6 +138,8 @@ export default function ArticlesPage() {
 
   const thClass =
     "px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide cursor-pointer select-none hover:text-gray-700 whitespace-nowrap";
+  const thStatic =
+    "px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap";
   const tdClass = "px-4 py-3 text-sm text-gray-700 align-middle";
 
   return (
@@ -148,7 +182,7 @@ export default function ArticlesPage() {
           <div className="flex flex-wrap items-center gap-3">
             <input
               type="search"
-              placeholder="Search by slug…"
+              placeholder="Search by keyword…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-cyan-400"
@@ -185,103 +219,155 @@ export default function ArticlesPage() {
                         Provider <SortIcon active={sortCol === "provider"} dir={sortDir} />
                       </th>
                       <th className={thClass} onClick={() => toggleSort("slug")}>
-                        Slug <SortIcon active={sortCol === "slug"} dir={sortDir} />
+                        Keyword <SortIcon active={sortCol === "slug"} dir={sortDir} />
                       </th>
-                      <th className={thClass} onClick={() => toggleSort("query")}>
-                        Query <SortIcon active={sortCol === "query"} dir={sortDir} />
-                      </th>
+                      <th className={thStatic}>Language</th>
+                      <th className={thStatic}>Domain</th>
                       <th className={thClass} onClick={() => toggleSort("headlines")}>
                         Headlines <SortIcon active={sortCol === "headlines"} dir={sortDir} />
                       </th>
                       <th className={thClass} onClick={() => toggleSort("date")}>
                         Added <SortIcon active={sortCol === "date"} dir={sortDir} />
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
-                        Actions
-                      </th>
+                      <th className={thStatic}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.map((article, i) => {
                       const provider = providerMap[article.feedProviderId];
-                      const color = providerColor(article.feedProviderId);
+                      const color = providerColorMap[article.feedProviderId] ?? "#94a3b8";
+                      const isExpanded = expandedRows.has(article.id);
                       return (
-                        <tr
-                          key={article.id}
-                          className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors ${i % 2 === 0 ? "" : "bg-gray-50/40"}`}
-                          style={{ borderLeft: `3px solid ${color}` }}
-                        >
-                          {/* Provider */}
-                          <td className={tdClass}>
-                            <span
-                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border"
-                              style={{
-                                backgroundColor: `${color}22`,
-                                borderColor: `${color}55`,
-                                color,
-                              }}
-                            >
-                              {provider?.name ?? (
-                                <span className="text-gray-400 italic">Unknown</span>
+                        <>
+                          <tr
+                            key={article.id}
+                            className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${i % 2 === 0 ? "" : "bg-gray-50/40"} ${isExpanded ? "border-b-0" : "last:border-0"}`}
+                            style={{ borderLeft: `3px solid ${color}` }}
+                          >
+                            {/* Provider */}
+                            <td className={tdClass}>
+                              <span
+                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border"
+                                style={{
+                                  backgroundColor: `${color}22`,
+                                  borderColor: `${color}55`,
+                                  color,
+                                }}
+                              >
+                                {provider?.name ?? (
+                                  <span className="text-gray-400 italic">Unknown</span>
+                                )}
+                              </span>
+                            </td>
+
+                            {/* Keyword */}
+                            <td className={tdClass}>
+                              <span className="font-mono text-xs text-gray-800 break-all">
+                                {article.slug}
+                              </span>
+                            </td>
+
+                            {/* Language */}
+                            <td className={tdClass}>
+                              {article.locale ? (
+                                <span className="text-xs text-gray-600">
+                                  {LOCALES[article.locale] ?? article.locale}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-300">—</span>
                               )}
-                            </span>
-                          </td>
+                            </td>
 
-                          {/* Slug */}
-                          <td className={tdClass}>
-                            <span className="font-mono text-xs text-gray-800 break-all">
-                              {article.slug}
-                            </span>
-                          </td>
+                            {/* Domain */}
+                            <td className={tdClass}>
+                              {article.domain ? (
+                                <span className="text-xs font-mono text-gray-600 truncate max-w-[140px] block" title={article.domain}>
+                                  {article.domain}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-300">—</span>
+                              )}
+                            </td>
 
-                          {/* Query */}
-                          <td className={tdClass}>
-                            {article.query ? (
-                              <span className="text-xs text-gray-600 truncate max-w-[160px] block" title={article.query}>
-                                {article.query}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-gray-300">—</span>
-                            )}
-                          </td>
+                            {/* Headlines */}
+                            <td className={tdClass}>
+                              {article.allowedHeadlines.length === 0 ? (
+                                <span className="text-xs text-gray-300">any</span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpand(article.id)}
+                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-cyan-100 hover:text-cyan-700 cursor-pointer transition-colors"
+                                >
+                                  {article.allowedHeadlines.length}
+                                  <span className="ml-1 text-gray-400">{isExpanded ? "▲" : "▼"}</span>
+                                </button>
+                              )}
+                            </td>
 
-                          {/* Headlines */}
-                          <td className={tdClass}>
-                            {article.allowedHeadlines.length === 0 ? (
-                              <span className="text-xs text-gray-300">any</span>
-                            ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                                {article.allowedHeadlines.length}
-                              </span>
-                            )}
-                          </td>
+                            {/* Added */}
+                            <td className={`${tdClass} text-xs text-gray-500 whitespace-nowrap`}>
+                              {formatDate(article.createdAt)}
+                            </td>
 
-                          {/* Added */}
-                          <td className={`${tdClass} text-xs text-gray-500 whitespace-nowrap`}>
-                            {formatDate(article.createdAt)}
-                          </td>
+                            {/* Actions */}
+                            <td className={tdClass}>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(`/dashboard/articles/${article.id}/edit`)}
+                                  className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                                >
+                                  Edit
+                                </button>
+                                {article.previewUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() => window.open(article.previewUrl, "_blank", "noopener")}
+                                    className="px-3 py-1 text-xs font-medium bg-cyan-50 text-cyan-700 border border-cyan-200 rounded-lg hover:bg-cyan-100 transition-colors"
+                                  >
+                                    Preview
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(article.id, article.slug)}
+                                  className="px-3 py-1 text-xs font-medium bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
 
-                          {/* Actions */}
-                          <td className={tdClass}>
-                            <div className="flex items-center gap-2">
-                              <button
-                                className="text-xs text-gray-600 hover:text-cyan-600 font-medium transition-colors"
-                                onClick={() =>
-                                  router.push(`/dashboard/articles/${article.id}/edit`)
-                                }
-                              >
-                                Edit
-                              </button>
-                              <span className="text-gray-200">·</span>
-                              <button
-                                className="text-xs text-red-400 hover:text-red-600 font-medium transition-colors"
-                                onClick={() => handleDelete(article.id, article.slug)}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                          {/* Expanded headlines row */}
+                          {isExpanded && article.allowedHeadlines.length > 0 && (
+                            <tr
+                              key={`${article.id}-expanded`}
+                              className="bg-gray-50/80 border-b border-gray-100 last:border-0"
+                              style={{ borderLeft: `3px solid ${color}` }}
+                            >
+                              <td colSpan={TOTAL_COLS} className="px-8 py-3">
+                                <div className="space-y-1.5">
+                                  {article.allowedHeadlines.map((h, idx) => (
+                                    <div key={idx} className="flex items-center gap-3 text-xs">
+                                      <span className="text-gray-300 w-4 text-right shrink-0 font-mono">
+                                        {idx + 1}.
+                                      </span>
+                                      <span className="font-mono text-gray-800 flex-1">{h.text}</span>
+                                      {h.rac && (
+                                        <span className="text-gray-400 shrink-0">
+                                          rac:{" "}
+                                          <span className="text-gray-600 font-medium">{h.rac}</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
                       );
                     })}
                   </tbody>

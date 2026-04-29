@@ -9,7 +9,7 @@ const articleSchema = z.object({
   id: z.string().min(1),
   feedProviderId: z.string().min(1),
   slug: z.string().min(1),
-  allowedHeadlines: z.array(z.string()),
+  allowedHeadlines: z.array(z.unknown()),
   createdAt: z.string(),
 });
 
@@ -19,7 +19,18 @@ function upcast(raw: Record<string, unknown>): Article {
     feedProviderId: raw.feedProviderId as string,
     slug: raw.slug as string,
     query: (raw.query as string) ?? "",
-    allowedHeadlines: (raw.allowedHeadlines as string[]) ?? [],
+    title: (raw.title as string) ?? undefined,
+    previewUrl: (raw.previewUrl as string) ?? undefined,
+    domain: (raw.domain as string) ?? undefined,
+    locale: (raw.locale as string) ?? undefined,
+    allowedHeadlines: ((raw.allowedHeadlines as unknown[]) ?? []).map((h) =>
+      typeof h === "string"
+        ? { text: h, rac: "" }
+        : {
+            text: (h as Record<string, string>).text ?? "",
+            rac: (h as Record<string, string>).rac ?? "",
+          }
+    ),
     createdAt: raw.createdAt as string,
   };
 }
