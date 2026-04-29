@@ -197,7 +197,7 @@ src/
   - **`visibleAccounts` / `visiblePresets`** — both filtered by `activeProviderIdsFromArticles` (providers that have articles connected), not by creative-active providers. This prevents showing accounts/presets before the article step is complete and prevents cross-provider mismatches.
   - **Column sort** — Articles, Accounts, and Presets columns are sorted by canonical provider order (providers sorted by `createdAt`) to group same-provider nodes together and reduce edge crossings.
 
-- **synthesizeCampaign():** `lib/synthesize-campaign.ts` converts one `CampaignBuildItem` + resolved `(provider, article, preset, asset)` into the `{campaigns[], adSquads[], creatives[]}` shape the orchestrator expects. It calls `buildUrlTemplate()` which resolves static URL macros now (`{{article.slug}}`, `{{article.query}}`, `{{creative.headline}}`, `{{organization_id}}`), leaving dynamic ones (`{{campaign.id}}`, `{{adSet.id}}`, `{{channel.id}}`, `{{ad.id}}`) as literal placeholders for the orchestrator.
+- **synthesizeCampaign():** `lib/synthesize-campaign.ts` converts one `CampaignBuildItem` + resolved `(provider, article, preset, asset)` into the `{campaigns[], adSquads[], creatives[]}` shape the orchestrator expects. It calls `buildUrlTemplate()` which resolves static URL macros now (`{{article.name}}`, `{{article.query}}`, `{{creative.headline}}`, `{{creative.rac}}`, `{{organization_id}}`), leaving dynamic ones (`{{campaign.id}}`, `{{adSet.id}}`, `{{channel.id}}`, `{{ad.id}}`) as literal placeholders for the orchestrator.
 
 - **Submission orchestrator:** `lib/submission-orchestrator.ts` now runs **seven stages** in sequence:
   1. **uploadMedia** — all creatives upload in parallel
@@ -213,9 +213,10 @@ src/
 
   | Macro | Resolved from | Stage |
   |---|---|---|
-  | `{{article.slug}}` | `article.slug` | synthesis |
+  | `{{article.name}}` | `article.slug` | synthesis |
   | `{{article.query}}` | `article.query` | synthesis |
   | `{{creative.headline}}` | canvas headline input | synthesis |
+  | `{{creative.rac}}` | `rac` field of the selected headline | synthesis |
   | `{{organization_id}}` | `provider.snapConfig.organizationId` | synthesis |
   | `{{campaign.id}}` | Snapchat campaign ID | after campaigns stage |
   | `{{adSet.id}}` / `{{adset.id}}` | Snapchat ad squad ID | after adSquads stage |
@@ -235,15 +236,17 @@ src/
 - **Campaign presets (v2):** `CampaignPreset` now has `feedProviderId` (required), `comboId?`, and `creativeDefaults?: { adStatus, brandName?, callToAction? }`. `PresetForm` shows a feed provider selector and combo selector. Old presets without `feedProviderId` get `feedProviderId: ""` on load — shown with an amber warning badge on the presets page. Preset loading still clamps `startDate`/`endDate` to the future via `ensureFutureDate`. `pixelId` is normalised to `undefined` (not `""`) on load.
 
 - **Articles (v3):** `Article` type fields:
-  - `slug` — "Keyword" in UI; URL parameter value; resolves `{{article.slug}}`
+  - `slug` — "Keyword" in UI; plain string (no format restriction); resolves `{{article.name}}`
   - `query` — search keyword resolving `{{article.query}}`
   - `title?` — display title (optional, form only)
   - `previewUrl?` — URL for article preview; shown as a cyan "Preview" button in the table that opens a new tab
   - `domain?` — selected from the feed provider's `domains[]` (baseDomain); only domains belonging to the chosen provider are shown
   - `locale?` — locale code e.g. `"en_US"`; picked from a 10-option dropdown (German-Germany, English-AU/CA/GB/US, Spanish-AR/ES, Portuguese-Brazil, French-France, Italian-Italy)
-  - `allowedHeadlines: { text: string; rac: string }[]` — each headline has a text (≤34 chars) and a RAC value. Old `string[]` records are migrated on load via `upcast()` (strings become `{ text: h, rac: "" }`). In the canvas wizard, the headline dropdown uses `h.text`.
+  - `allowedHeadlines: { text: string; rac: string }[]` — each headline has a text (≤34 chars) and a RAC value. Old `string[]` records are migrated on load via `upcast()` (strings become `{ text: h, rac: "" }`). In the canvas wizard, the headline dropdown uses `h.text`; selecting a headline also stores its `rac` in the canvas edge (`headlineRac` field of `CampaignBuildItem`), which resolves `{{creative.rac}}` at synthesis time. In the form, each headline is stacked: text input on top, RAC input below in a muted gray style.
 
   `FeedProvider` is imported from `src/types/feed-provider.ts` (not `article.ts`). The articles list page renders a sortable/filterable table (columns: Provider, Keyword, Language, Domain, Headlines, Added, Actions). Provider colors use the same stable `PROVIDER_COLORS` palette as the canvas (providers sorted by `createdAt`, color by index) — consistent across both views. The Headlines column badge is clickable to expand a row showing all headlines and their RAC values. Action buttons are styled pills: gray Edit, cyan Preview (only when `previewUrl` set), red Delete.
+
+  **`ArticleForm` gotcha:** `providers` loads async in a `useEffect`, so at mount the domain `<select>` has no options yet — the HTML select silently falls back to the first option. Fix: a second `useEffect` calls `setValue("domain", article.domain)` once `providers.length > 0`, restoring the saved value. Any future field that depends on a provider-driven option list should follow the same pattern.
 
 - **Silo → wizard integration:** `CampaignCanvas` opens `SiloBrowser` modal to pick assets. `getAssetById(creativeId)` is called with the Silo asset ID. Silo asset fields: `mediaType` (not `type`), `originalFileName` (not `fileName`), `optimizedUrl ?? originalUrl` (not `blobUrl`). After submission, `WizardShell` caches new Snapchat mediaIds into Silo assets and records usage history.
 
