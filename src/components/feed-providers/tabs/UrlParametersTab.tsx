@@ -4,16 +4,16 @@ import { useRef } from "react";
 import { Input } from "@/components/ui";
 import type { FeedProvider, UrlParameter } from "@/types/feed-provider";
 
-const MACROS = [
-  { label: "{{campaign.id}}", title: "Snap campaign ID" },
-  { label: "{{adSet.id}}", title: "Snap ad set ID" },
-  { label: "{{ad.id}}", title: "Snap ad ID (injected after creation)" },
-  { label: "{{organization_id}}", title: "Snap org ID" },
-  { label: "{{channel.id}}", title: "Assigned channel ID" },
-  { label: "{{article.name}}", title: "Article name" },
-  { label: "{{article.query}}", title: "Article search keyword" },
-  { label: "{{creative.headline}}", title: "Creative headline" },
-  { label: "{{creative.rac}}", title: "Headline RAC value" },
+const MACROS: Array<{ label: string; title: string; source: "snap" | "br" }> = [
+  { label: "{{campaign.id}}",      title: "Substituted by Snapchat at click time", source: "snap" },
+  { label: "{{adSet.id}}",         title: "Substituted by Snapchat at click time", source: "snap" },
+  { label: "{{ad.id}}",            title: "Substituted by Snapchat at click time", source: "snap" },
+  { label: "{{organization_id}}", title: "Snap org ID from provider settings",    source: "br" },
+  { label: "{{channel.id}}",      title: "Assigned channel ID from BoilerRoom",   source: "br" },
+  { label: "{{article.name}}",    title: "Article slug",                           source: "br" },
+  { label: "{{article.query}}",   title: "Article search keyword",                source: "br" },
+  { label: "{{creative.headline}}", title: "Creative headline",                   source: "br" },
+  { label: "{{creative.rac}}",    title: "Headline RAC value",                    source: "br" },
 ];
 
 interface UrlParametersTabProps {
@@ -72,6 +72,8 @@ export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParame
       .map(m => m.label)
   );
   const availableMacros = MACROS.filter(m => !usedMacroLabels.has(m.label));
+  const snapMacros = availableMacros.filter(m => m.source === "snap");
+  const brMacros = availableMacros.filter(m => m.source === "br");
 
   const previewUrl = (() => {
     const base = (urlConfig.baseUrl ?? "").replace(/\/$/, "");
@@ -142,21 +144,43 @@ export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParame
       </div>
 
       {availableMacros.length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-gray-500 mb-1.5">Available Macros</p>
-          <div className="flex flex-wrap gap-1.5">
-            {availableMacros.map((m) => (
-              <button
-                key={m.label}
-                type="button"
-                title={m.title}
-                onMouseDown={(e) => { e.preventDefault(); insertMacro(m.label); }}
-                className="px-2 py-0.5 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-md hover:bg-blue-100 font-mono whitespace-nowrap"
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
+        <div className="space-y-2">
+          {snapMacros.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-1.5">Snapchat Native <span className="font-normal text-gray-400">(substituted at click time)</span></p>
+              <div className="flex flex-wrap gap-1.5">
+                {snapMacros.map((m) => (
+                  <button
+                    key={m.label}
+                    type="button"
+                    title={m.title}
+                    onMouseDown={(e) => { e.preventDefault(); insertMacro(m.label); }}
+                    className="px-2 py-0.5 text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-md hover:bg-yellow-100 font-mono whitespace-nowrap"
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {brMacros.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-1.5">BoilerRoom <span className="font-normal text-gray-400">(resolved before sending to Snapchat)</span></p>
+              <div className="flex flex-wrap gap-1.5">
+                {brMacros.map((m) => (
+                  <button
+                    key={m.label}
+                    type="button"
+                    title={m.title}
+                    onMouseDown={(e) => { e.preventDefault(); insertMacro(m.label); }}
+                    className="px-2 py-0.5 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-md hover:bg-blue-100 font-mono whitespace-nowrap"
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -165,13 +189,15 @@ export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParame
           <p className="text-xs font-medium text-gray-500 mb-1">Preview URL</p>
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 font-mono text-xs break-all text-gray-700 leading-relaxed">
             {previewUrl ? (
-              previewUrl.split(/({{[^}]+}})/).map((part, i) =>
-                part.startsWith("{{") ? (
-                  <span key={i} className="bg-blue-100 text-blue-700 rounded px-0.5">{part}</span>
-                ) : (
-                  <span key={i}>{part}</span>
-                )
-              )
+              previewUrl.split(/({{[^}]+}})/).map((part, i) => {
+                if (!part.startsWith("{{")) return <span key={i}>{part}</span>;
+                const isSnap = MACROS.find(m => m.label.toLowerCase() === part.toLowerCase())?.source === "snap";
+                return (
+                  <span key={i} className={isSnap ? "bg-yellow-100 text-yellow-700 rounded px-0.5" : "bg-blue-100 text-blue-700 rounded px-0.5"}>
+                    {part}
+                  </span>
+                );
+              })
             ) : (
               <span className="text-gray-400 italic">Set a domain Base URL to see preview</span>
             )}
