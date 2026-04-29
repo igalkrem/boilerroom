@@ -28,11 +28,7 @@ const LOCALES = [
 
 const articleFormSchema = z.object({
   feedProviderId: z.string().min(1, "Feed provider is required"),
-  slug: z
-    .string()
-    .min(1, "Keyword is required")
-    .max(200)
-    .regex(/^[a-zA-Z0-9_-]+$/, "Only letters, numbers, hyphens, and underscores"),
+  slug: z.string().min(1, "Keyword is required").max(200),
   query: z.string().max(500),
   title: z.string().max(200),
   previewUrl: z.string().max(2000),
@@ -166,7 +162,7 @@ export function ArticleForm({ article }: ArticleFormProps) {
               error={errors.slug?.message}
             />
             <p className="text-xs text-gray-500 mt-1">
-              Used as the URL parameter value (letters, numbers, hyphens, underscores only). Resolves{" "}
+              Used as the URL parameter value. Resolves{" "}
               <code className="font-mono bg-gray-100 px-1 rounded">{"{{article.slug}}"}</code>.
             </p>
           </div>
