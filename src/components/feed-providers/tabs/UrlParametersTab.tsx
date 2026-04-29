@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import React, { useRef } from "react";
 import { Input } from "@/components/ui";
 import type { FeedProvider, UrlParameter } from "@/types/feed-provider";
 
@@ -74,6 +74,36 @@ export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParame
   const availableMacros = MACROS.filter(m => !usedMacroLabels.has(m.label));
   const snapMacros = availableMacros.filter(m => m.source === "snap");
   const brMacros = availableMacros.filter(m => m.source === "br");
+
+  function renderMacro(part: string, key: string) {
+    const isSnap = MACROS.find(m => m.label.toLowerCase() === part.toLowerCase())?.source === "snap";
+    return (
+      <span key={key} className={isSnap ? "bg-yellow-100 text-yellow-700 rounded px-0.5" : "bg-blue-100 text-blue-700 rounded px-0.5"}>
+        {part}
+      </span>
+    );
+  }
+
+  function renderPreviewUrl(url: string) {
+    const qIdx = url.indexOf("?");
+    if (qIdx === -1) return [<span key="base">{url}</span>];
+
+    const nodes: React.ReactNode[] = [<span key="base">{url.slice(0, qIdx + 1)}</span>];
+    url.slice(qIdx + 1).split("&").forEach((pair, pi) => {
+      if (pi > 0) nodes.push(<span key={`amp-${pi}`}>&amp;</span>);
+      const eqIdx = pair.indexOf("=");
+      if (eqIdx === -1) { nodes.push(<span key={`pair-${pi}`}>{pair}</span>); return; }
+      nodes.push(<span key={`key-${pi}`}>{pair.slice(0, eqIdx + 1)}</span>);
+      pair.slice(eqIdx + 1).split(/({{[^}]+}})/).forEach((v, vi) => {
+        if (!v) return;
+        nodes.push(v.startsWith("{{")
+          ? renderMacro(v, `v-${pi}-${vi}`)
+          : <span key={`v-${pi}-${vi}`} className="font-bold">{v}</span>
+        );
+      });
+    });
+    return nodes;
+  }
 
   const previewUrl = (() => {
     const base = (urlConfig.baseUrl ?? "").replace(/\/$/, "");
@@ -188,17 +218,7 @@ export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParame
         <div>
           <p className="text-xs font-medium text-gray-500 mb-1">Preview URL</p>
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 font-mono text-xs break-all text-gray-700 leading-relaxed">
-            {previewUrl ? (
-              previewUrl.split(/({{[^}]+}})/).map((part, i) => {
-                if (!part.startsWith("{{")) return <span key={i} className="font-bold">{part}</span>;
-                const isSnap = MACROS.find(m => m.label.toLowerCase() === part.toLowerCase())?.source === "snap";
-                return (
-                  <span key={i} className={isSnap ? "bg-yellow-100 text-yellow-700 rounded px-0.5" : "bg-blue-100 text-blue-700 rounded px-0.5"}>
-                    {part}
-                  </span>
-                );
-              })
-            ) : (
+            {previewUrl ? renderPreviewUrl(previewUrl) : (
               <span className="text-gray-400 italic">Set a domain Base URL to see preview</span>
             )}
           </div>
