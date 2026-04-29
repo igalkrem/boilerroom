@@ -234,7 +234,16 @@ src/
 
 - **Campaign presets (v2):** `CampaignPreset` now has `feedProviderId` (required), `comboId?`, and `creativeDefaults?: { adStatus, brandName?, callToAction? }`. `PresetForm` shows a feed provider selector and combo selector. Old presets without `feedProviderId` get `feedProviderId: ""` on load — shown with an amber warning badge on the presets page. Preset loading still clamps `startDate`/`endDate` to the future via `ensureFutureDate`. `pixelId` is normalised to `undefined` (not `""`) on load.
 
-- **Articles (v2):** `Article` now has a `query` field — the keyword passed as `search=`/`q=` in the URL, resolving `{{article.query}}`. Old articles default to `query: ""`. `ArticleForm` includes a "Search Query" text input. `FeedProvider` is no longer in `src/types/article.ts` — import from `src/types/feed-provider.ts`. The articles list page (`/dashboard/articles`) renders a flat sortable/filterable table (columns: Provider, Slug, Query, Headlines, Added, Actions) rather than grouped cards. Provider colors in the articles list are generated deterministically from the provider ID via `hsl(hash % 360, 65%, 45%)` — no `color` field on `FeedProvider`. Note: the canvas wizard uses a separate `PROVIDER_COLORS` palette (assigned by `createdAt` sort order) for NodeCard/edge coloring — these two systems are independent.
+- **Articles (v3):** `Article` type fields:
+  - `slug` — "Keyword" in UI; URL parameter value; resolves `{{article.slug}}`
+  - `query` — search keyword resolving `{{article.query}}`
+  - `title?` — display title (optional, form only)
+  - `previewUrl?` — URL for article preview; shown as a cyan "Preview" button in the table that opens a new tab
+  - `domain?` — selected from the feed provider's `domains[]` (baseDomain); only domains belonging to the chosen provider are shown
+  - `locale?` — locale code e.g. `"en_US"`; picked from a 10-option dropdown (German-Germany, English-AU/CA/GB/US, Spanish-AR/ES, Portuguese-Brazil, French-France, Italian-Italy)
+  - `allowedHeadlines: { text: string; rac: string }[]` — each headline has a text (≤34 chars) and a RAC value. Old `string[]` records are migrated on load via `upcast()` (strings become `{ text: h, rac: "" }`). In the canvas wizard, the headline dropdown uses `h.text`.
+
+  `FeedProvider` is imported from `src/types/feed-provider.ts` (not `article.ts`). The articles list page renders a sortable/filterable table (columns: Provider, Keyword, Language, Domain, Headlines, Added, Actions). Provider colors use the same stable `PROVIDER_COLORS` palette as the canvas (providers sorted by `createdAt`, color by index) — consistent across both views. The Headlines column badge is clickable to expand a row showing all headlines and their RAC values. Action buttons are styled pills: gray Edit, cyan Preview (only when `previewUrl` set), red Delete.
 
 - **Silo → wizard integration:** `CampaignCanvas` opens `SiloBrowser` modal to pick assets. `getAssetById(creativeId)` is called with the Silo asset ID. Silo asset fields: `mediaType` (not `type`), `originalFileName` (not `fileName`), `optimizedUrl ?? originalUrl` (not `blobUrl`). After submission, `WizardShell` caches new Snapchat mediaIds into Silo assets and records usage history.
 

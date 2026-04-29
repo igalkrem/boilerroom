@@ -110,12 +110,12 @@ export function synthesizeCampaign(
 
 function buildUrlTemplate(provider: FeedProvider, article: Article, headline: string): string {
   // Build the URL with macros still in place for dynamic ones (campaign.id, adSet.id, ad.id)
-  // Static ones (article.slug, article.query, creative.headline) are substituted now.
+  // Static ones (article.name, article.query, creative.headline) are substituted now.
   const base = provider.urlConfig.baseUrl.replace(/\/$/, "");
   const params = provider.urlConfig.parameters
     .map((p) => {
       const resolved = p.value
-        .replace(/\{\{article\.slug\}\}/gi, article.slug)
+        .replace(/\{\{article\.name\}\}/gi, article.slug)
         .replace(/\{\{article\.query\}\}/gi, article.query)
         .replace(/\{\{creative\.headline\}\}/gi, headline)
         .replace(/\{\{organization_id\}\}/gi, provider.snapConfig.organizationId ?? "");
