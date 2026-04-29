@@ -13,7 +13,7 @@ interface CanvasStore {
   removeCreative: (id: string) => void;
   toggleCreativeToProvider: (creativeId: string, feedProviderId: string) => void;
   toggleProviderToArticle: (feedProviderId: string, articleId: string) => void;
-  setArticleContent: (feedProviderId: string, articleId: string, headline: string, callToAction: string) => void;
+  setArticleContent: (feedProviderId: string, articleId: string, headline: string, callToAction: string, headlineRac?: string) => void;
   toggleArticleToPreset: (articleId: string, presetId: string) => void;
   setDuplications: (articleId: string, presetId: string, count: number) => void;
   toggleAdAccount: (id: string) => void;
@@ -75,18 +75,18 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
             ? s.edges.providerToArticle.filter(
                 (e) => !(e.feedProviderId === feedProviderId && e.articleId === articleId)
               )
-            : [...s.edges.providerToArticle, { feedProviderId, articleId, headline: "", callToAction: "" }],
+            : [...s.edges.providerToArticle, { feedProviderId, articleId, headline: "", headlineRac: "", callToAction: "" }],
         },
       };
     }),
 
-  setArticleContent: (feedProviderId, articleId, headline, callToAction) =>
+  setArticleContent: (feedProviderId, articleId, headline, callToAction, headlineRac) =>
     set((s) => ({
       edges: {
         ...s.edges,
         providerToArticle: s.edges.providerToArticle.map((e) =>
           e.feedProviderId === feedProviderId && e.articleId === articleId
-            ? { ...e, headline, callToAction }
+            ? { ...e, headline, callToAction, ...(headlineRac !== undefined ? { headlineRac } : {}) }
             : e
         ),
       },
@@ -148,11 +148,11 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
             continue;
           }
           const articleEdges = edges.providerToArticle.filter((e) => e.feedProviderId === feedProviderId);
-          for (const { articleId, headline, callToAction } of articleEdges) {
+          for (const { articleId, headline, headlineRac, callToAction } of articleEdges) {
             const presetEdges = edges.articleToPreset.filter((e) => e.articleId === articleId);
             for (const { presetId, duplications } of presetEdges) {
               for (let i = 0; i < duplications; i++) {
-                items.push({ adAccountId, creativeId, feedProviderId, articleId, presetId, duplicationIndex: i, headline, callToAction });
+                items.push({ adAccountId, creativeId, feedProviderId, articleId, presetId, duplicationIndex: i, headline, headlineRac: headlineRac ?? "", callToAction });
               }
             }
           }

@@ -126,6 +126,7 @@ export interface CanvasEdges {
     feedProviderId: string;
     articleId: string;
     headline: string;
+    headlineRac: string;
     callToAction: string;
   }>;
   articleToPreset: Array<{
@@ -143,5 +144,6 @@ export interface CampaignBuildItem {
   presetId: string;
   duplicationIndex: number; // 0-based within the duplication count
   headline: string;
+  headlineRac: string;
   callToAction: string;
 }

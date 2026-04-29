@@ -76,7 +76,7 @@ export function synthesizeCampaign(
   // The webViewUrl will be resolved by the orchestrator after channel assignment + snap ID resolution.
   // We store the raw URL template here so the orchestrator can resolve it.
   // For now, pass a placeholder that will be replaced.
-  const urlTemplatePlaceholder = buildUrlTemplate(provider, article, item.headline);
+  const urlTemplatePlaceholder = buildUrlTemplate(provider, article, item.headline, item.headlineRac);
 
   const creative: CreativeFormData = {
     id: creativeId,
@@ -108,9 +108,9 @@ export function synthesizeCampaign(
   };
 }
 
-function buildUrlTemplate(provider: FeedProvider, article: Article, headline: string): string {
+function buildUrlTemplate(provider: FeedProvider, article: Article, headline: string, rac: string): string {
   // Build the URL with macros still in place for dynamic ones (campaign.id, adSet.id, ad.id)
-  // Static ones (article.name, article.query, creative.headline) are substituted now.
+  // Static ones (article.name, article.query, creative.headline, creative.rac) are substituted now.
   const base = provider.urlConfig.baseUrl.replace(/\/$/, "");
   const params = provider.urlConfig.parameters
     .map((p) => {
@@ -118,6 +118,7 @@ function buildUrlTemplate(provider: FeedProvider, article: Article, headline: st
         .replace(/\{\{article\.name\}\}/gi, article.slug)
         .replace(/\{\{article\.query\}\}/gi, article.query)
         .replace(/\{\{creative\.headline\}\}/gi, headline)
+        .replace(/\{\{creative\.rac\}\}/gi, rac)
         .replace(/\{\{organization_id\}\}/gi, provider.snapConfig.organizationId ?? "");
       return `${p.key}=${resolved}`;
     })
