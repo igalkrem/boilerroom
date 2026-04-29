@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { put, list } from "@vercel/blob";
+import { put, list, getDownloadUrl } from "@vercel/blob";
 import { getSession, isSessionValid } from "@/lib/session";
 
 const VALID_KEYS = [
@@ -24,7 +24,8 @@ async function fetchBlob(path: string): Promise<unknown | null> {
     const { blobs } = await list({ prefix: path });
     const blob = blobs.find((b) => b.pathname === path);
     if (!blob) return null;
-    const res = await fetch(blob.url, { cache: "no-store" });
+    const downloadUrl = await getDownloadUrl(blob.url);
+    const res = await fetch(downloadUrl, { cache: "no-store" });
     if (!res.ok) return null;
     return res.json();
   } catch {
@@ -56,10 +57,9 @@ export async function GET(request: NextRequest) {
     if (oldData !== null) {
       try {
         await put(newPath, JSON.stringify(oldData), {
-          access: "public",
+          access: "private",
           allowOverwrite: true,
           addRandomSuffix: false,
-          cacheControlMaxAge: 60,
         });
       } catch (err) {
         console.warn("[/api/data] migration put failed:", err);
@@ -98,10 +98,9 @@ export async function POST(request: NextRequest) {
 
   try {
     await put(`metadata/${userId}/${key}.json`, JSON.stringify(data), {
-      access: "public",
+      access: "private",
       allowOverwrite: true,
       addRandomSuffix: false,
-      cacheControlMaxAge: 60,
     });
     return NextResponse.json({ ok: true });
   } catch (err) {

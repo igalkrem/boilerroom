@@ -11,7 +11,6 @@ import { getAssetById, upsertAsset } from "@/lib/silo";
 import { synthesizeCampaign } from "@/lib/synthesize-campaign";
 import { runSubmission } from "@/lib/submission-orchestrator";
 import type { CampaignBuildItem, SubmissionResults } from "@/types/wizard";
-import Link from "next/link";
 
 type Mode = "canvas" | "review" | "done";
 
@@ -152,10 +151,6 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
     <div className="flex flex-col h-full">
       {/* Top nav */}
       <div className="shrink-0 flex items-center gap-3 px-6 py-3 border-b border-gray-100 bg-white">
-        <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
-          ← Accounts
-        </Link>
-        <span className="text-gray-300">/</span>
         <span className="text-sm font-medium text-gray-700">Campaign Builder</span>
         <span className="text-gray-300 ml-2">·</span>
         <span
@@ -196,16 +191,10 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
               <button
                 type="button"
                 onClick={() => { setMode("canvas"); canvasStore.reset(); setAllResults([]); }}
-                className="px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 New Build
               </button>
-              <Link
-                href="/dashboard"
-                className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Back to Accounts
-              </Link>
             </div>
           </div>
         ) : mode === "canvas" ? (

@@ -24,10 +24,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
   }
 
-
+  const adAccountId = request.nextUrl.searchParams.get("adAccountId");
   const creativeId = request.nextUrl.searchParams.get("creativeId");
-  if (!creativeId) {
-    return NextResponse.json({ error: "creativeId query param required" }, { status: 400 });
+  if (!adAccountId || !creativeId) {
+    return NextResponse.json({ error: "adAccountId and creativeId query params required" }, { status: 400 });
+  }
+  if (!isAdAccountAllowed(session, adAccountId)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   try {
