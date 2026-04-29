@@ -110,7 +110,7 @@ src/
 │       ├── feed-providers/            # Feed Provider board UI (card grid + FeedProviderModal) — own top-nav tab
 │       ├── performance/               # Global performance dashboard (top-nav link)
 │       └── silo/                      # Media library
-│           ├── page.tsx               # Library grid with search/filter/delete
+│           ├── page.tsx               # Library grid with search/filter/delete; auto-fill grid (minmax 180–240px) keeps cards compact on wide screens
 │           ├── upload/                # Upload page with tag selector + SiloUploader
 │           └── tags/                  # Tag CRUD (create, edit, delete)
 ├── components/
@@ -132,12 +132,13 @@ src/
 │   ├── silo/
 │   │   ├── SiloUploader.tsx           # Batch uploader: hash → optimize → Blob upload (3 concurrent)
 │   │   ├── SiloBrowser.tsx            # Picker modal for canvas wizard integration
-│   │   ├── AssetCard.tsx              # Thumbnail card with quick actions
+│   │   ├── AssetCard.tsx              # Thumbnail card with quick actions; portrait preview capped at max-h-[280px]
 │   │   ├── AssetPreviewModal.tsx      # Full preview + metadata + usage history
 │   │   └── SnapchatUploadModal.tsx    # Pre-upload asset to Snapchat ad accounts (2 concurrent)
 │   ├── layout/
 │   │   ├── AuthGuard.tsx
-│   │   ├── TopNav.tsx
+│   │   ├── Sidebar.tsx                # Left sidebar navigation
+│   │   ├── TopBar.tsx                 # Top bar (page header area)
 │   │   └── KVHydrationProvider.tsx    # On dashboard mount: hydrates localStorage from Vercel Blob; blocks render on fresh session until data loaded
 │   ├── performance/
 │   │   ├── PerformanceTable.tsx       # Sortable table aggregated by ad squad + country; click row → DrilldownModal
@@ -225,7 +226,7 @@ src/
 
 - **Campaign presets (v2):** `CampaignPreset` now has `feedProviderId` (required), `comboId?`, and `creativeDefaults?: { adStatus, brandName?, callToAction? }`. `PresetForm` shows a feed provider selector and combo selector. Old presets without `feedProviderId` get `feedProviderId: ""` on load — shown with an amber warning badge on the presets page. Preset loading still clamps `startDate`/`endDate` to the future via `ensureFutureDate`. `pixelId` is normalised to `undefined` (not `""`) on load.
 
-- **Articles (v2):** `Article` now has a `query` field — the keyword passed as `search=`/`q=` in the URL, resolving `{{article.query}}`. Old articles default to `query: ""`. `ArticleForm` includes a "Search Query" text input. `FeedProvider` is no longer in `src/types/article.ts` — import from `src/types/feed-provider.ts`.
+- **Articles (v2):** `Article` now has a `query` field — the keyword passed as `search=`/`q=` in the URL, resolving `{{article.query}}`. Old articles default to `query: ""`. `ArticleForm` includes a "Search Query" text input. `FeedProvider` is no longer in `src/types/article.ts` — import from `src/types/feed-provider.ts`. The articles list page (`/dashboard/articles`) renders a flat sortable/filterable table (columns: Provider, Slug, Query, Headlines, Added, Actions) rather than grouped cards. Provider colors are generated deterministically from the provider ID via `hsl(hash % 360, 65%, 45%)` — no `color` field on `FeedProvider`.
 
 - **Silo → wizard integration:** `CampaignCanvas` opens `SiloBrowser` modal to pick assets. `getAssetById(creativeId)` is called with the Silo asset ID. Silo asset fields: `mediaType` (not `type`), `originalFileName` (not `fileName`), `optimizedUrl ?? originalUrl` (not `blobUrl`). After submission, `WizardShell` caches new Snapchat mediaIds into Silo assets and records usage history.
 
@@ -236,7 +237,7 @@ src/
 
 - **All Snapchat API calls are server-side.** Never call the Snapchat Marketing API from the browser.
 
-- **Silo — media library:** Asset metadata lives in localStorage (`boilerroom_silo_v1`). Upload pipeline: SHA-256 hash → canvas resize/thumbnail → `upload()` from `@vercel/blob/client`. Snapchat mediaIds cached per-ad-account in `snapchatUploads[]`. Cross-account reuse tries `media_copy` first; falls back to `uploadBlobToSnapchat`. `SnapchatUploadModal` pre-uploads from library (2 concurrent).
+- **Silo — media library:** Asset metadata lives in localStorage (`boilerroom_silo_v1`). Upload pipeline: SHA-256 hash → canvas resize/thumbnail → `upload()` from `@vercel/blob/client`. Snapchat mediaIds cached per-ad-account in `snapchatUploads[]`. Cross-account reuse tries `media_copy` first; falls back to `uploadBlobToSnapchat`. `SnapchatUploadModal` pre-uploads from library (2 concurrent). Grid uses `repeat(auto-fill, minmax(180px, 240px))` so cards stay compact on wide screens (more columns, not bigger cards). `AssetCard` portrait preview is capped at `max-h-[280px]`.
 
 - **KV Sync — persistent metadata storage:** All localStorage-backed stores call `syncToKV(key, data)` on every write — debounced 1.5s, fire-and-forget POST to `/api/data`. Blob paths: `metadata/{snapUserId}/{key}.json`. `KVHydrationProvider` blocks render on fresh session until KV data loaded; merges in background if localStorage already populated. Valid keys whitelisted in `/api/data`.
 
