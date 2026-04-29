@@ -125,7 +125,7 @@ src/
 │   │   ├── FeedProviderModal.tsx      # Large modal (max-w-3xl) with 5 tabs: Snap | Channels | Domains | Combos | Facebook
 │   │   └── tabs/
 │   │       ├── SnapTab.tsx            # Org ID, ad accounts, pixels + URL Parameters section at bottom
-│   │       ├── UrlParametersTab.tsx   # Parameter rows, always-visible filtered macro chips, live preview; hideBaseUrl prop
+│   │       ├── UrlParametersTab.tsx   # Parameter rows, always-visible filtered macro chips (two groups: Snapchat Native / BoilerRoom), live preview; hideBaseUrl prop
 │   │       ├── ChannelsTab.tsx        # CSV upload, status table, lifecycle controls
 │   │       ├── DomainsTab.tsx         # Domain rows (baseDomain + baseUrl + traffic source checkboxes)
 │   │       └── CombosTab.tsx          # Named combos (pixel + domain + channel config)
@@ -230,7 +230,7 @@ src/
 
   **Modal tabs:** Snap | Channels | Domains | Combos | Facebook (coming soon). The "URL Parameters" standalone tab was removed — URL parameter configuration now lives at the bottom of the Snap tab (rendered via `UrlParametersTab` with `hideBaseUrl`). Facebook tab is a placeholder.
 
-  **`UrlParametersTab` behaviour:** macro chips are always visible above the preview URL (not a focus-gated popup). Chips are filtered to only show macros not already present in any parameter value. Clicking a chip inserts into the last-focused value input (tracked via `lastActiveIndexRef`).
+  **`UrlParametersTab` behaviour:** macro chips are always visible above the preview URL (not a focus-gated popup). Chips are filtered to only show macros not already present in any parameter value. Clicking a chip inserts into the last-focused value input (tracked via `lastActiveIndexRef`). Chips are split into two labeled groups: **Snapchat Native** (yellow — `{{campaign.id}}`, `{{adset.id}}`, `{{ad.id}}` — substituted by Snapchat at click time) and **BoilerRoom** (blue — all others — resolved before sending to Snapchat). Preview URL highlights use the same yellow/blue color coding. The `source` field on each MACROS entry (`"snap"` | `"br"`) drives both the chip style and the preview highlight color.
 
   Legacy records (only had `name`, `parameterName`, `baseUrl`) are up-cast by `upcast()` in `feed-providers.ts` — all new fields default to empty/sensible values. The board UI is a card grid; clicking a card or "New" opens `FeedProviderModal`. No separate `/new` or `/[id]/edit` route pages — everything is in the modal.
 
