@@ -173,7 +173,7 @@ src/
 │   ├── session.ts                     # iron-session helpers & auth validation
 │   └── rate-limiter.ts
 └── types/
-    ├── wizard.ts                      # CampaignFormData, AdSquadFormData, CreativeFormData, SubmissionResults (incl. patchCreatives[]), CanvasEdges, CampaignBuildItem
+    ├── wizard.ts                      # CampaignFormData, AdSquadFormData, CreativeFormData, SubmissionResults, CanvasEdges, CampaignBuildItem
     ├── feed-provider.ts               # FeedProvider (full type with snapConfig, urlConfig, channelConfig, domains, combos), UrlParameter, FeedProviderDomain, FeedProviderCombo, ChannelSetupType
     ├── article.ts                     # Article (id, feedProviderId, slug, query, allowedHeadlines, createdAt)
     ├── preset.ts                      # CampaignPreset (includes feedProviderId, comboId, creativeDefaults)
@@ -197,31 +197,29 @@ src/
   - **`visibleAccounts` / `visiblePresets`** — both filtered by `activeProviderIdsFromArticles` (providers that have articles connected), not by creative-active providers. This prevents showing accounts/presets before the article step is complete and prevents cross-provider mismatches.
   - **Column sort** — Articles, Accounts, and Presets columns are sorted by canonical provider order (providers sorted by `createdAt`) to group same-provider nodes together and reduce edge crossings.
 
-- **synthesizeCampaign():** `lib/synthesize-campaign.ts` converts one `CampaignBuildItem` + resolved `(provider, article, preset, asset)` into the `{campaigns[], adSquads[], creatives[]}` shape the orchestrator expects. It calls `buildUrlTemplate()` which resolves static URL macros now (`{{article.name}}`, `{{article.query}}`, `{{creative.headline}}`, `{{creative.rac}}`, `{{organization_id}}`), leaving dynamic ones (`{{campaign.id}}`, `{{adSet.id}}`, `{{channel.id}}`, `{{ad.id}}`) as literal placeholders for the orchestrator.
+- **synthesizeCampaign():** `lib/synthesize-campaign.ts` converts one `CampaignBuildItem` + resolved `(provider, article, preset, asset)` into the `{campaigns[], adSquads[], creatives[]}` shape the orchestrator expects. It calls `buildUrlTemplate()` which resolves static URL macros now (`{{article.name}}`, `{{article.query}}`, `{{creative.headline}}`, `{{creative.rac}}`, `{{organization_id}}`), leaving `{{channel.id}}` for the orchestrator and Snapchat native macros (`{{campaign.id}}`, `{{adset.id}}`, `{{ad.id}}`) untouched — Snapchat substitutes those at click time.
 
-- **Submission orchestrator:** `lib/submission-orchestrator.ts` now runs **seven stages** in sequence:
+- **Submission orchestrator:** `lib/submission-orchestrator.ts` runs **five stages** in sequence:
   1. **uploadMedia** — all creatives upload in parallel
-  2. **Channel assignment** — if `provider.channelConfig.type === "provider-supplied"`, calls `POST /api/feed-providers/channels/assign`; if `addChannelIdToCampaignName`, appends `-{channelId}` to all campaign/squad/ad names
+  2. **Channel assignment** — if `provider.channelConfig.type === "provider-supplied"`, calls `POST /api/feed-providers/channels/assign`; if `addChannelIdToCampaignName`, appends `-{channelId}` to all campaign/squad/ad names; resolves `{{channel.id}}` in each creative's URL
   3. **campaigns** — create campaigns in Snapchat
   4. **adSquads** — create ad squads in Snapchat
-  5. **URL macro resolution** — replaces `{{campaign.id}}`, `{{adSet.id}}`, `{{channel.id}}` in each creative's `webViewUrl` using the IDs returned from stages 3–4
-  6. **creatives** — create creatives with the partially-resolved URL (`{{ad.id}}` still a placeholder)
-  7. **ads** — create ads; then **patchCreatives** — for any creative whose URL still contains `{{ad.id}}`, calls `PATCH /api/snapchat/creatives/{id}` with the real ad ID
+  5. **creatives** — create creatives; **ads** — create ads
   Each stage's results are tracked individually. `pacing_type` is hardcoded to `"STANDARD"`. The orchestrator accepts an optional `provider?: FeedProvider` parameter (6th arg) for channel assignment.
 
-- **URL macro system:** Two-pass resolution. Static macros resolved at synthesis time in `buildUrlTemplate()`:
+- **URL macro system:** Macros split by resolution stage:
 
-  | Macro | Resolved from | Stage |
+  | Macro | Resolved from | When |
   |---|---|---|
-  | `{{article.name}}` | `article.slug` | synthesis |
-  | `{{article.query}}` | `article.query` | synthesis |
-  | `{{creative.headline}}` | canvas headline input | synthesis |
-  | `{{creative.rac}}` | `rac` field of the selected headline | synthesis |
-  | `{{organization_id}}` | `provider.snapConfig.organizationId` | synthesis |
-  | `{{campaign.id}}` | Snapchat campaign ID | after campaigns stage |
-  | `{{adSet.id}}` / `{{adset.id}}` | Snapchat ad squad ID | after adSquads stage |
-  | `{{channel.id}}` | assigned channel from Postgres | after channel assignment |
-  | `{{ad.id}}` | Snapchat ad ID | PATCH after ads stage |
+  | `{{article.name}}` | `article.slug` | synthesis time |
+  | `{{article.query}}` | `article.query` | synthesis time |
+  | `{{creative.headline}}` | canvas headline input | synthesis time |
+  | `{{creative.rac}}` | `rac` field of the selected headline | synthesis time |
+  | `{{organization_id}}` | `provider.snapConfig.organizationId` | synthesis time |
+  | `{{channel.id}}` | assigned channel from Postgres | orchestrator (after channel assignment) |
+  | `{{campaign.id}}` | Snapchat campaign ID | Snapchat native — substituted at click time |
+  | `{{adset.id}}` | Snapchat ad squad ID | Snapchat native — substituted at click time |
+  | `{{ad.id}}` | Snapchat ad ID | Snapchat native — substituted at click time |
 
 - **Feed Providers (v3):** Full sell-side provider management. `FeedProvider` type lives in `src/types/feed-provider.ts` (not `article.ts`). Key fields:
   - `snapConfig` — `organizationId` (resolves `{{organization_id}}`), `allowedAdAccountIds[]`, `allowedPixelIds[]`
