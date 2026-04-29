@@ -475,7 +475,7 @@ export function CampaignCanvas({ adAccountId, onReview }: CampaignCanvasProps) {
                             >
                               <option value="">— Select headline —</option>
                               {article.allowedHeadlines.map((h) => (
-                                <option key={h} value={h}>{h}</option>
+                                <option key={h.text} value={h.text}>{h.text}</option>
                               ))}
                             </select>
                           ) : (
