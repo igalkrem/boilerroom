@@ -5,14 +5,26 @@ import { useParams, useRouter } from "next/navigation";
 import { getPresetById } from "@/lib/presets";
 import { useAdAccounts } from "@/hooks/useAdAccounts";
 import { useWizardStore } from "@/hooks/useWizardStore";
+import { loadAdAccountConfigs } from "@/lib/adAccounts";
 import { Select, Button, Spinner, Alert } from "@/components/ui";
 import type { CampaignPreset } from "@/types/preset";
+import type { AdAccountConfig } from "@/types/ad-account";
 
 export default function UsePresetPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { accounts, isLoading, error } = useAdAccounts();
+  const { accounts: allAccounts, isLoading, error } = useAdAccounts();
   const { loadPreset, reset, setAdAccountId } = useWizardStore();
+  const [configs, setConfigs] = useState<AdAccountConfig[]>([]);
+
+  useEffect(() => {
+    setConfigs(loadAdAccountConfigs());
+  }, []);
+
+  const accounts = allAccounts.filter((a) => {
+    const cfg = configs.find((c) => c.id === a.id);
+    return !cfg?.hidden;
+  });
 
   const [preset, setPreset] = useState<CampaignPreset | null>(null);
   const [notFound, setNotFound] = useState(false);

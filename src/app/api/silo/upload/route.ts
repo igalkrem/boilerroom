@@ -20,7 +20,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }),
     });
     return NextResponse.json(jsonResponse);
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 400 });
+  } catch {
+    return NextResponse.json({ error: "internal_error" }, { status: 400 });
   }
 }

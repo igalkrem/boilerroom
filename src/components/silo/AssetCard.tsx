@@ -68,7 +68,7 @@ export function AssetCard({
       onClick={selectMode ? () => onSelect?.(asset) : undefined}
     >
       {/* Thumbnail */}
-      <div className="relative bg-gray-900 aspect-[9/16] overflow-hidden">
+      <div className="relative bg-gray-900 aspect-[9/16] overflow-hidden max-h-[280px]">
         {asset.thumbnailUrl ? (
           <img
             src={asset.thumbnailUrl}

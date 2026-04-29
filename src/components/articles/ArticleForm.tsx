@@ -9,7 +9,8 @@ import { v4 as uuid } from "uuid";
 import { Input, Select, Button } from "@/components/ui";
 import { upsertArticle } from "@/lib/articles";
 import { loadFeedProviders } from "@/lib/feed-providers";
-import type { Article, FeedProvider } from "@/types/article";
+import type { Article } from "@/types/article";
+import type { FeedProvider } from "@/types/feed-provider";
 
 const articleFormSchema = z.object({
   feedProviderId: z.string().min(1, "Feed provider is required"),
@@ -18,6 +19,7 @@ const articleFormSchema = z.object({
     .min(1, "Slug is required")
     .max(200)
     .regex(/^[a-zA-Z0-9_-]+$/, "Only letters, numbers, hyphens, and underscores"),
+  query: z.string().max(500),
   allowedHeadlines: z.array(
     z.object({
       value: z.string().max(34, "Max 34 characters"),
@@ -55,9 +57,10 @@ export function ArticleForm({ article }: ArticleFormProps) {
       ? {
           feedProviderId: article.feedProviderId,
           slug: article.slug,
+          query: article.query ?? "",
           allowedHeadlines: article.allowedHeadlines.map((h) => ({ value: h })),
         }
-      : { feedProviderId: "", slug: "", allowedHeadlines: [] },
+      : { feedProviderId: "", slug: "", query: "", allowedHeadlines: [] },
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -70,6 +73,7 @@ export function ArticleForm({ article }: ArticleFormProps) {
       id: article?.id ?? uuid(),
       feedProviderId: data.feedProviderId,
       slug: data.slug,
+      query: data.query.trim(),
       allowedHeadlines: data.allowedHeadlines
         .map((h) => h.value.trim())
         .filter((h) => h.length > 0),
@@ -111,6 +115,16 @@ export function ArticleForm({ article }: ArticleFormProps) {
           />
           <p className="text-xs text-gray-500">
             Used as the URL parameter value (letters, numbers, hyphens, underscores only).
+          </p>
+          <Input
+            label="Search Query"
+            placeholder="e.g. best cars 2026"
+            {...register("query")}
+            error={errors.query?.message}
+          />
+          <p className="text-xs text-gray-500">
+            Keyword passed as the search= / q= parameter in the URL. Resolves{" "}
+            <code className="font-mono bg-gray-100 px-1 rounded">{"{{article.query}}"}</code>.
           </p>
         </div>
       </div>

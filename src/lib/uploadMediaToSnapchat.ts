@@ -35,6 +35,7 @@ async function uploadChunked(
   file: File,
   mediaId: string,
   safeName: string,
+  adAccountId: string,
   onProgress?: (msg: string) => void
 ): Promise<void> {
   const numChunks = Math.ceil(file.size / CHUNK_SIZE);
@@ -44,6 +45,7 @@ async function uploadChunked(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      adAccountId,
       mediaId,
       fileName: safeName,
       fileSize: file.size,
@@ -69,6 +71,7 @@ async function uploadChunked(
     form.append("partNumber", String(i + 1));
     form.append("uploadId", upload_id);
     form.append("addPath", add_path);
+    form.append("adAccountId", adAccountId);
     const res = await fetch("/api/snapchat/media/upload-chunk", {
       method: "POST",
       body: form,
@@ -89,7 +92,7 @@ async function uploadChunked(
   const finalRes = await fetch("/api/snapchat/media/upload-finalize", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ uploadId: upload_id, finalizePath: finalize_path }),
+    body: JSON.stringify({ adAccountId, uploadId: upload_id, finalizePath: finalize_path }),
   });
   const finalData = await safeJson(finalRes);
   if (finalData.error) throw new Error(finalData.error);
@@ -158,7 +161,7 @@ export async function uploadMediaToSnapchat(
 
   if (mediaType === "VIDEO" && file.size > SIMPLE_UPLOAD_MAX) {
     // Large video (> 4 MB): chunked upload + poll.
-    await uploadChunked(file, mediaId, safeName, onProgress);
+    await uploadChunked(file, mediaId, safeName, adAccountId, onProgress);
 
     // Poll until Snapchat finishes processing.
     // Each call to /api/snapchat/media/poll is a single status check (fast).

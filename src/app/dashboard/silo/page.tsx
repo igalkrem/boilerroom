@@ -125,7 +125,7 @@ export default function SiloPage() {
       ) : (
         <>
           <p className="text-xs text-gray-400">{filtered.length} asset{filtered.length !== 1 ? "s" : ""}</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(180px,240px))]">
             {filtered.map((asset) => (
               <AssetCard
                 key={asset.id}

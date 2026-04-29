@@ -13,6 +13,17 @@ const articleSchema = z.object({
   createdAt: z.string(),
 });
 
+function upcast(raw: Record<string, unknown>): Article {
+  return {
+    id: raw.id as string,
+    feedProviderId: raw.feedProviderId as string,
+    slug: raw.slug as string,
+    query: (raw.query as string) ?? "",
+    allowedHeadlines: (raw.allowedHeadlines as string[]) ?? [],
+    createdAt: raw.createdAt as string,
+  };
+}
+
 export function loadArticles(): Article[] {
   if (typeof window === "undefined") return [];
   try {
@@ -23,7 +34,9 @@ export function loadArticles(): Article[] {
       localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
       return [];
     }
-    return parsed.filter((item) => articleSchema.safeParse(item).success) as Article[];
+    return parsed
+      .filter((item) => articleSchema.safeParse(item).success)
+      .map((item) => upcast(item as Record<string, unknown>));
   } catch {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
     return [];

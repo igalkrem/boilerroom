@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import { getValidAccessToken } from "@/lib/snapchat/client";
 import { rateLimitedFetch } from "@/lib/rate-limiter";
 import { z } from "zod";
@@ -6,6 +7,7 @@ import { z } from "zod";
 export const maxDuration = 60;
 
 const bodySchema = z.object({
+  adAccountId: z.string().min(1),
   uploadId: z.string().min(1),
   finalizePath: z
     .string()
@@ -16,6 +18,14 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const session = await getSession();
+  if (!isSessionValid(session)) {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+  }
+  if (!isSnapchatConnected(session)) {
+    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
+  }
+
   let accessToken: string;
   try {
     accessToken = await getValidAccessToken();
@@ -28,7 +38,11 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
   }
-  const { uploadId, finalizePath } = parsed.data;
+  const { adAccountId, uploadId, finalizePath } = parsed.data;
+
+  if (!isAdAccountAllowed(session, adAccountId)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const finalizeUrl = `https://adsapi.snapchat.com${finalizePath}`;
 
@@ -43,7 +57,8 @@ export async function POST(request: NextRequest) {
 
   const text = await res.text();
   if (!res.ok) {
-    return NextResponse.json({ error: `Finalize failed: ${res.status} - ${text}` }, { status: 500 });
+    console.error("[upload-finalize] Snapchat error:", res.status, text);
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

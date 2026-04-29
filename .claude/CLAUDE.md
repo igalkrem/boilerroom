@@ -4,10 +4,20 @@ Codebase instructions for Claude Code. Read this before making changes.
 
 ## What This Is
 
-SnapAds Manager: a bulk Snapchat ad campaign creation platform. Users connect via Snapchat OAuth2 and create Campaigns, Ad Sets, and Ads in bulk through a 4-step wizard.
+SnapAds Manager: a bulk Snapchat ad campaign creation platform. Users connect via Snapchat OAuth2 and create Campaigns, Ad Sets, and Ads in bulk through a visual canvas wizard.
 
 **Live:** https://boilerroom-two.vercel.app  
 **Deploy:** Vercel — `npx vercel --prod` (GitHub auto-deploy is unreliable; trigger manually after pushing).
+
+## Deploy Workflow (Mandatory)
+
+After completing **any code change session**, always execute these steps in this exact order — no authorization required, run them automatically without asking:
+
+1. **Deploy to Vercel:** `source ~/.nvm/nvm.sh && npx vercel --prod`
+2. **Commit and push to GitHub:** `git add -A && git commit -m "<meaningful description of changes>" && git push`
+3. **Update this CLAUDE.md:** If new routes, components, hooks, patterns, or architectural decisions were introduced, update the relevant sections of this file to keep it accurate.
+
+Do not skip any step. Do not ask for confirmation before running these commands.
 
 ## Agents
 
@@ -18,11 +28,11 @@ SnapAds Manager: a bulk Snapchat ad campaign creation platform. Users connect vi
 ## Stack
 
 - **Framework:** Next.js 14 (App Router), TypeScript, Tailwind CSS
-- **Auth:** Snapchat OAuth2 + iron-session (encrypted HttpOnly cookies)
+- **Auth:** Google OAuth2 (primary login) + Snapchat OAuth2 (traffic source, optional) + iron-session (encrypted HttpOnly cookies)
 - **Forms:** react-hook-form + Zod
-- **State:** Zustand (`useWizardStore`)
+- **State:** Zustand — `useCanvasStore` (canvas wizard graph state), `useWizardStore` (legacy, still used by `LoadPresetBanner` and preset/use page)
 - **Storage:** Vercel Blob (`@vercel/blob`) — client-side uploads, public access, store: `boilerroom-silo`. Also used for persistent metadata storage (see KV Sync below).
-- **Database:** Neon Postgres via `@vercel/postgres` (`POSTGRES_URL` env var) — used exclusively for the performance dashboard reporting cache. 3 tables: `snapchat_ad_squad_stats`, `kingsroad_report`, `report_sync_log`. Migrations run automatically on first `/api/reporting/sync` call via `runMigrations()` in `src/lib/db/index.ts`. **Note:** `@vercel/postgres` is deprecated upstream — migrate to `@neondatabase/serverless` when convenient.
+- **Database:** Neon Postgres via `@vercel/postgres` (`POSTGRES_URL` env var) — reporting cache (3 tables: `snapchat_ad_squad_stats`, `kingsroad_report`, `report_sync_log`) + channel lifecycle (`feed_provider_channels`). Migrations run automatically on first `/api/reporting/sync` call via `runMigrations()` in `src/lib/db/index.ts`. **Note:** `@vercel/postgres` is deprecated upstream — migrate to `@neondatabase/serverless` when convenient.
 - **API:** Snapchat Marketing API v1 — all calls are server-side only, proxied through Next.js API routes
 - **KingsRoad API:** `https://partnerhub-api.kingsroad.io/api/v3` — sell-side revenue reporting. Bearer token in `KINGSROAD_API_TOKEN`. Paginated `/report/` endpoint, page_size=2000. Used only server-side in `/api/reporting/sync`.
 
@@ -47,9 +57,12 @@ Use the cloudflared URL as the redirect URI in `.env.local` and in the Snap OAut
 Copy `.env.example` to `.env.local` and fill in:
 
 ```
+GOOGLE_CLIENT_ID         # from Google Cloud Console → APIs & Credentials → OAuth 2.0 Client IDs
+GOOGLE_CLIENT_SECRET
+GOOGLE_REDIRECT_URI      # https://<tunnel-or-vercel-url>/api/auth/google/callback
 SNAPCHAT_CLIENT_ID
 SNAPCHAT_CLIENT_SECRET
-SNAPCHAT_REDIRECT_URI    # https://<tunnel-or-vercel-url>/api/auth/callback
+SNAPCHAT_REDIRECT_URI    # https://<tunnel-or-vercel-url>/api/auth/snapchat/callback
 NEXT_PUBLIC_APP_URL      # https://<tunnel-or-vercel-url>
 SESSION_SECRET           # 64-char hex: openssl rand -hex 32
 SESSION_COOKIE_NAME      # snap_ads_session
@@ -68,8 +81,12 @@ src/
 ├── app/
 │   ├── (auth)/                        # Login & OAuth callback pages
 │   ├── api/
-│   │   ├── auth/                      # login, logout, refresh, session, callback
+│   │   ├── auth/                      # logout, refresh, session; google/{login,callback}; snapchat/{connect,callback,disconnect}
 │   │   ├── data/                      # GET/POST — reads/writes user-scoped JSON blobs for persistent metadata
+│   │   ├── feed-providers/
+│   │   │   └── channels/              # GET/POST/DELETE — list, bulk-insert, hard-delete channels
+│   │   │       ├── assign/            # POST — picks oldest available channel, marks in-use
+│   │   │       └── release/           # POST — moves in-use channel to cooldown
 │   │   ├── reporting/
 │   │   │   ├── sync/                  # POST {adAccountId, startDate, endDate} — fetches Snapchat stats + KingsRoad data, upserts into Postgres; skips finalized dates, re-fetches recent dates at most once/hour
 │   │   │   └── combined/              # GET ?adAccountId&startDate&endDate&country — JOIN query returning merged metrics with EUR→USD conversion
@@ -80,16 +97,17 @@ src/
 │   │       ├── campaigns/
 │   │       ├── adsquads/
 │   │       ├── creatives/
+│   │       │   └── [id]/              # PATCH — update creative web_view_properties.url (for {{ad.id}} injection after ad creation)
 │   │       ├── ads/
 │   │       ├── ad-accounts/
 │   │       ├── profiles/              # GET ?adAccountId= → first profile_id for creative payload
 │   │       └── media/                 # upload-init, upload-chunk, upload-finalize, upload (image + small video ≤4.4 MB), upload-from-blob (server fetches Blob → Snapchat, any size), poll, copy
 │   └── dashboard/
-│       ├── [adAccountId]/create/      # 4-step wizard
+│       ├── [adAccountId]/create/      # Visual canvas wizard (Build → Review → Done)
 │       ├── pixels/                    # Pixel CRUD UI (new/[id]/edit)
 │       ├── presets/                   # Campaign preset CRUD UI (new/[id]/edit/[id]/use)
 │       ├── articles/                  # Article CRUD UI (new/[id]/edit)
-│       ├── feed-providers/            # Feed Provider CRUD UI (new/[id]/edit) — own top-nav tab
+│       ├── feed-providers/            # Feed Provider board UI (card grid + FeedProviderModal) — own top-nav tab
 │       ├── performance/               # Global performance dashboard (top-nav link)
 │       └── silo/                      # Media library
 │           ├── page.tsx               # Library grid with search/filter/delete
@@ -97,14 +115,23 @@ src/
 │           └── tags/                  # Tag CRUD (create, edit, delete)
 ├── components/
 │   ├── wizard/
-│   │   ├── steps/                     # Step1–Step4 form components
-│   │   ├── WizardShell.tsx            # Orchestrates the 4-step flow
-│   │   ├── StepIndicator.tsx
+│   │   ├── CampaignCanvas.tsx         # 4-column visual canvas: Creatives | Feed Providers | Articles | Presets
+│   │   ├── CanvasEdges.tsx            # Pure SVG bezier edge renderer (data-node-id + ResizeObserver)
+│   │   ├── ReviewAndPost.tsx          # Campaign name template + launch matrix table
+│   │   ├── WizardShell.tsx            # Build/Review/Done mode toggle + sequential launch loop
 │   │   ├── SubmissionProgress.tsx
 │   │   └── LoadPresetBanner.tsx
+│   ├── feed-providers/
+│   │   ├── FeedProviderModal.tsx      # Large modal (max-w-3xl) with 5 tabs
+│   │   └── tabs/
+│   │       ├── SnapTab.tsx            # Ad accounts, pixels, Snapchat org ID
+│   │       ├── UrlParametersTab.tsx   # Base URL, parameter rows, macro chip toolbar, live preview
+│   │       ├── ChannelsTab.tsx        # CSV upload, status table, lifecycle controls
+│   │       ├── DomainsTab.tsx         # Domain rows with traffic source checkboxes
+│   │       └── CombosTab.tsx          # Named combos (pixel + domain + channel config)
 │   ├── silo/
 │   │   ├── SiloUploader.tsx           # Batch uploader: hash → optimize → Blob upload (3 concurrent)
-│   │   ├── SiloBrowser.tsx            # Picker modal for Step 3 wizard integration
+│   │   ├── SiloBrowser.tsx            # Picker modal for canvas wizard integration
 │   │   ├── AssetCard.tsx              # Thumbnail card with quick actions
 │   │   ├── AssetPreviewModal.tsx      # Full preview + metadata + usage history
 │   │   └── SnapchatUploadModal.tsx    # Pre-upload asset to Snapchat ad accounts (2 concurrent)
@@ -118,35 +145,39 @@ src/
 │   ├── ui/
 │   │   └── MultiSelect.tsx            # Controlled multi-select dropdown with checkboxes (react-hook-form Controller)
 │   ├── pixels/                        # PixelForm component
-│   ├── presets/                       # Preset management components
-│   └── articles/                      # ArticleForm + FeedProviderForm components
+│   ├── presets/                       # PresetForm component (includes feed provider selector + creative defaults)
+│   └── articles/                      # ArticleForm component
 ├── hooks/
-│   └── useWizardStore.ts              # Zustand store (all wizard state)
+│   ├── useCanvasStore.ts              # Zustand store for canvas wizard graph state + buildCampaignMatrix()
+│   └── useWizardStore.ts              # Legacy Zustand store (still used by LoadPresetBanner + preset/use page)
 ├── lib/
 │   ├── snapchat/                      # Server-side API client (campaigns, adsquads, creatives, media, profiles, auth, stats)
-│   ├── submission-orchestrator.ts     # Sequences: uploadMedia → campaigns → ad sets → creatives → ads
+│   ├── submission-orchestrator.ts     # Sequences: uploadMedia → channel assign → campaigns → adSquads → URL resolve → creatives → ads → patchCreatives
+│   ├── synthesize-campaign.ts         # Converts CampaignBuildItem + resolved entities → {campaigns, adSquads, creatives}
 │   ├── uploadMediaToSnapchat.ts       # Client-side upload pipeline + uploadBlobToSnapchat (server-side path for Silo uploads)
 │   ├── silo.ts                        # Silo asset CRUD (localStorage + KV sync, key: boilerroom_silo_v1)
 │   ├── silo-tags.ts                   # Tag CRUD + auto-naming (localStorage + KV sync, key: boilerroom_silo_tags_v1)
 │   ├── silo-utils.ts                  # Browser utils: hash, optimizeImage, generateThumbnail, getVideoDuration
 │   ├── presets.ts                     # Preset CRUD (localStorage + KV sync, key: boilerroom_presets_v1)
 │   ├── pixels.ts                      # Pixel CRUD (localStorage + KV sync, key: boilerroom_pixels_v1)
-│   ├── feed-providers.ts              # FeedProvider CRUD (localStorage + KV sync, key: boilerroom_feed_providers_v1)
-│   ├── articles.ts                    # Article CRUD (localStorage + KV sync, key: boilerroom_articles_v1)
+│   ├── feed-providers.ts              # FeedProvider CRUD (localStorage + KV sync, key: boilerroom_feed_providers_v1) — upcast() normalises legacy records
+│   ├── articles.ts                    # Article CRUD (localStorage + KV sync, key: boilerroom_articles_v1) — upcast() defaults query: "" for old records
 │   ├── kv-sync.ts                     # hydrateFromKV(key) + syncToKV(key, data) — debounced 1.5s writes to /api/data
 │   ├── db/
-│   │   ├── index.ts                   # sql helper + runMigrations() (idempotent, runs once per process)
-│   │   └── migrations.sql             # CREATE TABLE IF NOT EXISTS for all 3 reporting tables
+│   │   ├── index.ts                   # sql helper + runMigrations() + channel CRUD: normalizeChannelStatuses(), assignChannel(), releaseChannel(), listChannels(), bulkInsertChannels(), deleteChannels()
+│   │   └── migrations.sql             # CREATE TABLE IF NOT EXISTS for all 4 tables (3 reporting + feed_provider_channels)
 │   ├── country-map.ts                 # countryNameToCode / countryCodeToName — normalises KingsRoad country_name ↔ Snapchat ISO-2
 │   ├── fx-rate.ts                     # getEurToUsd() — fetches frankfurter.app, cached 1h in module memory
 │   ├── kingsroad.ts                   # fetchKingsRoadReport(startDate, endDate) — paginated KingsRoad /report/ client
 │   ├── session.ts                     # iron-session helpers & auth validation
 │   └── rate-limiter.ts
 └── types/
-    ├── wizard.ts                      # Form types (CampaignFormData, AdSquadFormData, CreativeFormData)
+    ├── wizard.ts                      # CampaignFormData, AdSquadFormData, CreativeFormData, SubmissionResults (incl. patchCreatives[]), CanvasEdges, CampaignBuildItem
+    ├── feed-provider.ts               # FeedProvider (full type with snapConfig, urlConfig, channelConfig, domains, combos), UrlParameter, FeedProviderDomain, FeedProviderCombo, ChannelSetupType
+    ├── article.ts                     # Article (id, feedProviderId, slug, query, allowedHeadlines, createdAt)
+    ├── preset.ts                      # CampaignPreset (includes feedProviderId, comboId, creativeDefaults)
     ├── snapchat.ts                    # API payload types (SnapCampaignPayload, etc.)
     ├── silo.ts                        # SiloAsset, SiloTag, SnapchatUploadStatus, SnapchatUploadStage
-    ├── preset.ts                      # CampaignPreset type
     ├── pixel.ts                       # SavedPixel type
     └── session.ts
 ```
@@ -154,47 +185,89 @@ src/
 ## Architecture Notes
 
 - **OAuth flow:** `/api/auth/*` routes handle token exchange and refresh; tokens live in an iron-session HttpOnly cookie.
-- **Wizard state:** Zustand store (`useWizardStore`) holds all 4-step data in memory. `WizardShell` uses a `presetKey` to force react-hook-form remounts after preset loading.
-- **Submission orchestrator:** `lib/submission-orchestrator.ts` runs five stages in sequence: (1) **uploadMedia** — all creatives upload in parallel via `uploadMediaToSnapchat`; (2) campaigns; (3) ad sets; (4) creatives; (5) ads. Each stage's results are tracked individually. A creative whose upload fails is skipped in later stages without aborting the rest. `pacing_type` is hardcoded to `"STANDARD"` in the orchestrator — it is not a user-facing field. Before the creatives stage, the orchestrator fetches the ad account's Snapchat Public Profile ID via `GET /api/snapchat/profiles?adAccountId=...` and includes it in every creative payload as `profile_properties: { profile_id: "..." }` — required by Snapchat (E2652 if field absent, E2006 if profile_id null). **If the profile ID cannot be resolved (all API endpoints fail and `SNAPCHAT_PROFILE_ID` env var is not set), the orchestrator records a structured error for every creative and returns early — campaigns and ad squads already created are left as-is.** **Batch response matching:** Snapchat does not consistently echo `name` in response objects. The orchestrator uses name-match with positional-index fallback (`find(r => r.name === x) ?? results[i]`). Pure name-only matching silently breaks when Snapchat omits the name field; pure positional-only breaks on reorder. Both layers are required. When Snapchat returns fewer result objects than submitted items (partial batch failure), the missing entries record `"No result returned from API"` as the error.
-- **Campaign presets:** Users save campaign + ad set templates (no names — filled in the wizard). Preset loading clamps both `startDate` and `endDate` to the future via `ensureFutureDate` — stale dates from old presets are silently promoted to today. Start date can be "immediate" (undefined). `pixelId` is normalised to `undefined` (not `""`) on preset load. Managed under `/dashboard/presets`.
-- **Articles & Feed Providers:** Articles are landing pages that paid traffic is sent to. Each Article has a `slug` (URL param value), a `feedProviderId`, and `allowedHeadlines[]`. Each FeedProvider has a `name`, `parameterName` (URL param key, e.g. `"article"`), and `baseUrl`. The full URL is `{baseUrl}?{parameterName}={slug}`. Both entities use localStorage + KV sync (`br_feed_providers`, `br_articles`). In Step 3 of the wizard, an optional Article picker (WEB_VIEW only) auto-fills `webViewUrl` and — when the article has `allowedHeadlines` — replaces the headline text input with a constrained Select dropdown. `articleId` is stored on `CreativeFormData` but is not sent to the Snapchat API; it is only used client-side to drive URL construction and headline constraints. Managed under `/dashboard/articles`.
-- **Pixels:** Users register Snap Pixel IDs once under `/dashboard/pixels` (localStorage). Step 2 shows a pixel selector; `pixel_id` is required only when the optimization goal is `PIXEL_PAGE_VIEW` or `PIXEL_PURCHASE`. Only `pixel_id` is sent on the ad squad payload — `pixel_conversion_event` is NOT a valid Snapchat field and is not in the codebase.
-- **Duplicate buttons:** Store exposes `duplicateCampaign()`, `duplicateAdSquad()`, `duplicateCreative()`. Duplicated creatives reset `mediaId`/`mediaFile`/`uploadStatus` so media must be re-attached. `mediaFile` (the `File` object) is cleared alongside `mediaId` on duplicate.
-- **Media upload (deferred):** Step 3 resizes images locally (canvas → 1080×1920 JPEG) — no Snapchat API calls. Videos are passed through as-is (no transcoding). The actual upload happens at submission time in the `uploadMedia` stage. Two upload functions exist in `lib/uploadMediaToSnapchat.ts`:
-  - **`uploadBlobToSnapchat(blobUrl, fileName, adAccountId, mediaType)`** — used by `SnapchatUploadModal` for all Silo uploads regardless of size. The server fetches the file from Vercel Blob (server-to-server, no Vercel body limit applies) and posts it to Snapchat's simple upload endpoint (`POST /api/snapchat/media/upload-from-blob`). Snapchat marks media `READY` immediately — no polling ever needed. SSRF guard: `blobUrl` must end with `.vercel-storage.com`. The sanitized `fileName` is passed to the route and included as the filename in the FormData part (`form.append("file", blob, fileName)`) — Snapchat returns 400 if the multipart part has no filename.
-  - **`uploadMediaToSnapchat(file, adAccountId, mediaType)`** — used by the submission orchestrator for wizard uploads (local `File` object). **Size-based routing**: files ≤ 4.4 MB → simple single-POST (`POST /api/snapchat/media/upload`, READY immediately); files > 4.4 MB → chunked multipart-upload-v2 (INIT → 2 parallel 4 MB chunks → FINALIZE → poll until `READY`). The 4.4 MB simple-upload threshold (not 4 MB) leaves headroom under Vercel's 4.5 MB incoming request limit. Chunk size is a separate 4 MB constant. **Polling is client-side:** the retry loop (150 × 2s = 5 min) lives in `uploadMediaToSnapchat.ts`; if it exhausts without `READY`, `PollTimeoutError` is thrown — caller stores the `mediaId` in `processing` stage and shows a "Check" button. Chunked upload routes (`upload-init`, `upload-chunk`, `upload-finalize`) use `rateLimitedFetch` which retries 429s with exponential backoff (2s, 4s, 8s, 16s).
-  - File names are sanitized to `[a-zA-Z0-9._\-]` before every media entity POST AND in the INIT `file_name` field — Snapchat rejects names with spaces, unicode, or special chars (E1001) on both calls. **Videos must be H.264 MP4** — no client-side transcoding.
-- **All Snapchat API calls are server-side.** Never call the Snapchat Marketing API from the browser.
-- **Silo — media library:** Users upload images/videos once to Vercel Blob and reuse them across campaigns. Asset metadata (URLs, tags, Snapchat upload state) lives in localStorage (`boilerroom_silo_v1`). Tags auto-name files with a prefix + zero-padded index (e.g. `smbs_v_001`). The upload pipeline: SHA-256 hash (duplicate detection) → canvas resize/thumbnail → `upload()` from `@vercel/blob/client` direct to Blob (bypasses Vercel's 4.5 MB serverless limit) — token issued by `/api/silo/upload`. 3 files upload concurrently. Snapchat mediaIds are cached per-ad-account in `snapchatUploads[]` on each asset — if a `ready` mediaId exists for the current ad account, Step 3 skips the Snapchat upload entirely at submission time. Cross-account reuse tries `media_copy` first (`/api/snapchat/media/copy`) — same org → instant copy, no re-upload; different org → falls back to `uploadBlobToSnapchat` (server-side re-upload). `SnapchatUploadStage` is written to localStorage at every transition so status survives page navigation. The `SnapchatUploadModal` lets users pre-upload assets to selected ad accounts from the library (2 concurrent) — it calls `uploadBlobToSnapchat` directly, never downloading the file to the browser. WizardShell post-submission hook caches new mediaIds and records usage history in Silo assets.
-- **KV Sync — persistent metadata storage:** All four localStorage-backed stores (`silo.ts`, `silo-tags.ts`, `pixels.ts`, `presets.ts`) call `syncToKV(key, data)` from `lib/kv-sync.ts` on every write. `syncToKV` is debounced 1.5s and fires a `POST /api/data` in the background — fire-and-forget, never blocks the UI. Blob paths are `metadata/{snapUserId}/{key}.json` (user-scoped). On every dashboard mount, `KVHydrationProvider` fetches all 4 keys via `GET /api/data?key=...`: if localStorage is empty (new browser/cleared storage) it shows a spinner and blocks until KV data is loaded; if localStorage already has data it renders immediately and merges in the background (union by ID — picks up records from other browsers without overwriting local changes). The `/api/data` route validates the session and scopes paths to `session.snapUserId` — users cannot read or write each other's data.
-- **Silo → wizard Back-navigation invariant:** `pendingMediaFiles` is a module-level `Map<creativeId, File>` in `Step3Creatives.tsx` — cleared on component unmount. `siloSelections` is local React state — reset on remount. When the user navigates Back from Step 4 → Step 3, both are empty. `onNext` therefore falls back to `existingCreative?.mediaFile` from the Zustand store. On mount, the component also restores `siloSelections` from `creatives[].siloAssetId` via `getAssetById` so the Silo asset card re-renders correctly. **Never remove this fallback** — without it, `mediaIdMap` stays empty and the orchestrator returns silently after the ad squads stage, skipping profiles + creatives + ads entirely.
 
-- **Performance dashboard:** `/dashboard/performance` — global page (all accounts via selector). Attribution: `snapchat_ad_squad_stats.ad_squad_id = kingsroad_report.custom_channel_name`. Sync flow: `POST /api/reporting/sync` checks `report_sync_log` per date — finalized dates (>1 day old) are never re-fetched; dates within the last 24h are re-fetched at most once per hour. Combined query: LEFT JOIN on (ad_squad_id, date, country_code), returns spend in USD + revenue in EUR converted to USD via Frankfurter exchange rate. ROI = `(revenue_usd - spend_usd) / spend_usd × 100%`. Country normalization: KingsRoad `country_name` (e.g. `"UNITED STATES"`) → ISO-2 code via `countryNameToCode()` at ingest time; Snapchat stats use ISO-2 natively. **`getCampaigns(adAccountId)` and `getAdSquads(campaignId)` were added to the existing Snapchat client files** — used both by the sync route (to enumerate all ad squads) and the combined route (to resolve ad squad names). The performance routes require `isAdAccountAllowed` to pass — the account selector on the page calls `/api/snapchat/ad-accounts` first, which populates `session.allowedAdAccountIds`.
+- **Canvas wizard:** `WizardShell` renders in three modes: `canvas` (4-column `CampaignCanvas`), `review` (`ReviewAndPost`), `done` (success screen). The canvas uses `useCanvasStore` (Zustand) to track selected creative IDs and three edge lists (`creativeToProvider`, `providerToArticle`, `articleToPreset`). `buildCampaignMatrix()` in the store cross-products all connected paths × duplication counts to produce a flat `CampaignBuildItem[]`. On launch, `WizardShell` loops sequentially over the matrix: for each item it calls `synthesizeCampaign()` then `runSubmission()`. SVG bezier edges are rendered by `CanvasEdges` using `data-node-id` DOM attributes + `ResizeObserver`.
+
+- **synthesizeCampaign():** `lib/synthesize-campaign.ts` converts one `CampaignBuildItem` + resolved `(provider, article, preset, asset)` into the `{campaigns[], adSquads[], creatives[]}` shape the orchestrator expects. It calls `buildUrlTemplate()` which resolves static URL macros now (`{{article.slug}}`, `{{article.query}}`, `{{creative.headline}}`, `{{organization_id}}`), leaving dynamic ones (`{{campaign.id}}`, `{{adSet.id}}`, `{{channel.id}}`, `{{ad.id}}`) as literal placeholders for the orchestrator.
+
+- **Submission orchestrator:** `lib/submission-orchestrator.ts` now runs **seven stages** in sequence:
+  1. **uploadMedia** — all creatives upload in parallel
+  2. **Channel assignment** — if `provider.channelConfig.type === "provider-supplied"`, calls `POST /api/feed-providers/channels/assign`; if `addChannelIdToCampaignName`, appends `-{channelId}` to all campaign/squad/ad names
+  3. **campaigns** — create campaigns in Snapchat
+  4. **adSquads** — create ad squads in Snapchat
+  5. **URL macro resolution** — replaces `{{campaign.id}}`, `{{adSet.id}}`, `{{channel.id}}` in each creative's `webViewUrl` using the IDs returned from stages 3–4
+  6. **creatives** — create creatives with the partially-resolved URL (`{{ad.id}}` still a placeholder)
+  7. **ads** — create ads; then **patchCreatives** — for any creative whose URL still contains `{{ad.id}}`, calls `PATCH /api/snapchat/creatives/{id}` with the real ad ID
+  Each stage's results are tracked individually. `pacing_type` is hardcoded to `"STANDARD"`. The orchestrator accepts an optional `provider?: FeedProvider` parameter (6th arg) for channel assignment.
+
+- **URL macro system:** Two-pass resolution. Static macros resolved at synthesis time in `buildUrlTemplate()`:
+
+  | Macro | Resolved from | Stage |
+  |---|---|---|
+  | `{{article.slug}}` | `article.slug` | synthesis |
+  | `{{article.query}}` | `article.query` | synthesis |
+  | `{{creative.headline}}` | canvas headline input | synthesis |
+  | `{{organization_id}}` | `provider.snapConfig.organizationId` | synthesis |
+  | `{{campaign.id}}` | Snapchat campaign ID | after campaigns stage |
+  | `{{adSet.id}}` / `{{adset.id}}` | Snapchat ad squad ID | after adSquads stage |
+  | `{{channel.id}}` | assigned channel from Postgres | after channel assignment |
+  | `{{ad.id}}` | Snapchat ad ID | PATCH after ads stage |
+
+- **Feed Providers (v2):** Full sell-side provider management. `FeedProvider` type lives in `src/types/feed-provider.ts` (not `article.ts`). Key fields:
+  - `snapConfig` — `organizationId` (resolves `{{organization_id}}`), `allowedAdAccountIds[]`, `allowedPixelIds[]`
+  - `urlConfig` — `baseUrl` + `parameters: UrlParameter[]` (key/value with macro support)
+  - `channelConfig` — `type: "provider-supplied" | "parameter-based"`, `addChannelIdToCampaignName?`, `channelParamKey?`
+  - `domains[]` — `FeedProviderDomain` (baseDomain + trafficSources)
+  - `combos[]` — `FeedProviderCombo` (named preset of pixel + domain + channel settings)
+  Legacy records (only had `name`, `parameterName`, `baseUrl`) are up-cast by `upcast()` in `feed-providers.ts` — all new fields default to empty/sensible values. The board UI is a card grid; clicking a card or "New" opens `FeedProviderModal` (5 tabs). No separate `/new` or `/[id]/edit` route pages — everything is in the modal.
+
+- **Feed provider channels:** Postgres table `feed_provider_channels` tracks channel lifecycle: `available → in-use → cooldown → available`. Lifecycle promotion is lazy (runs on every read via `normalizeChannelStatuses(feedProviderId)`, no cron). Thresholds: `in-use` > 24h → cooldown; `cooldown` > 24h → available. Channels are imported via CSV upload in the Channels tab. `assignChannel()` picks the oldest available channel and marks it `in-use`. `releaseChannel()` moves a channel from `in-use` to `cooldown`.
+
+- **Campaign presets (v2):** `CampaignPreset` now has `feedProviderId` (required), `comboId?`, and `creativeDefaults?: { adStatus, brandName?, callToAction? }`. `PresetForm` shows a feed provider selector and combo selector. Old presets without `feedProviderId` get `feedProviderId: ""` on load — shown with an amber warning badge on the presets page. Preset loading still clamps `startDate`/`endDate` to the future via `ensureFutureDate`. `pixelId` is normalised to `undefined` (not `""`) on load.
+
+- **Articles (v2):** `Article` now has a `query` field — the keyword passed as `search=`/`q=` in the URL, resolving `{{article.query}}`. Old articles default to `query: ""`. `ArticleForm` includes a "Search Query" text input. `FeedProvider` is no longer in `src/types/article.ts` — import from `src/types/feed-provider.ts`.
+
+- **Silo → wizard integration:** `CampaignCanvas` opens `SiloBrowser` modal to pick assets. `getAssetById(creativeId)` is called with the Silo asset ID. Silo asset fields: `mediaType` (not `type`), `originalFileName` (not `fileName`), `optimizedUrl ?? originalUrl` (not `blobUrl`). After submission, `WizardShell` caches new Snapchat mediaIds into Silo assets and records usage history.
+
+- **Media upload (deferred):** The actual upload happens at submission time in the `uploadMedia` stage. Two upload functions in `lib/uploadMediaToSnapchat.ts`:
+  - **`uploadBlobToSnapchat(blobUrl, fileName, adAccountId, mediaType)`** — used by `SnapchatUploadModal` for all Silo uploads regardless of size. SSRF guard: `blobUrl` must end with `.vercel-storage.com`. Snapchat marks media `READY` immediately.
+  - **`uploadMediaToSnapchat(file, adAccountId, mediaType)`** — size-based routing: files ≤ 4.4 MB → simple single-POST (READY immediately); files > 4.4 MB → chunked multipart-upload-v2 (INIT → 2 parallel 4 MB chunks → FINALIZE → poll). Polling: 150 × 2s = 5 min max; `PollTimeoutError` on timeout. Chunked routes use `rateLimitedFetch` with exponential backoff on 429s.
+  - File names are sanitized to `[a-zA-Z0-9._\-]` before every media entity POST. **Videos must be H.264 MP4.**
+
+- **All Snapchat API calls are server-side.** Never call the Snapchat Marketing API from the browser.
+
+- **Silo — media library:** Asset metadata lives in localStorage (`boilerroom_silo_v1`). Upload pipeline: SHA-256 hash → canvas resize/thumbnail → `upload()` from `@vercel/blob/client`. Snapchat mediaIds cached per-ad-account in `snapchatUploads[]`. Cross-account reuse tries `media_copy` first; falls back to `uploadBlobToSnapchat`. `SnapchatUploadModal` pre-uploads from library (2 concurrent).
+
+- **KV Sync — persistent metadata storage:** All localStorage-backed stores call `syncToKV(key, data)` on every write — debounced 1.5s, fire-and-forget POST to `/api/data`. Blob paths: `metadata/{snapUserId}/{key}.json`. `KVHydrationProvider` blocks render on fresh session until KV data loaded; merges in background if localStorage already populated. Valid keys whitelisted in `/api/data`.
+
+- **Performance dashboard:** `/dashboard/performance` — global page (all accounts via selector). Attribution: `snapchat_ad_squad_stats.ad_squad_id = kingsroad_report.custom_channel_name`. Sync flow: finalized dates (>1 day old) never re-fetched; recent dates re-fetched at most once/hour. ROI = `(revenue_usd - spend_usd) / spend_usd × 100%`. Country normalization: KingsRoad `country_name` → ISO-2 via `countryNameToCode()` at ingest time.
 
 ## Security Notes
 
 - **`isAdAccountAllowed` denies by default:** When `session.allowedAdAccountIds` is empty (fresh session before dashboard loads), the function returns `false`. It is populated by `/api/snapchat/ad-accounts` — all Snapchat API routes that accept an `adAccountId` must call this check. Do NOT revert the default to `true`.
-- **`/api/data` is user-scoped:** Blob paths are `metadata/{snapUserId}/{key}.json`. Never use a shared path — any change that removes the `snapUserId` namespace lets any user overwrite another's data. Valid keys are whitelisted: `br_silo_assets`, `br_silo_tags`, `br_pixels`, `br_presets`.
-- **`media/upload` and `media/poll` require ownership checks:** Both routes call `isAdAccountAllowed` before forwarding to Snapchat. Do not remove these checks when refactoring the media pipeline.
-- **`media/copy` checks both source and destination:** An ownership check on destination only would let any authenticated user exfiltrate media from accounts they don't own. Both `sourceAdAccountId` and `destinationAdAccountId` must be verified.
-- **`media/upload-from-blob` SSRF guard:** The `blobUrl` field is validated to only allow hostnames ending in `.vercel-storage.com` before the server-side fetch. Do not relax this to arbitrary URLs — it would allow the server to make authenticated Snapchat uploads on behalf of any URL the attacker controls.
-- **Snapchat error bodies are not forwarded verbatim:** Routes should `console.error` full error details and return `{ error: "internal_error" }` to the client. Do not propagate raw `String(err)` in 5xx responses.
+- **`/api/data` is user-scoped:** Blob paths are `metadata/{snapUserId}/{key}.json`. Never use a shared path. Valid keys are whitelisted: `br_silo_assets`, `br_silo_tags`, `br_pixels`, `br_presets`.
+- **`/api/feed-providers/channels/*` requires `isAdAccountAllowed`:** All three channel routes check ownership before touching Postgres.
+- **`media/upload` and `media/poll` require ownership checks:** Both routes call `isAdAccountAllowed` before forwarding to Snapchat.
+- **`media/copy` checks both source and destination:** Both `sourceAdAccountId` and `destinationAdAccountId` must be verified to prevent cross-account media exfiltration.
+- **`media/upload-from-blob` SSRF guard:** `blobUrl` must end with `.vercel-storage.com` before server-side fetch.
+- **Snapchat error bodies are not forwarded verbatim:** Routes should `console.error` full error details and return `{ error: "internal_error" }` to the client.
+- **Content Security Policy (`next.config.mjs`):** `img-src` allows `'self' data: blob: https://*.public.blob.vercel-storage.com https://lh3.googleusercontent.com`. If you add images from a new external domain, update this list or they will be silently blocked.
 
 ## Snapchat API Field Notes
 
-- Campaign objective: `objective_v2_properties.objective_v2_type` is always `"SALES"` — hardcoded in the orchestrator and hidden from the UI. `CampaignObjective` type is the literal `"SALES"`.
-- Campaign budget: only `daily_budget_micro` is supported (`spendCapType: "DAILY_BUDGET" | "NO_BUDGET"`). Lifetime budget is not used at the campaign level. Minimum: $20 (20,000,000 micro). Ad squads still support both daily and lifetime.
-- `lifetime_spend_cap_micro` and `lifetime_budget_micro` are NOT sent on campaigns and are NOT present on `SnapCampaignPayload`. `lifetime_budget_micro` is ad-squad only.
-- `spend_cap_type` is an ad squad field only, not valid on campaigns
-- Ad squad `delivery_constraint` is required — set to `"DAILY_BUDGET"` or `"LIFETIME_BUDGET"` based on `spendCapType`. `conversion_location` is NOT a valid ad-squad API field (causes E1001); do not add it.
-- Valid optimization goals (SALES + WEB): `PIXEL_PURCHASE`, `PIXEL_SIGNUP`, `PIXEL_ADD_TO_CART`, `PIXEL_PAGE_VIEW`, `LANDING_PAGE_VIEW`. These are the only values in the `OptimizationGoal` type and the Step 2 dropdown. Do not add goals from other objectives (SWIPES, IMPRESSIONS, etc.) — they will return E2844 with the SALES campaign objective.
-- Ad squad pixel tracking: only `pixel_id` is sent, always optional. `pixel_conversion_event` is NOT a valid Snapchat ad squad API field (causes E1001).
-- Creative destination URL: `web_view_properties.url` (for WEB_VIEW) or `deep_link_properties.deep_link_url` (for DEEP_LINK/APP_INSTALL)
-- Ad destination URL: URL fields (`web_view_properties`, `deep_link_properties`) are NOT sent on the Ad payload — they live on the Creative only. The Ad payload only needs `ad_squad_id`, `creative_id`, `name`, `type`, `status`.
-- Ad `type` for WEB_VIEW creatives is `"REMOTE_WEBPAGE"` (not `"SNAP_AD"`). Confirmed via cross-referencing a live Snapchat UI-created campaign: creative type `WEB_VIEW` pairs with ad type `REMOTE_WEBPAGE`. The previous `SNAP_AD`+`SNAP_AD` workaround was used because pairing `WEB_VIEW` creative with `SNAP_AD` ad returns E1008, and `WEB_VIEW` is not a valid ad type (E2002) — but `REMOTE_WEBPAGE` is valid. `AD_TYPE_MAP` in the orchestrator maps creative type → ad type: `WEB_VIEW → REMOTE_WEBPAGE`, all others → `SNAP_AD`.
-- Interaction type is hardcoded to WEB_VIEW — the dropdown is hidden from the UI. The `interactionType` field still exists in the store and orchestrator to drive URL property selection. `INTERACTION_TYPE_MAP["WEB_VIEW"] = "WEB_VIEW"` (creative type). Web view behaviour comes from `web_view_properties.url` on the creative. **`call_to_action` is valid on `WEB_VIEW` creatives** — the CTA dropdown in Step 3 is active. Do NOT send `call_to_action` on `SNAP_AD` creatives (E2002 "call to action must be null") — the orchestrator already guards this with `creativeType !== "SNAP_AD"`.
-- Batch error responses: Snapchat returns errors in `sub_request_error_reason` (not `error_type`/`message`) for validation failures. All four batch-create libs read this field as a fallback.
-- Ad squad geo targeting: `targeting.geos` (NOT `geo_locations`) — array of `{ country_code: string }` with **lowercase** country codes (e.g., `"us"`, not `"US"`). Wrong field name or uppercase codes cause E1001. The UI field is `geoCountryCodes: string[]` (multi-select; was renamed from the old `geoCountryCode: string`). Old presets stored with `geoCountryCode` are migrated on load: `(sq as { geoCountryCodes?: string[]; geoCountryCode?: string }).geoCountryCodes ?? [oldValue ?? "US"]`.
-- Ad squad device targeting: `devices[].device_type` is `"MOBILE"` or `"WEB"`. When device = MOBILE, an optional `os_type` field (`"iOS"` or `"ANDROID"`) can be set — shown as a conditional "OS" dropdown in Step 2. Omitting `os_type` targets all OSes.
-- Fields intentionally omitted from payloads and **removed from the TypeScript types**: `frequency_cap_max_impressions`, `frequency_cap_time_period`, `shareable`. Do not re-add them to `SnapAdSquadPayload` or `SnapCreativePayload`. Also hardcoded/not user-facing: `pacing_type` (always `"STANDARD"`), `targeting_age_min`, `targeting_age_max`. `profile_properties` is required on creatives (E2652 if absent, E2006 if `profile_id` is null); type is `{ profile_id: string }` — not optional, no `Record<string, unknown>` union. The orchestrator auto-fetches the first profile_id via `GET /api/snapchat/profiles?adAccountId=...` before the creatives stage; if unresolvable, it returns early with errors instead of proceeding without the field.
-- Batch API response order is not guaranteed — the orchestrator matches results by `name` with positional-index fallback (`find(r => r.name === x) ?? results[i]`). Both layers are required. Do not simplify to name-only or index-only.
+- Campaign objective: `objective_v2_properties.objective_v2_type` is always `"SALES"` — hardcoded in the orchestrator and hidden from the UI.
+- Campaign budget: only `daily_budget_micro` is supported (`spendCapType: "DAILY_BUDGET" | "NO_BUDGET"`). Minimum: $20 (20,000,000 micro). Ad squads support both daily and lifetime.
+- `lifetime_spend_cap_micro` and `lifetime_budget_micro` are NOT sent on campaigns. `lifetime_budget_micro` is ad-squad only.
+- `spend_cap_type` is an ad squad field only, not valid on campaigns.
+- Ad squad `delivery_constraint` is required — `"DAILY_BUDGET"` or `"LIFETIME_BUDGET"`. `conversion_location` is NOT valid (E1001).
+- Valid optimization goals (SALES + WEB): `PIXEL_PURCHASE`, `PIXEL_SIGNUP`, `PIXEL_ADD_TO_CART`, `PIXEL_PAGE_VIEW`, `LANDING_PAGE_VIEW`. Do not add goals from other objectives — they return E2844 with SALES objective.
+- Ad squad pixel tracking: only `pixel_id` sent, always optional. `pixel_conversion_event` is NOT valid (E1001).
+- Creative destination URL: `web_view_properties.url` (WEB_VIEW) or `deep_link_properties.deep_link_url` (DEEP_LINK/APP_INSTALL).
+- Ad destination URL: URL fields are NOT sent on the Ad payload — Creative only. Ad payload: `ad_squad_id`, `creative_id`, `name`, `type`, `status`.
+- Ad `type` for WEB_VIEW creatives is `"REMOTE_WEBPAGE"`. `AD_TYPE_MAP`: `WEB_VIEW → REMOTE_WEBPAGE`, all others → `SNAP_AD`.
+- Interaction type is hardcoded to WEB_VIEW. **`call_to_action` is valid on `WEB_VIEW` creatives.** Do NOT send `call_to_action` on `SNAP_AD` creatives (E2002).
+- Batch error responses: errors in `sub_request_error_reason` (not `error_type`/`message`).
+- Ad squad geo targeting: `targeting.geos` (NOT `geo_locations`) — `{ country_code: string }` with **lowercase** codes. Old presets with `geoCountryCode` (singular) are migrated on load.
+- Ad squad device targeting: `devices[].device_type` is `"MOBILE"` or `"WEB"`. Optional `os_type` (`"iOS"` or `"ANDROID"`) when MOBILE.
+- Fields intentionally omitted from payloads: `frequency_cap_max_impressions`, `frequency_cap_time_period`, `shareable`. Hardcoded: `pacing_type` (`"STANDARD"`). `profile_properties: { profile_id: string }` is required on creatives (E2652 if absent, E2006 if null) — orchestrator auto-fetches via `GET /api/snapchat/profiles`; returns early with errors if unresolvable.
+- Batch API response order is not guaranteed — orchestrator matches by `name` with positional-index fallback (`find(r => r.name === x) ?? results[i]`). Both layers required.

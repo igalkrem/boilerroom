@@ -26,10 +26,10 @@ export default function EditPixelPage() {
       <div className="text-center py-12 space-y-3">
         <p className="text-gray-500">Pixel not found.</p>
         <button
-          onClick={() => router.push("/dashboard/pixels")}
+          onClick={() => router.push("/dashboard/traffic-sources")}
           className="text-cyan-600 underline text-sm"
         >
-          Back to Pixels
+          Back to Traffic Sources
         </button>
       </div>
     );

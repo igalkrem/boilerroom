@@ -1,8 +1,20 @@
 export interface SessionData {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number; // Unix ms: Date.now() + 3_600_000
+  // Google (primary identity)
+  googleUserId: string;
+  googleEmail: string;
+  googleName: string;
+  googleAvatar?: string;
+
+  // Snapchat (optional — added when user connects from Traffic Sources)
+  snapAccessToken?: string;
+  snapRefreshToken?: string;
+  snapExpiresAt?: number;
   snapUserId?: string;
-  oauthState?: string;
-  allowedAdAccountIds?: string[]; // cached after /api/snapchat/ad-accounts for ownership checks
+
+  // OAuth CSRF state — separate per provider to prevent flow collision
+  googleOAuthState?: string;
+  snapchatOAuthState?: string;
+
+  // Cached after /api/snapchat/ad-accounts for ownership checks
+  allowedAdAccountIds?: string[];
 }

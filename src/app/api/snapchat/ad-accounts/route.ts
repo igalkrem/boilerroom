@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { getAdAccounts } from "@/lib/snapchat/adaccounts";
-import { getSession, isSessionValid } from "@/lib/session";
+import { getSession, isSessionValid, isSnapchatConnected } from "@/lib/session";
 
 export async function GET() {
   const session = await getSession();
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+  }
+  if (!isSnapchatConnected(session)) {
+    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
   }
 
   try {

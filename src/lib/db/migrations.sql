@@ -35,3 +35,17 @@ CREATE TABLE IF NOT EXISTS report_sync_log (
   last_synced   TIMESTAMPTZ NOT NULL,
   PRIMARY KEY (source, sync_date, ad_account_id)
 );
+
+CREATE TABLE IF NOT EXISTS feed_provider_channels (
+  id               TEXT        PRIMARY KEY,
+  feed_provider_id TEXT        NOT NULL,
+  channel_id       TEXT        NOT NULL,
+  traffic_source   TEXT        NOT NULL DEFAULT 'Snap',
+  status           TEXT        NOT NULL DEFAULT 'available',
+  campaign_snap_id TEXT,
+  in_use_since     TIMESTAMPTZ,
+  cooldown_since   TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS fpc_fp_status ON feed_provider_channels(feed_provider_id, status);

@@ -29,10 +29,19 @@ export interface AdSquadPresetData {
   pixelId?: string;
 }
 
+export interface CreativePresetDefaults {
+  adStatus: "ACTIVE" | "PAUSED";
+  brandName?: string;
+  callToAction?: string;
+}
+
 export interface CampaignPreset {
   id: string;
   name: string;
+  feedProviderId: string; // required — preset belongs to one provider ("" for legacy presets)
+  comboId?: string; // optional: references a FeedProviderCombo.id from the provider
   createdAt: string; // ISO timestamp
   campaign: CampaignPresetData;
   adSquads: AdSquadPresetData[];
+  creativeDefaults?: CreativePresetDefaults;
 }

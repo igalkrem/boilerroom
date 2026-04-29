@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import { getValidAccessToken } from "@/lib/snapchat/client";
 import { rateLimitedFetch } from "@/lib/rate-limiter";
 import { z } from "zod";
@@ -8,6 +9,7 @@ export const maxDuration = 60;
 const BASE_URL = process.env.SNAPCHAT_API_BASE_URL ?? "https://adsapi.snapchat.com/v1";
 
 const bodySchema = z.object({
+  adAccountId: z.string().min(1),
   mediaId: z.string().min(1),
   fileName: z.string().min(1),
   fileSize: z.number().int().positive().max(500_000_000),
@@ -15,6 +17,14 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const session = await getSession();
+  if (!isSessionValid(session)) {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+  }
+  if (!isSnapchatConnected(session)) {
+    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
+  }
+
   let accessToken: string;
   try {
     accessToken = await getValidAccessToken();
@@ -27,7 +37,11 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
   }
-  const { mediaId, fileName, fileSize, numberOfParts } = parsed.data;
+  const { adAccountId, mediaId, fileName, fileSize, numberOfParts } = parsed.data;
+
+  if (!isAdAccountAllowed(session, adAccountId)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const form = new FormData();
   form.append("file_name", fileName);
@@ -42,7 +56,8 @@ export async function POST(request: NextRequest) {
 
   const text = await res.text();
   if (!res.ok) {
-    return NextResponse.json({ error: `Init failed: ${res.status} - ${text}` }, { status: 500 });
+    console.error("[upload-init] Snapchat error:", res.status, text);
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 
   const data = JSON.parse(text) as { upload_id?: string; add_path?: string; finalize_path?: string };

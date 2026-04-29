@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Badge, Card } from "@/components/ui";
 import { loadPresets, deletePreset } from "@/lib/presets";
+import { loadFeedProviders } from "@/lib/feed-providers";
 import type { CampaignPreset } from "@/types/preset";
+import type { FeedProvider } from "@/types/feed-provider";
 
 function objectiveLabel(objective: string) {
   const map: Record<string, string> = {
@@ -29,9 +31,12 @@ function formatDate(iso: string) {
 export default function PresetsPage() {
   const router = useRouter();
   const [presets, setPresets] = useState<CampaignPreset[]>([]);
+  const [providerMap, setProviderMap] = useState<Record<string, FeedProvider>>({});
 
   useEffect(() => {
     setPresets(loadPresets());
+    const providers = loadFeedProviders();
+    setProviderMap(Object.fromEntries(providers.map((p) => [p.id, p])));
   }, []);
 
   function handleDelete(id: string, name: string) {
@@ -76,6 +81,17 @@ export default function PresetsPage() {
                   {preset.adSquads.length} ad set{preset.adSquads.length !== 1 ? "s" : ""}
                 </Badge>
               </div>
+
+              {preset.feedProviderId && providerMap[preset.feedProviderId] && (
+                <span className="self-start text-xs bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full">
+                  {providerMap[preset.feedProviderId].name}
+                </span>
+              )}
+              {preset.feedProviderId && !providerMap[preset.feedProviderId] && (
+                <span className="self-start text-xs bg-amber-50 text-amber-600 border border-amber-100 px-2 py-0.5 rounded-full">
+                  Provider missing
+                </span>
+              )}
 
               <div className="text-xs text-gray-500 space-y-0.5">
                 <p>Objective: {objectiveLabel(preset.campaign.objective)}</p>

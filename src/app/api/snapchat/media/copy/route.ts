@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { snapFetch } from "@/lib/snapchat/client";
-import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
+import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import { z } from "zod";
 
 const bodySchema = z.object({
@@ -20,6 +20,10 @@ export async function POST(request: NextRequest) {
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
+  if (!isSnapchatConnected(session)) {
+    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
+  }
+
 
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
@@ -58,11 +62,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ results });
   } catch (err) {
+    console.error("[media/copy] error:", err);
     const msg = String(err);
     // Org-mismatch errors should be retried by the caller via full re-upload
     const isOrgMismatch = msg.includes("different organization") || msg.includes("org") || msg.includes("E2");
     return NextResponse.json(
-      { error: msg, orgMismatch: isOrgMismatch },
+      { error: "internal_error", orgMismatch: isOrgMismatch },
       { status: isOrgMismatch ? 422 : 500 }
     );
   }
