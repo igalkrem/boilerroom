@@ -1,7 +1,7 @@
 export interface Article {
   id: string;
   feedProviderId: string;
-  slug: string; // "Keyword" in UI — resolves {{article.slug}}
+  slug: string; // "Keyword" in UI — resolves {{article.name}}
   query: string;
   title?: string;
   previewUrl?: string;

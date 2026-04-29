@@ -10,7 +10,7 @@ const MACROS = [
   { label: "{{ad.id}}", title: "Snap ad ID (injected after creation)" },
   { label: "{{organization_id}}", title: "Snap org ID" },
   { label: "{{channel.id}}", title: "Assigned channel ID" },
-  { label: "{{article.slug}}", title: "Article slug" },
+  { label: "{{article.name}}", title: "Article name" },
   { label: "{{article.query}}", title: "Article search keyword" },
   { label: "{{creative.headline}}", title: "Creative headline" },
 ];

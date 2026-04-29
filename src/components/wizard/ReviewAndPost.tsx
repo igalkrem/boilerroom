@@ -10,7 +10,7 @@ import type { CampaignBuildItem } from "@/types/wizard";
 
 const NAME_MACROS = [
   { label: "{{preset.name}}", title: "Preset name" },
-  { label: "{{article.slug}}", title: "Article slug" },
+  { label: "{{article.name}}", title: "Article name" },
   { label: "{{creative.filename}}", title: "Creative filename" },
   { label: "{{date}}", title: "Today YYYY-MM-DD" },
   { label: "{{index}}", title: "1-based duplication index" },
@@ -27,7 +27,7 @@ function resolveName(
 ): string {
   return template
     .replace(/\{\{preset\.name\}\}/gi, context.presetName)
-    .replace(/\{\{article\.slug\}\}/gi, context.articleSlug)
+    .replace(/\{\{article\.name\}\}/gi, context.articleSlug)
     .replace(/\{\{creative\.filename\}\}/gi, context.creativeFilename)
     .replace(/\{\{date\}\}/gi, todayIso())
     .replace(/\{\{index\}\}/gi, String(item.duplicationIndex + 1));
@@ -42,7 +42,7 @@ interface ReviewAndPostProps {
 
 export function ReviewAndPost({ onBack, onLaunch, launching, launchProgress }: ReviewAndPostProps) {
   const store = useCanvasStore();
-  const [nameTemplate, setNameTemplate] = useState("{{preset.name}} {{article.slug}} {{date}}");
+  const [nameTemplate, setNameTemplate] = useState("{{preset.name}} {{article.name}} {{date}}");
 
   const matrix = store.buildCampaignMatrix();
 

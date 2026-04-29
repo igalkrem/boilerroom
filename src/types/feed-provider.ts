@@ -2,7 +2,7 @@ export type ChannelSetupType = "provider-supplied" | "parameter-based";
 
 export interface UrlParameter {
   key: string;
-  value: string; // may contain macros: {{campaign.id}} {{adSet.id}} {{ad.id}} {{organization_id}} {{channel.id}} {{article.slug}} {{article.query}} {{creative.headline}}
+  value: string; // may contain macros: {{campaign.id}} {{adSet.id}} {{ad.id}} {{organization_id}} {{channel.id}} {{article.name}} {{article.query}} {{creative.headline}}
 }
 
 export interface FeedProviderDomain {

@@ -163,7 +163,7 @@ export function ArticleForm({ article }: ArticleFormProps) {
             />
             <p className="text-xs text-gray-500 mt-1">
               Used as the URL parameter value. Resolves{" "}
-              <code className="font-mono bg-gray-100 px-1 rounded">{"{{article.slug}}"}</code>.
+              <code className="font-mono bg-gray-100 px-1 rounded">{"{{article.name}}"}</code>.
             </p>
           </div>
 
