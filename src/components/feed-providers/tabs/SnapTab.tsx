@@ -6,13 +6,16 @@ import { Input } from "@/components/ui";
 import { loadAdAccountConfigs } from "@/lib/adAccounts";
 import type { FeedProvider } from "@/types/feed-provider";
 import { loadPixels } from "@/lib/pixels";
+import { UrlParametersTab } from "./UrlParametersTab";
 
 interface SnapTabProps {
   snapConfig: FeedProvider["snapConfig"];
   onChange: (config: FeedProvider["snapConfig"]) => void;
+  urlConfig: FeedProvider["urlConfig"];
+  onUrlConfigChange: (config: FeedProvider["urlConfig"]) => void;
 }
 
-export function SnapTab({ snapConfig, onChange }: SnapTabProps) {
+export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: SnapTabProps) {
   const [assignedAccountNames, setAssignedAccountNames] = useState<Array<{ id: string; name: string }>>([]);
   const [pixelOptions, setPixelOptions] = useState<Array<{ id: string; name: string; pixelId: string }>>([]);
 
@@ -108,6 +111,17 @@ export function SnapTab({ snapConfig, onChange }: SnapTabProps) {
             ))}
           </div>
         )}
+      </div>
+
+      <hr className="border-gray-100" />
+
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 mb-4">URL Parameters</h3>
+        <UrlParametersTab
+          urlConfig={urlConfig}
+          onChange={onUrlConfigChange}
+          hideBaseUrl
+        />
       </div>
     </div>
   );

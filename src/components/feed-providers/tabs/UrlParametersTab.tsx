@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { Input } from "@/components/ui";
 import type { FeedProvider, UrlParameter } from "@/types/feed-provider";
 
@@ -19,10 +19,11 @@ const MACROS = [
 interface UrlParametersTabProps {
   urlConfig: FeedProvider["urlConfig"];
   onChange: (config: FeedProvider["urlConfig"]) => void;
+  hideBaseUrl?: boolean;
 }
 
-export function UrlParametersTab({ urlConfig, onChange }: UrlParametersTabProps) {
-  const [activeValueIndex, setActiveValueIndex] = useState<number | null>(null);
+export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParametersTabProps) {
+  const lastActiveIndexRef = useRef<number | null>(null);
   const valueRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   function updateParam(index: number, field: keyof UrlParameter, value: string) {
@@ -46,7 +47,9 @@ export function UrlParametersTab({ urlConfig, onChange }: UrlParametersTabProps)
     });
   }
 
-  function insertMacro(index: number, macro: string) {
+  function insertMacro(macro: string) {
+    const index = lastActiveIndexRef.current;
+    if (index === null) return;
     const input = valueRefs.current[index];
     const param = urlConfig.parameters[index];
     if (!param) return;
@@ -56,7 +59,6 @@ export function UrlParametersTab({ urlConfig, onChange }: UrlParametersTabProps)
     const next = param.value.slice(0, start) + macro + param.value.slice(end);
     updateParam(index, "value", next);
 
-    // Restore focus and cursor
     requestAnimationFrame(() => {
       input?.focus();
       const pos = start + macro.length;
@@ -64,8 +66,15 @@ export function UrlParametersTab({ urlConfig, onChange }: UrlParametersTabProps)
     });
   }
 
+  const usedMacroLabels = new Set(
+    MACROS
+      .filter(m => urlConfig.parameters.some(p => p.value.includes(m.label)))
+      .map(m => m.label)
+  );
+  const availableMacros = MACROS.filter(m => !usedMacroLabels.has(m.label));
+
   const previewUrl = (() => {
-    const base = urlConfig.baseUrl.replace(/\/$/, "");
+    const base = (urlConfig.baseUrl ?? "").replace(/\/$/, "");
     const params = urlConfig.parameters
       .filter((p) => p.key)
       .map((p) => `${p.key}=${p.value}`)
@@ -75,12 +84,14 @@ export function UrlParametersTab({ urlConfig, onChange }: UrlParametersTabProps)
 
   return (
     <div className="space-y-5">
-      <Input
-        label="Base URL"
-        placeholder="https://example.com/lp"
-        value={urlConfig.baseUrl}
-        onChange={(e) => onChange({ ...urlConfig, baseUrl: e.target.value })}
-      />
+      {!hideBaseUrl && (
+        <Input
+          label="Base URL"
+          placeholder="https://example.com/lp"
+          value={urlConfig.baseUrl ?? ""}
+          onChange={(e) => onChange({ ...urlConfig, baseUrl: e.target.value })}
+        />
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -96,7 +107,7 @@ export function UrlParametersTab({ urlConfig, onChange }: UrlParametersTabProps)
 
         <div className="space-y-2">
           {urlConfig.parameters.map((param, i) => (
-            <div key={i} className="relative">
+            <div key={i}>
               <div className="flex gap-2 items-start">
                 <input
                   type="text"
@@ -106,32 +117,16 @@ export function UrlParametersTab({ urlConfig, onChange }: UrlParametersTabProps)
                   className="w-32 shrink-0 px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                 />
                 <span className="text-gray-400 mt-1.5 text-sm">=</span>
-                <div className="flex-1 relative">
+                <div className="flex-1">
                   <input
                     ref={(el) => { valueRefs.current[i] = el; }}
                     type="text"
                     placeholder="value or {{macro}}"
                     value={param.value}
                     onChange={(e) => updateParam(i, "value", e.target.value)}
-                    onFocus={() => setActiveValueIndex(i)}
-                    onBlur={() => setTimeout(() => setActiveValueIndex(null), 200)}
+                    onFocus={() => { lastActiveIndexRef.current = i; }}
                     className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                   />
-                  {activeValueIndex === i && (
-                    <div className="absolute top-full left-0 mt-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg p-2 flex flex-wrap gap-1 min-w-max">
-                      {MACROS.map((m) => (
-                        <button
-                          key={m.label}
-                          type="button"
-                          title={m.title}
-                          onMouseDown={(e) => { e.preventDefault(); insertMacro(i, m.label); }}
-                          className="px-2 py-0.5 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-md hover:bg-blue-100 font-mono whitespace-nowrap"
-                        >
-                          {m.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
                 <button
                   type="button"
@@ -146,16 +141,39 @@ export function UrlParametersTab({ urlConfig, onChange }: UrlParametersTabProps)
         </div>
       </div>
 
-      {urlConfig.baseUrl && (
+      {availableMacros.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-gray-500 mb-1.5">Available Macros</p>
+          <div className="flex flex-wrap gap-1.5">
+            {availableMacros.map((m) => (
+              <button
+                key={m.label}
+                type="button"
+                title={m.title}
+                onMouseDown={(e) => { e.preventDefault(); insertMacro(m.label); }}
+                className="px-2 py-0.5 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-md hover:bg-blue-100 font-mono whitespace-nowrap"
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(previewUrl || !hideBaseUrl) && (
         <div>
           <p className="text-xs font-medium text-gray-500 mb-1">Preview URL</p>
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 font-mono text-xs break-all text-gray-700 leading-relaxed">
-            {previewUrl.split(/({{[^}]+}})/).map((part, i) =>
-              part.startsWith("{{") ? (
-                <span key={i} className="bg-blue-100 text-blue-700 rounded px-0.5">{part}</span>
-              ) : (
-                <span key={i}>{part}</span>
+            {previewUrl ? (
+              previewUrl.split(/({{[^}]+}})/).map((part, i) =>
+                part.startsWith("{{") ? (
+                  <span key={i} className="bg-blue-100 text-blue-700 rounded px-0.5">{part}</span>
+                ) : (
+                  <span key={i}>{part}</span>
+                )
               )
+            ) : (
+              <span className="text-gray-400 italic">Set a domain Base URL to see preview</span>
             )}
           </div>
         </div>
