@@ -61,11 +61,11 @@ export async function normalizeChannelStatuses(feedProviderId: string): Promise<
 
 // ─── Channel queries ───────────────────────────────────────────────────────
 
-export async function listChannels(feedProviderId: string): Promise<ChannelRow[]> {
+export async function listChannels(feedProviderId: string, googleUserId: string): Promise<ChannelRow[]> {
   await normalizeChannelStatuses(feedProviderId);
   const { rows } = await sql<ChannelRow>`
     SELECT * FROM feed_provider_channels
-    WHERE feed_provider_id = ${feedProviderId}
+    WHERE feed_provider_id = ${feedProviderId} AND google_user_id = ${googleUserId}
     ORDER BY created_at ASC
   `;
   return rows;
@@ -73,21 +73,22 @@ export async function listChannels(feedProviderId: string): Promise<ChannelRow[]
 
 export async function bulkInsertChannels(
   feedProviderId: string,
-  rows: Array<{ channelId: string; trafficSource: string }>
+  rows: Array<{ channelId: string; trafficSource: string }>,
+  googleUserId: string
 ): Promise<void> {
   for (const row of rows) {
     const id = `${feedProviderId}-${row.channelId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     await sql`
-      INSERT INTO feed_provider_channels (id, feed_provider_id, channel_id, traffic_source)
-      VALUES (${id}, ${feedProviderId}, ${row.channelId}, ${row.trafficSource})
+      INSERT INTO feed_provider_channels (id, feed_provider_id, channel_id, traffic_source, google_user_id)
+      VALUES (${id}, ${feedProviderId}, ${row.channelId}, ${row.trafficSource}, ${googleUserId})
       ON CONFLICT DO NOTHING
     `;
   }
 }
 
-export async function deleteChannels(ids: string[]): Promise<void> {
+export async function deleteChannels(ids: string[], googleUserId: string): Promise<void> {
   for (const id of ids) {
-    await sql`DELETE FROM feed_provider_channels WHERE id = ${id}`;
+    await sql`DELETE FROM feed_provider_channels WHERE id = ${id} AND google_user_id = ${googleUserId}`;
   }
 }
 

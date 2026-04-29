@@ -48,4 +48,7 @@ CREATE TABLE IF NOT EXISTS feed_provider_channels (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE feed_provider_channels ADD COLUMN IF NOT EXISTS google_user_id TEXT NOT NULL DEFAULT '';
+
 CREATE INDEX IF NOT EXISTS fpc_fp_status ON feed_provider_channels(feed_provider_id, status);
+CREATE INDEX IF NOT EXISTS fpc_user ON feed_provider_channels(google_user_id);

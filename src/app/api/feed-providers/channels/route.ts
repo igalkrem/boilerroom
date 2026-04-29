@@ -13,7 +13,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "feedProviderId required" }, { status: 400 });
   }
   try {
-    const rows = await listChannels(feedProviderId);
+    const rows = await listChannels(feedProviderId, session.googleUserId);
     const grouped = {
       available: rows.filter((r) => r.status === "available"),
       inUse: rows.filter((r) => r.status === "in-use"),
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "feedProviderId and rows required" }, { status: 400 });
   }
   try {
-    await bulkInsertChannels(body.feedProviderId, body.rows);
+    await bulkInsertChannels(body.feedProviderId, body.rows, session.googleUserId);
     return NextResponse.json({ ok: true, count: body.rows.length });
   } catch {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
@@ -64,7 +64,7 @@ export async function DELETE(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "ids required" }, { status: 400 });
   }
   try {
-    await deleteChannels(body.ids);
+    await deleteChannels(body.ids, session.googleUserId);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
