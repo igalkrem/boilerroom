@@ -13,6 +13,7 @@ const MACROS = [
   { label: "{{article.name}}", title: "Article name" },
   { label: "{{article.query}}", title: "Article search keyword" },
   { label: "{{creative.headline}}", title: "Creative headline" },
+  { label: "{{creative.rac}}", title: "Headline RAC value" },
 ];
 
 interface UrlParametersTabProps {

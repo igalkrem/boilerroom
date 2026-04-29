@@ -468,9 +468,11 @@ export function CampaignCanvas({ adAccountId, onReview }: CampaignCanvasProps) {
                           {article.allowedHeadlines.length > 0 ? (
                             <select
                               value={ae.headline}
-                              onChange={(e) =>
-                                store.setArticleContent(ae.feedProviderId, article.id, e.target.value, ae.callToAction)
-                              }
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const rac = article.allowedHeadlines.find((h) => h.text === val)?.rac ?? "";
+                                store.setArticleContent(ae.feedProviderId, article.id, val, ae.callToAction, rac);
+                              }}
                               className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
                             >
                               <option value="">— Select headline —</option>
@@ -485,7 +487,7 @@ export function CampaignCanvas({ adAccountId, onReview }: CampaignCanvasProps) {
                               value={ae.headline}
                               placeholder="Headline (max 34 chars)"
                               onChange={(e) =>
-                                store.setArticleContent(ae.feedProviderId, article.id, e.target.value, ae.callToAction)
+                                store.setArticleContent(ae.feedProviderId, article.id, e.target.value, ae.callToAction, "")
                               }
                               className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
                             />
@@ -496,7 +498,7 @@ export function CampaignCanvas({ adAccountId, onReview }: CampaignCanvasProps) {
                           <select
                             value={ae.callToAction}
                             onChange={(e) =>
-                              store.setArticleContent(ae.feedProviderId, article.id, ae.headline, e.target.value)
+                              store.setArticleContent(ae.feedProviderId, article.id, ae.headline, e.target.value, ae.headlineRac)
                             }
                             className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
                           >
