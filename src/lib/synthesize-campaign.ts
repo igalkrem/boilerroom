@@ -30,11 +30,10 @@ export function synthesizeCampaign(
   provider: FeedProvider,
   article: Article,
   preset: CampaignPreset,
-  asset: SiloAsset
+  assets: SiloAsset[]
 ): SynthesisResult {
   const campaignId = uuid();
   const adSquadId = uuid();
-  const creativeId = uuid();
 
   const campaign: CampaignFormData = {
     id: campaignId,
@@ -85,29 +84,29 @@ export function synthesizeCampaign(
     );
   }
 
-  const creative: CreativeFormData = {
-    id: creativeId,
+  const multiAsset = assets.length > 1;
+  const creatives: CreativeFormData[] = assets.map((asset, idx) => ({
+    id: uuid(),
     adSquadId,
-    name: campaignName,
+    name: multiAsset ? `${campaignName} [${idx + 1}]` : campaignName,
     headline: item.headline,
     brandName: preset.creativeDefaults?.brandName,
     callToAction: item.callToAction || preset.creativeDefaults?.callToAction,
-    interactionType: "WEB_VIEW",
+    interactionType: "WEB_VIEW" as const,
     webViewUrl: urlTemplatePlaceholder,
     articleId: article.id,
     adStatus: preset.creativeDefaults?.adStatus ?? "PAUSED",
-    uploadStatus: "idle",
-    // Silo asset
+    uploadStatus: "idle" as const,
     siloAssetId: asset.id,
     siloAssetBlobUrl: asset.optimizedUrl ?? asset.originalUrl,
     siloAssetMediaType: asset.mediaType,
     siloAssetOriginalFileName: asset.originalFileName,
-  };
+  }));
 
   return {
     campaigns: [campaign],
     adSquads: [adSquad],
-    creatives: [creative],
+    creatives,
     feedProviderId: provider.id,
     articleQuery: article.query,
     articleSlug: article.slug,
