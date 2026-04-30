@@ -28,6 +28,7 @@ Do not skip any step. Do not ask for confirmation before running these commands.
 ## Stack
 
 - **Framework:** Next.js 14 (App Router), TypeScript, Tailwind CSS
+- **Canvas:** `@xyflow/react` (React Flow v12) + `@dagrejs/dagre` for auto-layout
 - **Auth:** Google OAuth2 (primary login) + Snapchat OAuth2 (traffic source, optional) + iron-session (encrypted HttpOnly cookies)
 - **Forms:** react-hook-form + Zod
 - **State:** Zustand — `useCanvasStore` (canvas wizard graph state), `useWizardStore` (legacy, still used by `LoadPresetBanner` and preset/use page)
@@ -117,8 +118,17 @@ src/
 │           └── tags/                  # Tag CRUD (create, edit, delete)
 ├── components/
 │   ├── wizard/
-│   │   ├── CampaignCanvas.tsx         # 4-column visual canvas: Creatives | Feed Providers | Articles | Presets
-│   │   ├── CanvasEdges.tsx            # Pure SVG bezier edge renderer (data-node-id + ResizeObserver)
+│   │   ├── CampaignCanvas.tsx         # React Flow free-form canvas (replaces fixed column layout)
+│   │   ├── CanvasControls.tsx         # Top bar: Add Creative, Auto-align, Review →; computeAutoLayout (dagre LR)
+│   │   ├── nodes/
+│   │   │   ├── CreativeNode.tsx       # Thumbnail + filename + remove; source handle right
+│   │   │   ├── ProviderNode.tsx       # Name + color + creative count; "+ Router" button when connected
+│   │   │   ├── RouterNode.tsx         # Diamond shape; routes one provider to multiple articles
+│   │   │   ├── ArticleNode.tsx        # Slug + query + inline headline/CTA editor (expand ▼)
+│   │   │   ├── AdAccountNode.tsx      # Click to select/deselect; no edge handles needed
+│   │   │   └── PresetNode.tsx         # Name + config + duplication rows + Creatives/set control
+│   │   ├── edges/
+│   │   │   └── ProviderEdge.tsx       # Dotted bezier in provider color
 │   │   ├── ReviewAndPost.tsx          # Campaign name template + launch matrix table
 │   │   ├── WizardShell.tsx            # Build/Review/Done mode toggle + sequential launch loop
 │   │   ├── SubmissionProgress.tsx
@@ -190,7 +200,9 @@ src/
 
 - **OAuth flow:** `/api/auth/*` routes handle token exchange and refresh; tokens live in an iron-session HttpOnly cookie.
 
-- **Canvas wizard:** `WizardShell` renders in three modes: `canvas` (4-column `CampaignCanvas`), `review` (`ReviewAndPost`), `done` (success screen). The canvas uses `useCanvasStore` (Zustand) to track selected creative IDs, three edge lists (`creativeToProvider`, `providerToArticle`, `articleToPreset`), and `presetCreativesPerAdSet` (per-preset creative grouping). `buildCampaignMatrix()` follows wizard flow order (provider → article → preset), groups creatives into chunks of `presetCreativesPerAdSet[presetId]` (default 1), and produces `CampaignBuildItem[]` where each item has `creativeIds: string[]`. Deselecting any node cascades: removing a creative→provider edge that orphans a provider also removes that provider's article edges; removing a provider→article edge that orphans an article also removes that article's preset edges. On launch, `WizardShell` loops sequentially, loads all assets for `item.creativeIds`, calls `synthesizeCampaign()` (returns one campaign, one ad squad, N creatives) then `runSubmission()`. SVG bezier edges are rendered by `CanvasEdges` using `data-node-id` DOM attributes + `ResizeObserver`.
+- **Canvas wizard:** `WizardShell` renders in three modes: `canvas` (`CampaignCanvas` React Flow), `review` (`ReviewAndPost`), `done` (success screen). The canvas uses `useCanvasStore` (Zustand) to track selected creative IDs, three edge lists (`creativeToProvider`, `providerToArticle`, `articleToPreset`), `presetCreativesPerAdSet`, `nodePositions`, and `routerNodes`. `buildCampaignMatrix()` follows wizard flow order (provider → article → preset), groups creatives into chunks of `presetCreativesPerAdSet[presetId]` (default 1), and produces `CampaignBuildItem[]` where each item has `creativeIds: string[]`. Cascade: removing a creative→provider edge that orphans a provider also removes its article edges; removing a provider→article edge that orphans an article also removes its preset edges. On launch, `WizardShell` loops sequentially, loads all assets for `item.creativeIds`, calls `synthesizeCampaign()` (returns one campaign, one ad squad, N creatives) then `runSubmission()`.
+
+  **React Flow canvas (`CampaignCanvas.tsx`):** Nodes are freely draggable; positions persist in `store.nodePositions`. Connections are drawn by dragging from source/target handles — `onConnect` maps handle types to store actions; `onEdgesDelete` (Backspace/Delete) fires cascade logic. Router nodes sit between a Provider and Articles as explicit fan-out nodes (diamond shape); adding one moves creativeToProvider edges visually through the router while `buildCampaignMatrix()` resolves them transparently. **Auto-align** runs dagre LR layout via `computeAutoLayout()` in `CanvasControls.tsx`. Visibility rules (which articles/accounts/presets appear) are the same as the old column layout.
 
   **Canvas visual rules:**
   - **Provider colors** — assigned from `PROVIDER_COLORS` array indexed by sort-order of `createdAt` (stable; not array position). Colors propagate to NodeCard borders, indicator dots, and SVG edges.
