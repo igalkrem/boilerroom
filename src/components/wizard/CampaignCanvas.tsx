@@ -1,107 +1,62 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useCallback, useState, useMemo } from "react";
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  MiniMap,
+  useNodesState,
+  useEdgesState,
+  type Node,
+  type Edge,
+  type Connection,
+  type NodeChange,
+  type EdgeChange,
+  applyNodeChanges,
+  applyEdgeChanges,
+  BackgroundVariant,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+
 import { useCanvasStore } from "@/hooks/useCanvasStore";
-import { CanvasEdges, type EdgeDef } from "./CanvasEdges";
 import { SiloBrowser } from "@/components/silo/SiloBrowser";
 import { loadFeedProviders } from "@/lib/feed-providers";
 import { loadArticles } from "@/lib/articles";
 import { loadPresets } from "@/lib/presets";
 import { loadAdAccountConfigs } from "@/lib/adAccounts";
 import { useAdAccounts } from "@/hooks/useAdAccounts";
-import { getAssetById } from "@/lib/silo";
 import type { FeedProvider } from "@/types/feed-provider";
 import type { Article } from "@/types/article";
 import type { CampaignPreset } from "@/types/preset";
-import type { SiloAsset } from "@/types/silo";
 import type { AdAccountConfig } from "@/types/ad-account";
+import { computeAutoLayout, CanvasControls } from "./CanvasControls";
+import { CreativeNode } from "./nodes/CreativeNode";
+import { ProviderNode } from "./nodes/ProviderNode";
+import { RouterNode } from "./nodes/RouterNode";
+import { ArticleNode } from "./nodes/ArticleNode";
+import { AdAccountNode } from "./nodes/AdAccountNode";
+import { PresetNode } from "./nodes/PresetNode";
+import { ProviderEdge } from "./edges/ProviderEdge";
 
-const PROVIDER_COLORS = ["#3b82f6", "#f97316", "#8b5cf6", "#10b981", "#ec4899", "#f59e0b"];
+const PROVIDER_COLORS = ["#3b82f6", "#f97316", "#8b5cf6", "#10b981", "#ec4899", "#f59e0b"] as const;
 
-interface ColumnHeaderProps { title: string; count: number; action?: React.ReactNode }
-function ColumnHeader({ title, count, action }: ColumnHeaderProps) {
-  return (
-    <div className="flex items-center justify-between mb-3 px-1">
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold text-gray-700">{title}</span>
-        {count > 0 && (
-          <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{count}</span>
-        )}
-      </div>
-      {action}
-    </div>
-  );
-}
+const NODE_TYPES = {
+  creative: CreativeNode,
+  provider: ProviderNode,
+  router: RouterNode,
+  article: ArticleNode,
+  adaccount: AdAccountNode,
+  preset: PresetNode,
+};
 
-function NodeCard({
-  nodeId,
-  connected,
-  invalid,
-  connectedColor,
-  connectedColors,
-  disabled,
-  onClick,
-  children,
-}: {
-  nodeId: string;
-  connected: boolean;
-  invalid?: boolean;
-  connectedColor?: string;
-  connectedColors?: string[];
-  disabled?: boolean;
-  onClick?: () => void;
-  children: React.ReactNode;
-}) {
-  const handleClick = disabled ? undefined : onClick;
+const EDGE_TYPES = {
+  provider: ProviderEdge,
+};
 
-  // Multi-color gradient border for creatives connected to multiple providers
-  if (connected && connectedColors && connectedColors.length > 1) {
-    const gradStyle: React.CSSProperties = {
-      border: "2px solid transparent",
-      backgroundImage: `linear-gradient(white, white), linear-gradient(to right, ${connectedColors.join(", ")})`,
-      backgroundClip: "padding-box, border-box",
-      backgroundOrigin: "border-box",
-    };
-    return (
-      <div
-        data-node-id={nodeId}
-        onClick={handleClick}
-        style={gradStyle}
-        className={`relative rounded-xl p-3 transition-all select-none shadow-sm ${
-          handleClick ? "cursor-pointer hover:shadow-md" : ""
-        }`}
-      >
-        {children}
-      </div>
-    );
-  }
-
-  const connectedStyle =
-    connected && connectedColor
-      ? { borderColor: connectedColor, backgroundColor: `${connectedColor}18` }
-      : undefined;
-
-  return (
-    <div
-      data-node-id={nodeId}
-      onClick={handleClick}
-      style={connectedStyle}
-      className={`relative rounded-xl border-2 p-3 transition-all select-none ${
-        disabled ? "opacity-40 cursor-not-allowed" : handleClick ? "cursor-pointer hover:shadow-md" : ""
-      } ${
-        connected
-          ? connectedColor
-            ? "shadow-sm"
-            : "border-blue-400 bg-blue-50/60 shadow-sm"
-          : invalid
-          ? "border-red-300 bg-red-50/30"
-          : "border-gray-200 bg-white hover:border-gray-300"
-      }`}
-    >
-      {children}
-    </div>
-  );
-}
+// Default column x-positions for auto-placing new nodes
+const COLUMN_X = { creative: 0, provider: 300, router: 520, article: 740, adaccount: 1040, preset: 1320 };
+const ROW_GAP = 110;
 
 interface CampaignCanvasProps {
   adAccountId?: string;
@@ -110,14 +65,11 @@ interface CampaignCanvasProps {
 
 export function CampaignCanvas({ adAccountId, onReview }: CampaignCanvasProps) {
   const store = useCanvasStore();
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [siloOpen, setSiloOpen] = useState(false);
 
   const [providers, setProviders] = useState<FeedProvider[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
   const [presets, setPresets] = useState<CampaignPreset[]>([]);
-  const [creativeAssets, setCreativeAssets] = useState<SiloAsset[]>([]);
-  const [siloOpen, setSiloOpen] = useState(false);
-  const [expandedArticle, setExpandedArticle] = useState<string | null>(null);
   const [adAccountConfigs, setAdAccountConfigs] = useState<AdAccountConfig[]>([]);
   const { accounts: allAccounts } = useAdAccounts();
 
@@ -128,542 +80,401 @@ export function CampaignCanvas({ adAccountId, onReview }: CampaignCanvasProps) {
     setAdAccountConfigs(loadAdAccountConfigs());
   }, []);
 
+  // Seed pre-selected ad account if provided
   useEffect(() => {
-    const assets = store.creativeIds
-      .map((id) => getAssetById(id))
-      .filter((a): a is SiloAsset => Boolean(a));
-    setCreativeAssets(assets);
-  }, [store.creativeIds]);
+    if (adAccountId && store.selectedAdAccountIds.length === 0) {
+      store.setSelectedAdAccountIds([adAccountId]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adAccountId]);
 
-  // Sort providers by creation date for stable color assignment
-  const sortedByCreation = [...providers].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  // Stable provider color map
+  const sortedByCreation = useMemo(
+    () => [...providers].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+    [providers]
   );
-  const providerColorMap: Record<string, string> = {};
-  sortedByCreation.forEach((p, i) => {
-    providerColorMap[p.id] = PROVIDER_COLORS[i % PROVIDER_COLORS.length];
-  });
-  const sortedProviderOrder = sortedByCreation.map((p) => p.id);
+  const providerColorMap: Record<string, string> = useMemo(() => {
+    const map: Record<string, string> = {};
+    sortedByCreation.forEach((p, i) => { map[p.id] = PROVIDER_COLORS[i % PROVIDER_COLORS.length]; });
+    return map;
+  }, [sortedByCreation]);
 
-  // Providers connected to at least one creative
+  // ─── Visibility logic (same rules as old canvas) ─────────────────────────
   const activeProviderIds = new Set(store.edges.creativeToProvider.map((e) => e.feedProviderId));
+  const activeProviderIdsFromArticles = new Set(store.edges.providerToArticle.map((e) => e.feedProviderId));
 
-  // Providers with at least one article connected
-  const activeProviderIdsFromArticles = new Set(
-    store.edges.providerToArticle.map((e) => e.feedProviderId)
-  );
-
-  const activeArticleIds = new Set(store.edges.providerToArticle.map((e) => e.articleId));
-
-  // Articles: only those belonging to an active provider, sorted by provider order
   const visibleArticles = articles.filter((a) => activeProviderIds.has(a.feedProviderId));
-  const sortedVisibleArticles = [...visibleArticles].sort((a, b) => {
-    const ai = sortedProviderOrder.indexOf(a.feedProviderId);
-    const bi = sortedProviderOrder.indexOf(b.feedProviderId);
-    return ai !== bi ? ai - bi : a.slug.localeCompare(b.slug);
-  });
-
-  // Presets: only show after articles are connected (enforces the flow)
   const visiblePresets = presets.filter(
     (p) => !p.feedProviderId || activeProviderIdsFromArticles.has(p.feedProviderId)
   );
-  const sortedVisiblePresets = [...visiblePresets].sort((a, b) => {
-    const ai = sortedProviderOrder.indexOf(a.feedProviderId ?? "");
-    const bi = sortedProviderOrder.indexOf(b.feedProviderId ?? "");
-    return ai !== bi ? ai - bi : a.name.localeCompare(b.name);
-  });
-
-  // Ad accounts: filter by providers that have articles connected (prevents cross-provider mismatch)
   const visibleAccounts = allAccounts.filter((a) => {
     const cfg = adAccountConfigs.find((c) => c.id === a.id);
     if (cfg?.hidden) return false;
     if (cfg && cfg.feedProviderIds.length > 0) {
       return [...activeProviderIdsFromArticles].some((pid) => cfg.feedProviderIds.includes(pid));
     }
-    return true; // unmanaged accounts: always show
-  });
-  const sortedVisibleAccounts = [...visibleAccounts].sort((a, b) => {
-    const aCfg = adAccountConfigs.find((c) => c.id === a.id);
-    const bCfg = adAccountConfigs.find((c) => c.id === b.id);
-    const ai = sortedProviderOrder.indexOf(aCfg?.feedProviderIds[0] ?? "");
-    const bi = sortedProviderOrder.indexOf(bCfg?.feedProviderIds[0] ?? "");
-    return ai !== bi ? ai - bi : a.name.localeCompare(b.name);
+    return true;
   });
 
-  // Auto-deselect accounts no longer visible
-  const visibleAccountIdKey = visibleAccounts.map((a) => a.id).join(",");
+  // Auto-deselect stale accounts
+  const visibleAccountIds = useMemo(() => visibleAccounts.map((a) => a.id), [visibleAccounts]);
   useEffect(() => {
-    const visibleIds = new Set(visibleAccounts.map((a) => a.id));
-    const stale = store.selectedAdAccountIds.filter((id) => !visibleIds.has(id));
+    const visibleSet = new Set(visibleAccountIds);
+    const stale = store.selectedAdAccountIds.filter((id) => !visibleSet.has(id));
     if (stale.length > 0) {
-      store.setSelectedAdAccountIds(store.selectedAdAccountIds.filter((id) => visibleIds.has(id)));
+      store.setSelectedAdAccountIds(store.selectedAdAccountIds.filter((id) => visibleSet.has(id)));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleAccountIdKey]);
+  }, [visibleAccountIds.join(",")]);
 
-  // Gate: presets require an ad account selection
   const canSelectPresets = store.selectedAdAccountIds.length > 0;
 
-  // Build SVG edges
-  const edgeDefs: EdgeDef[] = [];
+  // ─── Build React Flow nodes ───────────────────────────────────────────────
+  const buildNodes = useCallback((): Node[] => {
+    const nodes: Node[] = [];
 
-  for (const e of store.edges.creativeToProvider) {
-    edgeDefs.push({
-      id: `cp-${e.creativeId}-${e.feedProviderId}`,
-      fromNodeId: `creative-${e.creativeId}`,
-      toNodeId: `provider-${e.feedProviderId}`,
-      color: providerColorMap[e.feedProviderId] ?? "#94a3b8",
+    const pos = (type: keyof typeof COLUMN_X, index: number, id: string): { x: number; y: number } => {
+      if (store.nodePositions[id]) return store.nodePositions[id];
+      return { x: COLUMN_X[type], y: index * ROW_GAP };
+    };
+
+    // Creatives
+    store.creativeIds.forEach((assetId, i) => {
+      nodes.push({
+        id: `creative-${assetId}`,
+        type: "creative",
+        position: pos("creative", i, `creative-${assetId}`),
+        data: { assetId, providerColorMap },
+      });
     });
-  }
-  for (const e of store.edges.providerToArticle) {
-    edgeDefs.push({
-      id: `pa-${e.feedProviderId}-${e.articleId}`,
-      fromNodeId: `provider-${e.feedProviderId}`,
-      toNodeId: `article-${e.articleId}`,
-      color: providerColorMap[e.feedProviderId] ?? "#94a3b8",
+
+    // Providers (all, not just active)
+    sortedByCreation.forEach((provider, i) => {
+      nodes.push({
+        id: `provider-${provider.id}`,
+        type: "provider",
+        position: pos("provider", i, `provider-${provider.id}`),
+        data: {
+          providerId: provider.id,
+          name: provider.name,
+          color: providerColorMap[provider.id] ?? "#94a3b8",
+          onAddRouter: (pId: string) => {
+            const router = store.addRouter(pId);
+            // Place router between provider and articles
+            const provPos = store.nodePositions[`provider-${pId}`] ?? { x: COLUMN_X.provider, y: i * ROW_GAP };
+            store.setNodePosition(router.id, { x: COLUMN_X.router, y: provPos.y });
+          },
+        },
+      });
     });
-  }
-  // article → adAccount: only for provider-matching accounts
-  for (const ae of store.edges.providerToArticle) {
-    const provColor = providerColorMap[ae.feedProviderId] ?? "#94a3b8";
-    for (const accountId of store.selectedAdAccountIds) {
-      const accCfg = adAccountConfigs.find((c) => c.id === accountId);
-      const matches = !accCfg?.feedProviderIds.length || accCfg.feedProviderIds.includes(ae.feedProviderId);
-      if (!matches) continue;
-      edgeDefs.push({
-        id: `aa-${ae.articleId}-${accountId}`,
-        fromNodeId: `article-${ae.articleId}`,
-        toNodeId: `account-${accountId}`,
-        color: provColor,
+
+    // Router nodes
+    store.routerNodes.forEach((router, i) => {
+      nodes.push({
+        id: router.id,
+        type: "router",
+        position: pos("router", i, router.id),
+        data: {
+          routerId: router.id,
+          color: providerColorMap[router.feedProviderId] ?? "#94a3b8",
+        },
+      });
+    });
+
+    // Articles (only visible ones)
+    visibleArticles.forEach((article, i) => {
+      const color = providerColorMap[article.feedProviderId] ?? "#94a3b8";
+      nodes.push({
+        id: `article-${article.id}`,
+        type: "article",
+        position: pos("article", i, `article-${article.id}`),
+        data: { article, color },
+      });
+    });
+
+    // Ad accounts (only visible ones)
+    visibleAccounts.forEach((account, i) => {
+      const cfg = adAccountConfigs.find((c) => c.id === account.id);
+      const color = cfg?.feedProviderIds.length
+        ? (providerColorMap[cfg.feedProviderIds[0]] ?? "#94a3b8")
+        : "#94a3b8";
+      nodes.push({
+        id: `account-${account.id}`,
+        type: "adaccount",
+        position: pos("adaccount", i, `account-${account.id}`),
+        data: { accountId: account.id, name: account.name, color },
+      });
+    });
+
+    // Presets (only visible ones)
+    visiblePresets.forEach((preset, i) => {
+      const provider = preset.feedProviderId ? sortedByCreation.find((p) => p.id === preset.feedProviderId) : null;
+      const color = provider ? (providerColorMap[provider.id] ?? "#94a3b8") : "#94a3b8";
+      nodes.push({
+        id: `preset-${preset.id}`,
+        type: "preset",
+        position: pos("preset", i, `preset-${preset.id}`),
+        data: { preset, color, articles, disabled: !canSelectPresets },
+      });
+    });
+
+    return nodes;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    store.creativeIds, store.edges, store.nodePositions, store.routerNodes, store.selectedAdAccountIds,
+    sortedByCreation, providerColorMap, visibleArticles, visibleAccounts, visiblePresets,
+    adAccountConfigs, articles, canSelectPresets,
+  ]);
+
+  // ─── Build React Flow edges ───────────────────────────────────────────────
+  const buildEdges = useCallback((): Edge[] => {
+    const edges: Edge[] = [];
+
+    // Creative → Provider (or Creative → Router if router exists for that provider)
+    for (const e of store.edges.creativeToProvider) {
+      const router = store.routerNodes.find((r) => r.feedProviderId === e.feedProviderId);
+      const target = router ? router.id : `provider-${e.feedProviderId}`;
+      edges.push({
+        id: `cp-${e.creativeId}-${e.feedProviderId}`,
+        source: `creative-${e.creativeId}`,
+        sourceHandle: "out",
+        target,
+        targetHandle: "in",
+        type: "provider",
+        data: { color: providerColorMap[e.feedProviderId] ?? "#94a3b8" },
       });
     }
-  }
-  // adAccount → preset
-  for (const pe of store.edges.articleToPreset) {
-    const provEdge = store.edges.providerToArticle.find((e) => e.articleId === pe.articleId);
-    const provColor = provEdge ? (providerColorMap[provEdge.feedProviderId] ?? "#94a3b8") : "#94a3b8";
-    const provId = provEdge?.feedProviderId;
-    for (const accountId of store.selectedAdAccountIds) {
-      const accCfg = adAccountConfigs.find((c) => c.id === accountId);
-      const matches = !provId || !accCfg?.feedProviderIds.length || accCfg.feedProviderIds.includes(provId);
-      if (!matches) continue;
-      edgeDefs.push({
-        id: `ap2-${accountId}-${pe.presetId}-${pe.articleId}`,
-        fromNodeId: `account-${accountId}`,
-        toNodeId: `preset-${pe.presetId}`,
-        color: provColor,
+
+    // Router → Provider (router to its provider)
+    for (const r of store.routerNodes) {
+      edges.push({
+        id: `rp-${r.id}`,
+        source: r.id,
+        sourceHandle: "out",
+        target: `provider-${r.feedProviderId}`,
+        targetHandle: "in",
+        type: "provider",
+        data: { color: providerColorMap[r.feedProviderId] ?? "#94a3b8" },
       });
     }
-  }
 
-  const siloAdAccountId = store.selectedAdAccountIds[0] ?? adAccountId ?? "";
+    // Provider → Article (or Router → Article)
+    for (const e of store.edges.providerToArticle) {
+      const router = store.routerNodes.find((r) => r.feedProviderId === e.feedProviderId);
+      const source = router ? router.id : `provider-${e.feedProviderId}`;
+      edges.push({
+        id: `pa-${e.feedProviderId}-${e.articleId}`,
+        source,
+        sourceHandle: "out",
+        target: `article-${e.articleId}`,
+        targetHandle: "in",
+        type: "provider",
+        data: { color: providerColorMap[e.feedProviderId] ?? "#94a3b8" },
+      });
+    }
+
+    // Article → AdAccount (derived from providerToArticle + selectedAccounts)
+    for (const ae of store.edges.providerToArticle) {
+      const color = providerColorMap[ae.feedProviderId] ?? "#94a3b8";
+      for (const accountId of store.selectedAdAccountIds) {
+        const cfg = adAccountConfigs.find((c) => c.id === accountId);
+        const matches = !cfg?.feedProviderIds.length || cfg.feedProviderIds.includes(ae.feedProviderId);
+        if (!matches) continue;
+        const edgeId = `aa-${ae.articleId}-${accountId}`;
+        if (!edges.some((ed) => ed.id === edgeId)) {
+          edges.push({
+            id: edgeId,
+            source: `article-${ae.articleId}`,
+            sourceHandle: "out",
+            target: `account-${accountId}`,
+            targetHandle: "in",
+            type: "provider",
+            data: { color },
+          });
+        }
+      }
+    }
+
+    // AdAccount → Preset
+    for (const pe of store.edges.articleToPreset) {
+      const provEdge = store.edges.providerToArticle.find((e) => e.articleId === pe.articleId);
+      const color = provEdge ? (providerColorMap[provEdge.feedProviderId] ?? "#94a3b8") : "#94a3b8";
+      const provId = provEdge?.feedProviderId;
+      for (const accountId of store.selectedAdAccountIds) {
+        const cfg = adAccountConfigs.find((c) => c.id === accountId);
+        const matches = !provId || !cfg?.feedProviderIds.length || cfg.feedProviderIds.includes(provId);
+        if (!matches) continue;
+        const edgeId = `ap-${accountId}-${pe.presetId}-${pe.articleId}`;
+        if (!edges.some((ed) => ed.id === edgeId)) {
+          edges.push({
+            id: edgeId,
+            source: `account-${accountId}`,
+            sourceHandle: "out",
+            target: `preset-${pe.presetId}`,
+            targetHandle: "in",
+            type: "provider",
+            data: { color },
+          });
+        }
+      }
+    }
+
+    return edges;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    store.edges, store.routerNodes, store.selectedAdAccountIds,
+    providerColorMap, adAccountConfigs,
+  ]);
+
+  const [nodes, setNodes] = useNodesState(buildNodes());
+  const [edges, setEdges] = useEdgesState(buildEdges());
+
+  // Keep React Flow state in sync with Zustand store
+  useEffect(() => { setNodes(buildNodes()); }, [buildNodes, setNodes]);
+  useEffect(() => { setEdges(buildEdges()); }, [buildEdges, setEdges]);
+
+  // Sync node position changes back to store
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      setNodes((nds) => applyNodeChanges(changes, nds));
+      for (const change of changes) {
+        if (change.type === "position" && change.position && !change.dragging) {
+          store.setNodePosition(change.id, change.position);
+        }
+      }
+    },
+    [setNodes, store]
+  );
+
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
+    [setEdges]
+  );
+
+  // Handle new connections drawn by the user
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      const { source, target } = connection;
+      if (!source || !target) return;
+
+      const srcType = source.split("-")[0];
+      const tgtType = target.split("-")[0];
+
+      if (srcType === "creative" && (tgtType === "provider" || tgtType === "router")) {
+        const creativeId = source.replace(/^creative-/, "");
+        const providerId = tgtType === "router"
+          ? store.routerNodes.find((r) => r.id === target)?.feedProviderId ?? ""
+          : target.replace(/^provider-/, "");
+        if (providerId) store.toggleCreativeToProvider(creativeId, providerId);
+      } else if ((srcType === "provider" || srcType === "router") && tgtType === "article") {
+        const providerId = srcType === "router"
+          ? store.routerNodes.find((r) => r.id === source)?.feedProviderId ?? ""
+          : source.replace(/^provider-/, "");
+        const articleId = target.replace(/^article-/, "");
+        if (providerId) store.toggleProviderToArticle(providerId, articleId);
+      } else if (srcType === "article" && tgtType === "account") {
+        // Ad account selection is click-based, not edge-based; but acknowledge the drag
+        const accountId = target.replace(/^account-/, "");
+        store.toggleAdAccount(accountId);
+      } else if (srcType === "account" && tgtType === "preset") {
+        // Preset connection is click-based; acknowledge drag
+        const presetId = target.replace(/^preset-/, "");
+        const preset = presets.find((p) => p.id === presetId);
+        if (preset && canSelectPresets) {
+          const activeArticleIds = new Set(store.edges.providerToArticle.map((e) => e.articleId));
+          const matching = [...activeArticleIds].filter((aId) => {
+            const article = articles.find((a) => a.id === aId);
+            return article && (!preset.feedProviderId || article.feedProviderId === preset.feedProviderId);
+          });
+          matching.forEach((aId) => store.toggleArticleToPreset(aId, presetId));
+        }
+      }
+    },
+    [store, presets, articles, canSelectPresets]
+  );
+
+  // Handle edge deletion
+  const onEdgesDelete = useCallback(
+    (deletedEdges: Edge[]) => {
+      for (const edge of deletedEdges) {
+        const { source, target } = edge;
+        const srcType = source.split("-")[0];
+        const tgtType = target.split("-")[0];
+
+        if (srcType === "creative" && (tgtType === "provider" || tgtType === "router")) {
+          const creativeId = source.replace(/^creative-/, "");
+          const providerId = tgtType === "router"
+            ? store.routerNodes.find((r) => r.id === target)?.feedProviderId ?? ""
+            : target.replace(/^provider-/, "");
+          if (providerId) store.toggleCreativeToProvider(creativeId, providerId);
+        } else if ((srcType === "provider" || srcType === "router") && tgtType === "article") {
+          const providerId = srcType === "router"
+            ? store.routerNodes.find((r) => r.id === source)?.feedProviderId ?? ""
+            : source.replace(/^provider-/, "");
+          const articleId = target.replace(/^article-/, "");
+          if (providerId) store.toggleProviderToArticle(providerId, articleId);
+        }
+      }
+    },
+    [store]
+  );
+
+  // Auto-layout
+  const handleAutoLayout = useCallback(() => {
+    const currentNodes = buildNodes();
+    const currentEdges = buildEdges();
+    const positions = computeAutoLayout(currentNodes, currentEdges);
+    store.setNodePositions(positions);
+  }, [buildNodes, buildEdges, store]);
+
   const matrix = store.buildCampaignMatrix();
-  const isValid = matrix.length > 0;
+  const siloAdAccountId = store.selectedAdAccountIds[0] ?? adAccountId ?? "";
 
   return (
     <div className="flex flex-col h-full">
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100 bg-white shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold text-gray-700">Campaign Builder</span>
-          {matrix.length > 0 && (
-            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-              {matrix.length} campaign{matrix.length !== 1 ? "s" : ""} ready
-            </span>
-          )}
-        </div>
-        <button
-          type="button"
-          disabled={!isValid}
-          onClick={onReview}
-          className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      <CanvasControls
+        onAddCreative={() => setSiloOpen(true)}
+        onAutoLayout={handleAutoLayout}
+        campaignCount={matrix.length}
+        onReview={onReview}
+        isValid={matrix.length > 0}
+      />
+
+      <div className="flex-1 min-h-0">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onEdgesDelete={onEdgesDelete}
+          nodeTypes={NODE_TYPES}
+          edgeTypes={EDGE_TYPES}
+          fitView
+          fitViewOptions={{ padding: 0.2 }}
+          deleteKeyCode={["Backspace", "Delete"]}
+          minZoom={0.2}
+          maxZoom={2}
+          proOptions={{ hideAttribution: true }}
         >
-          Review →
-        </button>
+          <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#e5e7eb" />
+          <Controls showInteractive={false} />
+          <MiniMap nodeStrokeWidth={3} zoomable pannable />
+        </ReactFlow>
       </div>
 
-      {/* Canvas */}
-      <div
-        ref={containerRef}
-        className="relative flex-1 overflow-x-auto overflow-y-auto p-6"
-        style={{ minHeight: 0 }}
-      >
-        <CanvasEdges edges={edgeDefs} containerRef={containerRef} />
-
-        <div className="flex gap-6 min-w-max items-start">
-          {/* Column 1 — Creatives */}
-          <div className="w-56 shrink-0">
-            <ColumnHeader
-              title="Creatives"
-              count={store.creativeIds.length}
-              action={
-                <button
-                  type="button"
-                  onClick={() => setSiloOpen(true)}
-                  className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  + Add
-                </button>
-              }
-            />
-            <div className="space-y-2">
-              {creativeAssets.map((asset) => {
-                const connected = store.edges.creativeToProvider.some((e) => e.creativeId === asset.id);
-                const connectedProviderColors = store.edges.creativeToProvider
-                  .filter((e) => e.creativeId === asset.id)
-                  .map((e) => providerColorMap[e.feedProviderId] ?? "#94a3b8");
-                return (
-                  <NodeCard
-                    key={asset.id}
-                    nodeId={`creative-${asset.id}`}
-                    connected={connected}
-                    connectedColors={connectedProviderColors.length > 1 ? connectedProviderColors : undefined}
-                    connectedColor={connectedProviderColors.length === 1 ? connectedProviderColors[0] : undefined}
-                    invalid={!connected && store.creativeIds.length > 0}
-                  >
-                    <div className="flex items-start gap-2">
-                      {asset.thumbnailUrl ? (
-                        <img src={asset.thumbnailUrl} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
-                      ) : (
-                        <div className="w-10 h-10 rounded-lg bg-gray-100 shrink-0 flex items-center justify-center text-gray-400 text-xs">
-                          {asset.mediaType === "VIDEO" ? "▶" : "🖼"}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-gray-700 truncate">{asset.originalFileName}</p>
-                        <p className="text-xs text-gray-400">{asset.mediaType}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); store.removeCreative(asset.id); }}
-                        className="text-gray-300 hover:text-red-500 shrink-0 text-xs"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </NodeCard>
-                );
-              })}
-              {store.creativeIds.length === 0 && (
-                <button
-                  type="button"
-                  onClick={() => setSiloOpen(true)}
-                  className="w-full border-2 border-dashed border-gray-200 rounded-xl p-4 text-xs text-gray-400 hover:border-blue-300 hover:text-blue-500 transition-colors text-center"
-                >
-                  Click to select from Silo
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Column 2 — Feed Providers */}
-          <div className="w-52 shrink-0">
-            <ColumnHeader title="Feed Providers" count={activeProviderIds.size} />
-            <div className="space-y-2">
-              {providers.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4">No providers configured.</p>
-              )}
-              {sortedByCreation.map((provider) => {
-                const color = providerColorMap[provider.id];
-                const connected = activeProviderIds.has(provider.id);
-                const connectedCreatives = store.edges.creativeToProvider
-                  .filter((e) => e.feedProviderId === provider.id)
-                  .map((e) => e.creativeId);
-                return (
-                  <NodeCard
-                    key={provider.id}
-                    nodeId={`provider-${provider.id}`}
-                    connected={connected}
-                    connectedColor={connected ? color : undefined}
-                    onClick={() => {
-                      if (store.creativeIds.length > 0) {
-                        store.creativeIds.forEach((cId) =>
-                          store.toggleCreativeToProvider(cId, provider.id)
-                        );
-                      }
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ background: color }}
-                      />
-                      <span className="text-sm font-medium text-gray-800 truncate">{provider.name}</span>
-                    </div>
-                    {connected && (
-                      <p className="text-xs text-gray-400 mt-1 pl-4">
-                        {connectedCreatives.length} creative{connectedCreatives.length !== 1 ? "s" : ""}
-                      </p>
-                    )}
-                  </NodeCard>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Column 3 — Articles */}
-          <div className="w-64 shrink-0">
-            <ColumnHeader
-              title="Articles"
-              count={store.edges.providerToArticle.length}
-            />
-            <div className="space-y-2">
-              {activeProviderIds.size === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4">Connect a feed provider first.</p>
-              )}
-              {sortedVisibleArticles.map((article) => {
-                const provider = providers.find((p) => p.id === article.feedProviderId);
-                const provColor = provider ? providerColorMap[provider.id] : "#94a3b8";
-                const articleEdges = store.edges.providerToArticle.filter((e) => e.articleId === article.id);
-                const connected = articleEdges.length > 0;
-                const isExpanded = expandedArticle === article.id;
-
-                return (
-                  <div key={article.id}>
-                    <NodeCard
-                      nodeId={`article-${article.id}`}
-                      connected={connected}
-                      connectedColor={connected ? provColor : undefined}
-                      onClick={() => {
-                        const activeForThisArticle = [...activeProviderIds].filter(
-                          (pId) => pId === article.feedProviderId
-                        );
-                        activeForThisArticle.forEach((pId) =>
-                          store.toggleProviderToArticle(pId, article.id)
-                        );
-                      }}
-                    >
-                      <div className="flex items-start gap-2">
-                        <span
-                          className="w-2 h-2 rounded-full mt-1.5 shrink-0"
-                          style={{ background: provColor }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-800 truncate">{article.slug}</p>
-                          {article.query && (
-                            <p className="text-xs text-gray-400 truncate">{article.query}</p>
-                          )}
-                        </div>
-                        {connected && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setExpandedArticle(isExpanded ? null : article.id); }}
-                            className="text-xs text-gray-400 hover:text-gray-600 shrink-0"
-                          >
-                            {isExpanded ? "▲" : "▼"}
-                          </button>
-                        )}
-                      </div>
-                    </NodeCard>
-
-                    {/* Inline headline + CTA editor */}
-                    {connected && isExpanded && articleEdges.map((ae) => (
-                      <div
-                        key={`${ae.feedProviderId}-${ae.articleId}`}
-                        className="mt-1 ml-2 border border-blue-200 rounded-lg p-2 space-y-2 bg-blue-50/40"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div>
-                          <label className="text-xs text-gray-500 block mb-0.5">Headline</label>
-                          {article.allowedHeadlines.length > 0 ? (
-                            <select
-                              value={ae.headline}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const rac = article.allowedHeadlines.find((h) => h.text === val)?.rac ?? "";
-                                store.setArticleContent(ae.feedProviderId, article.id, val, ae.callToAction, rac);
-                              }}
-                              className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                            >
-                              <option value="">— Select headline —</option>
-                              {article.allowedHeadlines.map((h) => (
-                                <option key={h.text} value={h.text}>{h.text}</option>
-                              ))}
-                            </select>
-                          ) : (
-                            <input
-                              type="text"
-                              maxLength={34}
-                              value={ae.headline}
-                              placeholder="Headline (max 34 chars)"
-                              onChange={(e) =>
-                                store.setArticleContent(ae.feedProviderId, article.id, e.target.value, ae.callToAction, "")
-                              }
-                              className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                            />
-                          )}
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 block mb-0.5">Call to Action</label>
-                          <select
-                            value={ae.callToAction}
-                            onChange={(e) =>
-                              store.setArticleContent(ae.feedProviderId, article.id, ae.headline, e.target.value, ae.headlineRac)
-                            }
-                            className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                          >
-                            <option value="">— None —</option>
-                            {["MORE","SHOP_NOW","SIGN_UP","DOWNLOAD","WATCH","GET_NOW","ORDER_NOW","BOOK_NOW","APPLY_NOW","BUY_NOW"].map((c) => (
-                              <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Column 4 — Ad Accounts */}
-          <div className="w-52 shrink-0">
-            <ColumnHeader title="Ad Accounts" count={store.selectedAdAccountIds.length} />
-            <div className="space-y-2">
-              {activeProviderIdsFromArticles.size === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4">Connect an article first.</p>
-              )}
-              {activeProviderIdsFromArticles.size > 0 && visibleAccounts.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4">No ad accounts assigned to this provider.</p>
-              )}
-              {sortedVisibleAccounts.map((account) => {
-                const accCfg = adAccountConfigs.find((c) => c.id === account.id);
-                const accProviderColor = accCfg?.feedProviderIds.length
-                  ? (providerColorMap[accCfg.feedProviderIds[0]] ?? "#94a3b8")
-                  : "#94a3b8";
-                const selected = store.selectedAdAccountIds.includes(account.id);
-                return (
-                  <NodeCard
-                    key={account.id}
-                    nodeId={`account-${account.id}`}
-                    connected={selected}
-                    connectedColor={selected ? accProviderColor : undefined}
-                    onClick={() => store.toggleAdAccount(account.id)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ background: selected ? accProviderColor : "#d1d5db" }}
-                      />
-                      <span className="text-sm font-medium text-gray-800 truncate">{account.name}</span>
-                    </div>
-                    {selected && (
-                      <p className="text-xs text-gray-400 mt-1 pl-4 truncate">{account.id.slice(0, 8)}…</p>
-                    )}
-                  </NodeCard>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Column 5 — Presets */}
-          <div className="w-60 shrink-0">
-            <ColumnHeader title="Presets" count={store.edges.articleToPreset.length} />
-            <div className="space-y-2">
-              {activeArticleIds.size === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4">Connect an article first.</p>
-              )}
-              {activeArticleIds.size > 0 && !canSelectPresets && (
-                <p className="text-xs text-amber-600 text-center py-2 px-2 bg-amber-50/80 rounded-lg border border-amber-200">
-                  Select an ad account first
-                </p>
-              )}
-              {sortedVisiblePresets.map((preset) => {
-                const provider = preset.feedProviderId ? providers.find((p) => p.id === preset.feedProviderId) : null;
-                const provColor = provider ? providerColorMap[provider.id] : "#94a3b8";
-                const presetEdges = store.edges.articleToPreset.filter((e) => e.presetId === preset.id);
-                const connected = presetEdges.length > 0;
-
-                return (
-                  <NodeCard
-                    key={preset.id}
-                    nodeId={`preset-${preset.id}`}
-                    connected={connected}
-                    connectedColor={connected ? provColor : undefined}
-                    disabled={!canSelectPresets}
-                    onClick={() => {
-                      const matchingArticles = [...activeArticleIds].filter((aId) => {
-                        const article = articles.find((a) => a.id === aId);
-                        return article && (!preset.feedProviderId || article.feedProviderId === preset.feedProviderId);
-                      });
-                      matchingArticles.forEach((aId) => store.toggleArticleToPreset(aId, preset.id));
-                    }}
-                  >
-                    <div className="flex items-start gap-2">
-                      {provider && (
-                        <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: provColor }} />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">{preset.name}</p>
-                        <p className="text-xs text-gray-400">
-                          {preset.adSquads[0]?.geoCountryCodes?.join(", ") ?? ""}
-                          {preset.adSquads[0]?.dailyBudgetUsd ? ` · $${preset.adSquads[0].dailyBudgetUsd}/day` : ""}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Duplication counter per article connection */}
-                    {connected && (
-                      <div className="mt-2 space-y-1" onClick={(e) => e.stopPropagation()}>
-                        {presetEdges.map((pe) => {
-                          const article = articles.find((a) => a.id === pe.articleId);
-                          return (
-                            <div key={pe.articleId} className="flex items-center gap-2 justify-between">
-                              <span className="text-xs text-gray-500 truncate">{article?.slug ?? pe.articleId}</span>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => store.setDuplications(pe.articleId, preset.id, pe.duplications - 1)}
-                                  className="w-5 h-5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded flex items-center justify-center"
-                                >
-                                  −
-                                </button>
-                                <span className="text-xs font-medium text-gray-700 w-5 text-center">{pe.duplications}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => store.setDuplications(pe.articleId, preset.id, pe.duplications + 1)}
-                                  className="w-5 h-5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded flex items-center justify-center"
-                                >
-                                  +
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {/* Creatives per ad set control */}
-                        <div className="flex items-center gap-2 justify-between pt-1 border-t border-gray-100">
-                          <span className="text-xs text-gray-400">Creatives/set</span>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => store.setPresetCreativesPerAdSet(preset.id, (store.presetCreativesPerAdSet[preset.id] ?? 1) - 1)}
-                              className="w-5 h-5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded flex items-center justify-center"
-                            >
-                              −
-                            </button>
-                            <span className="text-xs font-medium text-gray-700 w-5 text-center">
-                              {store.presetCreativesPerAdSet[preset.id] ?? 1}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => store.setPresetCreativesPerAdSet(preset.id, (store.presetCreativesPerAdSet[preset.id] ?? 1) + 1)}
-                              className="w-5 h-5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded flex items-center justify-center"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </NodeCard>
-                );
-              })}
-            </div>
-          </div>
+      {store.creativeIds.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ top: 52 }}>
+          <button
+            type="button"
+            onClick={() => setSiloOpen(true)}
+            className="pointer-events-auto border-2 border-dashed border-gray-200 rounded-xl px-8 py-6 text-sm text-gray-400 hover:border-blue-300 hover:text-blue-500 transition-colors bg-white/80 backdrop-blur-sm"
+          >
+            + Add a Creative to start building
+          </button>
         </div>
-      </div>
+      )}
 
-      {/* Silo Browser modal */}
       <SiloBrowser
         isOpen={siloOpen}
         onClose={() => setSiloOpen(false)}

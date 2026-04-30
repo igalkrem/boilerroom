@@ -38,11 +38,18 @@ function cascadeProviderRemoval(feedProviderId: string, edges: CanvasEdges): Can
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
+export interface RouterNode {
+  id: string;
+  feedProviderId: string;
+}
+
 interface CanvasStore {
   creativeIds: string[];
   edges: CanvasEdges;
   selectedAdAccountIds: string[];
   presetCreativesPerAdSet: Record<string, number>;
+  nodePositions: Record<string, { x: number; y: number }>;
+  routerNodes: RouterNode[];
 
   addCreative: (id: string) => void;
   removeCreative: (id: string) => void;
@@ -54,6 +61,10 @@ interface CanvasStore {
   setPresetCreativesPerAdSet: (presetId: string, count: number) => void;
   toggleAdAccount: (id: string) => void;
   setSelectedAdAccountIds: (ids: string[]) => void;
+  setNodePosition: (nodeId: string, position: { x: number; y: number }) => void;
+  setNodePositions: (positions: Record<string, { x: number; y: number }>) => void;
+  addRouter: (feedProviderId: string) => RouterNode;
+  removeRouter: (routerId: string) => void;
   reset: () => void;
 
   buildCampaignMatrix: () => CampaignBuildItem[];
@@ -70,6 +81,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   edges: { ...initialEdges },
   selectedAdAccountIds: [],
   presetCreativesPerAdSet: {},
+  nodePositions: {},
+  routerNodes: [],
 
   addCreative: (id) =>
     set((s) => ({ creativeIds: s.creativeIds.includes(id) ? s.creativeIds : [...s.creativeIds, id] })),
@@ -194,8 +207,30 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   setSelectedAdAccountIds: (ids) => set({ selectedAdAccountIds: ids }),
 
+  setNodePosition: (nodeId, position) =>
+    set((s) => ({ nodePositions: { ...s.nodePositions, [nodeId]: position } })),
+
+  setNodePositions: (positions) =>
+    set((s) => ({ nodePositions: { ...s.nodePositions, ...positions } })),
+
+  addRouter: (feedProviderId) => {
+    const newRouter: RouterNode = { id: `router-${Date.now()}`, feedProviderId };
+    set((s) => ({ routerNodes: [...s.routerNodes, newRouter] }));
+    return newRouter;
+  },
+
+  removeRouter: (routerId) =>
+    set((s) => ({ routerNodes: s.routerNodes.filter((r) => r.id !== routerId) })),
+
   reset: () =>
-    set({ creativeIds: [], edges: { ...initialEdges }, selectedAdAccountIds: [], presetCreativesPerAdSet: {} }),
+    set({
+      creativeIds: [],
+      edges: { ...initialEdges },
+      selectedAdAccountIds: [],
+      presetCreativesPerAdSet: {},
+      nodePositions: {},
+      routerNodes: [],
+    }),
 
   buildCampaignMatrix: (): CampaignBuildItem[] => {
     const { creativeIds, edges, selectedAdAccountIds, presetCreativesPerAdSet } = get();
