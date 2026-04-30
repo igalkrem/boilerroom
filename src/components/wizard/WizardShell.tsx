@@ -1,8 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CampaignCanvas } from "./CampaignCanvas";
+import dynamic from "next/dynamic";
 import { ReviewAndPost } from "./ReviewAndPost";
+
+const CampaignCanvas = dynamic(
+  () => import("./CampaignCanvas").then((m) => ({ default: m.CampaignCanvas })),
+  { ssr: false }
+);
 import { useCanvasStore } from "@/hooks/useCanvasStore";
 import { loadFeedProviders } from "@/lib/feed-providers";
 import { loadArticles } from "@/lib/articles";
