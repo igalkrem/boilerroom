@@ -107,7 +107,7 @@ src/
 │       ├── [adAccountId]/create/      # Campaign builder with pre-selected ad account
 │       ├── create/                    # Campaign builder (no pre-selected account)
 │       ├── pixels/                    # Pixel CRUD UI (new/[id]/edit)
-│       ├── presets/                   # Campaign preset CRUD UI (new/[id]/edit/[id]/use)
+│       ├── presets/                   # Campaign preset CRUD UI (new/[id]/edit); card grid shows feed/geo/pixel/bid/budget/device + Duplicate action; no "Load in Wizard"
 │       ├── articles/                  # Article CRUD UI (new/[id]/edit)
 │       ├── feed-providers/            # Feed Provider board UI (card grid + FeedProviderModal) — own top-nav tab
 │       ├── performance/               # Global performance dashboard (top-nav link)
@@ -148,7 +148,7 @@ src/
 │   ├── ui/
 │   │   └── MultiSelect.tsx            # Controlled multi-select dropdown with checkboxes (react-hook-form Controller)
 │   ├── pixels/                        # PixelForm component
-│   ├── presets/                       # PresetForm component (includes feed provider selector + creative defaults)
+│   ├── presets/                       # PresetForm — flat single-column form; Traffic Source selector (Snap active, Facebook coming soon); no Campaign Defaults section
 │   └── articles/                      # ArticleForm component
 ├── hooks/
 │   ├── useCanvasStore.ts              # Zustand store for canvas wizard graph state + buildCampaignMatrix()
@@ -161,7 +161,7 @@ src/
 │   ├── silo.ts                        # Silo asset CRUD (localStorage + KV sync, key: boilerroom_silo_v1)
 │   ├── silo-tags.ts                   # Tag CRUD + auto-naming (localStorage + KV sync, key: boilerroom_silo_tags_v1)
 │   ├── silo-utils.ts                  # Browser utils: hash, optimizeImage, generateThumbnail, getVideoDuration
-│   ├── presets.ts                     # Preset CRUD (localStorage + KV sync, key: boilerroom_presets_v1)
+│   ├── presets.ts                     # Preset CRUD (localStorage + KV sync, key: boilerroom_presets_v1) — loadPresets() defaults trafficSource="snap"; duplicatePreset(id) copies with new id/name
 │   ├── pixels.ts                      # Pixel CRUD (localStorage + KV sync, key: boilerroom_pixels_v1)
 │   ├── feed-providers.ts              # FeedProvider CRUD (localStorage + KV sync, key: boilerroom_feed_providers_v1) — upcast() normalises legacy records
 │   ├── articles.ts                    # Article CRUD (localStorage + KV sync, key: boilerroom_articles_v1) — upcast() defaults query: "" for old records
@@ -178,7 +178,7 @@ src/
     ├── wizard.ts                      # CampaignFormData, AdSquadFormData, CreativeFormData, SubmissionResults, CanvasEdges, CampaignBuildItem
     ├── feed-provider.ts               # FeedProvider (full type with snapConfig, urlConfig, channelConfig, domains, combos), UrlParameter, FeedProviderDomain, FeedProviderCombo, ChannelSetupType
     ├── article.ts                     # Article (id, feedProviderId, slug, query, allowedHeadlines, createdAt)
-    ├── preset.ts                      # CampaignPreset (includes feedProviderId, comboId, creativeDefaults)
+    ├── preset.ts                      # CampaignPreset (includes trafficSource, feedProviderId, comboId, creativeDefaults)
     ├── snapchat.ts                    # API payload types (SnapCampaignPayload, etc.)
     ├── silo.ts                        # SiloAsset, SiloTag, SnapchatUploadStatus, SnapchatUploadStage
     ├── pixel.ts                       # SavedPixel type
@@ -238,7 +238,7 @@ src/
 
 - **Feed provider channels:** Postgres table `feed_provider_channels` tracks channel lifecycle: `available → in-use → cooldown → available`. Lifecycle promotion is lazy (runs on every read via `normalizeChannelStatuses(feedProviderId)`, no cron). Thresholds: `in-use` > 24h → cooldown; `cooldown` > 24h → available. Channels are imported via CSV upload in the Channels tab. `assignChannel()` picks the oldest available channel and marks it `in-use`. `releaseChannel()` moves a channel from `in-use` to `cooldown`. The table has a `google_user_id` column — all queries (`listChannels`, `bulkInsertChannels`, `deleteChannels`) filter by the session's Google user ID to enforce per-user ownership.
 
-- **Campaign presets (v2):** `CampaignPreset` now has `feedProviderId` (required), `comboId?`, and `creativeDefaults?: { adStatus, brandName?, callToAction? }`. `PresetForm` shows a feed provider selector and combo selector. Old presets without `feedProviderId` get `feedProviderId: ""` on load — shown with an amber warning badge on the presets page. Preset loading still clamps `startDate`/`endDate` to the future via `ensureFutureDate`. `pixelId` is normalised to `undefined` (not `""`) on load.
+- **Campaign presets (v3):** `CampaignPreset` key fields: `trafficSource?: "snap" | "facebook"` (defaults to `"snap"` on load for old records), `feedProviderId` (required; `""` for legacy), `comboId?`, `creativeDefaults?: { adStatus, callToAction? }`. `brandName` removed from `creativeDefaults` — no longer in UI. Campaign is always saved as `status: "ACTIVE"`, `spendCapType: "NO_BUDGET"`, no start/end date. Ad squad always `spendCapType: "DAILY_BUDGET"`, no end date, no gender. `PresetForm` is a flat `max-w-2xl` form with three `<hr>`-divided sections: (1) Traffic Source + Name + Feed Provider + Combo; (2) Geo + Device + OS + Placements; (3) Pixel + Optimization Goal + Bid Strategy + Bid Amount + Daily Budget + Ad Set Status + Ad Status + Call to Action. Always exactly one ad squad. Old presets without `feedProviderId` show an amber "Provider not found" warning on the list page. `duplicatePreset(id)` in `lib/presets.ts` creates a copy named "Copy of X". Preset list cards display: name, traffic source badge (Snap yellow / Facebook blue), and a 2-column data grid: Feed | Geo | Pixel | Bid | Budget | Device. Card actions: Edit | Duplicate | Delete — no "Load in Wizard" (preset selection happens in the wizard canvas).
 
 - **Articles (v3):** `Article` type fields:
   - `slug` — "Keyword" in UI; plain string (no format restriction); resolves `{{article.name}}`
