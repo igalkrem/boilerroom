@@ -100,21 +100,37 @@ export function CampaignCanvas({ adAccountId, onReview }: CampaignCanvasProps) {
   }, [sortedByCreation]);
 
   // ─── Visibility logic (same rules as old canvas) ─────────────────────────
-  const activeProviderIds = new Set(store.edges.creativeToProvider.map((e) => e.feedProviderId));
-  const activeProviderIdsFromArticles = new Set(store.edges.providerToArticle.map((e) => e.feedProviderId));
-
-  const visibleArticles = articles.filter((a) => activeProviderIds.has(a.feedProviderId));
-  const visiblePresets = presets.filter(
-    (p) => !p.feedProviderId || activeProviderIdsFromArticles.has(p.feedProviderId)
+  // All of these MUST be memoized — filter/Set always return new references,
+  // and they flow into buildNodes useCallback deps → setNodes useEffect.
+  // Without useMemo every render triggers a new buildNodes → setNodes → re-render loop (#185).
+  const activeProviderIds = useMemo(
+    () => new Set(store.edges.creativeToProvider.map((e) => e.feedProviderId)),
+    [store.edges.creativeToProvider]
   );
-  const visibleAccounts = allAccounts.filter((a) => {
-    const cfg = adAccountConfigs.find((c) => c.id === a.id);
-    if (cfg?.hidden) return false;
-    if (cfg && cfg.feedProviderIds.length > 0) {
-      return [...activeProviderIdsFromArticles].some((pid) => cfg.feedProviderIds.includes(pid));
-    }
-    return true;
-  });
+  const activeProviderIdsFromArticles = useMemo(
+    () => new Set(store.edges.providerToArticle.map((e) => e.feedProviderId)),
+    [store.edges.providerToArticle]
+  );
+
+  const visibleArticles = useMemo(
+    () => articles.filter((a) => activeProviderIds.has(a.feedProviderId)),
+    [articles, activeProviderIds]
+  );
+  const visiblePresets = useMemo(
+    () => presets.filter((p) => !p.feedProviderId || activeProviderIdsFromArticles.has(p.feedProviderId)),
+    [presets, activeProviderIdsFromArticles]
+  );
+  const visibleAccounts = useMemo(
+    () => allAccounts.filter((a) => {
+      const cfg = adAccountConfigs.find((c) => c.id === a.id);
+      if (cfg?.hidden) return false;
+      if (cfg && cfg.feedProviderIds.length > 0) {
+        return [...activeProviderIdsFromArticles].some((pid) => cfg.feedProviderIds.includes(pid));
+      }
+      return true;
+    }),
+    [allAccounts, adAccountConfigs, activeProviderIdsFromArticles]
+  );
 
   // Auto-deselect stale accounts
   const visibleAccountIds = useMemo(() => visibleAccounts.map((a) => a.id), [visibleAccounts]);
