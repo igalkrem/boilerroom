@@ -15,7 +15,7 @@ import { loadPresets } from "@/lib/presets";
 import { getAssetById, upsertAsset } from "@/lib/silo";
 import { synthesizeCampaign } from "@/lib/synthesize-campaign";
 import { runSubmission } from "@/lib/submission-orchestrator";
-import { resolveCampaignName } from "@/lib/resolve-campaign-name";
+import { resolveCampaignName, generateUniqueId4 } from "@/lib/resolve-campaign-name";
 import type { CampaignBuildItem, SubmissionResults } from "@/types/wizard";
 
 type Mode = "canvas" | "review" | "done";
@@ -67,8 +67,10 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
           presetName: preset.name,
           articleSlug: article.slug,
           creativeFilename: assets[0].originalFileName,
+          presetTag: preset.tag,
+          uniqueId4: generateUniqueId4(),
         };
-        const campaignName = resolveCampaignName(nameTemplate, item, ctx);
+        const campaignName = resolveCampaignName(nameTemplate, item, ctx, provider.snapConfig.campaignNamingTemplate);
 
         const synthesis = synthesizeCampaign(item, campaignName, provider, article, preset, assets);
 

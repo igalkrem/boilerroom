@@ -1,5 +1,10 @@
 export type ChannelSetupType = "provider-supplied" | "parameter-based";
 
+export interface NamingSegment {
+  type: "literal" | "macro";
+  value: string; // literal: plain text; macro: key e.g. "preset.tag"
+}
+
 export interface UrlParameter {
   key: string;
   value: string; // may contain macros: {{campaign.id}} {{adSet.id}} {{ad.id}} {{organization_id}} {{channel.id}} {{article.name}} {{article.query}} {{creative.headline}}
@@ -30,6 +35,7 @@ export interface FeedProvider {
     organizationId?: string; // Snapchat org ID (parent of all ad accounts) — resolves {{organization_id}} macro
     allowedAdAccountIds: string[];
     allowedPixelIds: string[];
+    campaignNamingTemplate?: NamingSegment[]; // Snap-specific naming template; segments joined by " | "
   };
   // URL Parameters tab
   urlConfig: {

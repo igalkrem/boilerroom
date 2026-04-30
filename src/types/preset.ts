@@ -38,6 +38,7 @@ export interface CreativePresetDefaults {
 export interface CampaignPreset {
   id: string;
   name: string;
+  tag?: string; // resolves {{preset.tag}} in campaign naming templates
   trafficSource?: "snap" | "facebook";
   feedProviderId: string; // required — preset belongs to one provider ("" for legacy presets)
   comboId?: string; // optional: references a FeedProviderCombo.id from the provider
