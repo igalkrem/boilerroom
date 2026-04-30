@@ -243,7 +243,7 @@ export function CampaignCanvas({ adAccountId, onReview }: CampaignCanvasProps) {
     return nodes;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    store.creativeIds, store.edges, store.routerNodes, store.selectedAdAccountIds,
+    store.creativeIds, store.routerNodes, store.selectedAdAccountIds,
     sortedByCreation, providerColorMap, visibleArticles, visibleAccounts, visiblePresets,
     adAccountConfigs, articles, canSelectPresets,
   ]);
