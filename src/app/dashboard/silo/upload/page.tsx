@@ -17,7 +17,7 @@ export default function SiloUploadPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Upload Media</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Upload Media</h1>
           <p className="text-sm text-gray-500 mt-1">Files are stored in your Silo library and can be reused across campaigns.</p>
         </div>
         <Button variant="ghost" onClick={() => router.push("/dashboard/silo")}>

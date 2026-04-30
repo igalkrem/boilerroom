@@ -20,7 +20,9 @@ export default function SiloPage() {
   const [filterType, setFilterType] = useState<"" | "IMAGE" | "VIDEO">("");
   const [filterStatus, setFilterStatus] = useState<"" | "ready" | "processing" | "failed" | "archived">("");
   const [previewAsset, setPreviewAsset] = useState<SiloAsset | null>(null);
-  const [snapUploadAsset, setSnapUploadAsset] = useState<SiloAsset | null>(null);
+  const [snapUploadAssets, setSnapUploadAssets] = useState<SiloAsset[] | null>(null);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   function reload() {
     setAssets(loadAssets());
@@ -29,9 +31,21 @@ export default function SiloPage() {
 
   useEffect(() => { reload(); }, []);
 
+  function exitBulkMode() {
+    setBulkMode(false);
+    setSelectedIds(new Set());
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
   function handleDelete(asset: SiloAsset) {
     if (!window.confirm(`Delete "${asset.name}"? This will permanently remove the files from storage.`)) return;
-    // Delete Blob files via server route
     const urls = [asset.originalUrl, asset.optimizedUrl, asset.thumbnailUrl].filter(Boolean) as string[];
     fetch("/api/silo/delete", {
       method: "DELETE",
@@ -43,25 +57,57 @@ export default function SiloPage() {
     if (previewAsset?.id === asset.id) setPreviewAsset(null);
   }
 
+  function handleBulkDelete() {
+    const count = selectedIds.size;
+    if (!window.confirm(`Delete ${count} asset${count !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+    const toDelete = assets.filter((a) => selectedIds.has(a.id));
+    const urls = toDelete.flatMap((a) =>
+      [a.originalUrl, a.optimizedUrl, a.thumbnailUrl].filter(Boolean) as string[]
+    );
+    fetch("/api/silo/delete", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urls }),
+    }).catch(console.error);
+    toDelete.forEach((a) => deleteAsset(a.id));
+    setSelectedIds(new Set());
+    reload();
+  }
+
+  function handleBulkSnapchat() {
+    const toUpload = assets.filter((a) => selectedIds.has(a.id));
+    if (toUpload.length > 0) setSnapUploadAssets(toUpload);
+  }
+
   const tagMap = Object.fromEntries(tags.map((t) => [t.id, t.name]));
 
-  const filtered = assets.filter((a) => {
-    if (search && !a.name.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterTag && a.tagId !== filterTag) return false;
-    if (filterType && a.mediaType !== filterType) return false;
-    if (filterStatus && a.status !== filterStatus) return false;
-    return true;
-  }).sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+  const filtered = assets
+    .filter((a) => {
+      if (search && !a.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (filterTag && a.tagId !== filterTag) return false;
+      if (filterType && a.mediaType !== filterType) return false;
+      if (filterStatus && a.status !== filterStatus) return false;
+      return true;
+    })
+    .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+
+  const selectCls =
+    "border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500";
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Silo</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Silo</h1>
           <p className="text-sm text-gray-500 mt-1">Your media library. Upload once, reuse everywhere.</p>
         </div>
         <div className="flex gap-2">
+          {assets.length > 0 && (
+            <Button variant="secondary" onClick={bulkMode ? exitBulkMode : () => setBulkMode(true)}>
+              {bulkMode ? "Done" : "Select"}
+            </Button>
+          )}
           <Button variant="secondary" onClick={() => router.push("/dashboard/silo/tags")}>
             Tags
           </Button>
@@ -70,6 +116,33 @@ export default function SiloPage() {
           </Button>
         </div>
       </div>
+
+      {/* Bulk action bar */}
+      {bulkMode && selectedIds.size > 0 && (
+        <div className="sticky top-0 z-10 bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
+          <span className="text-sm font-medium text-gray-700">{selectedIds.size} selected</span>
+          <div className="flex gap-2">
+            <button
+              onClick={handleBulkDelete}
+              className="px-3 py-1.5 text-xs font-medium bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+            >
+              Delete ({selectedIds.size})
+            </button>
+            <button
+              onClick={handleBulkSnapchat}
+              className="px-3 py-1.5 text-xs font-medium bg-white text-gray-700 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
+            >
+              → Snapchat ({selectedIds.size})
+            </button>
+          </div>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="ml-auto text-xs text-gray-400 hover:text-gray-600"
+          >
+            Deselect all
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
@@ -80,28 +153,16 @@ export default function SiloPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <select
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-          value={filterTag}
-          onChange={(e) => setFilterTag(e.target.value)}
-        >
+        <select className={selectCls} value={filterTag} onChange={(e) => setFilterTag(e.target.value)}>
           <option value="">All tags</option>
           {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
-        <select
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value as "" | "IMAGE" | "VIDEO")}
-        >
+        <select className={selectCls} value={filterType} onChange={(e) => setFilterType(e.target.value as "" | "IMAGE" | "VIDEO")}>
           <option value="">All types</option>
           <option value="IMAGE">Images</option>
           <option value="VIDEO">Videos</option>
         </select>
-        <select
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
-        >
+        <select className={selectCls} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}>
           <option value="">All statuses</option>
           <option value="ready">Ready</option>
           <option value="processing">Processing</option>
@@ -110,7 +171,7 @@ export default function SiloPage() {
         </select>
       </div>
 
-      {/* Empty state */}
+      {/* Grid */}
       {assets.length === 0 ? (
         <div className="bg-white border border-dashed border-gray-300 rounded-xl p-16 text-center space-y-3">
           <p className="text-gray-500 text-sm">No media in your library yet.</p>
@@ -133,7 +194,10 @@ export default function SiloPage() {
                 tagName={asset.tagId ? tagMap[asset.tagId] : undefined}
                 onPreview={setPreviewAsset}
                 onDelete={handleDelete}
-                onUploadToSnapchat={setSnapUploadAsset}
+                onUploadToSnapchat={(a) => setSnapUploadAssets([a])}
+                bulkMode={bulkMode}
+                selected={selectedIds.has(asset.id)}
+                onToggleSelect={toggleSelect}
               />
             ))}
           </div>
@@ -146,7 +210,7 @@ export default function SiloPage() {
           tagName={previewAsset.tagId ? tagMap[previewAsset.tagId] : undefined}
           isOpen
           onClose={() => setPreviewAsset(null)}
-          onUploadToSnapchat={(a) => { setPreviewAsset(null); setSnapUploadAsset(a); }}
+          onUploadToSnapchat={(a) => { setPreviewAsset(null); setSnapUploadAssets([a]); }}
           onAssetUpdated={(updated) => {
             upsertAsset(updated);
             setPreviewAsset(updated);
@@ -155,14 +219,14 @@ export default function SiloPage() {
         />
       )}
 
-      {snapUploadAsset && (
+      {snapUploadAssets && (
         <SnapchatUploadModal
-          asset={snapUploadAsset}
+          assets={snapUploadAssets}
           isOpen
-          onClose={() => setSnapUploadAsset(null)}
+          onClose={() => setSnapUploadAssets(null)}
           onComplete={(updated) => {
-            upsertAsset(updated);
-            setSnapUploadAsset(null);
+            updated.forEach(upsertAsset);
+            setSnapUploadAssets(null);
             reload();
           }}
         />

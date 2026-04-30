@@ -15,6 +15,9 @@ interface AssetCardProps {
   onDelete?: (asset: SiloAsset) => void;
   onSelect?: (asset: SiloAsset) => void;
   onUploadToSnapchat?: (asset: SiloAsset) => void;
+  bulkMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 function statusBadge(asset: SiloAsset) {
@@ -26,25 +29,22 @@ function statusBadge(asset: SiloAsset) {
   }
 }
 
-function snapAccountBadges(asset: SiloAsset, highlightAdAccountId?: string) {
+function snapAccountBadge(asset: SiloAsset, highlightAdAccountId?: string) {
   const ready = asset.snapchatUploads.filter((s) => s.stage === "ready");
   if (ready.length === 0) return null;
+  const isCachedForHighlighted =
+    highlightAdAccountId != null &&
+    ready.some((s) => s.adAccountId === highlightAdAccountId);
   return (
-    <div className="flex flex-wrap gap-1 mt-1">
-      {ready.map((s) => (
-        <span
-          key={s.adAccountId}
-          className={clsx(
-            "text-[10px] px-1.5 py-0.5 rounded font-medium",
-            s.adAccountId === highlightAdAccountId
-              ? "bg-cyan-100 text-cyan-800"
-              : "bg-gray-100 text-gray-500"
-          )}
-          title={`Snapchat: ${s.adAccountName}`}
-        >
-          {s.adAccountId === highlightAdAccountId ? "✓ Cached" : "Snap ✓"}
-        </span>
-      ))}
+    <div className="mt-1">
+      <span
+        className={clsx(
+          "text-[10px] px-1.5 py-0.5 rounded font-medium",
+          isCachedForHighlighted ? "bg-cyan-100 text-cyan-800" : "bg-gray-100 text-gray-500"
+        )}
+      >
+        {isCachedForHighlighted ? "✓ Cached" : "Snap ✓"}
+      </span>
     </div>
   );
 }
@@ -58,14 +58,31 @@ export function AssetCard({
   onDelete,
   onSelect,
   onUploadToSnapchat,
+  bulkMode,
+  selected,
+  onToggleSelect,
 }: AssetCardProps) {
+  const isInteractive = selectMode || bulkMode;
+
+  function handleClick() {
+    if (bulkMode) onToggleSelect?.(asset.id);
+    else if (selectMode) onSelect?.(asset);
+  }
+
   return (
     <div
       className={clsx(
-        "bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm flex flex-col",
-        selectMode && "cursor-pointer hover:border-cyan-400 hover:shadow-md transition-all"
+        "bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col",
+        isInteractive && "cursor-pointer transition-all",
+        bulkMode && selected
+          ? "border-cyan-400 shadow-md"
+          : bulkMode
+          ? "border-gray-200 hover:border-cyan-300 hover:shadow-md"
+          : selectMode
+          ? "border-gray-200 hover:border-cyan-400 hover:shadow-md"
+          : "border-gray-200"
       )}
-      onClick={selectMode ? () => onSelect?.(asset) : undefined}
+      onClick={isInteractive ? handleClick : undefined}
     >
       {/* Thumbnail */}
       <div className="relative bg-gray-900 aspect-[9/16] overflow-hidden max-h-[280px]">
@@ -80,11 +97,27 @@ export function AssetCard({
             {asset.mediaType === "VIDEO" ? "🎬" : "🖼"} No preview
           </div>
         )}
-        <div className="absolute top-2 left-2">
+
+        {/* Bulk checkbox — top-left */}
+        {bulkMode && (
+          <div className="absolute top-2 left-2">
+            <input
+              type="checkbox"
+              checked={!!selected}
+              onChange={() => onToggleSelect?.(asset.id)}
+              onClick={(e) => e.stopPropagation()}
+              className="h-4 w-4 rounded border-white bg-white/80 text-cyan-500 shadow"
+            />
+          </div>
+        )}
+
+        {/* Media type badge */}
+        <div className={clsx("absolute top-2", bulkMode ? "right-2" : "left-2")}>
           <span className="text-[10px] bg-black/60 text-white px-1.5 py-0.5 rounded font-medium">
             {asset.mediaType}
           </span>
         </div>
+
         {asset.mediaType === "VIDEO" && asset.durationSeconds != null && (
           <div className="absolute bottom-2 right-2 text-[10px] bg-black/60 text-white px-1.5 py-0.5 rounded">
             {Math.floor(asset.durationSeconds / 60)}:{String(Math.round(asset.durationSeconds % 60)).padStart(2, "0")}
@@ -104,11 +137,11 @@ export function AssetCard({
         <p className="text-xs text-gray-400">
           {formatFileSize(asset.fileSize)} · {new Date(asset.uploadDate).toLocaleDateString()}
         </p>
-        {snapAccountBadges(asset, selectedAdAccountId)}
+        {snapAccountBadge(asset, selectedAdAccountId)}
       </div>
 
-      {/* Actions */}
-      {!selectMode && (
+      {/* Actions — hidden in bulk or select mode */}
+      {!isInteractive && (
         <div className="px-3 pb-3 flex gap-1.5 flex-wrap border-t border-gray-100 pt-2.5">
           <Button size="sm" variant="secondary" onClick={() => onPreview(asset)}>
             Preview
