@@ -103,7 +103,9 @@ src/
 │   │       ├── profiles/              # GET ?adAccountId= → first profile_id for creative payload
 │   │       └── media/                 # upload-init, upload-chunk, upload-finalize, upload (image + small video ≤4.4 MB), upload-from-blob (server fetches Blob → Snapchat, any size), poll, copy
 │   └── dashboard/
-│       ├── [adAccountId]/create/      # Visual canvas wizard (Build → Review → Done)
+│       ├── page.tsx                   # Campaign builder (WizardShell) — default landing page
+│       ├── [adAccountId]/create/      # Campaign builder with pre-selected ad account
+│       ├── create/                    # Campaign builder (no pre-selected account)
 │       ├── pixels/                    # Pixel CRUD UI (new/[id]/edit)
 │       ├── presets/                   # Campaign preset CRUD UI (new/[id]/edit/[id]/use)
 │       ├── articles/                  # Article CRUD UI (new/[id]/edit)
@@ -234,7 +236,7 @@ src/
 
   Legacy records (only had `name`, `parameterName`, `baseUrl`) are up-cast by `upcast()` in `feed-providers.ts` — all new fields default to empty/sensible values. The board UI is a card grid; clicking a card or "New" opens `FeedProviderModal`. No separate `/new` or `/[id]/edit` route pages — everything is in the modal.
 
-- **Feed provider channels:** Postgres table `feed_provider_channels` tracks channel lifecycle: `available → in-use → cooldown → available`. Lifecycle promotion is lazy (runs on every read via `normalizeChannelStatuses(feedProviderId)`, no cron). Thresholds: `in-use` > 24h → cooldown; `cooldown` > 24h → available. Channels are imported via CSV upload in the Channels tab. `assignChannel()` picks the oldest available channel and marks it `in-use`. `releaseChannel()` moves a channel from `in-use` to `cooldown`.
+- **Feed provider channels:** Postgres table `feed_provider_channels` tracks channel lifecycle: `available → in-use → cooldown → available`. Lifecycle promotion is lazy (runs on every read via `normalizeChannelStatuses(feedProviderId)`, no cron). Thresholds: `in-use` > 24h → cooldown; `cooldown` > 24h → available. Channels are imported via CSV upload in the Channels tab. `assignChannel()` picks the oldest available channel and marks it `in-use`. `releaseChannel()` moves a channel from `in-use` to `cooldown`. The table has a `google_user_id` column — all queries (`listChannels`, `bulkInsertChannels`, `deleteChannels`) filter by the session's Google user ID to enforce per-user ownership.
 
 - **Campaign presets (v2):** `CampaignPreset` now has `feedProviderId` (required), `comboId?`, and `creativeDefaults?: { adStatus, brandName?, callToAction? }`. `PresetForm` shows a feed provider selector and combo selector. Old presets without `feedProviderId` get `feedProviderId: ""` on load — shown with an amber warning badge on the presets page. Preset loading still clamps `startDate`/`endDate` to the future via `ensureFutureDate`. `pixelId` is normalised to `undefined` (not `""`) on load.
 
@@ -262,15 +264,15 @@ src/
 
 - **Silo — media library:** Asset metadata lives in localStorage (`boilerroom_silo_v1`). Upload pipeline: SHA-256 hash → canvas resize/thumbnail → `upload()` from `@vercel/blob/client`. Snapchat mediaIds cached per-ad-account in `snapchatUploads[]`. Cross-account reuse tries `media_copy` first; falls back to `uploadBlobToSnapchat`. `SnapchatUploadModal` pre-uploads from library (2 concurrent). Grid uses `repeat(auto-fill, minmax(180px, 240px))` so cards stay compact on wide screens (more columns, not bigger cards). `AssetCard` portrait preview is capped at `max-h-[280px]`.
 
-- **KV Sync — persistent metadata storage:** All localStorage-backed stores call `syncToKV(key, data)` on every write — debounced 1.5s, fire-and-forget POST to `/api/data`. Blob paths: `metadata/{snapUserId}/{key}.json`. `KVHydrationProvider` blocks render on fresh session until KV data loaded; merges in background if localStorage already populated. Valid keys whitelisted in `/api/data`.
+- **KV Sync — persistent metadata storage:** All localStorage-backed stores call `syncToKV(key, data)` on every write — debounced 1.5s, fire-and-forget POST to `/api/data`. Blob paths: `metadata/{googleUserId}/{key}.json`. Blobs are stored with `access: "private"` (not public CDN); server reads use `getDownloadUrl` from `@vercel/blob`. `KVHydrationProvider` blocks render on fresh session until KV data loaded; merges in background if localStorage already populated. Valid keys whitelisted in `/api/data`.
 
 - **Performance dashboard:** `/dashboard/performance` — global page (all accounts via selector). Attribution: `snapchat_ad_squad_stats.ad_squad_id = kingsroad_report.custom_channel_name`. Sync flow: finalized dates (>1 day old) never re-fetched; recent dates re-fetched at most once/hour. ROI = `(revenue_usd - spend_usd) / spend_usd × 100%`. Country normalization: KingsRoad `country_name` → ISO-2 via `countryNameToCode()` at ingest time.
 
 ## Security Notes
 
-- **`isAdAccountAllowed` denies by default:** When `session.allowedAdAccountIds` is empty (fresh session before dashboard loads), the function returns `false`. It is populated by `/api/snapchat/ad-accounts` — all Snapchat API routes that accept an `adAccountId` must call this check. Do NOT revert the default to `true`.
-- **`/api/data` is user-scoped:** Blob paths are `metadata/{snapUserId}/{key}.json`. Never use a shared path. Valid keys are whitelisted: `br_silo_assets`, `br_silo_tags`, `br_pixels`, `br_presets`.
-- **`/api/feed-providers/channels/*` requires `isAdAccountAllowed`:** All three channel routes check ownership before touching Postgres.
+- **`isAdAccountAllowed` denies by default:** When `session.allowedAdAccountIds` is empty (fresh session before dashboard loads), the function returns `false`. It is populated by `/api/snapchat/ad-accounts` — all Snapchat API routes that accept an `adAccountId` must call this check. Do NOT revert the default to `true`. The four Snapchat GET proxy routes (`campaigns`, `adsquads`, `creatives`, `ads`) require `?adAccountId=` and call `isAdAccountAllowed` before fetching.
+- **`/api/data` is user-scoped:** Blob paths are `metadata/{googleUserId}/{key}.json`. Blobs are `access: "private"` — never expose them as public. Never use a shared path. Valid keys are whitelisted: `br_silo_assets`, `br_silo_tags`, `br_pixels`, `br_presets`, `br_feed_providers`, `br_articles`, `br_ad_accounts_v1`.
+- **`/api/feed-providers/channels/*` is user-scoped:** GET/POST/DELETE pass `session.googleUserId` to all DB functions; queries filter by `google_user_id` so users can only access their own channels.
 - **`media/upload` and `media/poll` require ownership checks:** Both routes call `isAdAccountAllowed` before forwarding to Snapchat.
 - **`media/copy` checks both source and destination:** Both `sourceAdAccountId` and `destinationAdAccountId` must be verified to prevent cross-account media exfiltration.
 - **`media/upload-from-blob` SSRF guard:** `blobUrl` must end with `.vercel-storage.com` before server-side fetch.
