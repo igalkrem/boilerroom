@@ -10,6 +10,7 @@ import { loadPresets } from "@/lib/presets";
 import { getAssetById, upsertAsset } from "@/lib/silo";
 import { synthesizeCampaign } from "@/lib/synthesize-campaign";
 import { runSubmission } from "@/lib/submission-orchestrator";
+import { resolveCampaignName } from "@/lib/resolve-campaign-name";
 import type { CampaignBuildItem, SubmissionResults } from "@/types/wizard";
 
 type Mode = "canvas" | "review" | "done";
@@ -29,20 +30,6 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
   const [launchProgress, setLaunchProgress] = useState(0);
   const [allResults, setAllResults] = useState<SubmissionResults[]>([]);
 
-  function resolveName(
-    template: string,
-    item: CampaignBuildItem,
-    context: { presetName: string; articleSlug: string; creativeFilename: string }
-  ): string {
-    const today = new Date().toISOString().slice(0, 10);
-    return template
-      .replace(/\{\{preset\.name\}\}/gi, context.presetName)
-      .replace(/\{\{article\.name\}\}/gi, context.articleSlug)
-      .replace(/\{\{creative\.filename\}\}/gi, context.creativeFilename)
-      .replace(/\{\{date\}\}/gi, today)
-      .replace(/\{\{index\}\}/gi, String(item.duplicationIndex + 1));
-  }
-
   async function handleLaunch(items: CampaignBuildItem[], nameTemplate: string) {
     setLaunching(true);
     setLaunchProgress(0);
@@ -54,88 +41,99 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
 
     const collectedResults: SubmissionResults[] = [];
 
-    for (let i = 0; i < items.length; i++) {
-      setLaunchProgress(i);
-      const item = items[i];
+    try {
+      for (let i = 0; i < items.length; i++) {
+        setLaunchProgress(i);
+        const item = items[i];
 
-      const provider = providers.find((p) => p.id === item.feedProviderId);
-      const article = articles.find((a) => a.id === item.articleId);
-      const preset = presets.find((p) => p.id === item.presetId);
-      const asset = getAssetById(item.creativeId);
+        const provider = providers.find((p) => p.id === item.feedProviderId);
+        const article = articles.find((a) => a.id === item.articleId);
+        const preset = presets.find((p) => p.id === item.presetId);
+        const asset = getAssetById(item.creativeId);
 
-      if (!provider || !article || !preset || !asset) {
-        console.warn(`[wizard] skipping item ${i}: missing provider/article/preset/asset`);
-        continue;
-      }
+        if (!provider || !article || !preset || !asset) {
+          console.warn(`[wizard] skipping item ${i}: missing provider/article/preset/asset`);
+          collectedResults.push({
+            uploadMedia: [],
+            campaigns: [{ clientId: item.creativeId, snapId: "", name: `item-${i + 1}`, error: "Missing data: provider/article/preset/asset not found" }],
+            adSquads: [],
+            creatives: [],
+            ads: [],
+          });
+          continue;
+        }
 
-      const ctx = {
-        presetName: preset.name,
-        articleSlug: article.slug,
-        creativeFilename: asset.originalFileName,
-      };
-      const campaignName = resolveName(nameTemplate, item, ctx);
+        const ctx = {
+          presetName: preset.name,
+          articleSlug: article.slug,
+          creativeFilename: asset.originalFileName,
+        };
+        const campaignName = resolveCampaignName(nameTemplate, item, ctx);
 
-      const synthesis = synthesizeCampaign(item, campaignName, provider, article, preset, asset);
+        const synthesis = synthesizeCampaign(item, campaignName, provider, article, preset, asset);
 
-      const itemAccountId = item.adAccountId;
-      const stageCallback = (stage: string) =>
-        console.log(`[wizard] item ${i + 1}/${items.length} stage: ${stage}`);
+        const itemAccountId = item.adAccountId;
+        const stageCallback = (stage: string) =>
+          console.log(`[wizard] item ${i + 1}/${items.length} stage: ${stage}`);
 
-      const result = await runSubmission(
-        itemAccountId,
-        synthesis.campaigns,
-        synthesis.adSquads,
-        synthesis.creatives,
-        stageCallback,
-        provider
-      );
+        const result = await runSubmission(
+          itemAccountId,
+          synthesis.campaigns,
+          synthesis.adSquads,
+          synthesis.creatives,
+          stageCallback,
+          provider
+        );
 
-      collectedResults.push(result);
+        collectedResults.push(result);
 
-      // Cache new Snapchat mediaIds into Silo assets
-      result.uploadMedia.forEach((r) => {
-        if (r.error || !r.snapId) return;
-        const cr = synthesis.creatives.find((c) => c.id === r.clientId);
-        if (!cr?.siloAssetId) return;
-        const silo = getAssetById(cr.siloAssetId);
-        if (!silo) return;
-        const existing = silo.snapchatUploads.find((s) => s.adAccountId === itemAccountId);
-        const updatedUploads = existing
-          ? silo.snapchatUploads.map((s) =>
-              s.adAccountId === itemAccountId
-                ? { ...s, stage: "ready" as const, snapMediaId: r.snapId, completedAt: new Date().toISOString() }
-                : s
-            )
-          : [
-              ...silo.snapchatUploads,
+        // Cache new Snapchat mediaIds into Silo assets
+        result.uploadMedia.forEach((r) => {
+          if (r.error || !r.snapId) return;
+          const cr = synthesis.creatives.find((c) => c.id === r.clientId);
+          if (!cr?.siloAssetId) return;
+          const silo = getAssetById(cr.siloAssetId);
+          if (!silo) return;
+          const existing = silo.snapchatUploads.find((s) => s.adAccountId === itemAccountId);
+          const updatedUploads = existing
+            ? silo.snapchatUploads.map((s) =>
+                s.adAccountId === itemAccountId
+                  ? { ...s, stage: "ready" as const, snapMediaId: r.snapId, completedAt: new Date().toISOString() }
+                  : s
+              )
+            : [
+                ...silo.snapchatUploads,
+                {
+                  adAccountId: itemAccountId,
+                  adAccountName: itemAccountId,
+                  stage: "ready" as const,
+                  snapMediaId: r.snapId,
+                  completedAt: new Date().toISOString(),
+                },
+              ];
+          upsertAsset({
+            ...silo,
+            snapchatUploads: updatedUploads,
+            usageHistory: [
+              ...silo.usageHistory,
               {
                 adAccountId: itemAccountId,
-                adAccountName: itemAccountId,
-                stage: "ready" as const,
-                snapMediaId: r.snapId,
-                completedAt: new Date().toISOString(),
+                campaignName,
+                creativeName: cr.name,
+                usedAt: new Date().toISOString(),
               },
-            ];
-        upsertAsset({
-          ...silo,
-          snapchatUploads: updatedUploads,
-          usageHistory: [
-            ...silo.usageHistory,
-            {
-              adAccountId: itemAccountId,
-              campaignName,
-              creativeName: cr.name,
-              usedAt: new Date().toISOString(),
-            },
-          ],
+            ],
+          });
         });
-      });
+      }
+      setLaunchProgress(items.length);
+    } catch (err) {
+      console.error("[wizard] handleLaunch threw:", err);
+    } finally {
+      setAllResults(collectedResults);
+      setLaunching(false);
+      setMode("done");
     }
-
-    setAllResults(collectedResults);
-    setLaunchProgress(items.length);
-    setLaunching(false);
-    setMode("done");
   }
 
   const totalSucceeded =

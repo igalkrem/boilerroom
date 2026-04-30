@@ -69,7 +69,11 @@
       "Skill(update-config)",
       "Skill(update-config:*)",
       "Edit(/Users/igalkremer/Desktop/BoilerRoom/.claude/CLAUDE.md)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(grep -n \"sql\\\\`\\\\|BETWEEN\\\\|stat_date\" /Users/igalkremer/Desktop/BoilerRoom/src/app/api/reporting/sync/route.ts)",
+      "Bash(node -e \"const cur = new Date\\('invalid'\\); const end = new Date\\('2026-01-01'\\); let i=0; while\\(cur <= end && i < 5\\) { i++; } console.log\\('iterations:', i\\)\")",
+      "Bash(node -e \"console.log\\(new URL\\('//evil.com/v1/something', 'https://adsapi.snapchat.com'\\).href\\)\")",
+      "Bash(node -e ' *)"
     ]
   },
   "hooks": {

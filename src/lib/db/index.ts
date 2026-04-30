@@ -36,7 +36,7 @@ export interface ChannelRow {
 
 // ─── Lifecycle normalisation (lazy, called before status-sensitive reads) ──
 
-export async function normalizeChannelStatuses(feedProviderId: string): Promise<void> {
+export async function normalizeChannelStatuses(feedProviderId: string, googleUserId: string): Promise<void> {
   const now = new Date();
   const h24ago = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
 
@@ -45,6 +45,7 @@ export async function normalizeChannelStatuses(feedProviderId: string): Promise<
     UPDATE feed_provider_channels
     SET status = 'cooldown', cooldown_since = NOW(), campaign_snap_id = NULL
     WHERE feed_provider_id = ${feedProviderId}
+      AND google_user_id = ${googleUserId}
       AND status = 'in-use'
       AND in_use_since < ${h24ago}::timestamptz
   `;
@@ -54,6 +55,7 @@ export async function normalizeChannelStatuses(feedProviderId: string): Promise<
     UPDATE feed_provider_channels
     SET status = 'available', in_use_since = NULL, cooldown_since = NULL
     WHERE feed_provider_id = ${feedProviderId}
+      AND google_user_id = ${googleUserId}
       AND status = 'cooldown'
       AND cooldown_since < ${h24ago}::timestamptz
   `;
@@ -62,7 +64,7 @@ export async function normalizeChannelStatuses(feedProviderId: string): Promise<
 // ─── Channel queries ───────────────────────────────────────────────────────
 
 export async function listChannels(feedProviderId: string, googleUserId: string): Promise<ChannelRow[]> {
-  await normalizeChannelStatuses(feedProviderId);
+  await normalizeChannelStatuses(feedProviderId, googleUserId);
   const { rows } = await sql<ChannelRow>`
     SELECT * FROM feed_provider_channels
     WHERE feed_provider_id = ${feedProviderId} AND google_user_id = ${googleUserId}
@@ -94,12 +96,15 @@ export async function deleteChannels(ids: string[], googleUserId: string): Promi
 
 export async function assignChannel(
   feedProviderId: string,
-  campaignSnapId: string
+  campaignSnapId: string,
+  googleUserId: string
 ): Promise<string | null> {
-  await normalizeChannelStatuses(feedProviderId);
+  await normalizeChannelStatuses(feedProviderId, googleUserId);
   const { rows } = await sql<ChannelRow>`
     SELECT * FROM feed_provider_channels
-    WHERE feed_provider_id = ${feedProviderId} AND status = 'available'
+    WHERE feed_provider_id = ${feedProviderId}
+      AND google_user_id = ${googleUserId}
+      AND status = 'available'
     ORDER BY created_at ASC
     LIMIT 1
   `;
@@ -108,15 +113,17 @@ export async function assignChannel(
   await sql`
     UPDATE feed_provider_channels
     SET status = 'in-use', campaign_snap_id = ${campaignSnapId}, in_use_since = NOW()
-    WHERE id = ${row.id}
+    WHERE id = ${row.id} AND google_user_id = ${googleUserId}
   `;
   return row.channel_id;
 }
 
-export async function releaseChannel(campaignSnapId: string): Promise<void> {
+export async function releaseChannel(campaignSnapId: string, googleUserId: string): Promise<void> {
   await sql`
     UPDATE feed_provider_channels
     SET status = 'cooldown', cooldown_since = NOW(), campaign_snap_id = NULL
-    WHERE campaign_snap_id = ${campaignSnapId} AND status = 'in-use'
+    WHERE campaign_snap_id = ${campaignSnapId}
+      AND google_user_id = ${googleUserId}
+      AND status = 'in-use'
   `;
 }

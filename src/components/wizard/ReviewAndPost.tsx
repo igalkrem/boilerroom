@@ -6,6 +6,7 @@ import { loadFeedProviders } from "@/lib/feed-providers";
 import { loadArticles } from "@/lib/articles";
 import { loadPresets } from "@/lib/presets";
 import { getAssetById } from "@/lib/silo";
+import { resolveCampaignName } from "@/lib/resolve-campaign-name";
 import type { CampaignBuildItem } from "@/types/wizard";
 
 const NAME_MACROS = [
@@ -15,23 +16,6 @@ const NAME_MACROS = [
   { label: "{{date}}", title: "Today YYYY-MM-DD" },
   { label: "{{index}}", title: "1-based duplication index" },
 ];
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function resolveName(
-  template: string,
-  item: CampaignBuildItem,
-  context: { presetName: string; articleSlug: string; creativeFilename: string }
-): string {
-  return template
-    .replace(/\{\{preset\.name\}\}/gi, context.presetName)
-    .replace(/\{\{article\.name\}\}/gi, context.articleSlug)
-    .replace(/\{\{creative\.filename\}\}/gi, context.creativeFilename)
-    .replace(/\{\{date\}\}/gi, todayIso())
-    .replace(/\{\{index\}\}/gi, String(item.duplicationIndex + 1));
-}
 
 interface ReviewAndPostProps {
   onBack: () => void;
@@ -83,7 +67,7 @@ export function ReviewAndPost({ onBack, onLaunch, launching, launchProgress }: R
           onClick={() => onLaunch(matrix, nameTemplate)}
           className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          {launching ? `Launching… (${launchProgress}/${matrix.length})` : `Launch ${matrix.length} Campaign${matrix.length !== 1 ? "s" : ""}`}
+          {launching ? `Launching… (${Math.min(launchProgress + 1, matrix.length)}/${matrix.length})` : `Launch ${matrix.length} Campaign${matrix.length !== 1 ? "s" : ""}`}
         </button>
       </div>
 
@@ -138,7 +122,7 @@ export function ReviewAndPost({ onBack, onLaunch, launching, launchProgress }: R
               <tbody className="divide-y divide-gray-100">
                 {matrix.map((item, idx) => {
                   const ctx = getContext(item);
-                  const resolvedName = resolveName(nameTemplate, item, ctx);
+                  const resolvedName = resolveCampaignName(nameTemplate, item, ctx);
                   const provider = providers.find((p) => p.id === item.feedProviderId);
                   const isDone = launching && idx < launchProgress;
                   const isActive = launching && idx === launchProgress;

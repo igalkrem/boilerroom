@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
   if (!snapRes.ok) {
     const errText = await snapRes.text();
     console.error("[upload-from-blob] Snapchat upload failed:", snapRes.status, errText);
-    return NextResponse.json({ error: `Upload failed: ${snapRes.status}` }, { status: 500 });
+    return NextResponse.json({ error: "upload_failed" }, { status: 500 });
   }
 
   return NextResponse.json({ mediaId, status: "READY" });

@@ -50,6 +50,9 @@ export function synthesizeCampaign(
 
   // Use first ad squad template from preset
   const squadTemplate = preset.adSquads[0];
+  if (!squadTemplate) {
+    throw new Error(`Preset "${preset.name}" has no ad squad template`);
+  }
   const adSquad: AdSquadFormData = {
     id: adSquadId,
     campaignId,
@@ -75,8 +78,12 @@ export function synthesizeCampaign(
 
   // The webViewUrl will be resolved by the orchestrator after channel assignment + snap ID resolution.
   // We store the raw URL template here so the orchestrator can resolve it.
-  // For now, pass a placeholder that will be replaced.
   const urlTemplatePlaceholder = buildUrlTemplate(provider, article, item.headline, item.headlineRac);
+  if (!urlTemplatePlaceholder) {
+    throw new Error(
+      `Provider "${provider.name}" has no base URL and no parameters — configure a base URL on the domain or provider.`
+    );
+  }
 
   const creative: CreativeFormData = {
     id: creativeId,

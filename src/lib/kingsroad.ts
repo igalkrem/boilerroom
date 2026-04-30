@@ -77,7 +77,22 @@ export async function fetchKingsRoadReport(startDate: string, endDate: string): 
         funnel_impressions: r.funnel_impressions ?? 0,
       });
     }
-    url = page.next ?? null;
+    const nextUrl = page.next ?? null;
+    if (nextUrl !== null) {
+      try {
+        const parsed = new URL(nextUrl);
+        if (parsed.origin !== "https://partnerhub-api.kingsroad.io") {
+          console.error("[kingsroad] unexpected pagination origin — aborting:", parsed.origin);
+          break;
+        }
+        url = nextUrl;
+      } catch {
+        console.error("[kingsroad] invalid next URL — aborting:", nextUrl);
+        break;
+      }
+    } else {
+      url = null;
+    }
   }
   return rows;
 }
