@@ -630,6 +630,29 @@ export function CampaignCanvas({ adAccountId, onReview }: CampaignCanvasProps) {
                             </div>
                           );
                         })}
+                        {/* Creatives per ad set control */}
+                        <div className="flex items-center gap-2 justify-between pt-1 border-t border-gray-100">
+                          <span className="text-xs text-gray-400">Creatives/set</span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => store.setPresetCreativesPerAdSet(preset.id, (store.presetCreativesPerAdSet[preset.id] ?? 1) - 1)}
+                              className="w-5 h-5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded flex items-center justify-center"
+                            >
+                              −
+                            </button>
+                            <span className="text-xs font-medium text-gray-700 w-5 text-center">
+                              {store.presetCreativesPerAdSet[preset.id] ?? 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => store.setPresetCreativesPerAdSet(preset.id, (store.presetCreativesPerAdSet[preset.id] ?? 1) + 1)}
+                              className="w-5 h-5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded flex items-center justify-center"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </NodeCard>

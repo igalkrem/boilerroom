@@ -136,7 +136,7 @@ export interface CanvasEdges {
 
 export interface CampaignBuildItem {
   adAccountId: string;
-  creativeId: string;
+  creativeIds: string[];
   feedProviderId: string;
   articleId: string;
   presetId: string;

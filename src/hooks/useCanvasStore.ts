@@ -4,10 +4,45 @@ import { create } from "zustand";
 import type { CanvasEdges, CampaignBuildItem } from "@/types/wizard";
 import { loadAdAccountConfigs } from "@/lib/adAccounts";
 
+// ─── Cascade helpers ──────────────────────────────────────────────────────────
+
+function chunkArray<T>(arr: T[], n: number): T[][] {
+  if (n <= 0 || arr.length === 0) return arr.length > 0 ? [arr] : [];
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += n) chunks.push(arr.slice(i, i + n));
+  return chunks;
+}
+
+// After removing a providerToArticle edge, drop articleToPreset edges for any
+// article that now has zero provider connections.
+function orphanArticle(
+  articleId: string,
+  remainingProviderToArticle: CanvasEdges["providerToArticle"],
+  articleToPreset: CanvasEdges["articleToPreset"]
+): CanvasEdges["articleToPreset"] {
+  const stillConnected = remainingProviderToArticle.some((e) => e.articleId === articleId);
+  return stillConnected ? articleToPreset : articleToPreset.filter((e) => e.articleId !== articleId);
+}
+
+// Remove all providerToArticle edges for a provider, then cascade to articleToPreset
+// for any article that becomes orphaned.
+function cascadeProviderRemoval(feedProviderId: string, edges: CanvasEdges): CanvasEdges {
+  const removedEdges = edges.providerToArticle.filter((e) => e.feedProviderId === feedProviderId);
+  const newP2A = edges.providerToArticle.filter((e) => e.feedProviderId !== feedProviderId);
+  let newA2P = edges.articleToPreset;
+  for (const { articleId } of removedEdges) {
+    newA2P = orphanArticle(articleId, newP2A, newA2P);
+  }
+  return { ...edges, providerToArticle: newP2A, articleToPreset: newA2P };
+}
+
+// ─── Store ────────────────────────────────────────────────────────────────────
+
 interface CanvasStore {
   creativeIds: string[];
   edges: CanvasEdges;
   selectedAdAccountIds: string[];
+  presetCreativesPerAdSet: Record<string, number>;
 
   addCreative: (id: string) => void;
   removeCreative: (id: string) => void;
@@ -16,6 +51,7 @@ interface CanvasStore {
   setArticleContent: (feedProviderId: string, articleId: string, headline: string, callToAction: string, headlineRac?: string) => void;
   toggleArticleToPreset: (articleId: string, presetId: string) => void;
   setDuplications: (articleId: string, presetId: string, count: number) => void;
+  setPresetCreativesPerAdSet: (presetId: string, count: number) => void;
   toggleAdAccount: (id: string) => void;
   setSelectedAdAccountIds: (ids: string[]) => void;
   reset: () => void;
@@ -33,34 +69,47 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   creativeIds: [],
   edges: { ...initialEdges },
   selectedAdAccountIds: [],
+  presetCreativesPerAdSet: {},
 
   addCreative: (id) =>
     set((s) => ({ creativeIds: s.creativeIds.includes(id) ? s.creativeIds : [...s.creativeIds, id] })),
 
   removeCreative: (id) =>
-    set((s) => ({
-      creativeIds: s.creativeIds.filter((c) => c !== id),
-      edges: {
-        ...s.edges,
-        creativeToProvider: s.edges.creativeToProvider.filter((e) => e.creativeId !== id),
-      },
-    })),
+    set((s) => {
+      const newC2P = s.edges.creativeToProvider.filter((e) => e.creativeId !== id);
+      // For each provider that lost this creative, cascade if now empty
+      const removedProviders = s.edges.creativeToProvider
+        .filter((e) => e.creativeId === id)
+        .map((e) => e.feedProviderId);
+      let edges: CanvasEdges = { ...s.edges, creativeToProvider: newC2P };
+      for (const feedProviderId of removedProviders) {
+        const stillHasCreative = newC2P.some((e) => e.feedProviderId === feedProviderId);
+        if (!stillHasCreative) edges = cascadeProviderRemoval(feedProviderId, edges);
+      }
+      return { creativeIds: s.creativeIds.filter((c) => c !== id), edges };
+    }),
 
   toggleCreativeToProvider: (creativeId, feedProviderId) =>
     set((s) => {
       const exists = s.edges.creativeToProvider.some(
         (e) => e.creativeId === creativeId && e.feedProviderId === feedProviderId
       );
-      return {
-        edges: {
-          ...s.edges,
-          creativeToProvider: exists
-            ? s.edges.creativeToProvider.filter(
-                (e) => !(e.creativeId === creativeId && e.feedProviderId === feedProviderId)
-              )
-            : [...s.edges.creativeToProvider, { creativeId, feedProviderId }],
-        },
-      };
+      if (!exists) {
+        return {
+          edges: {
+            ...s.edges,
+            creativeToProvider: [...s.edges.creativeToProvider, { creativeId, feedProviderId }],
+          },
+        };
+      }
+      // Removing: cascade if provider loses all creative connections
+      const newC2P = s.edges.creativeToProvider.filter(
+        (e) => !(e.creativeId === creativeId && e.feedProviderId === feedProviderId)
+      );
+      const providerStillConnected = newC2P.some((e) => e.feedProviderId === feedProviderId);
+      let edges: CanvasEdges = { ...s.edges, creativeToProvider: newC2P };
+      if (!providerStillConnected) edges = cascadeProviderRemoval(feedProviderId, edges);
+      return { edges };
     }),
 
   toggleProviderToArticle: (feedProviderId, articleId) =>
@@ -68,16 +117,23 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       const exists = s.edges.providerToArticle.some(
         (e) => e.feedProviderId === feedProviderId && e.articleId === articleId
       );
-      return {
-        edges: {
-          ...s.edges,
-          providerToArticle: exists
-            ? s.edges.providerToArticle.filter(
-                (e) => !(e.feedProviderId === feedProviderId && e.articleId === articleId)
-              )
-            : [...s.edges.providerToArticle, { feedProviderId, articleId, headline: "", headlineRac: "", callToAction: "" }],
-        },
-      };
+      if (!exists) {
+        return {
+          edges: {
+            ...s.edges,
+            providerToArticle: [
+              ...s.edges.providerToArticle,
+              { feedProviderId, articleId, headline: "", headlineRac: "", callToAction: "" },
+            ],
+          },
+        };
+      }
+      // Removing: cascade if article loses all provider connections
+      const newP2A = s.edges.providerToArticle.filter(
+        (e) => !(e.feedProviderId === feedProviderId && e.articleId === articleId)
+      );
+      const newA2P = orphanArticle(articleId, newP2A, s.edges.articleToPreset);
+      return { edges: { ...s.edges, providerToArticle: newP2A, articleToPreset: newA2P } };
     }),
 
   setArticleContent: (feedProviderId, articleId, headline, callToAction, headlineRac) =>
@@ -121,6 +177,14 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       },
     })),
 
+  setPresetCreativesPerAdSet: (presetId, count) =>
+    set((s) => ({
+      presetCreativesPerAdSet: {
+        ...s.presetCreativesPerAdSet,
+        [presetId]: Math.max(1, Math.min(10, count)),
+      },
+    })),
+
   toggleAdAccount: (id) =>
     set((s) => ({
       selectedAdAccountIds: s.selectedAdAccountIds.includes(id)
@@ -130,29 +194,53 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   setSelectedAdAccountIds: (ids) => set({ selectedAdAccountIds: ids }),
 
-  reset: () => set({ creativeIds: [], edges: { ...initialEdges }, selectedAdAccountIds: [] }),
+  reset: () =>
+    set({ creativeIds: [], edges: { ...initialEdges }, selectedAdAccountIds: [], presetCreativesPerAdSet: {} }),
 
   buildCampaignMatrix: (): CampaignBuildItem[] => {
-    const { creativeIds, edges, selectedAdAccountIds } = get();
+    const { creativeIds, edges, selectedAdAccountIds, presetCreativesPerAdSet } = get();
     if (selectedAdAccountIds.length === 0) return [];
     const adAccountConfigs = loadAdAccountConfigs();
     const items: CampaignBuildItem[] = [];
 
-    for (const adAccountId of selectedAdAccountIds) {
-      const accCfg = adAccountConfigs.find((c) => c.id === adAccountId);
-      for (const creativeId of creativeIds) {
-        const providerEdges = edges.creativeToProvider.filter((e) => e.creativeId === creativeId);
-        for (const { feedProviderId } of providerEdges) {
-          // Skip cross-provider mismatch: account isn't assigned to this provider
-          if (accCfg && accCfg.feedProviderIds.length > 0 && !accCfg.feedProviderIds.includes(feedProviderId)) {
-            continue;
-          }
-          const articleEdges = edges.providerToArticle.filter((e) => e.feedProviderId === feedProviderId);
-          for (const { articleId, headline, headlineRac, callToAction } of articleEdges) {
-            const presetEdges = edges.articleToPreset.filter((e) => e.articleId === articleId);
-            for (const { presetId, duplications } of presetEdges) {
+    // Follow wizard flow: provider → article → preset (creatives grouped per provider)
+    const uniqueProviderIds = [...new Set(edges.providerToArticle.map((e) => e.feedProviderId))];
+
+    for (const feedProviderId of uniqueProviderIds) {
+      // Creatives connected to this provider
+      const providerCreatives = creativeIds.filter((cId) =>
+        edges.creativeToProvider.some((e) => e.creativeId === cId && e.feedProviderId === feedProviderId)
+      );
+      if (providerCreatives.length === 0) continue;
+
+      const articleEdges = edges.providerToArticle.filter((e) => e.feedProviderId === feedProviderId);
+
+      for (const { articleId, headline, headlineRac, callToAction } of articleEdges) {
+        const presetEdges = edges.articleToPreset.filter((e) => e.articleId === articleId);
+
+        for (const { presetId, duplications } of presetEdges) {
+          const n = presetCreativesPerAdSet[presetId] ?? 1;
+          const chunks = chunkArray(providerCreatives, n);
+
+          const eligibleAccounts = selectedAdAccountIds.filter((adAccountId) => {
+            const accCfg = adAccountConfigs.find((c) => c.id === adAccountId);
+            return !accCfg || accCfg.feedProviderIds.length === 0 || accCfg.feedProviderIds.includes(feedProviderId);
+          });
+
+          for (const chunk of chunks) {
+            for (const adAccountId of eligibleAccounts) {
               for (let i = 0; i < duplications; i++) {
-                items.push({ adAccountId, creativeId, feedProviderId, articleId, presetId, duplicationIndex: i, headline, headlineRac: headlineRac ?? "", callToAction });
+                items.push({
+                  adAccountId,
+                  creativeIds: chunk,
+                  feedProviderId,
+                  articleId,
+                  presetId,
+                  duplicationIndex: i,
+                  headline,
+                  headlineRac: headlineRac ?? "",
+                  callToAction,
+                });
               }
             }
           }

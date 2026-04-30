@@ -49,13 +49,13 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
         const provider = providers.find((p) => p.id === item.feedProviderId);
         const article = articles.find((a) => a.id === item.articleId);
         const preset = presets.find((p) => p.id === item.presetId);
-        const asset = getAssetById(item.creativeId);
+        const assets = item.creativeIds.map((id) => getAssetById(id)).filter(Boolean) as NonNullable<ReturnType<typeof getAssetById>>[];
 
-        if (!provider || !article || !preset || !asset) {
-          console.warn(`[wizard] skipping item ${i}: missing provider/article/preset/asset`);
+        if (!provider || !article || !preset || assets.length === 0) {
+          console.warn(`[wizard] skipping item ${i}: missing provider/article/preset/assets`);
           collectedResults.push({
             uploadMedia: [],
-            campaigns: [{ clientId: item.creativeId, snapId: "", name: `item-${i + 1}`, error: "Missing data: provider/article/preset/asset not found" }],
+            campaigns: [{ clientId: item.creativeIds[0] ?? `item-${i}`, snapId: "", name: `item-${i + 1}`, error: "Missing data: provider/article/preset/assets not found" }],
             adSquads: [],
             creatives: [],
             ads: [],
@@ -66,11 +66,11 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
         const ctx = {
           presetName: preset.name,
           articleSlug: article.slug,
-          creativeFilename: asset.originalFileName,
+          creativeFilename: assets[0].originalFileName,
         };
         const campaignName = resolveCampaignName(nameTemplate, item, ctx);
 
-        const synthesis = synthesizeCampaign(item, campaignName, provider, article, preset, asset);
+        const synthesis = synthesizeCampaign(item, campaignName, provider, article, preset, assets);
 
         const itemAccountId = item.adAccountId;
         const stageCallback = (stage: string) =>
