@@ -156,7 +156,8 @@ src/
 ├── lib/
 │   ├── snapchat/                      # Server-side API client (campaigns, adsquads, creatives, media, profiles, auth, stats)
 │   ├── submission-orchestrator.ts     # Sequences: uploadMedia → channel assign → campaigns → adSquads → URL resolve → creatives → ads → patchCreatives
-│   ├── synthesize-campaign.ts         # Converts CampaignBuildItem + resolved entities → {campaigns, adSquads, creatives}
+│   ├── synthesize-campaign.ts         # Converts CampaignBuildItem + resolved entities → {campaigns, adSquads, creatives}; throws if preset has no adSquads or provider URL is empty
+│   ├── resolve-campaign-name.ts       # Shared resolveCampaignName() used by WizardShell + ReviewAndPost — keeps preview and actual names identical
 │   ├── uploadMediaToSnapchat.ts       # Client-side upload pipeline + uploadBlobToSnapchat (server-side path for Silo uploads)
 │   ├── silo.ts                        # Silo asset CRUD (localStorage + KV sync, key: boilerroom_silo_v1)
 │   ├── silo-tags.ts                   # Tag CRUD + auto-naming (localStorage + KV sync, key: boilerroom_silo_tags_v1)
@@ -272,11 +273,17 @@ src/
 
 - **`isAdAccountAllowed` denies by default:** When `session.allowedAdAccountIds` is empty (fresh session before dashboard loads), the function returns `false`. It is populated by `/api/snapchat/ad-accounts` — all Snapchat API routes that accept an `adAccountId` must call this check. Do NOT revert the default to `true`. The four Snapchat GET proxy routes (`campaigns`, `adsquads`, `creatives`, `ads`) require `?adAccountId=` and call `isAdAccountAllowed` before fetching.
 - **`/api/data` is user-scoped:** Blob paths are `metadata/{googleUserId}/{key}.json`. Blobs are `access: "private"` — never expose them as public. Never use a shared path. Valid keys are whitelisted: `br_silo_assets`, `br_silo_tags`, `br_pixels`, `br_presets`, `br_feed_providers`, `br_articles`, `br_ad_accounts_v1`.
-- **`/api/feed-providers/channels/*` is user-scoped:** GET/POST/DELETE pass `session.googleUserId` to all DB functions; queries filter by `google_user_id` so users can only access their own channels.
+- **`/api/feed-providers/channels/*` is user-scoped:** GET/POST/DELETE pass `session.googleUserId` to all DB functions; queries filter by `google_user_id` so users can only access their own channels. `assignChannel`, `releaseChannel`, and `normalizeChannelStatuses` all require `googleUserId` — never call them without it.
+- **`/api/silo/delete` is user-scoped:** Before calling `del()`, the route fetches `metadata/{googleUserId}/br_silo_assets.json` from the blob store and verifies every URL to be deleted is present in the user's asset list. Fails safe (500) if the KV fetch fails.
 - **`media/upload` and `media/poll` require ownership checks:** Both routes call `isAdAccountAllowed` before forwarding to Snapchat.
-- **`media/copy` checks both source and destination:** Both `sourceAdAccountId` and `destinationAdAccountId` must be verified to prevent cross-account media exfiltration.
+- **`media/copy` checks both source and destination:** Both `sourceAdAccountId` and `destinationAdAccountId` must be verified to prevent cross-account media exfiltration. Error response uses `retryAsUpload` (not `orgMismatch`) — only set when the error string contains "different organization".
 - **`media/upload-from-blob` SSRF guard:** `blobUrl` must end with `.vercel-storage.com` before server-side fetch.
-- **Snapchat error bodies are not forwarded verbatim:** Routes should `console.error` full error details and return `{ error: "internal_error" }` to the client.
+- **KingsRoad pagination SSRF guard:** `page.next` URL is validated to originate from `https://partnerhub-api.kingsroad.io` before following. Loop aborts on unexpected origin or invalid URL.
+- **`/api/reporting/sync` date range is validated:** Zod schema enforces YYYY-MM-DD format and a maximum 90-day window. Requests outside this range return 400.
+- **`/api/auth/refresh` skips Snapchat when token is still valid:** Pre-check compares `session.snapExpiresAt` against now − 5 min; returns `{ ok: true, cached: true }` without hitting Snapchat's token endpoint.
+- **Session cookie has `maxAge: 14 days`:** Prevents indefinite persistence on shared machines. iron-session resets the clock on every `save()`.
+- **Snapchat token revoked on disconnect:** `/api/auth/snapchat/disconnect` calls Snapchat's `revoke_token` endpoint (best-effort) before clearing the session fields.
+- **Snapchat error bodies are not forwarded verbatim:** Routes `console.error` full details and return generic codes to the client (`"upload_failed"`, `"internal_error"`, etc.).
 - **Content Security Policy (`next.config.mjs`):** `img-src` allows `'self' data: blob: https://*.public.blob.vercel-storage.com https://lh3.googleusercontent.com`. If you add images from a new external domain, update this list or they will be silently blocked.
 
 ## Snapchat API Field Notes
