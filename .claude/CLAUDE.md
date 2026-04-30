@@ -21,6 +21,7 @@ Do not skip any step. Do not ask for confirmation before running these commands.
 
 ## Agents
 
+- **`builder-expert`** — canvas wizard: React Flow canvas, useCanvasStore, submission orchestrator, synthesizeCampaign(), URL macros, Silo integration, node/edge components. **TRIGGER** for any task touching `src/components/wizard/`, `src/hooks/useCanvasStore.ts`, `src/lib/submission-orchestrator.ts`, `src/lib/synthesize-campaign.ts`, or any question about the builder feature. **SKIP** for security, API spec compliance, and unrelated features.
 - **`code-reviewer`** — functional correctness: bugs, type safety, error handling, data flows. Run before any PR.
 - **`security-audit`** — auth, SSRF, access control, secrets, OWASP. Run before any deploy or when new API routes are added.
 - **`snapchat-api-auditor`** — Snapchat API spec compliance: payload field names vs live docs, forbidden fields, invalid enums. Run before any deploy or after a Snapchat API update.
@@ -204,10 +205,11 @@ src/
 
   **React Flow canvas (`CampaignCanvas.tsx`):** Nodes are freely draggable; positions persist in `store.nodePositions`. Connections are drawn by dragging from source/target handles — `onConnect` maps handle types to store actions; `onEdgesDelete` (Backspace/Delete) fires cascade logic. Router nodes sit between a Provider and Articles as explicit fan-out nodes (diamond shape); adding one moves creativeToProvider edges visually through the router while `buildCampaignMatrix()` resolves them transparently. **Auto-align** runs dagre LR layout via `computeAutoLayout()` in `CanvasControls.tsx`. Visibility rules (which articles/accounts/presets appear) are the same as the old column layout.
 
-  **React Flow render-loop hazards (React error #185):** Two pitfalls that cause an infinite `setNodes` loop:
+  **React Flow render-loop hazards (React error #185):** Three pitfalls that cause an infinite `setNodes` loop:
   1. **`store.nodePositions` must NOT be in `buildNodes` deps.** If it were, every drag → store write → `buildNodes` rebuilds → `setNodes` → React Flow fires position changes → store write → repeat. Fix: read positions via `nodePositionsRef` (a `useRef` kept in sync via a separate `useEffect`) so `buildNodes` can read current positions without subscribing to them.
   2. **Use `change.dragging === false` (strict), not `!change.dragging`.** React Flow fires `onNodesChange` with `{ type: "position", dragging: undefined }` on initialization — `!undefined` is `true`, so every node's init position would be written to the store, triggering a rebuild loop. Strict `=== false` passes only on user drag-and-drop completion.
-  All five visibility arrays (`activeProviderIds`, `activeProviderIdsFromArticles`, `visibleArticles`, `visibleAccounts`, `visiblePresets`) are wrapped in `useMemo` — `filter()`/`new Set()` always return new references, and these flow into `buildNodes` deps.
+  3. **Never inline `[]` as a fallback in hooks that feed into `buildNodes` deps.** `useAdAccounts` returns `data?.accounts ?? EMPTY_ACCOUNTS` where `EMPTY_ACCOUNTS` is a module-level constant. If the fallback were `[]`, every render while SWR is loading would produce a new array reference → `visibleAccounts` recomputes → `buildNodes` rebuilds → `setNodes` → re-render → repeat. The same applies to any hook that feeds an array into a `useMemo` dep chain.
+  All five visibility arrays (`activeProviderIds`, `activeProviderIdsFromArticles`, `visibleArticles`, `visibleAccounts`, `visiblePresets`) are wrapped in `useMemo` — `filter()`/`new Set()` always return new references, and these flow into `buildNodes` deps. `store.edges` is intentionally absent from `buildNodes` deps — visibility is already captured by the memoized arrays above.
 
   **Canvas visual rules:**
   - **Provider colors** — assigned from `PROVIDER_COLORS` array indexed by sort-order of `createdAt` (stable; not array position). Colors propagate to NodeCard borders, indicator dots, and SVG edges.
