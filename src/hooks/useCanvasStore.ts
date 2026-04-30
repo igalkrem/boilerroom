@@ -1,17 +1,9 @@
 "use client";
 
 import { create } from "zustand";
-import type { CanvasEdges, CampaignBuildItem } from "@/types/wizard";
-import { loadAdAccountConfigs } from "@/lib/adAccounts";
+import type { CanvasEdges, CampaignBuildItem, CreativeGroup } from "@/types/wizard";
 
 // ─── Cascade helpers ──────────────────────────────────────────────────────────
-
-function chunkArray<T>(arr: T[], n: number): T[][] {
-  if (n <= 0 || arr.length === 0) return arr.length > 0 ? [arr] : [];
-  const chunks: T[][] = [];
-  for (let i = 0; i < arr.length; i += n) chunks.push(arr.slice(i, i + n));
-  return chunks;
-}
 
 // After removing a providerToArticle edge, drop articleToPreset edges for any
 // article that now has zero provider connections.
@@ -24,8 +16,7 @@ function orphanArticle(
   return stillConnected ? articleToPreset : articleToPreset.filter((e) => e.articleId !== articleId);
 }
 
-// Remove all providerToArticle edges for a provider, then cascade to articleToPreset
-// for any article that becomes orphaned.
+// Remove all providerToArticle edges for a provider, then cascade to articleToPreset.
 function cascadeProviderRemoval(feedProviderId: string, edges: CanvasEdges): CanvasEdges {
   const removedEdges = edges.providerToArticle.filter((e) => e.feedProviderId === feedProviderId);
   const newP2A = edges.providerToArticle.filter((e) => e.feedProviderId !== feedProviderId);
@@ -44,23 +35,24 @@ export interface RouterNode {
 }
 
 interface CanvasStore {
-  creativeIds: string[];
+  creativeGroups: CreativeGroup[];
   edges: CanvasEdges;
-  selectedAdAccountIds: string[];
-  presetCreativesPerAdSet: Record<string, number>;
   nodePositions: Record<string, { x: number; y: number }>;
   routerNodes: RouterNode[];
 
-  addCreative: (id: string) => void;
-  removeCreative: (id: string) => void;
-  toggleCreativeToProvider: (creativeId: string, feedProviderId: string) => void;
+  addGroup: () => CreativeGroup;
+  removeGroup: (groupId: string) => void;
+  addCreativeToGroup: (groupId: string, assetId: string) => void;
+  removeCreativeFromGroup: (groupId: string, assetId: string) => void;
+  toggleGroupToProvider: (groupId: string, feedProviderId: string) => void;
+
   toggleProviderToArticle: (feedProviderId: string, articleId: string) => void;
   setArticleContent: (feedProviderId: string, articleId: string, headline: string, callToAction: string, headlineRac?: string) => void;
   toggleArticleToPreset: (articleId: string, presetId: string) => void;
   setDuplications: (articleId: string, presetId: string, count: number) => void;
-  setPresetCreativesPerAdSet: (presetId: string, count: number) => void;
-  toggleAdAccount: (id: string) => void;
-  setSelectedAdAccountIds: (ids: string[]) => void;
+
+  toggleArticleToAdAccount: (articleId: string, adAccountId: string) => void;
+
   setNodePosition: (nodeId: string, position: { x: number; y: number }) => void;
   setNodePositions: (positions: Record<string, { x: number; y: number }>) => void;
   addRouter: (feedProviderId: string) => RouterNode;
@@ -71,56 +63,81 @@ interface CanvasStore {
 }
 
 const initialEdges: CanvasEdges = {
-  creativeToProvider: [],
+  groupToProvider: [],
   providerToArticle: [],
   articleToPreset: [],
+  articleToAdAccount: [],
 };
 
 export const useCanvasStore = create<CanvasStore>((set, get) => ({
-  creativeIds: [],
+  creativeGroups: [],
   edges: { ...initialEdges },
-  selectedAdAccountIds: [],
-  presetCreativesPerAdSet: {},
   nodePositions: {},
   routerNodes: [],
 
-  addCreative: (id) =>
-    set((s) => ({ creativeIds: s.creativeIds.includes(id) ? s.creativeIds : [...s.creativeIds, id] })),
+  addGroup: () => {
+    const newGroup: CreativeGroup = { id: `group-${Date.now()}`, creativeIds: [] };
+    set((s) => ({ creativeGroups: [...s.creativeGroups, newGroup] }));
+    return newGroup;
+  },
 
-  removeCreative: (id) =>
+  removeGroup: (groupId) =>
     set((s) => {
-      const newC2P = s.edges.creativeToProvider.filter((e) => e.creativeId !== id);
-      // For each provider that lost this creative, cascade if now empty
-      const removedProviders = s.edges.creativeToProvider
-        .filter((e) => e.creativeId === id)
+      const removedProviders = s.edges.groupToProvider
+        .filter((e) => e.groupId === groupId)
         .map((e) => e.feedProviderId);
-      let edges: CanvasEdges = { ...s.edges, creativeToProvider: newC2P };
+      const newG2P = s.edges.groupToProvider.filter((e) => e.groupId !== groupId);
+      let edges: CanvasEdges = { ...s.edges, groupToProvider: newG2P };
       for (const feedProviderId of removedProviders) {
-        const stillHasCreative = newC2P.some((e) => e.feedProviderId === feedProviderId);
-        if (!stillHasCreative) edges = cascadeProviderRemoval(feedProviderId, edges);
+        const stillHasGroup = newG2P.some((e) => e.feedProviderId === feedProviderId);
+        if (!stillHasGroup) edges = cascadeProviderRemoval(feedProviderId, edges);
       }
-      return { creativeIds: s.creativeIds.filter((c) => c !== id), edges };
+      return { creativeGroups: s.creativeGroups.filter((g) => g.id !== groupId), edges };
     }),
 
-  toggleCreativeToProvider: (creativeId, feedProviderId) =>
+  addCreativeToGroup: (groupId, assetId) =>
+    set((s) => ({
+      creativeGroups: s.creativeGroups.map((g) => {
+        if (g.id !== groupId) return g;
+        if (g.creativeIds.includes(assetId) || g.creativeIds.length >= 5) return g;
+        return { ...g, creativeIds: [...g.creativeIds, assetId] };
+      }),
+    })),
+
+  removeCreativeFromGroup: (groupId, assetId) => {
+    const state = get();
+    const group = state.creativeGroups.find((g) => g.id === groupId);
+    if (!group) return;
+    const remaining = group.creativeIds.filter((id) => id !== assetId);
+    if (remaining.length === 0) {
+      get().removeGroup(groupId);
+    } else {
+      set((s) => ({
+        creativeGroups: s.creativeGroups.map((g) =>
+          g.id === groupId ? { ...g, creativeIds: remaining } : g
+        ),
+      }));
+    }
+  },
+
+  toggleGroupToProvider: (groupId, feedProviderId) =>
     set((s) => {
-      const exists = s.edges.creativeToProvider.some(
-        (e) => e.creativeId === creativeId && e.feedProviderId === feedProviderId
+      const exists = s.edges.groupToProvider.some(
+        (e) => e.groupId === groupId && e.feedProviderId === feedProviderId
       );
       if (!exists) {
         return {
           edges: {
             ...s.edges,
-            creativeToProvider: [...s.edges.creativeToProvider, { creativeId, feedProviderId }],
+            groupToProvider: [...s.edges.groupToProvider, { groupId, feedProviderId }],
           },
         };
       }
-      // Removing: cascade if provider loses all creative connections
-      const newC2P = s.edges.creativeToProvider.filter(
-        (e) => !(e.creativeId === creativeId && e.feedProviderId === feedProviderId)
+      const newG2P = s.edges.groupToProvider.filter(
+        (e) => !(e.groupId === groupId && e.feedProviderId === feedProviderId)
       );
-      const providerStillConnected = newC2P.some((e) => e.feedProviderId === feedProviderId);
-      let edges: CanvasEdges = { ...s.edges, creativeToProvider: newC2P };
+      const providerStillConnected = newG2P.some((e) => e.feedProviderId === feedProviderId);
+      let edges: CanvasEdges = { ...s.edges, groupToProvider: newG2P };
       if (!providerStillConnected) edges = cascadeProviderRemoval(feedProviderId, edges);
       return { edges };
     }),
@@ -141,7 +158,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
           },
         };
       }
-      // Removing: cascade if article loses all provider connections
       const newP2A = s.edges.providerToArticle.filter(
         (e) => !(e.feedProviderId === feedProviderId && e.articleId === articleId)
       );
@@ -190,22 +206,22 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       },
     })),
 
-  setPresetCreativesPerAdSet: (presetId, count) =>
-    set((s) => ({
-      presetCreativesPerAdSet: {
-        ...s.presetCreativesPerAdSet,
-        [presetId]: Math.max(1, Math.min(10, count)),
-      },
-    })),
-
-  toggleAdAccount: (id) =>
-    set((s) => ({
-      selectedAdAccountIds: s.selectedAdAccountIds.includes(id)
-        ? s.selectedAdAccountIds.filter((a) => a !== id)
-        : [...s.selectedAdAccountIds, id],
-    })),
-
-  setSelectedAdAccountIds: (ids) => set({ selectedAdAccountIds: ids }),
+  toggleArticleToAdAccount: (articleId, adAccountId) =>
+    set((s) => {
+      const exists = s.edges.articleToAdAccount.some(
+        (e) => e.articleId === articleId && e.adAccountId === adAccountId
+      );
+      return {
+        edges: {
+          ...s.edges,
+          articleToAdAccount: exists
+            ? s.edges.articleToAdAccount.filter(
+                (e) => !(e.articleId === articleId && e.adAccountId === adAccountId)
+              )
+            : [...s.edges.articleToAdAccount, { articleId, adAccountId }],
+        },
+      };
+    }),
 
   setNodePosition: (nodeId, position) =>
     set((s) => ({ nodePositions: { ...s.nodePositions, [nodeId]: position } })),
@@ -224,59 +240,46 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   reset: () =>
     set({
-      creativeIds: [],
+      creativeGroups: [],
       edges: { ...initialEdges },
-      selectedAdAccountIds: [],
-      presetCreativesPerAdSet: {},
       nodePositions: {},
       routerNodes: [],
     }),
 
   buildCampaignMatrix: (): CampaignBuildItem[] => {
-    const { creativeIds, edges, selectedAdAccountIds, presetCreativesPerAdSet } = get();
-    if (selectedAdAccountIds.length === 0) return [];
-    const adAccountConfigs = loadAdAccountConfigs();
+    const { creativeGroups, edges } = get();
     const items: CampaignBuildItem[] = [];
 
-    // Follow wizard flow: provider → article → preset (creatives grouped per provider)
-    const uniqueProviderIds = [...new Set(edges.providerToArticle.map((e) => e.feedProviderId))];
+    for (const { groupId, feedProviderId } of edges.groupToProvider) {
+      const group = creativeGroups.find((g) => g.id === groupId);
+      if (!group || group.creativeIds.length === 0) continue;
 
-    for (const feedProviderId of uniqueProviderIds) {
-      // Creatives connected to this provider
-      const providerCreatives = creativeIds.filter((cId) =>
-        edges.creativeToProvider.some((e) => e.creativeId === cId && e.feedProviderId === feedProviderId)
+      const articleEdges = edges.providerToArticle.filter(
+        (e) => e.feedProviderId === feedProviderId
       );
-      if (providerCreatives.length === 0) continue;
-
-      const articleEdges = edges.providerToArticle.filter((e) => e.feedProviderId === feedProviderId);
 
       for (const { articleId, headline, headlineRac, callToAction } of articleEdges) {
         const presetEdges = edges.articleToPreset.filter((e) => e.articleId === articleId);
+        const eligibleAccounts = edges.articleToAdAccount
+          .filter((e) => e.articleId === articleId)
+          .map((e) => e.adAccountId);
+
+        if (eligibleAccounts.length === 0) continue;
 
         for (const { presetId, duplications } of presetEdges) {
-          const n = presetCreativesPerAdSet[presetId] ?? 1;
-          const chunks = chunkArray(providerCreatives, n);
-
-          const eligibleAccounts = selectedAdAccountIds.filter((adAccountId) => {
-            const accCfg = adAccountConfigs.find((c) => c.id === adAccountId);
-            return !accCfg || accCfg.feedProviderIds.length === 0 || accCfg.feedProviderIds.includes(feedProviderId);
-          });
-
-          for (const chunk of chunks) {
-            for (const adAccountId of eligibleAccounts) {
-              for (let i = 0; i < duplications; i++) {
-                items.push({
-                  adAccountId,
-                  creativeIds: chunk,
-                  feedProviderId,
-                  articleId,
-                  presetId,
-                  duplicationIndex: i,
-                  headline,
-                  headlineRac: headlineRac ?? "",
-                  callToAction,
-                });
-              }
+          for (const adAccountId of eligibleAccounts) {
+            for (let i = 0; i < duplications; i++) {
+              items.push({
+                adAccountId,
+                creativeIds: group.creativeIds,
+                feedProviderId,
+                articleId,
+                presetId,
+                duplicationIndex: i,
+                headline,
+                headlineRac: headlineRac ?? "",
+                callToAction,
+              });
             }
           }
         }

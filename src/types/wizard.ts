@@ -118,8 +118,13 @@ export type SubmissionStage =
 
 // ─── Canvas store types ────────────────────────────────────────────────────
 
+export interface CreativeGroup {
+  id: string;
+  creativeIds: string[]; // max 5
+}
+
 export interface CanvasEdges {
-  creativeToProvider: Array<{ creativeId: string; feedProviderId: string }>;
+  groupToProvider: Array<{ groupId: string; feedProviderId: string }>;
   providerToArticle: Array<{
     feedProviderId: string;
     articleId: string;
@@ -132,6 +137,7 @@ export interface CanvasEdges {
     presetId: string;
     duplications: number;
   }>;
+  articleToAdAccount: Array<{ articleId: string; adAccountId: string }>;
 }
 
 export interface CampaignBuildItem {
