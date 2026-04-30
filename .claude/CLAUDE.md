@@ -204,6 +204,11 @@ src/
 
   **React Flow canvas (`CampaignCanvas.tsx`):** Nodes are freely draggable; positions persist in `store.nodePositions`. Connections are drawn by dragging from source/target handles — `onConnect` maps handle types to store actions; `onEdgesDelete` (Backspace/Delete) fires cascade logic. Router nodes sit between a Provider and Articles as explicit fan-out nodes (diamond shape); adding one moves creativeToProvider edges visually through the router while `buildCampaignMatrix()` resolves them transparently. **Auto-align** runs dagre LR layout via `computeAutoLayout()` in `CanvasControls.tsx`. Visibility rules (which articles/accounts/presets appear) are the same as the old column layout.
 
+  **React Flow render-loop hazards (React error #185):** Two pitfalls that cause an infinite `setNodes` loop:
+  1. **`store.nodePositions` must NOT be in `buildNodes` deps.** If it were, every drag → store write → `buildNodes` rebuilds → `setNodes` → React Flow fires position changes → store write → repeat. Fix: read positions via `nodePositionsRef` (a `useRef` kept in sync via a separate `useEffect`) so `buildNodes` can read current positions without subscribing to them.
+  2. **Use `change.dragging === false` (strict), not `!change.dragging`.** React Flow fires `onNodesChange` with `{ type: "position", dragging: undefined }` on initialization — `!undefined` is `true`, so every node's init position would be written to the store, triggering a rebuild loop. Strict `=== false` passes only on user drag-and-drop completion.
+  All five visibility arrays (`activeProviderIds`, `activeProviderIdsFromArticles`, `visibleArticles`, `visibleAccounts`, `visiblePresets`) are wrapped in `useMemo` — `filter()`/`new Set()` always return new references, and these flow into `buildNodes` deps.
+
   **Canvas visual rules:**
   - **Provider colors** — assigned from `PROVIDER_COLORS` array indexed by sort-order of `createdAt` (stable; not array position). Colors propagate to NodeCard borders, indicator dots, and SVG edges.
   - **Creative NodeCard** — shows a multi-color gradient border (CSS `background-image` double-gradient trick) when connected to more than one provider; single-provider connections use that provider's color; unconnected shows gray.
