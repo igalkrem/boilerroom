@@ -126,6 +126,7 @@ export function PresetForm({ preset }: PresetFormProps) {
   );
   const [feedProviderId, setFeedProviderId] = useState<string>(preset?.feedProviderId ?? "");
   const [comboId, setComboId] = useState<string>(preset?.comboId ?? "");
+  const [tag, setTag] = useState<string>(preset?.tag ?? "");
   const [adStatus, setAdStatus] = useState<"ACTIVE" | "PAUSED">(
     preset?.creativeDefaults?.adStatus ?? "PAUSED"
   );
@@ -193,6 +194,7 @@ export function PresetForm({ preset }: PresetFormProps) {
     const saved: CampaignPreset = {
       id: preset?.id ?? uuid(),
       name: data.presetName,
+      tag: tag || undefined,
       trafficSource,
       feedProviderId,
       comboId: comboId || undefined,
@@ -273,6 +275,19 @@ export function PresetForm({ preset }: PresetFormProps) {
             {...register("presetName")}
             error={errors.presetName?.message}
           />
+        </div>
+
+        <div className="sm:col-span-2">
+          <Input
+            label="Preset Tag"
+            placeholder="e.g. T1"
+            value={tag}
+            onChange={(e) => setTag(e.target.value)}
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            Used in campaign naming templates as{" "}
+            <code className="bg-gray-100 px-1 rounded">{"{{preset.tag}}"}</code>.
+          </p>
         </div>
 
         <div>

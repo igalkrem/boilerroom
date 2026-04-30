@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useCanvasStore } from "@/hooks/useCanvasStore";
 import { loadFeedProviders } from "@/lib/feed-providers";
 import { loadArticles } from "@/lib/articles";
@@ -34,7 +34,18 @@ export function ReviewAndPost({ onBack, onLaunch, launching, launchProgress }: R
   const articles = loadArticles();
   const presets = loadPresets();
 
-  function getContext(item: CampaignBuildItem) {
+  // Stable per-row preview IDs — only regenerate when matrix length changes
+  const previewIds = useMemo(
+    () => matrix.map(() => Math.random().toString(36).slice(2, 6).toUpperCase()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [matrix.length]
+  );
+
+  const hasProviderTemplates = providers.some(
+    (p) => (p.snapConfig.campaignNamingTemplate?.length ?? 0) > 0
+  );
+
+  function getContext(item: CampaignBuildItem, uniqueId4: string) {
     const preset = presets.find((p) => p.id === item.presetId);
     const article = articles.find((a) => a.id === item.articleId);
     const firstAsset = getAssetById(item.creativeIds[0]);
@@ -48,6 +59,8 @@ export function ReviewAndPost({ onBack, onLaunch, launching, launchProgress }: R
       presetName: preset?.name ?? item.presetId,
       articleSlug: article?.slug ?? item.articleId,
       creativeFilename,
+      presetTag: preset?.tag,
+      uniqueId4,
     };
   }
 
@@ -80,9 +93,16 @@ export function ReviewAndPost({ onBack, onLaunch, launching, launchProgress }: R
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* Name template */}
         <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
-          <h3 className="font-semibold text-gray-800 text-sm">Campaign Name Template</h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-semibold text-gray-800 text-sm">Campaign Name Template</h3>
+            {hasProviderTemplates && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-violet-100 text-violet-700">
+                Provider template active
+              </span>
+            )}
+          </div>
           <p className="text-xs text-gray-500">
-            This template is used for the campaign, ad set, and ad name. Macros are resolved per row.
+            Fallback template used when a provider has no naming template configured. Macros are resolved per row.
           </p>
           <div className="flex gap-2">
             <input
@@ -127,9 +147,14 @@ export function ReviewAndPost({ onBack, onLaunch, launching, launchProgress }: R
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {matrix.map((item, idx) => {
-                  const ctx = getContext(item);
-                  const resolvedName = resolveCampaignName(nameTemplate, item, ctx);
                   const provider = providers.find((p) => p.id === item.feedProviderId);
+                  const ctx = getContext(item, previewIds[idx] ?? "XXXX");
+                  const resolvedName = resolveCampaignName(
+                    nameTemplate,
+                    item,
+                    ctx,
+                    provider?.snapConfig.campaignNamingTemplate
+                  );
                   const isDone = launching && idx < launchProgress;
                   const isActive = launching && idx === launchProgress;
                   return (

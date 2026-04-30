@@ -8,6 +8,7 @@ const KV_KEY = "br_presets";
 const presetSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
+  tag: z.string().optional(),
   createdAt: z.string(),
   campaign: z.object({
     objective: z.string().min(1),
