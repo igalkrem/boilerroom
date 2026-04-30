@@ -30,7 +30,9 @@ export function loadPresets(): CampaignPreset[] {
       return [];
     }
     // Filter out corrupted entries rather than wiping the entire store.
-    return parsed.filter((item) => presetSchema.safeParse(item).success) as CampaignPreset[];
+    return parsed
+      .filter((item) => presetSchema.safeParse(item).success)
+      .map((item) => ({ trafficSource: "snap" as const, ...item })) as CampaignPreset[];
   } catch {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
     return [];
@@ -61,4 +63,17 @@ export function deletePreset(id: string): void {
 
 export function getPresetById(id: string): CampaignPreset | undefined {
   return loadPresets().find((p) => p.id === id);
+}
+
+export function duplicatePreset(id: string): CampaignPreset | null {
+  const original = getPresetById(id);
+  if (!original) return null;
+  const copy: CampaignPreset = {
+    ...original,
+    id: crypto.randomUUID(),
+    name: `Copy of ${original.name}`,
+    createdAt: new Date().toISOString(),
+  };
+  upsertPreset(copy);
+  return copy;
 }
