@@ -119,17 +119,17 @@ src/
 │           └── tags/                  # Tag CRUD (create, edit, delete)
 ├── components/
 │   ├── wizard/
-│   │   ├── CampaignCanvas.tsx         # React Flow free-form canvas (replaces fixed column layout)
-│   │   ├── CanvasControls.tsx         # Top bar: Add Creative, Auto-align, Review →; computeAutoLayout (dagre LR)
+│   │   ├── CampaignCanvas.tsx         # React Flow free-form canvas; grey bg; fitView maxZoom 0.75
+│   │   ├── CanvasControls.tsx         # Top bar: Add Creative, Auto-align, Review →; computeAutoLayout (dagre LR, ranksep 200)
 │   │   ├── nodes/
-│   │   │   ├── CreativeNode.tsx       # Thumbnail + filename + remove; source handle right
-│   │   │   ├── ProviderNode.tsx       # Name + color + creative count; "+ Router" button when connected
-│   │   │   ├── RouterNode.tsx         # Diamond shape; routes one provider to multiple articles
-│   │   │   ├── ArticleNode.tsx        # Slug + query + inline headline/CTA editor (expand ▼)
-│   │   │   ├── AdAccountNode.tsx      # Click to select/deselect; no edge handles needed
-│   │   │   └── PresetNode.tsx         # Name + config + duplication rows + Creatives/set control
+│   │   │   ├── CreativeGroupNode.tsx  # Group card: thumbnail grid (1–5), click-to-preview modal, + Add creative footer, source handle right
+│   │   │   ├── ProviderNode.tsx       # Left accent bar + group count; hidden until first group added; no "+ Router" button
+│   │   │   ├── RouterNode.tsx         # Sleek circle (⑃ icon) — auto-inserted when provider gets second article
+│   │   │   ├── ArticleNode.tsx        # Slug + query + inline headline/CTA editor (expand ▼); 📄 icon
+│   │   │   ├── AdAccountNode.tsx      # Initials avatar; connected state from articleToAdAccount edges (no click-select)
+│   │   │   └── PresetNode.tsx         # Name + config + duplication rows; no Creatives/set control (replaced by groups)
 │   │   ├── edges/
-│   │   │   └── ProviderEdge.tsx       # Dotted bezier in provider color
+│   │   │   └── ProviderEdge.tsx       # Dotted SmoothStep in provider color (was bezier)
 │   │   ├── ReviewAndPost.tsx          # Campaign name template + launch matrix table
 │   │   ├── WizardShell.tsx            # Build/Review/Done mode toggle + sequential launch loop
 │   │   ├── SubmissionProgress.tsx
@@ -187,7 +187,7 @@ src/
 │   ├── session.ts                     # iron-session helpers & auth validation
 │   └── rate-limiter.ts
 └── types/
-    ├── wizard.ts                      # CampaignFormData, AdSquadFormData, CreativeFormData, SubmissionResults, CanvasEdges, CampaignBuildItem
+    ├── wizard.ts                      # CampaignFormData, AdSquadFormData, CreativeFormData, SubmissionResults, CreativeGroup, CanvasEdges, CampaignBuildItem
     ├── feed-provider.ts               # FeedProvider (full type with snapConfig, urlConfig, channelConfig, domains, combos), UrlParameter, FeedProviderDomain, FeedProviderCombo, ChannelSetupType
     ├── article.ts                     # Article (id, feedProviderId, slug, query, allowedHeadlines, createdAt)
     ├── preset.ts                      # CampaignPreset (includes trafficSource, feedProviderId, comboId, creativeDefaults)
@@ -201,23 +201,33 @@ src/
 
 - **OAuth flow:** `/api/auth/*` routes handle token exchange and refresh; tokens live in an iron-session HttpOnly cookie.
 
-- **Canvas wizard:** `WizardShell` renders in three modes: `canvas` (`CampaignCanvas` React Flow), `review` (`ReviewAndPost`), `done` (success screen). `CampaignCanvas` is loaded via `next/dynamic` with `ssr: false` — React Flow accesses browser globals during render and crashes during Next.js static pre-rendering without this. The canvas uses `useCanvasStore` (Zustand) to track selected creative IDs, three edge lists (`creativeToProvider`, `providerToArticle`, `articleToPreset`), `presetCreativesPerAdSet`, `nodePositions`, and `routerNodes`. `buildCampaignMatrix()` follows wizard flow order (provider → article → preset), groups creatives into chunks of `presetCreativesPerAdSet[presetId]` (default 1), and produces `CampaignBuildItem[]` where each item has `creativeIds: string[]`. Cascade: removing a creative→provider edge that orphans a provider also removes its article edges; removing a provider→article edge that orphans an article also removes its preset edges. On launch, `WizardShell` loops sequentially, loads all assets for `item.creativeIds`, calls `synthesizeCampaign()` (returns one campaign, one ad squad, N creatives) then `runSubmission()`.
+- **Canvas wizard:** `WizardShell` renders in three modes: `canvas` (`CampaignCanvas` React Flow), `review` (`ReviewAndPost`), `done` (success screen). `CampaignCanvas` is loaded via `next/dynamic` with `ssr: false`. The canvas uses `useCanvasStore` (Zustand) to track `creativeGroups: CreativeGroup[]` (each group holds 1–5 asset IDs), four edge lists (`groupToProvider`, `providerToArticle`, `articleToPreset`, `articleToAdAccount`), `nodePositions`, and `routerNodes`. `buildCampaignMatrix()` iterates groupToProvider edges — each group is an explicit chunk of creatives, producing `CampaignBuildItem[]` where each item has `creativeIds: string[]`. Cascade: removing a group→provider edge that orphans a provider also removes its article edges; removing a provider→article edge that orphans an article also removes its preset edges. On launch, `WizardShell` loads all assets for `item.creativeIds`, calls `synthesizeCampaign()`, then `runSubmission()`.
 
-  **React Flow canvas (`CampaignCanvas.tsx`):** Nodes are freely draggable; positions persist in `store.nodePositions`. Connections are drawn by dragging from source/target handles — `onConnect` maps handle types to store actions; `onEdgesDelete` (Backspace/Delete) fires cascade logic. Router nodes sit between a Provider and Articles as explicit fan-out nodes (diamond shape); adding one moves creativeToProvider edges visually through the router while `buildCampaignMatrix()` resolves them transparently. **Auto-align** runs dagre LR layout via `computeAutoLayout()` in `CanvasControls.tsx`. Visibility rules (which articles/accounts/presets appear) are the same as the old column layout.
+  **React Flow canvas (`CampaignCanvas.tsx`):** Nodes are freely draggable; positions persist in `store.nodePositions`. Key design decisions:
+  - **Creative groups** — users add groups via "+ Add Creative" (creates new `CreativeGroup` node + opens SiloBrowser). Each group card shows portrait thumbnails; clicking a thumbnail opens a full preview modal (image or video player). Up to 5 creatives per group. Groups are the unit that connects to providers.
+  - **Provider visibility** — providers only appear after at least one group exists.
+  - **Auto-router** — in `onConnect`, when a provider already has ≥1 article edge and no router yet, a router is auto-inserted. No manual "+ Router" button on ProviderNode.
+  - **Explicit article→account wiring** — users drag from article's right handle to an account's left handle. `store.edges.articleToAdAccount` stores these edges. No global `selectedAdAccountIds` broadcast.
+  - **Left handle click = disconnect** — all target handles have an `onClick` that calls `makeDisconnectTarget(nodeId)`, which removes all incoming edges for that node (cascade-safe).
+  - **Preset gate** — preset nodes are `disabled` until `store.edges.articleToAdAccount.length > 0`.
+  - **Edges** — `ProviderEdge` uses `getSmoothStepPath` (right-angle routing, less tangling). All handles are 20px circles (`!w-5 !h-5 !rounded-full`).
+  - **Router node** — sleek 36px circle with ⑃ icon (was diamond).
+  - **Auto-align** — dagre LR with `ranksep: 200`, `nodesep: 60`; group node dims `220×160`.
+  - **Canvas** — grey background `#f5f5f5`, `fitView` with `maxZoom: 0.75`.
 
   **React Flow render-loop hazards (React error #185):** Three pitfalls that cause an infinite `setNodes` loop:
-  1. **`store.nodePositions` must NOT be in `buildNodes` deps.** If it were, every drag → store write → `buildNodes` rebuilds → `setNodes` → React Flow fires position changes → store write → repeat. Fix: read positions via `nodePositionsRef` (a `useRef` kept in sync via a separate `useEffect`) so `buildNodes` can read current positions without subscribing to them.
-  2. **Use `change.dragging === false` (strict), not `!change.dragging`.** React Flow fires `onNodesChange` with `{ type: "position", dragging: undefined }` on initialization — `!undefined` is `true`, so every node's init position would be written to the store, triggering a rebuild loop. Strict `=== false` passes only on user drag-and-drop completion.
-  3. **Never inline `[]` as a fallback in hooks that feed into `buildNodes` deps.** `useAdAccounts` returns `data?.accounts ?? EMPTY_ACCOUNTS` where `EMPTY_ACCOUNTS` is a module-level constant. If the fallback were `[]`, every render while SWR is loading would produce a new array reference → `visibleAccounts` recomputes → `buildNodes` rebuilds → `setNodes` → re-render → repeat. The same applies to any hook that feeds an array into a `useMemo` dep chain.
-  All five visibility arrays (`activeProviderIds`, `activeProviderIdsFromArticles`, `visibleArticles`, `visibleAccounts`, `visiblePresets`) are wrapped in `useMemo` — `filter()`/`new Set()` always return new references, and these flow into `buildNodes` deps. `store.edges` is intentionally absent from `buildNodes` deps — visibility is already captured by the memoized arrays above.
+  1. **`store.nodePositions` must NOT be in `buildNodes` deps.** Fix: read positions via `nodePositionsRef` (a `useRef` kept in sync via a separate `useEffect`) so `buildNodes` can read current positions without subscribing to them.
+  2. **Use `change.dragging === false` (strict), not `!change.dragging`.** React Flow fires `onNodesChange` with `{ type: "position", dragging: undefined }` on initialization — `!undefined` is `true`, so every node's init position would be written to the store, triggering a rebuild loop.
+  3. **Never inline `[]` as a fallback in hooks that feed into `buildNodes` deps.** `useAdAccounts` returns `data?.accounts ?? EMPTY_ACCOUNTS` where `EMPTY_ACCOUNTS` is a module-level constant. Inline `[]` creates a new reference every render while SWR is loading → `visibleAccounts` recomputes → `buildNodes` rebuilds → `setNodes` → re-render → repeat.
+  All five visibility arrays (`activeProviderIds`, `activeProviderIdsFromArticles`, `visibleArticles`, `visibleAccounts`, `visiblePresets`) are wrapped in `useMemo`. `store.edges` is intentionally absent from `buildNodes` deps — visibility is already captured by the memoized arrays above.
 
   **Canvas visual rules:**
-  - **Provider colors** — assigned from `PROVIDER_COLORS` array indexed by sort-order of `createdAt` (stable; not array position). Colors propagate to NodeCard borders, indicator dots, and SVG edges.
-  - **Creative NodeCard** — shows a multi-color gradient border (CSS `background-image` double-gradient trick) when connected to more than one provider; single-provider connections use that provider's color; unconnected shows gray.
-  - **Ad account NodeCard** — uses the color of its first assigned `feedProviderIds` provider. Accounts are only shown when at least one of their providers has an article connected (`activeProviderIdsFromArticles`).
-  - **Preset gate** — preset NodeCards are `disabled` (unclickable, dimmed) until at least one ad account is selected. An amber hint is shown when articles are connected but no account is selected yet.
-  - **`visibleAccounts` / `visiblePresets`** — both filtered by `activeProviderIdsFromArticles` (providers that have articles connected), not by creative-active providers. This prevents showing accounts/presets before the article step is complete and prevents cross-provider mismatches.
-  - **Column sort** — Articles, Accounts, and Presets columns are sorted by canonical provider order (providers sorted by `createdAt`) to group same-provider nodes together and reduce edge crossings.
+  - **Provider colors** — assigned from `PROVIDER_COLORS` array indexed by sort-order of `createdAt` (stable; not array position). Colors propagate to node borders, indicator dots, and SVG edges.
+  - **CreativeGroupNode** — multi-color gradient border (CSS `background-image` double-gradient trick) when connected to more than one provider; single-provider uses that provider's color; empty/disconnected shows red-tinted.
+  - **Ad account NodeCard** — connected state derived from `articleToAdAccount` edges (not from `selectedAdAccountIds`). Shows 2-letter initials avatar.
+  - **Preset gate** — `disabled` until `articleToAdAccount.length > 0`.
+  - **`visibleAccounts`** — filtered by `activeProviderIdsFromArticles`; visible once any article is connected.
+  - **`visiblePresets`** — filtered by `activeProviderIdsFromArticles`.
 
 - **synthesizeCampaign():** `lib/synthesize-campaign.ts` converts one `CampaignBuildItem` + resolved `(provider, article, preset, assets[])` into the `{campaigns[], adSquads[], creatives[]}` shape the orchestrator expects. One campaign + one ad squad are created; `creatives[]` has one entry per asset (all share the same `adSquadId`). When multiple assets are passed, creative names are suffixed `[1]`, `[2]`, etc. It calls `buildUrlTemplate()` which resolves static URL macros now (`{{article.name}}`, `{{article.query}}`, `{{creative.headline}}`, `{{creative.rac}}`, `{{organization_id}}`), leaving `{{channel.id}}` for the orchestrator and Snapchat native macros (`{{campaign.id}}`, `{{adset.id}}`, `{{ad.id}}`) untouched — Snapchat substitutes those at click time.
 
