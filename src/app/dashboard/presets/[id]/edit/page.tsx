@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { getPresetById } from "@/lib/presets";
 import { PresetForm } from "@/components/presets/PresetForm";
 import type { CampaignPreset } from "@/types/preset";
@@ -38,10 +39,15 @@ export default function EditPresetPage() {
   if (!preset) return null;
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-8 max-w-2xl">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Edit Preset</h1>
-        <p className="text-sm text-gray-500 mt-1">Update your campaign template settings.</p>
+        <Link
+          href="/dashboard/presets"
+          className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 mb-3"
+        >
+          ← Presets
+        </Link>
+        <h1 className="text-2xl font-semibold text-gray-900">Edit Preset</h1>
       </div>
       <PresetForm preset={preset} />
     </div>
