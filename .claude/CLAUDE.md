@@ -134,9 +134,9 @@ src/
 │   ├── silo/
 │   │   ├── SiloUploader.tsx           # Batch uploader: hash → optimize → Blob upload (3 concurrent)
 │   │   ├── SiloBrowser.tsx            # Picker modal for canvas wizard integration
-│   │   ├── AssetCard.tsx              # Thumbnail card with quick actions; portrait preview capped at max-h-[280px]
+│   │   ├── AssetCard.tsx              # Thumbnail card with quick actions; bulk-mode checkbox overlay; single "Snap ✓" badge; portrait preview capped at max-h-[280px]
 │   │   ├── AssetPreviewModal.tsx      # Full preview + metadata + usage history
-│   │   └── SnapchatUploadModal.tsx    # Pre-upload asset to Snapchat ad accounts (2 concurrent)
+│   │   └── SnapchatUploadModal.tsx    # Pre-upload to Snapchat — accepts assets: SiloAsset[] (single or bulk); 2-concurrent per asset
 │   ├── layout/
 │   │   ├── AuthGuard.tsx
 │   │   ├── Sidebar.tsx                # Left sidebar navigation
@@ -262,7 +262,7 @@ src/
 
 - **All Snapchat API calls are server-side.** Never call the Snapchat Marketing API from the browser.
 
-- **Silo — media library:** Asset metadata lives in localStorage (`boilerroom_silo_v1`). Upload pipeline: SHA-256 hash → canvas resize/thumbnail → `upload()` from `@vercel/blob/client`. Snapchat mediaIds cached per-ad-account in `snapchatUploads[]`. Cross-account reuse tries `media_copy` first; falls back to `uploadBlobToSnapchat`. `SnapchatUploadModal` pre-uploads from library (2 concurrent). Grid uses `repeat(auto-fill, minmax(180px, 240px))` so cards stay compact on wide screens (more columns, not bigger cards). `AssetCard` portrait preview is capped at `max-h-[280px]`.
+- **Silo — media library:** Asset metadata lives in localStorage (`boilerroom_silo_v1`). Upload pipeline: SHA-256 hash → canvas resize/thumbnail → `upload()` from `@vercel/blob/client`. Snapchat mediaIds cached per-ad-account in `snapchatUploads[]`. Cross-account reuse tries `media_copy` first; falls back to `uploadBlobToSnapchat`. `SnapchatUploadModal` accepts `assets: SiloAsset[]` — works for single or bulk; 2-concurrent uploads per asset. Grid uses `repeat(auto-fill, minmax(180px, 240px))` so cards stay compact on wide screens. `AssetCard` portrait preview is capped at `max-h-[280px]`. **Bulk mode:** "Select" button in Silo header enables checkbox selection; sticky action bar appears with "Delete (N)" and "→ Snapchat (N)" when items are selected. `AssetCard` shows a single "Snap ✓" badge regardless of how many ad accounts have the asset cached (was: one badge per account).
 
 - **KV Sync — persistent metadata storage:** All localStorage-backed stores call `syncToKV(key, data)` on every write — debounced 1.5s, fire-and-forget POST to `/api/data`. Blob paths: `metadata/{googleUserId}/{key}.json`. Blobs are stored with `access: "private"` (not public CDN); server reads use `getDownloadUrl` from `@vercel/blob`. `KVHydrationProvider` blocks render on fresh session until KV data loaded; merges in background if localStorage already populated. Valid keys whitelisted in `/api/data`.
 
