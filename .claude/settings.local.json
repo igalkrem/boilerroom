@@ -68,7 +68,7 @@
       "Bash(python3 -c ' *)",
       "Skill(update-config)",
       "Skill(update-config:*)",
-      "Edit(.claude/CLAUDE.md)",
+      "Edit(/Users/igalkremer/Desktop/BoilerRoom/.claude/CLAUDE.md)",
       "Bash(git commit *)"
     ]
   },
@@ -90,7 +90,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -c \"import sys, json; d=json.load(sys.stdin); 'vercel --prod' in d.get('command','') and print('Post-deploy: review recent git changes (git log --oneline -5) and update .claude/CLAUDE.md and .claude/agents/code-reviewer.md to reflect any new patterns, API behaviors, or infrastructure changes shipped in this deploy. Only update sections that are actually stale.')\""
+            "command": "python3 -c \"import sys, json; d=json.load(sys.stdin); 'vercel --prod' in d.get('command','') and print(open('/Users/igalkremer/Desktop/BoilerRoom/.claude/rules/post-deploy-update.md').read())\""
           }
         ]
       }

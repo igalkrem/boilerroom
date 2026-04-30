@@ -37,7 +37,7 @@ export default function EditArticlePage() {
         >
           ← Articles
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">Edit Article</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Edit Article</h1>
       </div>
       <ArticleForm article={article} />
     </div>

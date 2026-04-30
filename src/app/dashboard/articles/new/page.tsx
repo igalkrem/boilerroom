@@ -13,7 +13,7 @@ export default function NewArticlePage() {
         >
           ← Articles
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">New Article</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">New Article</h1>
       </div>
       <ArticleForm />
     </div>
