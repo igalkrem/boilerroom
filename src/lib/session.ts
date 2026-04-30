@@ -15,6 +15,7 @@ export async function getSession(): Promise<IronSession<SessionData>> {
       httpOnly: true,
       // "lax" allows cross-site OAuth redirects (Google and Snapchat both redirect back cross-site)
       sameSite: "lax" as const,
+      maxAge: 14 * 24 * 60 * 60, // 14 days; iron-session resets the clock on every save()
     },
   });
   return session;

@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
   if (!uploadRes.ok) {
     const errText = await uploadRes.text();
     console.error("[media/upload] Failed:", uploadRes.status, errText);
-    return NextResponse.json({ error: `Upload failed: ${uploadRes.status}` }, { status: 500 });
+    return NextResponse.json({ error: "upload_failed" }, { status: 500 });
   }
 
   return NextResponse.json({ mediaId, status: "READY" });

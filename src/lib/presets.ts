@@ -68,12 +68,10 @@ export function getPresetById(id: string): CampaignPreset | undefined {
 export function duplicatePreset(id: string): CampaignPreset | null {
   const original = getPresetById(id);
   if (!original) return null;
-  const copy: CampaignPreset = {
-    ...original,
-    id: crypto.randomUUID(),
-    name: `Copy of ${original.name}`,
-    createdAt: new Date().toISOString(),
-  };
+  const copy = structuredClone(original) as CampaignPreset;
+  copy.id = crypto.randomUUID();
+  copy.name = `Copy of ${original.name}`;
+  copy.createdAt = new Date().toISOString();
   upsertPreset(copy);
   return copy;
 }

@@ -1,10 +1,24 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import { runMigrations, sql } from "@/lib/db";
 import { fetchKingsRoadReport } from "@/lib/kingsroad";
 import { getCampaigns } from "@/lib/snapchat/campaigns";
 import { getAdSquads } from "@/lib/snapchat/adsquads";
 import { getAdSquadStats } from "@/lib/snapchat/stats";
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const syncBodySchema = z.object({
+  adAccountId: z.string().min(1),
+  startDate: z.string().regex(DATE_RE, "startDate must be YYYY-MM-DD"),
+  endDate: z.string().regex(DATE_RE, "endDate must be YYYY-MM-DD"),
+}).refine((d) => {
+  const start = new Date(d.startDate);
+  const end = new Date(d.endDate);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return false;
+  const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+  return diffDays >= 0 && diffDays <= 90;
+}, { message: "Date range must be between 0 and 90 days" });
 
 // Returns true if the date is finalized (older than 1 day) and already synced,
 // OR if it was synced within the last hour (recent data — throttle re-fetches).
@@ -62,12 +76,13 @@ export async function POST(request: NextRequest) {
   }
 
 
-  const body = await request.json() as { adAccountId?: string; startDate?: string; endDate?: string };
-  const { adAccountId, startDate, endDate } = body;
-
-  if (!adAccountId || !startDate || !endDate) {
-    return NextResponse.json({ error: "missing_params" }, { status: 400 });
+  const rawBody = await request.json().catch(() => null);
+  const parsed = syncBodySchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
+  const { adAccountId, startDate, endDate } = parsed.data;
+
   if (!isAdAccountAllowed(session, adAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }

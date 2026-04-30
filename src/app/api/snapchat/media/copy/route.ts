@@ -65,10 +65,10 @@ export async function POST(request: NextRequest) {
     console.error("[media/copy] error:", err);
     const msg = String(err);
     // Org-mismatch errors should be retried by the caller via full re-upload
-    const isOrgMismatch = msg.includes("different organization") || msg.includes("org") || msg.includes("E2");
+    const retryAsUpload = msg.includes("different organization");
     return NextResponse.json(
-      { error: "internal_error", orgMismatch: isOrgMismatch },
-      { status: isOrgMismatch ? 422 : 500 }
+      { error: "media_copy_failed", retryAsUpload },
+      { status: retryAsUpload ? 422 : 500 }
     );
   }
 }

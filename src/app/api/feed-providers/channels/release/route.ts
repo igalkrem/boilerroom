@@ -18,7 +18,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "campaignSnapId required" }, { status: 400 });
   }
   try {
-    await releaseChannel(body.campaignSnapId);
+    await releaseChannel(body.campaignSnapId, session.googleUserId);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });

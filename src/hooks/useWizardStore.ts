@@ -104,12 +104,15 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
     if (!item) return;
     const clone = structuredClone(item);
     clone.id = uuid();
-    // Reset media state — each creative needs its own file and upload
+    // Reset all media state — each creative needs its own file and upload
     clone.mediaId = undefined;
     clone.mediaFile = undefined;
     clone.mediaFileName = undefined;
     clone.mediaPreviewUrl = undefined;
     clone.siloAssetId = undefined;
+    clone.siloAssetBlobUrl = undefined;
+    clone.siloAssetMediaType = undefined;
+    clone.siloAssetOriginalFileName = undefined;
     clone.uploadStatus = "idle";
     set({ creatives: [...creatives, clone] });
   },
