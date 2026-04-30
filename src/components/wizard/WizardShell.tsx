@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import dynamic from "next/dynamic";
 import { ReviewAndPost } from "./ReviewAndPost";
 
@@ -24,13 +24,8 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
   const canvasStore = useCanvasStore();
   const [mode, setMode] = useState<Mode>("canvas");
 
-  // When entering via a pre-selected ad account (e.g. from preset use page), seed the store.
-  useEffect(() => {
-    if (adAccountId && canvasStore.selectedAdAccountIds.length === 0) {
-      canvasStore.setSelectedAdAccountIds([adAccountId]);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adAccountId]);
+  // adAccountId is no longer pre-seeded — account connections are now drawn explicitly
+  // on the canvas by the user (article → ad account edges).
   const [launching, setLaunching] = useState(false);
   const [launchProgress, setLaunchProgress] = useState(0);
   const [allResults, setAllResults] = useState<SubmissionResults[]>([]);

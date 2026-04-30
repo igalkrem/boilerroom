@@ -1,6 +1,6 @@
 "use client";
 
-import { BaseEdge, EdgeProps, getBezierPath } from "@xyflow/react";
+import { BaseEdge, EdgeProps, getSmoothStepPath } from "@xyflow/react";
 
 export function ProviderEdge({
   id,
@@ -13,7 +13,11 @@ export function ProviderEdge({
   data,
   selected,
 }: EdgeProps & { data?: { color?: string } }) {
-  const [edgePath] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
+  const [edgePath] = getSmoothStepPath({
+    sourceX, sourceY, sourcePosition,
+    targetX, targetY, targetPosition,
+    borderRadius: 14,
+  });
   const color = data?.color ?? "#94a3b8";
 
   return (
@@ -24,7 +28,7 @@ export function ProviderEdge({
         stroke: color,
         strokeWidth: selected ? 2.5 : 2,
         strokeDasharray: "6 3",
-        opacity: selected ? 1 : 0.7,
+        opacity: selected ? 1 : 0.65,
       }}
     />
   );
