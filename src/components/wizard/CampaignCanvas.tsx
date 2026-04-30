@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useState, useMemo } from "react";
+import { useEffect, useCallback, useState, useMemo, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -88,6 +88,12 @@ export function CampaignCanvas({ adAccountId, onReview }: CampaignCanvasProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adAccountId]);
 
+  // Read nodePositions via ref so buildNodes doesn't subscribe to position changes.
+  // If nodePositions were in buildNodes deps, every drag would update the store →
+  // rebuild nodes → React Flow fires more position changes → infinite loop (#185).
+  const nodePositionsRef = useRef(store.nodePositions);
+  useEffect(() => { nodePositionsRef.current = store.nodePositions; }, [store.nodePositions]);
+
   // Stable provider color map
   const sortedByCreation = useMemo(
     () => [...providers].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
@@ -150,7 +156,7 @@ export function CampaignCanvas({ adAccountId, onReview }: CampaignCanvasProps) {
     const nodes: Node[] = [];
 
     const pos = (type: keyof typeof COLUMN_X, index: number, id: string): { x: number; y: number } => {
-      if (store.nodePositions[id]) return store.nodePositions[id];
+      if (nodePositionsRef.current[id]) return nodePositionsRef.current[id];
       return { x: COLUMN_X[type], y: index * ROW_GAP };
     };
 
@@ -237,7 +243,7 @@ export function CampaignCanvas({ adAccountId, onReview }: CampaignCanvasProps) {
     return nodes;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    store.creativeIds, store.edges, store.nodePositions, store.routerNodes, store.selectedAdAccountIds,
+    store.creativeIds, store.edges, store.routerNodes, store.selectedAdAccountIds,
     sortedByCreation, providerColorMap, visibleArticles, visibleAccounts, visiblePresets,
     adAccountConfigs, articles, canSelectPresets,
   ]);
@@ -354,7 +360,9 @@ export function CampaignCanvas({ adAccountId, onReview }: CampaignCanvasProps) {
     (changes: NodeChange[]) => {
       setNodes((nds) => applyNodeChanges(changes, nds));
       for (const change of changes) {
-        if (change.type === "position" && change.position && !change.dragging) {
+        // Use === false (not !dragging) — React Flow fires dragging: undefined on init,
+        // which would write to the store and trigger a rebuild loop.
+        if (change.type === "position" && change.position && change.dragging === false) {
           store.setNodePosition(change.id, change.position);
         }
       }
