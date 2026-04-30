@@ -130,14 +130,14 @@ src/
 │   │   │   └── PresetNode.tsx         # Name + config + duplication rows; no Creatives/set control (replaced by groups)
 │   │   ├── edges/
 │   │   │   └── ProviderEdge.tsx       # Dotted SmoothStep in provider color (was bezier)
-│   │   ├── ReviewAndPost.tsx          # Campaign name template + launch matrix table
+│   │   ├── ReviewAndPost.tsx          # Fallback campaign name template + launch matrix table; shows "Provider template active" badge when any provider has a naming template
 │   │   ├── WizardShell.tsx            # Build/Review/Done mode toggle + sequential launch loop
 │   │   ├── SubmissionProgress.tsx
 │   │   └── LoadPresetBanner.tsx
 │   ├── feed-providers/
 │   │   ├── FeedProviderModal.tsx      # Large modal (max-w-3xl) with 5 tabs: Snap | Channels | Domains | Combos | Facebook
 │   │   └── tabs/
-│   │       ├── SnapTab.tsx            # Org ID, ad accounts, pixels + URL Parameters section at bottom
+│   │       ├── SnapTab.tsx            # Org ID, ad accounts, pixels + URL Parameters + Campaign Naming Template section (violet card; NamingTemplateEditor with segment pills + live preview)
 │   │       ├── UrlParametersTab.tsx   # Parameter rows, always-visible filtered macro chips (two groups: Snapchat Native / BoilerRoom), live preview; hideBaseUrl prop
 │   │       ├── ChannelsTab.tsx        # CSV upload, status table, lifecycle controls
 │   │       ├── DomainsTab.tsx         # Domain rows (baseDomain + baseUrl + traffic source checkboxes)
@@ -168,7 +168,7 @@ src/
 │   ├── snapchat/                      # Server-side API client (campaigns, adsquads, creatives, media, profiles, auth, stats)
 │   ├── submission-orchestrator.ts     # Sequences: uploadMedia → channel assign → campaigns → adSquads → URL resolve → creatives → ads → patchCreatives
 │   ├── synthesize-campaign.ts         # Converts CampaignBuildItem + resolved entities → {campaigns, adSquads, creatives}; throws if preset has no adSquads or provider URL is empty
-│   ├── resolve-campaign-name.ts       # Shared resolveCampaignName() used by WizardShell + ReviewAndPost — keeps preview and actual names identical
+│   ├── resolve-campaign-name.ts       # resolveCampaignName(fallbackTemplate, item, ctx, providerTemplate?) — uses provider's NamingSegment[] template if present, else string-replace fallback; also exports generateUniqueId4()
 │   ├── uploadMediaToSnapchat.ts       # Client-side upload pipeline + uploadBlobToSnapchat (server-side path for Silo uploads)
 │   ├── silo.ts                        # Silo asset CRUD (localStorage + KV sync, key: boilerroom_silo_v1)
 │   ├── silo-tags.ts                   # Tag CRUD + auto-naming (localStorage + KV sync, key: boilerroom_silo_tags_v1)
@@ -253,14 +253,27 @@ src/
   | `{{adset.id}}` | Snapchat ad squad ID | Snapchat native — substituted at click time |
   | `{{ad.id}}` | Snapchat ad ID | Snapchat native — substituted at click time |
 
+- **Campaign naming macros** (used in `NamingSegment[]` provider templates only — not in URL templates):
+
+  | Macro key | Resolved from | Notes |
+  |---|---|---|
+  | `preset.tag` | `preset.tag` field | Short label set per preset |
+  | `article.name` | `article.slug` | Same value as `{{article.name}}` above |
+  | `date_ddmm` | current date | e.g. `"3004"` for 30 April |
+  | `unique_id_4` | `generateUniqueId4()` | Fresh random 4-char alphanumeric per campaign at launch time; preview uses stable per-row mock |
+  | `preset.name` | `preset.name` | Full preset name |
+  | `index` | `duplicationIndex + 1` | 1-based duplication count |
+
+  `resolveCampaignName(fallback, item, ctx, providerTemplate?)` — if `providerTemplate` is non-empty, resolves segments and joins with `" | "`; otherwise falls back to the old string-replace logic using `fallback`.
+
 - **Feed Providers (v3):** Full sell-side provider management. `FeedProvider` type lives in `src/types/feed-provider.ts` (not `article.ts`). Key fields:
-  - `snapConfig` — `organizationId` (resolves `{{organization_id}}`), `allowedAdAccountIds[]`, `allowedPixelIds[]`
+  - `snapConfig` — `organizationId` (resolves `{{organization_id}}`), `allowedAdAccountIds[]`, `allowedPixelIds[]`, `campaignNamingTemplate?: NamingSegment[]` (Snap-specific; stored per-traffic-source — when Facebook is added it gets its own field)
   - `urlConfig` — `parameters: UrlParameter[]` (key/value with macro support). `baseUrl` is retained in the stored shape as a backward-compat fallback but is no longer shown in the UI — base URLs are now per-domain.
   - `channelConfig` — `type: "provider-supplied" | "parameter-based"`, `addChannelIdToCampaignName?`, `channelParamKey?`
   - `domains[]` — `FeedProviderDomain` (`id`, `baseDomain`, `baseUrl?`, `trafficSources[]`). Each domain carries its own `baseUrl`. `buildUrlTemplate()` resolves base URL as `domain.baseUrl ?? provider.urlConfig.baseUrl ?? ""` (latter is the fallback for old records).
   - `combos[]` — `FeedProviderCombo` (named preset of pixel + domain + channel settings)
 
-  **Modal tabs:** Snap | Channels | Domains | Combos | Facebook (coming soon). The "URL Parameters" standalone tab was removed — URL parameter configuration now lives at the bottom of the Snap tab (rendered via `UrlParametersTab` with `hideBaseUrl`). Facebook tab is a placeholder.
+  **Modal tabs:** Snap | Channels | Domains | Combos | Facebook (coming soon). The "URL Parameters" standalone tab was removed — URL parameter configuration now lives at the bottom of the Snap tab (rendered via `UrlParametersTab` with `hideBaseUrl`). Below URL Parameters, a violet **Campaign Naming Template** card (`NamingTemplateEditor`) lets users build segment-based names (literal text chips + macro chips joined by " | "). Macros: `{{preset.tag}}`, `{{article.name}}`, `{{date_ddmm}}`, `{{unique_id_4}}`. Live preview resolves against example values. Facebook tab is a placeholder.
 
   **`UrlParametersTab` behaviour:** macro chips are always visible above the preview URL (not a focus-gated popup). Chips are filtered to only show macros not already present in any parameter value. Clicking a chip inserts into the last-focused value input (tracked via `lastActiveIndexRef`). Chips are split into two labeled groups: **Snapchat Native** (yellow — `{{campaign.id}}`, `{{adset.id}}`, `{{ad.id}}` — substituted by Snapchat at click time) and **BoilerRoom** (blue — all others — resolved before sending to Snapchat). Preview URL uses a structured renderer (not a flat split): base URL, parameter keys, `?`, `&`, and `=` are regular weight; hardcoded literal parameter values are **bold**; macros are highlighted yellow (Snapchat native) or blue (BoilerRoom). The `source` field on each MACROS entry (`"snap"` | `"br"`) drives both the chip style and the preview highlight color.
 
@@ -268,7 +281,7 @@ src/
 
 - **Feed provider channels:** Postgres table `feed_provider_channels` tracks channel lifecycle: `available → in-use → cooldown → available`. Lifecycle promotion is lazy (runs on every read via `normalizeChannelStatuses(feedProviderId)`, no cron). Thresholds: `in-use` > 24h → cooldown; `cooldown` > 24h → available. Channels are imported via CSV upload in the Channels tab. `assignChannel()` picks the oldest available channel and marks it `in-use`. `releaseChannel()` moves a channel from `in-use` to `cooldown`. The table has a `google_user_id` column — all queries (`listChannels`, `bulkInsertChannels`, `deleteChannels`) filter by the session's Google user ID to enforce per-user ownership.
 
-- **Campaign presets (v3):** `CampaignPreset` key fields: `trafficSource?: "snap" | "facebook"` (defaults to `"snap"` on load for old records), `feedProviderId` (required; `""` for legacy), `comboId?`, `creativeDefaults?: { adStatus, callToAction? }`. `brandName` removed from `creativeDefaults` — no longer in UI. Campaign is always saved as `status: "ACTIVE"`, `spendCapType: "NO_BUDGET"`, no start/end date. Ad squad always `spendCapType: "DAILY_BUDGET"`, no end date, no gender. `PresetForm` is a flat `max-w-2xl` form with three `<hr>`-divided sections: (1) Traffic Source + Name + Feed Provider + Combo; (2) Geo + Device + OS + Placements; (3) Pixel + Optimization Goal + Bid Strategy + Bid Amount + Daily Budget + Ad Set Status + Ad Status + Call to Action. Always exactly one ad squad. Old presets without `feedProviderId` show an amber "Provider not found" warning on the list page. `duplicatePreset(id)` in `lib/presets.ts` creates a copy named "Copy of X". Preset list cards display: name, traffic source badge (Snap yellow / Facebook blue), and a 2-column data grid: Feed | Geo | Pixel | Bid | Budget | Device. Card actions: Edit | Duplicate | Delete — no "Load in Wizard" (preset selection happens in the wizard canvas).
+- **Campaign presets (v3):** `CampaignPreset` key fields: `trafficSource?: "snap" | "facebook"` (defaults to `"snap"` on load for old records), `feedProviderId` (required; `""` for legacy), `comboId?`, `tag?` (short label resolves `{{preset.tag}}` in naming templates), `creativeDefaults?: { adStatus, callToAction? }`. `brandName` removed from `creativeDefaults` — no longer in UI. Campaign is always saved as `status: "ACTIVE"`, `spendCapType: "NO_BUDGET"`, no start/end date. Ad squad always `spendCapType: "DAILY_BUDGET"`, no end date, no gender. `PresetForm` is a flat `max-w-2xl` form with three `<hr>`-divided sections: (1) Traffic Source + Name + **Preset Tag** + Feed Provider + Combo; (2) Geo + Device + OS + Placements; (3) Pixel + Optimization Goal + Bid Strategy + Bid Amount + Daily Budget + Ad Set Status + Ad Status + Call to Action. Always exactly one ad squad. Old presets without `feedProviderId` show an amber "Provider not found" warning on the list page. `duplicatePreset(id)` in `lib/presets.ts` creates a copy named "Copy of X". Preset list cards display: name, traffic source badge (Snap yellow / Facebook blue), and a 2-column data grid: Feed | Geo | Pixel | Bid | Budget | Device. Card actions: Edit | Duplicate | Delete — no "Load in Wizard" (preset selection happens in the wizard canvas).
 
 - **Articles (v3):** `Article` type fields:
   - `slug` — "Keyword" in UI; plain string (no format restriction); resolves `{{article.name}}`
