@@ -126,7 +126,9 @@ function buildUrlTemplate(provider: FeedProvider, article: Article, headline: st
         .replace(/\{\{article\.query\}\}/gi, article.query)
         .replace(/\{\{creative\.headline\}\}/gi, headline)
         .replace(/\{\{creative\.rac\}\}/gi, rac)
-        .replace(/\{\{organization_id\}\}/gi, provider.snapConfig.organizationId ?? "");
+        .replace(/\{\{organization_id\}\}/gi, provider.snapConfig.organizationId ?? "")
+        // URL-encode any remaining {{...}} that aren't Snapchat native or orchestrator macros
+        .replace(/\{\{(?!campaign\.id|adset\.id|ad\.id|channel\.id)[^}]+\}\}/gi, encodeURIComponent);
       return `${p.key}=${resolved}`;
     })
     .join("&");

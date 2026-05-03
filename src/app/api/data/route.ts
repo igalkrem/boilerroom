@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     if (oldData !== null) {
       try {
         await put(newPath, JSON.stringify(oldData), {
-          access: "private",
+          access: "public",
           allowOverwrite: true,
           addRandomSuffix: false,
         });
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
 
   try {
     await put(`metadata/${userId}/${key}.json`, JSON.stringify(data), {
-      access: "private",
+      access: "public",
       allowOverwrite: true,
       addRandomSuffix: false,
     });
