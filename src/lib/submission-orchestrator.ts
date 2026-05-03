@@ -372,7 +372,7 @@ export async function runSubmission(
       ad_account_id: adAccountId,
       name: cr.name,
       type: creativeType,
-      headline: cr.headline,
+      headline: cr.headline || undefined,
       brand_name: cr.brandName || undefined,
       // call_to_action is not valid on SNAP_AD type creatives (E2002 "call to action must be null")
       call_to_action: creativeType !== "SNAP_AD" && cr.callToAction ? cr.callToAction : undefined,
