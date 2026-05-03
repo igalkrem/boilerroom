@@ -120,7 +120,7 @@ export interface SnapCreativePayload {
   ad_account_id: string;
   name: string;
   type: CreativeType;
-  headline: string; // max 34 chars
+  headline?: string; // max 34 chars
   top_snap_media_id: string;
   call_to_action?: string;
   brand_name?: string;
