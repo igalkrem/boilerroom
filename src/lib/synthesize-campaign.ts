@@ -122,13 +122,13 @@ function buildUrlTemplate(provider: FeedProvider, article: Article, headline: st
   const params = provider.urlConfig.parameters
     .map((p) => {
       const resolved = p.value
-        .replace(/\{\{article\.name\}\}/gi, article.slug)
-        .replace(/\{\{article\.query\}\}/gi, article.query)
-        .replace(/\{\{creative\.headline\}\}/gi, headline)
-        .replace(/\{\{creative\.rac\}\}/gi, rac)
-        .replace(/\{\{organization_id\}\}/gi, provider.snapConfig.organizationId ?? "")
-        // URL-encode any remaining {{...}} that aren't Snapchat native or orchestrator macros
-        .replace(/\{\{(?!campaign\.id|adset\.id|ad\.id|channel\.id)[^}]+\}\}/gi, encodeURIComponent);
+        .replace(/\{\{article\.name\}\}/gi, encodeURIComponent(article.slug))
+        .replace(/\{\{article\.query\}\}/gi, encodeURIComponent(article.query))
+        .replace(/\{\{creative\.headline\}\}/gi, encodeURIComponent(headline))
+        .replace(/\{\{creative\.rac\}\}/gi, encodeURIComponent(rac))
+        .replace(/\{\{organization_id\}\}/gi, encodeURIComponent(provider.snapConfig.organizationId ?? ""))
+        // Strip any remaining {{...}} that aren't Snapchat native or orchestrator macros
+        .replace(/\{\{(?!campaign\.id|adset\.id|ad\.id|channel\.id)[^}]+\}\}/gi, "");
       return `${p.key}=${resolved}`;
     })
     .join("&");
