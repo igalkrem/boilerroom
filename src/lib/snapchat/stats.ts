@@ -42,12 +42,12 @@ export async function getAdSquadStats(
   startDate: string,
   endDate: string
 ): Promise<AdSquadStatRow[]> {
-  // Snapchat requires times at midnight in the ad account's timezone (America/Los_Angeles).
-  // -07:00 = PDT (summer), -08:00 = PST (winter). Using -07:00 as a practical default.
-  const startTime = `${startDate}T00:00:00.000-07:00`;
+  // Use PST (-08:00) year-round to never miss the start of a day.
+  // During PDT (summer) the window opens 1h before local midnight — harmless overlap.
+  const startTime = `${startDate}T00:00:00.000-08:00`;
   const endDateExclusive = new Date(endDate + "T00:00:00Z");
   endDateExclusive.setUTCDate(endDateExclusive.getUTCDate() + 1);
-  const endTime = endDateExclusive.toISOString().slice(0, 10) + "T00:00:00.000-07:00";
+  const endTime = endDateExclusive.toISOString().slice(0, 10) + "T00:00:00.000-08:00";
 
   const data = await snapFetch<SnapStatsResponse>(
     `/adsquads/${adSquadId}/stats?granularity=DAY&fields=impressions,swipes,spend,video_views&start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`
