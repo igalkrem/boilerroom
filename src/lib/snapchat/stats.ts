@@ -34,8 +34,7 @@ function toDate(isoString: string): string {
 }
 
 function toMicro(spend: number | undefined): number {
-  // Snapchat returns spend in dollars, not micro — convert.
-  return Math.round((spend ?? 0) * 1_000_000);
+  return Math.round(spend ?? 0);
 }
 
 export async function getAdSquadStats(
