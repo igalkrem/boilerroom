@@ -5,6 +5,7 @@ import { runMigrations, sql } from "@/lib/db";
 import { fetchKingsRoadReport } from "@/lib/kingsroad";
 import { getCampaigns } from "@/lib/snapchat/campaigns";
 import { getAdSquads } from "@/lib/snapchat/adsquads";
+import type { SnapAdSquad } from "@/types/snapchat";
 import { getAdSquadStats } from "@/lib/snapchat/stats";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -166,7 +167,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // ── Snapchat: list all ad squads, fetch stats per squad ──────────────────
+  // ── Snapchat: list all ad squads, always backfill names, fetch stats if needed ──
   const snapDatesToFetch: string[] = [];
   for (const date of dates) {
     if (await shouldSkip("snapchat", date, adAccountId)) {
@@ -182,17 +183,29 @@ export async function POST(request: NextRequest) {
   let snapchatError: string | null = null;
   const debugSquadErrors: Array<{ id: string; error: string }> = [];
 
-  if (snapDatesToFetch.length > 0) {
-    const snapStart = snapDatesToFetch[0];
-    const snapEnd = snapDatesToFetch[snapDatesToFetch.length - 1];
-    try {
-      const campaigns = await getCampaigns(adAccountId);
-      debugCampaigns = campaigns.map((c) => c.id);
-      const adSquadLists = await Promise.all(
-        campaigns.map((c) => getAdSquads(c.id))
-      );
-      const adSquads = adSquadLists.flat();
-      debugSquads = adSquads.map((s) => ({ id: s.id, name: s.name }));
+  try {
+    const campaigns = await getCampaigns(adAccountId);
+    debugCampaigns = campaigns.map((c) => c.id);
+    const adSquadLists = await Promise.allSettled(
+      campaigns.map((c) => getAdSquads(c.id))
+    );
+    const adSquads = adSquadLists
+      .filter((r): r is PromiseFulfilledResult<SnapAdSquad[]> => r.status === "fulfilled")
+      .flatMap((r) => r.value);
+    debugSquads = adSquads.map((s) => ({ id: s.id, name: s.name }));
+
+    // Always backfill names for existing rows that were synced before this column existed.
+    await Promise.allSettled(
+      adSquads.map((squad) =>
+        sql`UPDATE snapchat_ad_squad_stats
+            SET ad_squad_name = ${squad.name}
+            WHERE ad_squad_id = ${squad.id} AND ad_account_id = ${adAccountId} AND ad_squad_name = ''`
+      )
+    );
+
+    if (snapDatesToFetch.length > 0) {
+      const snapStart = snapDatesToFetch[0];
+      const snapEnd = snapDatesToFetch[snapDatesToFetch.length - 1];
 
       await Promise.all(
         adSquads.map(async (squad) => {
@@ -232,10 +245,10 @@ export async function POST(request: NextRequest) {
           snapchatSynced++;
         }
       }
-    } catch (err) {
-      snapchatError = err instanceof Error ? err.message : String(err);
-      console.error("[reporting/sync] Snapchat fetch error:", err);
     }
+  } catch (err) {
+    snapchatError = err instanceof Error ? err.message : String(err);
+    console.error("[reporting/sync] Snapchat fetch error:", err);
   }
 
   return NextResponse.json({

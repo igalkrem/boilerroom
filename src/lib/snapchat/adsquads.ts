@@ -22,8 +22,10 @@ export async function getAdSquad(adSquadId: string): Promise<SnapAdSquad> {
 
 export async function getAdSquadsForAccount(adAccountId: string): Promise<SnapAdSquad[]> {
   const campaigns = await getCampaigns(adAccountId);
-  const squadLists = await Promise.all(campaigns.map((c) => getAdSquads(c.id)));
-  return squadLists.flat();
+  const results = await Promise.allSettled(campaigns.map((c) => getAdSquads(c.id)));
+  return results
+    .filter((r): r is PromiseFulfilledResult<SnapAdSquad[]> => r.status === "fulfilled")
+    .flatMap((r) => r.value);
 }
 
 export async function updateAdSquad(
