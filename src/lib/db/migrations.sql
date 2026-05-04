@@ -52,3 +52,5 @@ ALTER TABLE feed_provider_channels ADD COLUMN IF NOT EXISTS google_user_id TEXT 
 
 CREATE INDEX IF NOT EXISTS fpc_fp_status ON feed_provider_channels(feed_provider_id, status);
 CREATE INDEX IF NOT EXISTS fpc_user ON feed_provider_channels(google_user_id);
+
+ALTER TABLE kingsroad_report ADD COLUMN IF NOT EXISTS funnel_requests BIGINT NOT NULL DEFAULT 0;

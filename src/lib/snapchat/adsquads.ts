@@ -28,7 +28,7 @@ export async function getAdSquadsForAccount(adAccountId: string): Promise<SnapAd
 
 export async function updateAdSquad(
   adSquadId: string,
-  updates: { daily_budget_micro?: number; bid_micro?: number }
+  updates: { daily_budget_micro?: number; bid_micro?: number; status?: "ACTIVE" | "PAUSED" }
 ): Promise<SnapAdSquad> {
   const current = await getAdSquad(adSquadId);
   const merged = { ...current, ...updates };

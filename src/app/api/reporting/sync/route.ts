@@ -116,12 +116,12 @@ export async function POST(request: NextRequest) {
             (record_date, custom_channel_name, country_code, domain_name,
              ad_requests, clicks, earnings_eur, page_views,
              individual_ad_impressions, matched_ad_requests,
-             funnel_clicks, funnel_impressions, fetched_at)
+             funnel_clicks, funnel_impressions, funnel_requests, fetched_at)
           VALUES
             (${r.record_date}, ${r.custom_channel_name}, ${r.country_code}, ${r.domain_name},
              ${r.ad_requests}, ${r.clicks}, ${r.earnings_eur}, ${r.page_views},
              ${r.individual_ad_impressions}, ${r.matched_ad_requests},
-             ${r.funnel_clicks}, ${r.funnel_impressions}, NOW())
+             ${r.funnel_clicks}, ${r.funnel_impressions}, ${r.funnel_requests}, NOW())
           ON CONFLICT (record_date, custom_channel_name, country_code, domain_name)
           DO UPDATE SET
             ad_requests = EXCLUDED.ad_requests,
@@ -132,6 +132,7 @@ export async function POST(request: NextRequest) {
             matched_ad_requests = EXCLUDED.matched_ad_requests,
             funnel_clicks = EXCLUDED.funnel_clicks,
             funnel_impressions = EXCLUDED.funnel_impressions,
+            funnel_requests = EXCLUDED.funnel_requests,
             fetched_at = NOW()
         `;
       }
@@ -154,20 +155,29 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  let debugCampaigns: string[] = [];
+  let debugSquads: Array<{ id: string; name: string }> = [];
+  let debugStatRows = 0;
+  let snapchatError: string | null = null;
+  const debugSquadErrors: Array<{ id: string; error: string }> = [];
+
   if (snapDatesToFetch.length > 0) {
     const snapStart = snapDatesToFetch[0];
     const snapEnd = snapDatesToFetch[snapDatesToFetch.length - 1];
     try {
       const campaigns = await getCampaigns(adAccountId);
+      debugCampaigns = campaigns.map((c) => c.id);
       const adSquadLists = await Promise.all(
         campaigns.map((c) => getAdSquads(c.id))
       );
       const adSquads = adSquadLists.flat();
+      debugSquads = adSquads.map((s) => ({ id: s.id, name: s.name }));
 
       await Promise.all(
         adSquads.map(async (squad) => {
           try {
             const statRows = await getAdSquadStats(squad.id, snapStart, snapEnd);
+            debugStatRows += statRows.length;
             for (const r of statRows) {
               await sql`
                 INSERT INTO snapchat_ad_squad_stats
@@ -186,7 +196,9 @@ export async function POST(request: NextRequest) {
               `;
             }
           } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
             console.error(`[reporting/sync] stats error for squad ${squad.id}:`, err);
+            debugSquadErrors.push({ id: squad.id, error: msg });
           }
         })
       );
@@ -196,12 +208,21 @@ export async function POST(request: NextRequest) {
         snapchatSynced++;
       }
     } catch (err) {
+      snapchatError = err instanceof Error ? err.message : String(err);
       console.error("[reporting/sync] Snapchat fetch error:", err);
     }
   }
 
   return NextResponse.json({
-    snapchat: { synced: snapchatSynced, skipped: snapchatSkipped },
+    snapchat: { synced: snapchatSynced, skipped: snapchatSkipped, error: snapchatError },
     kingsroad: { synced: kingsroadSynced, skipped: kingsroadSkipped },
+    debug: {
+      campaigns_found: debugCampaigns.length,
+      squads_found: debugSquads.length,
+      squad_ids: debugSquads,
+      stat_rows_fetched: debugStatRows,
+      squad_errors: debugSquadErrors,
+      dates_attempted: snapDatesToFetch,
+    },
   });
 }

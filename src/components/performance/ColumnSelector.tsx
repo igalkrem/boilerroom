@@ -3,20 +3,38 @@
 import { useState, useRef, useEffect } from "react";
 
 const ALL_COLUMNS = [
-  { key: "impressions",  label: "Impressions" },
-  { key: "swipes",       label: "Swipes" },
-  { key: "spend_usd",    label: "Spend ($)" },
-  { key: "revenue_usd",  label: "Revenue ($)" },
-  { key: "roi_pct",      label: "ROI" },
-  { key: "clicks",       label: "Clicks" },
-  { key: "page_views",   label: "Page Views" },
-  { key: "video_views",  label: "Video Views" },
+  { key: "impressions",          label: "Impressions" },
+  { key: "swipes",               label: "Clicks" },
+  { key: "spend_usd",            label: "Spend ($)" },
+  { key: "revenue_usd",          label: "Revenue ($)" },
+  { key: "roi_pct",              label: "ROI" },
+  { key: "roi_1d",               label: "-1D ROI" },
+  { key: "roi_2d",               label: "-2D ROI" },
+  { key: "roi_3d",               label: "-3D ROI" },
+  { key: "funnel_clicks",        label: "Funnel Clicks" },
+  { key: "rpc",                  label: "RPC" },
+  { key: "profit",               label: "Profit" },
+  { key: "ctr",                  label: "CTR" },
+  { key: "cpm",                  label: "CPM" },
+  { key: "cpc",                  label: "CPC" },
+  { key: "cvr",                  label: "CVR" },
+  { key: "cpr",                  label: "CPR" },
+  { key: "rpr",                  label: "RPR" },
+  { key: "page_views",           label: "Page Views" },
+  { key: "clicks",               label: "VZ Clicks" },
+  { key: "ad_requests",          label: "Ad Requests" },
+  { key: "matched_ad_requests",  label: "Matched Requests" },
+  { key: "funnel_impressions",   label: "Funnel Impressions" },
+  { key: "funnel_requests",      label: "Funnel Requests" },
+  { key: "domain_name",          label: "Domain" },
+  { key: "video_views",          label: "Video Views" },
 ] as const;
 
 const LS_KEY = "br_perf_cols";
 
 export const DEFAULT_VISIBLE_COLUMNS = new Set<string>([
-  "impressions", "swipes", "spend_usd", "revenue_usd", "roi_pct", "clicks", "page_views",
+  "spend_usd", "revenue_usd", "roi_pct", "roi_1d", "roi_2d", "roi_3d",
+  "swipes", "funnel_clicks", "rpc", "profit", "ctr",
 ]);
 
 export function loadSavedColumns(): Set<string> {
@@ -74,7 +92,7 @@ export function ColumnSelector({ visible, onChange }: Props) {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-40">
+        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-44 max-h-80 overflow-y-auto">
           {ALL_COLUMNS.map(({ key, label }) => (
             <label
               key={key}

@@ -2,30 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import { sql } from "@/lib/db";
 import { getEurToUsd } from "@/lib/fx-rate";
-import { getCampaigns } from "@/lib/snapchat/campaigns";
-import { getAdSquads } from "@/lib/snapchat/adsquads";
-
-export interface CombinedRow {
-  ad_squad_id: string;
-  ad_squad_name: string;
-  stat_date: string;
-  country_code: string;
-  impressions: number;
-  swipes: number;
-  spend_usd: number;
-  video_views: number;
-  clicks: number;
-  revenue_eur: number;
-  revenue_usd: number;
-  roi_pct: number | null;
-  page_views: number;
-  ad_requests: number;
-  matched_ad_requests: number;
-  funnel_clicks: number;
-  funnel_impressions: number;
-  funnel_requests: number;
-  domain_name: string;
-}
+import type { CombinedRow } from "@/app/api/reporting/combined/route";
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -38,10 +15,9 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = request.nextUrl;
   const adAccountId = searchParams.get("adAccountId") ?? "";
-  const startDate = searchParams.get("startDate") ?? "";
-  const endDate = searchParams.get("endDate") ?? "";
+  const adSquadId = searchParams.get("adSquadId") ?? "";
 
-  if (!adAccountId || !startDate || !endDate) {
+  if (!adAccountId || !adSquadId) {
     return NextResponse.json({ error: "missing_params" }, { status: 400 });
   }
   if (!isAdAccountAllowed(session, adAccountId)) {
@@ -88,22 +64,10 @@ export async function GET(request: NextRequest) {
         ON  s.ad_squad_id  = k.custom_channel_name
         AND s.stat_date    = k.record_date
       WHERE s.ad_account_id = ${adAccountId}
-        AND s.stat_date BETWEEN ${startDate} AND ${endDate}
-      ORDER BY s.stat_date DESC, s.spend_micro DESC
+        AND s.ad_squad_id   = ${adSquadId}
+      ORDER BY s.stat_date DESC
     `,
   ]);
-
-  // Resolve ad squad names from Snapchat API.
-  const nameMap = new Map<string, string>();
-  try {
-    const campaigns = await getCampaigns(adAccountId);
-    const adSquadLists = await Promise.all(campaigns.map((c) => getAdSquads(c.id)));
-    for (const squad of adSquadLists.flat()) {
-      nameMap.set(squad.id, squad.name);
-    }
-  } catch (err) {
-    console.error("[reporting/combined] name resolution failed:", err);
-  }
 
   const combined: CombinedRow[] = rows.map((r) => {
     const spendUsd = Number(r.spend_micro) / 1_000_000;
@@ -112,7 +76,7 @@ export async function GET(request: NextRequest) {
     const roiPct = spendUsd > 0 ? (revenueUsd / spendUsd) * 100 : null;
     return {
       ad_squad_id: r.ad_squad_id as string,
-      ad_squad_name: nameMap.get(r.ad_squad_id as string) ?? r.ad_squad_id as string,
+      ad_squad_name: adSquadId,
       stat_date: r.stat_date as string,
       country_code: r.country_code as string,
       impressions: Number(r.impressions),

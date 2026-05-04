@@ -96,19 +96,20 @@ export async function PATCH(request: NextRequest) {
     squadId?: string;
     daily_budget_micro?: number;
     bid_micro?: number;
+    status?: "ACTIVE" | "PAUSED";
   } | null;
 
   if (!body || typeof body.adAccountId !== "string" || typeof body.squadId !== "string") {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
-  const { adAccountId, squadId, daily_budget_micro, bid_micro } = body;
+  const { adAccountId, squadId, daily_budget_micro, bid_micro, status } = body;
 
   if (!isAdAccountAllowed(session, adAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   try {
-    const updated = await updateAdSquad(squadId, { daily_budget_micro, bid_micro });
+    const updated = await updateAdSquad(squadId, { daily_budget_micro, bid_micro, status });
     return NextResponse.json({ adsquad: updated });
   } catch (err) {
     console.error("Update ad squad error:", err);

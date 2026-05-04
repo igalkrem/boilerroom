@@ -22,6 +22,7 @@ export interface KingsRoadRow {
   matched_ad_requests: number;
   funnel_clicks: number;
   funnel_impressions: number;
+  funnel_requests: number;
 }
 
 interface ApiRow {
@@ -37,6 +38,7 @@ interface ApiRow {
   matched_ad_requests: number;
   funnel_clicks: number;
   funnel_impressions: number;
+  funnel_requests: number;
 }
 
 interface PageResponse {
@@ -75,6 +77,7 @@ export async function fetchKingsRoadReport(startDate: string, endDate: string): 
         matched_ad_requests: r.matched_ad_requests ?? 0,
         funnel_clicks: r.funnel_clicks ?? 0,
         funnel_impressions: r.funnel_impressions ?? 0,
+        funnel_requests: r.funnel_requests ?? 0,
       });
     }
     const nextUrl = page.next ?? null;
