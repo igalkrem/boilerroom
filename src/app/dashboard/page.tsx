@@ -1,5 +1,5 @@
-import { WizardShell } from "@/components/wizard/WizardShell";
+import { redirect } from "next/navigation";
 
 export default function DashboardPage() {
-  return <WizardShell />;
+  redirect("/dashboard/performance");
 }

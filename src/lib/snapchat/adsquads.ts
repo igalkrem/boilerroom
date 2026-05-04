@@ -1,4 +1,5 @@
 import { snapFetch } from "./client";
+import { getCampaigns } from "./campaigns";
 import type { SnapAdSquadPayload, SnapAdSquad, SnapBatchResponse, SnapApiItem } from "@/types/snapchat";
 
 export async function getAdSquads(campaignId: string): Promise<SnapAdSquad[]> {
@@ -16,6 +17,30 @@ export async function getAdSquad(adSquadId: string): Promise<SnapAdSquad> {
   );
   const item = data.adsquads?.[0];
   if (!item?.adsquad) throw new Error("Ad squad not found");
+  return item.adsquad;
+}
+
+export async function getAdSquadsForAccount(adAccountId: string): Promise<SnapAdSquad[]> {
+  const campaigns = await getCampaigns(adAccountId);
+  const squadLists = await Promise.all(campaigns.map((c) => getAdSquads(c.id)));
+  return squadLists.flat();
+}
+
+export async function updateAdSquad(
+  adSquadId: string,
+  updates: { daily_budget_micro?: number; bid_micro?: number }
+): Promise<SnapAdSquad> {
+  const current = await getAdSquad(adSquadId);
+  const merged = { ...current, ...updates };
+  const data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
+    `/adsquads/${adSquadId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ adsquads: [merged] }),
+    }
+  );
+  const item = data.adsquads?.[0];
+  if (!item?.adsquad) throw new Error("Ad squad update failed");
   return item.adsquad;
 }
 

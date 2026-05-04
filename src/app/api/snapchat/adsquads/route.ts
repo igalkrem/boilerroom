@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdSquads, getAdSquad } from "@/lib/snapchat/adsquads";
+import { createAdSquads, getAdSquad, getAdSquadsForAccount, updateAdSquad } from "@/lib/snapchat/adsquads";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import type { SnapAdSquadPayload } from "@/types/snapchat";
 import { z } from "zod";
@@ -27,18 +27,22 @@ export async function GET(request: NextRequest) {
 
   const adAccountId = request.nextUrl.searchParams.get("adAccountId");
   const adSquadId = request.nextUrl.searchParams.get("adSquadId");
-  if (!adAccountId || !adSquadId) {
-    return NextResponse.json({ error: "adAccountId and adSquadId query params required" }, { status: 400 });
+  if (!adAccountId) {
+    return NextResponse.json({ error: "adAccountId query param required" }, { status: 400 });
   }
   if (!isAdAccountAllowed(session, adAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   try {
-    const adsquad = await getAdSquad(adSquadId);
-    return NextResponse.json({ adsquad });
+    if (adSquadId) {
+      const adsquad = await getAdSquad(adSquadId);
+      return NextResponse.json({ adsquad });
+    }
+    const adsquads = await getAdSquadsForAccount(adAccountId);
+    return NextResponse.json({ adsquads });
   } catch (err) {
-    console.error("Get ad squad error:", err);
+    console.error("Get ad squad(s) error:", err);
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
@@ -74,6 +78,40 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ results });
   } catch (err) {
     console.error("Create adsquads error:", err);
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  const session = await getSession();
+  if (!isSessionValid(session)) {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+  }
+  if (!isSnapchatConnected(session)) {
+    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
+  }
+
+  const body = await request.json().catch(() => null) as {
+    adAccountId?: string;
+    squadId?: string;
+    daily_budget_micro?: number;
+    bid_micro?: number;
+  } | null;
+
+  if (!body || typeof body.adAccountId !== "string" || typeof body.squadId !== "string") {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  const { adAccountId, squadId, daily_budget_micro, bid_micro } = body;
+
+  if (!isAdAccountAllowed(session, adAccountId)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  try {
+    const updated = await updateAdSquad(squadId, { daily_budget_micro, bid_micro });
+    return NextResponse.json({ adsquad: updated });
+  } catch (err) {
+    console.error("Update ad squad error:", err);
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
