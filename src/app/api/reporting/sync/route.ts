@@ -33,7 +33,8 @@ async function shouldSkip(
   `;
   if (rows.length === 0) return false;
 
-  const lastSynced = new Date(rows[0].last_synced as string).getTime();
+  const raw = rows[0].last_synced;
+  const lastSynced = (raw instanceof Date ? raw : new Date(raw as string)).getTime();
   const dateObj = new Date(date);
   const yesterday = new Date();
   yesterday.setUTCHours(0, 0, 0, 0);
@@ -64,6 +65,25 @@ function dateRange(startDate: string, endDate: string): string[] {
     cur.setUTCDate(cur.getUTCDate() + 1);
   }
   return dates;
+}
+
+function buildRanges(dates: string[]): Array<[string, string]> {
+  if (dates.length === 0) return [];
+  const ranges: Array<[string, string]> = [];
+  let rangeStart = dates[0];
+  let rangeEnd = dates[0];
+  for (let i = 1; i < dates.length; i++) {
+    const gapDays = (new Date(dates[i]).getTime() - new Date(dates[i - 1]).getTime()) / 86_400_000;
+    if (gapDays === 1) {
+      rangeEnd = dates[i];
+    } else {
+      ranges.push([rangeStart, rangeEnd]);
+      rangeStart = dates[i];
+      rangeEnd = dates[i];
+    }
+  }
+  ranges.push([rangeStart, rangeEnd]);
+  return ranges;
 }
 
 export async function POST(request: NextRequest) {
@@ -106,35 +126,36 @@ export async function POST(request: NextRequest) {
   }
 
   if (kingsroadDatesToFetch.length > 0) {
-    const krStart = kingsroadDatesToFetch[0];
-    const krEnd = kingsroadDatesToFetch[kingsroadDatesToFetch.length - 1];
+    const ranges = buildRanges(kingsroadDatesToFetch);
     try {
-      const rows = await fetchKingsRoadReport(krStart, krEnd);
-      for (const r of rows) {
-        await sql`
-          INSERT INTO kingsroad_report
-            (record_date, custom_channel_name, country_code, domain_name,
-             ad_requests, clicks, earnings_eur, page_views,
-             individual_ad_impressions, matched_ad_requests,
-             funnel_clicks, funnel_impressions, funnel_requests, fetched_at)
-          VALUES
-            (${r.record_date}, ${r.custom_channel_name}, ${r.country_code}, ${r.domain_name},
-             ${r.ad_requests}, ${r.clicks}, ${r.earnings_eur}, ${r.page_views},
-             ${r.individual_ad_impressions}, ${r.matched_ad_requests},
-             ${r.funnel_clicks}, ${r.funnel_impressions}, ${r.funnel_requests}, NOW())
-          ON CONFLICT (record_date, custom_channel_name, country_code, domain_name)
-          DO UPDATE SET
-            ad_requests = EXCLUDED.ad_requests,
-            clicks = EXCLUDED.clicks,
-            earnings_eur = EXCLUDED.earnings_eur,
-            page_views = EXCLUDED.page_views,
-            individual_ad_impressions = EXCLUDED.individual_ad_impressions,
-            matched_ad_requests = EXCLUDED.matched_ad_requests,
-            funnel_clicks = EXCLUDED.funnel_clicks,
-            funnel_impressions = EXCLUDED.funnel_impressions,
-            funnel_requests = EXCLUDED.funnel_requests,
-            fetched_at = NOW()
-        `;
+      for (const [krStart, krEnd] of ranges) {
+        const rows = await fetchKingsRoadReport(krStart, krEnd);
+        for (const r of rows) {
+          await sql`
+            INSERT INTO kingsroad_report
+              (record_date, custom_channel_name, country_code, domain_name,
+               ad_requests, clicks, earnings_eur, page_views,
+               individual_ad_impressions, matched_ad_requests,
+               funnel_clicks, funnel_impressions, funnel_requests, fetched_at)
+            VALUES
+              (${r.record_date}, ${r.custom_channel_name}, ${r.country_code}, ${r.domain_name},
+               ${r.ad_requests}, ${r.clicks}, ${r.earnings_eur}, ${r.page_views},
+               ${r.individual_ad_impressions}, ${r.matched_ad_requests},
+               ${r.funnel_clicks}, ${r.funnel_impressions}, ${r.funnel_requests}, NOW())
+            ON CONFLICT (record_date, custom_channel_name, country_code, domain_name)
+            DO UPDATE SET
+              ad_requests = EXCLUDED.ad_requests,
+              clicks = EXCLUDED.clicks,
+              earnings_eur = EXCLUDED.earnings_eur,
+              page_views = EXCLUDED.page_views,
+              individual_ad_impressions = EXCLUDED.individual_ad_impressions,
+              matched_ad_requests = EXCLUDED.matched_ad_requests,
+              funnel_clicks = EXCLUDED.funnel_clicks,
+              funnel_impressions = EXCLUDED.funnel_impressions,
+              funnel_requests = EXCLUDED.funnel_requests,
+              fetched_at = NOW()
+          `;
+        }
       }
       for (const date of kingsroadDatesToFetch) {
         await markSynced("kingsroad", date, "");
@@ -181,13 +202,14 @@ export async function POST(request: NextRequest) {
             for (const r of statRows) {
               await sql`
                 INSERT INTO snapchat_ad_squad_stats
-                  (ad_squad_id, ad_account_id, stat_date, country_code,
+                  (ad_squad_id, ad_account_id, ad_squad_name, stat_date, country_code,
                    impressions, swipes, spend_micro, video_views, fetched_at)
                 VALUES
-                  (${squad.id}, ${adAccountId}, ${r.date}, ${r.country_code},
+                  (${squad.id}, ${adAccountId}, ${squad.name}, ${r.date}, ${r.country_code},
                    ${r.impressions}, ${r.swipes}, ${r.spend_micro}, ${r.video_views}, NOW())
                 ON CONFLICT (ad_squad_id, stat_date, country_code)
                 DO UPDATE SET
+                  ad_squad_name = EXCLUDED.ad_squad_name,
                   impressions = EXCLUDED.impressions,
                   swipes = EXCLUDED.swipes,
                   spend_micro = EXCLUDED.spend_micro,
@@ -203,9 +225,12 @@ export async function POST(request: NextRequest) {
         })
       );
 
-      for (const date of snapDatesToFetch) {
-        await markSynced("snapchat", date, adAccountId);
-        snapchatSynced++;
+      const allSquadsFailed = adSquads.length > 0 && debugSquadErrors.length === adSquads.length;
+      if (!allSquadsFailed) {
+        for (const date of snapDatesToFetch) {
+          await markSynced("snapchat", date, adAccountId);
+          snapchatSynced++;
+        }
       }
     } catch (err) {
       snapchatError = err instanceof Error ? err.message : String(err);

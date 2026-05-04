@@ -1,9 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
-import { sql } from "@/lib/db";
+import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
+import { runMigrations, sql } from "@/lib/db";
 import { getEurToUsd } from "@/lib/fx-rate";
-import { getCampaigns } from "@/lib/snapchat/campaigns";
-import { getAdSquads } from "@/lib/snapchat/adsquads";
 
 export interface CombinedRow {
   ad_squad_id: string;
@@ -27,13 +25,12 @@ export interface CombinedRow {
   domain_name: string;
 }
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
-  }
-  if (!isSnapchatConnected(session)) {
-    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
   }
 
   const { searchParams } = request.nextUrl;
@@ -41,20 +38,23 @@ export async function GET(request: NextRequest) {
   const startDate = searchParams.get("startDate") ?? "";
   const endDate = searchParams.get("endDate") ?? "";
 
-  if (!adAccountId || !startDate || !endDate) {
-    return NextResponse.json({ error: "missing_params" }, { status: 400 });
+  if (!adAccountId || !DATE_RE.test(startDate) || !DATE_RE.test(endDate)) {
+    return NextResponse.json({ error: "invalid_params" }, { status: 400 });
   }
   if (!isAdAccountAllowed(session, adAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+
+  await runMigrations();
 
   const [eurToUsd, { rows }] = await Promise.all([
     getEurToUsd(),
     sql`
       SELECT
         s.ad_squad_id,
+        COALESCE(NULLIF(s.ad_squad_name, ''), s.ad_squad_id) AS ad_squad_name,
         s.stat_date::text                         AS stat_date,
-        ''                                        AS country_code,
+        s.country_code,
         s.impressions::bigint                     AS impressions,
         s.swipes::bigint                          AS swipes,
         s.spend_micro::bigint                     AS spend_micro,
@@ -93,18 +93,6 @@ export async function GET(request: NextRequest) {
     `,
   ]);
 
-  // Resolve ad squad names from Snapchat API.
-  const nameMap = new Map<string, string>();
-  try {
-    const campaigns = await getCampaigns(adAccountId);
-    const adSquadLists = await Promise.all(campaigns.map((c) => getAdSquads(c.id)));
-    for (const squad of adSquadLists.flat()) {
-      nameMap.set(squad.id, squad.name);
-    }
-  } catch (err) {
-    console.error("[reporting/combined] name resolution failed:", err);
-  }
-
   const combined: CombinedRow[] = rows.map((r) => {
     const spendUsd = Number(r.spend_micro) / 1_000_000;
     const revenueEur = Number(r.earnings_eur);
@@ -112,7 +100,7 @@ export async function GET(request: NextRequest) {
     const roiPct = spendUsd > 0 ? (revenueUsd / spendUsd) * 100 : null;
     return {
       ad_squad_id: r.ad_squad_id as string,
-      ad_squad_name: nameMap.get(r.ad_squad_id as string) ?? r.ad_squad_id as string,
+      ad_squad_name: r.ad_squad_name as string,
       stat_date: r.stat_date as string,
       country_code: r.country_code as string,
       impressions: Number(r.impressions),
