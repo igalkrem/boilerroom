@@ -112,7 +112,7 @@ src/
 │       ├── presets/                   # Campaign preset CRUD UI (new/[id]/edit); card grid shows feed/geo/pixel/bid/budget/device + Duplicate action; no "Load in Wizard"
 │       ├── articles/                  # Article CRUD UI (new/[id]/edit)
 │       ├── feed-providers/            # Feed Provider board UI (card grid + FeedProviderModal) — own top-nav tab
-│       ├── performance/               # Global performance dashboard (top-nav link)
+│       ├── performance/               # **Default landing page** — auto-loads on mount, auto-refreshes every 15 min
 │       └── silo/                      # Media library
 │           ├── page.tsx               # Library grid with search/filter/delete; auto-fill grid (minmax 180–240px) keeps cards compact on wide screens
 │           ├── upload/                # Upload page with tag selector + SiloUploader
@@ -154,8 +154,11 @@ src/
 │   │   ├── TopBar.tsx                 # Top bar (page header area)
 │   │   └── KVHydrationProvider.tsx    # On dashboard mount: hydrates localStorage from Vercel Blob; blocks render on fresh session until data loaded
 │   ├── performance/
-│   │   ├── PerformanceTable.tsx       # Sortable table aggregated by ad squad + country; click row → DrilldownModal
-│   │   └── DrilldownModal.tsx         # Per-ad-squad daily breakdown table with totals row
+│   │   ├── PerformanceTable.tsx       # Sortable table; optional columns via visibleColumns prop; ⚙ Edit row expands BudgetBidControls; click row → DrilldownModal
+│   │   ├── DrilldownModal.tsx         # Per-ad-squad daily breakdown table with totals row
+│   │   ├── DateRangePicker.tsx        # Google Ads-style date picker: presets left, two-month calendar right; default = Today
+│   │   ├── ColumnSelector.tsx         # Dropdown checklist to show/hide metric columns; persists to localStorage (br_perf_cols)
+│   │   └── BudgetBidControls.tsx      # Inline expand row: adjust daily budget and bid with quick buttons + input + Save (PATCH /api/snapchat/adsquads)
 │   ├── ui/
 │   │   └── MultiSelect.tsx            # Controlled multi-select dropdown with checkboxes (react-hook-form Controller)
 │   ├── pixels/                        # PixelForm component
@@ -309,7 +312,7 @@ src/
 
 - **KV Sync — persistent metadata storage:** All localStorage-backed stores call `syncToKV(key, data)` on every write — debounced 1.5s, fire-and-forget POST to `/api/data`. Blob paths: `metadata/{googleUserId}/{key}.json`. Blobs are stored with `access: "public"` (the `boilerroom-silo` store is a public store; private access is not supported). Server reads use `getDownloadUrl` from `@vercel/blob`. `KVHydrationProvider` blocks render on fresh session until KV data loaded; merges in background if localStorage already populated. Valid keys whitelisted in `/api/data`.
 
-- **Performance dashboard:** `/dashboard/performance` — global page (all accounts via selector). Attribution: `snapchat_ad_squad_stats.ad_squad_id = kingsroad_report.custom_channel_name` (JOIN key). The channel name must equal the Snapchat ad squad UUID — this only works for campaigns created via BoilerRoom with channel assignment enabled (provider channel type `"provider-supplied"`). KingsRoad has two traffic sources: **QuestLyon domain = Snapchat** (UUID channel names), **Zentryvia domain = Facebook** (18-digit numeric IDs, no Snap attribution). Sync flow: finalized dates (>1 day old) never re-fetched; recent dates re-fetched at most once/hour. ROI = `(revenue_usd - spend_usd) / spend_usd × 100%`. Country normalization: KingsRoad `country_name` → ISO-2 via `countryNameToCode()` at ingest time. **Combined query:** KingsRoad is pre-aggregated by `(custom_channel_name, record_date)` in a subquery before joining — direct join would overcount spend when a channel has multiple country rows per date. Snapchat stats have no country breakdown (`country_code` is always `''`).
+- **Performance dashboard:** `/dashboard/performance` — **default landing page** (replaces Campaign Builder at `/dashboard/`; builder still at `/dashboard/create`). Auto-loads on mount; auto-refreshes every 15 min via `setInterval` with a `latestParams` ref to avoid stale closures. No manual Refresh button or account selector. **Account detection:** reads `loadAdAccountConfigs()` from localStorage; filters to `!config.hidden` (same flag as Traffic Sources "Hide from campaigns" toggle); falls back to all accounts if none configured. **Multi-account:** syncs and loads all active accounts in parallel via `Promise.allSettled`; rows merged into one list. **Date picker:** `DateRangePicker` — presets (Today default) + two-month calendar; max 90 days (API limit). **Columns:** `ColumnSelector` toggles metric columns; persists to `localStorage` key `br_perf_cols`. **Controls:** `⚙ Edit` per row opens `BudgetBidControls` (inline expand) — `PATCH /api/snapchat/adsquads` fetches current squad, merges `daily_budget_micro`/`bid_micro`, PUTs back; `GET /api/snapchat/adsquads?adAccountId=X` (no `adSquadId`) lists all squads for account. Attribution: `snapchat_ad_squad_stats.ad_squad_id = kingsroad_report.custom_channel_name` (JOIN key). The channel name must equal the Snapchat ad squad UUID — only works for campaigns created via BoilerRoom with channel assignment enabled (provider channel type `"provider-supplied"`). KingsRoad has two traffic sources: **QuestLyon domain = Snapchat** (UUID channel names), **Zentryvia domain = Facebook** (18-digit numeric IDs, no Snap attribution). Sync flow: finalized dates (>1 day old) never re-fetched; recent dates re-fetched at most once/hour. **ROI = `revenue_usd / spend_usd × 100`** (ROAS %): 100% = break-even, green ≥ 100%, red < 100%, `—` when spend = 0. Country normalization: KingsRoad `country_name` → ISO-2 via `countryNameToCode()` at ingest time. **Combined query:** KingsRoad is pre-aggregated by `(custom_channel_name, record_date)` in a subquery before joining — direct join would overcount spend when a channel has multiple country rows per date. Snapchat stats have no country breakdown (`country_code` is always `''`).
 
 ## Security Notes
 
