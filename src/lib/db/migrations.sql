@@ -54,3 +54,4 @@ CREATE INDEX IF NOT EXISTS fpc_fp_status ON feed_provider_channels(feed_provider
 CREATE INDEX IF NOT EXISTS fpc_user ON feed_provider_channels(google_user_id);
 
 ALTER TABLE kingsroad_report ADD COLUMN IF NOT EXISTS funnel_requests BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE snapchat_ad_squad_stats ADD COLUMN IF NOT EXISTS ad_squad_name TEXT NOT NULL DEFAULT '';
