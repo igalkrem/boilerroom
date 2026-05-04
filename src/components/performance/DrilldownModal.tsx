@@ -12,11 +12,11 @@ interface Props {
 function fmt$(n: number) { return `$${n.toFixed(2)}`; }
 function fmtRoi(pct: number | null) {
   if (pct === null) return "—";
-  return (pct >= 0 ? "+" : "") + pct.toFixed(1) + "%";
+  return pct.toFixed(1) + "%";
 }
 function roiColor(pct: number | null) {
   if (pct === null) return "text-gray-400";
-  return pct >= 0 ? "text-green-600" : "text-red-600";
+  return pct >= 100 ? "text-green-600" : "text-red-600";
 }
 function fmtNum(n: number) { return n.toLocaleString(); }
 
@@ -34,7 +34,7 @@ export function DrilldownModal({ adSquadName, rows, onClose }: Props) {
     }),
     { spend: 0, revenue: 0, impressions: 0, swipes: 0, clicks: 0, pageViews: 0 }
   );
-  const totalRoi = totals.spend > 0 ? ((totals.revenue - totals.spend) / totals.spend) * 100 : null;
+  const totalRoi = totals.spend > 0 ? (totals.revenue / totals.spend) * 100 : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">

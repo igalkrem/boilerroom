@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
     const spendUsd = Number(r.spend_micro) / 1_000_000;
     const revenueEur = Number(r.earnings_eur);
     const revenueUsd = revenueEur * eurToUsd;
-    const roiPct = spendUsd > 0 ? ((revenueUsd - spendUsd) / spendUsd) * 100 : null;
+    const roiPct = spendUsd > 0 ? (revenueUsd / spendUsd) * 100 : null;
     return {
       ad_squad_id: r.ad_squad_id as string,
       ad_squad_name: nameMap.get(r.ad_squad_id as string) ?? r.ad_squad_id as string,
