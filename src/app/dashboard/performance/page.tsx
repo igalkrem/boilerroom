@@ -12,6 +12,10 @@ import type { SquadDetail } from "@/components/performance/PerformanceTable";
 import type { SnapAdAccount } from "@/types/snapchat";
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
+function dateOffset(n: number) {
+  const d = new Date(); d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
 
 export default function PerformancePage() {
   const { accounts } = useAdAccounts();
@@ -27,6 +31,7 @@ export default function PerformancePage() {
   const [endDate, setEndDate] = useState(today);
 
   const [rows, setRows] = useState<CombinedRow[]>([]);
+  const [historicalRows, setHistoricalRows] = useState<CombinedRow[]>([]);
   const [eurToUsd, setEurToUsd] = useState(1.08);
   const [squadDetails, setSquadDetails] = useState<Map<string, SquadDetail>>(new Map());
   const [syncing, setSyncing] = useState(false);
@@ -60,7 +65,7 @@ export default function PerformancePage() {
 
     const results = await Promise.allSettled(
       accts.map((a) =>
-        fetch(`/api/reporting/combined?adAccountId=${a.id}&startDate=${start}&endDate=${end}&country=`)
+        fetch(`/api/reporting/combined?adAccountId=${a.id}&startDate=${start}&endDate=${end}`)
           .then((r) => r.json() as Promise<{ rows: CombinedRow[]; eur_to_usd: number }>)
       )
     );
@@ -70,6 +75,17 @@ export default function PerformancePage() {
 
     const first = results.find((r) => r.status === "fulfilled");
     if (first?.status === "fulfilled") setEurToUsd(first.value.eur_to_usd ?? 1.08);
+
+    // Also fetch historical data (last 3 days) for -1D/-2D/-3D ROI columns
+    const histStart = dateOffset(-3);
+    const histEnd = dateOffset(-1);
+    const histResults = await Promise.allSettled(
+      accts.map((a) =>
+        fetch(`/api/reporting/combined?adAccountId=${a.id}&startDate=${histStart}&endDate=${histEnd}`)
+          .then((r) => r.json() as Promise<{ rows: CombinedRow[] }>)
+      )
+    );
+    setHistoricalRows(histResults.flatMap((r) => r.status === "fulfilled" ? (r.value.rows ?? []) : []));
 
     setLastSynced(new Date());
     setLoading(false);
@@ -85,7 +101,12 @@ export default function PerformancePage() {
             .then((r) => r.json())
             .then((d) => ({
               accountId: a.id,
-              squads: (d.adsquads ?? []) as Array<{ id: string; daily_budget_micro?: number; bid_micro?: number }>,
+              squads: (d.adsquads ?? []) as Array<{
+                id: string;
+                daily_budget_micro?: number;
+                bid_micro?: number;
+                status?: "ACTIVE" | "PAUSED";
+              }>,
             }))
         )
       );
@@ -97,6 +118,7 @@ export default function PerformancePage() {
               daily_budget_micro: s.daily_budget_micro ?? 0,
               bid_micro: s.bid_micro ?? 0,
               ad_account_id: r.value.accountId,
+              status: s.status ?? "ACTIVE",
             });
           }
         }
@@ -186,7 +208,8 @@ export default function PerformancePage() {
           eurToUsd={eurToUsd}
           visibleColumns={visibleColumns}
           squadDetails={squadDetails}
-          onControlsUpdated={() => void loadSquadDetails(activeAccounts)}
+          historicalRows={historicalRows}
+          onSquadUpdated={() => void loadSquadDetails(activeAccounts)}
         />
       )}
 
