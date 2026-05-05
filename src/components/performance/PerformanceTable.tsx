@@ -34,7 +34,7 @@ function microToDollar(micro: number) { return micro / 1_000_000; }
 function dollarToMicro(dollars: number) { return Math.round(dollars * 1_000_000); }
 function fmt$(n: number) { return `$${n.toFixed(2)}`; }
 function fmtPct(n: number | null) { return n === null ? "—" : n.toFixed(2) + "%"; }
-function fmtRoi(pct: number | null) { return pct === null ? "—" : pct.toFixed(1) + "%"; }
+function fmtRoi(pct: number | null) { return pct === null ? "—" : pct.toFixed(2) + "%"; }
 function roiColor(pct: number | null) {
   if (pct === null) return "text-gray-400";
   if (pct >= 100) return "text-green-600";
@@ -277,7 +277,7 @@ export function PerformanceTable({
 
   async function saveBid(squadId: string) {
     const dollars = parseFloat(bidDraft);
-    if (isNaN(dollars) || dollars <= 0) { setInlineError("Invalid bid"); return; }
+    if (isNaN(dollars) || dollars < 0.01) { setInlineError("Min bid $0.01"); return; }
     const detail = squadDetails.get(squadId);
     if (!detail) return;
     setSavingInline(squadId + "_bid");
@@ -310,6 +310,7 @@ export function PerformanceTable({
       onSquadUpdated();
     } catch {
       console.error("status toggle failed");
+      setInlineError("Status update failed");
     }
   }
 
@@ -322,10 +323,10 @@ export function PerformanceTable({
       if (isNaN(v) || v < 20) { setBulkError("Budget must be at least $20.00"); return; }
     } else if (field === "bid") {
       const v = parseFloat(bulkBid);
-      if (isNaN(v) || v <= 0) { setBulkError("Bid must be greater than $0.00"); return; }
+      if (isNaN(v) || v < 0.01) { setBulkError("Bid must be at least $0.01"); return; }
     }
     setBulkSaving(true);
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       ids.map((squadId) => {
         const detail = squadDetails.get(squadId);
         if (!detail) return Promise.resolve();
@@ -344,9 +345,17 @@ export function PerformanceTable({
         });
       })
     );
+    const failures = results.filter(
+      (r) => r.status === "rejected" || (r.status === "fulfilled" && r.value instanceof Response && !r.value.ok)
+    ).length;
     setBulkSaving(false);
-    setSelectedIds(new Set());
-    setShowBulkEdit(false);
+    if (failures > 0) {
+      setBulkError(`${failures} of ${ids.length} update${ids.length === 1 ? "" : "s"} failed. Please retry.`);
+    } else {
+      setSelectedIds(new Set());
+      setShowBulkEdit(false);
+      setBulkError(null);
+    }
     onSquadUpdated();
   }
 
@@ -364,6 +373,7 @@ export function PerformanceTable({
   function clearSelection() {
     setSelectedIds(new Set());
     setShowBulkEdit(false);
+    setBulkError(null);
   }
 
   function downloadCsv() {
@@ -379,7 +389,7 @@ export function PerformanceTable({
       return [
         `"${r.ad_squad_name.replace(/"/g, '""')}"`,
         r.spend_usd.toFixed(2), r.revenue_usd.toFixed(2),
-        r.roi_pct !== null ? r.roi_pct.toFixed(1) : "",
+        r.roi_pct !== null ? r.roi_pct.toFixed(2) : "",
         r.profit.toFixed(2),
         r.impressions, r.swipes, r.funnel_clicks,
         r.ctr !== null ? r.ctr.toFixed(2) : "",
@@ -395,9 +405,9 @@ export function PerformanceTable({
         detail ? microToDollar(detail.daily_budget_micro).toFixed(2) : "",
         detail ? microToDollar(detail.bid_micro).toFixed(2) : "",
         detail ? detail.status : "",
-        r.roi_1d !== null ? r.roi_1d.toFixed(1) : "",
-        r.roi_2d !== null ? r.roi_2d.toFixed(1) : "",
-        r.roi_3d !== null ? r.roi_3d.toFixed(1) : "",
+        r.roi_1d !== null ? r.roi_1d.toFixed(2) : "",
+        r.roi_2d !== null ? r.roi_2d.toFixed(2) : "",
+        r.roi_3d !== null ? r.roi_3d.toFixed(2) : "",
       ].join(",");
     });
     const content = [headers.join(","), ...csvRows].join("\n");
@@ -441,7 +451,7 @@ export function PerformanceTable({
               <>
                 <span className="text-sm font-medium text-gray-700 pl-1">{selectedIds.size} selected</span>
                 <button
-                  onClick={() => setShowBulkEdit(v => !v)}
+                  onClick={() => { setShowBulkEdit(v => !v); setBulkError(null); }}
                   className={`flex items-center gap-1.5 px-2.5 py-1 text-sm rounded-md border transition-colors ${
                     showBulkEdit
                       ? "bg-blue-600 text-white border-blue-600"

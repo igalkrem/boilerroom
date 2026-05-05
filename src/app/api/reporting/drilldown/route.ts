@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
-import { sql } from "@/lib/db";
+import { runMigrations, sql } from "@/lib/db";
 import { getEurToUsd } from "@/lib/fx-rate";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 
@@ -20,6 +20,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
+  await runMigrations();
+
   const [eurToUsd, { rows }] = await Promise.all([
     getEurToUsd(),
     sql`
@@ -27,7 +29,7 @@ export async function GET(request: NextRequest) {
         s.ad_squad_id,
         COALESCE(NULLIF(s.ad_squad_name, ''), s.ad_squad_id) AS ad_squad_name,
         s.stat_date::text                         AS stat_date,
-        ''                                        AS country_code,
+        ''                                        AS country_code, /* drilldown is per-squad, no country breakdown */
         s.impressions::bigint                     AS impressions,
         s.swipes::bigint                          AS swipes,
         s.spend_micro::bigint                     AS spend_micro,
