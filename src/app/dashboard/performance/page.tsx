@@ -37,6 +37,7 @@ export default function PerformancePage() {
   const [historicalRows, setHistoricalRows] = useState<CombinedRow[]>([]);
   const [eurToUsd, setEurToUsd] = useState(1.08);
   const [squadDetails, setSquadDetails] = useState<Map<string, SquadDetail>>(new Map());
+  const [squadDetailsError, setSquadDetailsError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,39 +98,74 @@ export default function PerformancePage() {
 
   const loadSquadDetails = useCallback(async (accts: SnapAdAccount[]) => {
     if (accts.length === 0) return;
-    try {
-      const results = await Promise.allSettled(
-        accts.map((a) =>
-          fetch(`/api/snapchat/adsquads?adAccountId=${a.id}`)
-            .then((r) => r.json())
-            .then((d) => ({
-              accountId: a.id,
-              squads: (d.adsquads ?? []) as Array<{
-                id: string;
-                daily_budget_micro?: number;
-                bid_micro?: number;
-                status?: "ACTIVE" | "PAUSED";
-              }>,
-            }))
-        )
-      );
-      const map = new Map<string, SquadDetail>();
-      for (const r of results) {
+
+    type AccountSquads = {
+      accountId: string;
+      squads: Array<{
+        id: string;
+        daily_budget_micro?: number;
+        bid_micro?: number;
+        status?: "ACTIVE" | "PAUSED";
+      }>;
+    };
+
+    async function fetchOne(a: SnapAdAccount, attempt = 0): Promise<AccountSquads> {
+      const r = await fetch(`/api/snapchat/adsquads?adAccountId=${a.id}`);
+      if (!r.ok) {
+        if (attempt < 2) {
+          await new Promise((res) => setTimeout(res, 1000 * (attempt + 1)));
+          return fetchOne(a, attempt + 1);
+        }
+        throw new Error(`HTTP ${r.status}`);
+      }
+      const d = await r.json();
+      return { accountId: a.id, squads: d.adsquads ?? [] };
+    }
+
+    const results = await Promise.allSettled(accts.map((a) => fetchOne(a)));
+    const failedIds: string[] = [];
+
+    setSquadDetails((prev) => {
+      const next = new Map(prev);
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i];
+        const a = accts[i];
         if (r.status === "fulfilled") {
+          // Replace squads for this account; keep entries from other accounts intact.
+          for (const [squadId, d] of next) {
+            if (d.ad_account_id === a.id) next.delete(squadId);
+          }
           for (const s of r.value.squads) {
-            map.set(s.id, {
+            next.set(s.id, {
               daily_budget_micro: s.daily_budget_micro ?? 0,
               bid_micro: s.bid_micro ?? 0,
               ad_account_id: r.value.accountId,
               status: s.status ?? "ACTIVE",
             });
           }
+        } else {
+          failedIds.push(a.id);
+          console.error(`[performance] squad details fetch failed for ${a.id}:`, r.reason);
         }
       }
-      setSquadDetails(map);
-    } catch (err) {
-      console.error("[performance] squad details:", err);
-    }
+      return next;
+    });
+
+    setSquadDetailsError(
+      failedIds.length > 0
+        ? `Could not load campaign settings for ${failedIds.length} ad account${failedIds.length === 1 ? "" : "s"} — refresh to retry.`
+        : null
+    );
+  }, []);
+
+  const updateSquadDetail = useCallback((squadId: string, patch: Partial<SquadDetail>) => {
+    setSquadDetails((prev) => {
+      const existing = prev.get(squadId);
+      if (!existing) return prev;
+      const next = new Map(prev);
+      next.set(squadId, { ...existing, ...patch });
+      return next;
+    });
   }, []);
 
   // Auto-load on first available accounts
@@ -203,6 +239,9 @@ export default function PerformancePage() {
       </div>
 
       {error && <Alert type="error" className="mb-4">{error}</Alert>}
+      {squadDetailsError && (
+        <p className="text-xs text-amber-600 mb-2">{squadDetailsError}</p>
+      )}
 
       <KpiSummaryBar rows={rows} isLoading={syncing || loading} />
 
@@ -216,6 +255,7 @@ export default function PerformancePage() {
           historicalRows={historicalRows}
           startDate={startDate}
           onSquadUpdated={() => void loadSquadDetails(activeAccounts)}
+          onSquadPatched={updateSquadDetail}
         />
       )}
 
