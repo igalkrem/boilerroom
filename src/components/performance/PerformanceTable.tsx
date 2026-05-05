@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import type { ReactNode } from "react";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import { DrilldownModal } from "./DrilldownModal";
 import { ColumnSelector } from "./ColumnSelector";
@@ -17,6 +18,8 @@ interface Props {
   eurToUsd: number;
   visibleColumns: Set<string>;
   onColumnsChange: (cols: Set<string>) => void;
+  columnOrder: string[];
+  onColumnOrderChange: (order: string[]) => void;
   squadDetails: Map<string, SquadDetail>;
   historicalRows: CombinedRow[];
   startDate: string;
@@ -81,6 +84,41 @@ interface AggrRow {
   cvr: number | null;
 }
 
+interface MetricColDef {
+  label: string;
+  sortKey?: SortKey;
+  render: (r: AggrRow) => ReactNode;
+  tdClass?: string;
+}
+
+const METRIC_COLS: Record<string, MetricColDef> = {
+  spend_usd:           { label: "Spend ($)",          sortKey: "spend_usd",           render: (r) => fmt$(r.spend_usd),   tdClass: "text-gray-900 font-medium" },
+  revenue_usd:         { label: "Revenue ($)",         sortKey: "revenue_usd",         render: (r) => fmt$(r.revenue_usd), tdClass: "text-gray-900" },
+  roi_pct:             { label: "ROI",                 sortKey: "roi_pct",             render: (r) => <span className={`font-semibold ${roiColor(r.roi_pct)}`}>{fmtRoi(r.roi_pct)}</span> },
+  roi_1d:              { label: "-1D ROI",             sortKey: "roi_1d",              render: (r) => <span className={`font-semibold ${roiColor(r.roi_1d)}`}>{fmtRoi(r.roi_1d)}</span> },
+  roi_2d:              { label: "-2D ROI",             sortKey: "roi_2d",              render: (r) => <span className={`font-semibold ${roiColor(r.roi_2d)}`}>{fmtRoi(r.roi_2d)}</span> },
+  roi_3d:              { label: "-3D ROI",             sortKey: "roi_3d",              render: (r) => <span className={`font-semibold ${roiColor(r.roi_3d)}`}>{fmtRoi(r.roi_3d)}</span> },
+  profit:              { label: "Profit",              sortKey: "profit",              render: (r) => <span className={r.profit >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>{fmt$(r.profit)}</span> },
+  rpc:                 { label: "RPC",                 sortKey: "rpc",                 render: (r) => r.rpc !== null ? fmt$(r.rpc) : "—",          tdClass: "text-gray-700" },
+  ctr:                 { label: "CTR",                 sortKey: "ctr",                 render: (r) => fmtPct(r.ctr),                               tdClass: "text-gray-700" },
+  cpm:                 { label: "CPM",                 sortKey: "cpm",                 render: (r) => r.cpm !== null ? fmt$(r.cpm) : "—",          tdClass: "text-gray-700" },
+  cpc:                 { label: "CPC",                 sortKey: "cpc",                 render: (r) => r.cpc !== null ? fmt$(r.cpc) : "—",          tdClass: "text-gray-700" },
+  cvr:                 { label: "CVR",                 sortKey: "cvr",                 render: (r) => fmtPct(r.cvr),                               tdClass: "text-gray-700" },
+  cpr:                 { label: "CPR",                 sortKey: "cpr",                 render: (r) => r.cpr !== null ? fmt$(r.cpr) : "—",          tdClass: "text-gray-700" },
+  rpr:                 { label: "RPR",                 sortKey: "rpr",                 render: (r) => r.rpr !== null ? fmt$(r.rpr) : "—",          tdClass: "text-gray-700" },
+  impressions:         { label: "Impressions",         sortKey: "impressions",         render: (r) => fmtNum(r.impressions),                       tdClass: "text-gray-700" },
+  swipes:              { label: "Clicks",              sortKey: "swipes",              render: (r) => fmtNum(r.swipes),                            tdClass: "text-gray-700" },
+  funnel_clicks:       { label: "Funnel Clicks",       sortKey: "funnel_clicks",       render: (r) => fmtNum(r.funnel_clicks),                     tdClass: "text-gray-700" },
+  funnel_impressions:  { label: "Funnel Impressions",  sortKey: "funnel_impressions",  render: (r) => fmtNum(r.funnel_impressions),                tdClass: "text-gray-700" },
+  funnel_requests:     { label: "Funnel Requests",     sortKey: "funnel_requests",     render: (r) => fmtNum(r.funnel_requests),                   tdClass: "text-gray-700" },
+  ad_requests:         { label: "Ad Requests",         sortKey: "ad_requests",         render: (r) => fmtNum(r.ad_requests),                       tdClass: "text-gray-700" },
+  matched_ad_requests: { label: "Matched Requests",    sortKey: "matched_ad_requests", render: (r) => fmtNum(r.matched_ad_requests),               tdClass: "text-gray-700" },
+  clicks:              { label: "VZ Clicks",           sortKey: "clicks",              render: (r) => fmtNum(r.clicks),                            tdClass: "text-gray-700" },
+  page_views:          { label: "Page Views",          sortKey: "page_views",          render: (r) => fmtNum(r.page_views),                        tdClass: "text-gray-700" },
+  video_views:         { label: "Video Views",         sortKey: "video_views",         render: (r) => fmtNum(r.video_views),                       tdClass: "text-gray-700" },
+  domain_name:         { label: "Domain",                                              render: (r) => <span className="text-xs text-gray-500">{r.domain_name || "—"}</span> },
+};
+
 function SortArrow({ active, desc }: { active: boolean; desc: boolean }) {
   if (!active) return (
     <svg className="w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -99,7 +137,8 @@ function SortArrow({ active, desc }: { active: boolean; desc: boolean }) {
 }
 
 export function PerformanceTable({
-  rows, eurToUsd, visibleColumns, onColumnsChange, squadDetails, historicalRows, startDate, onSquadUpdated, onSquadPatched,
+  rows, eurToUsd, visibleColumns, onColumnsChange, columnOrder, onColumnOrderChange,
+  squadDetails, historicalRows, startDate, onSquadUpdated, onSquadPatched,
 }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("spend_usd");
   const [sortDesc, setSortDesc] = useState(true);
@@ -107,6 +146,7 @@ export function PerformanceTable({
   const [filterQuery, setFilterQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [expandedNames, setExpandedNames] = useState<Set<string>>(new Set());
 
   // Inline budget/bid editing
   const [editingBudget, setEditingBudget] = useState<string | null>(null);
@@ -531,7 +571,12 @@ export function PerformanceTable({
             </div>
 
             {/* Column selector */}
-            <ColumnSelector visible={visibleColumns} onChange={onColumnsChange} />
+            <ColumnSelector
+              visible={visibleColumns}
+              order={columnOrder}
+              onChange={onColumnsChange}
+              onOrderChange={onColumnOrderChange}
+            />
 
             {/* Download CSV */}
             <button
@@ -646,32 +691,13 @@ export function PerformanceTable({
                   Bid
                 </th>
 
-                {/* Metric columns */}
-                {sortableTh("spend_usd", "Spend ($)")}
-                {sortableTh("revenue_usd", "Revenue ($)")}
-                {sortableTh("roi_pct", "ROI")}
-                {sortableTh("roi_1d", "-1D ROI")}
-                {sortableTh("roi_2d", "-2D ROI")}
-                {sortableTh("roi_3d", "-3D ROI")}
-                {sortableTh("profit", "Profit")}
-                {sortableTh("rpc", "RPC")}
-                {sortableTh("ctr", "CTR")}
-                {sortableTh("cpm", "CPM")}
-                {sortableTh("cpc", "CPC")}
-                {sortableTh("cvr", "CVR")}
-                {sortableTh("cpr", "CPR")}
-                {sortableTh("rpr", "RPR")}
-                {sortableTh("impressions", "Impressions")}
-                {sortableTh("swipes", "Clicks")}
-                {sortableTh("funnel_clicks", "Funnel Clicks")}
-                {sortableTh("funnel_impressions", "Funnel Impressions")}
-                {sortableTh("funnel_requests", "Funnel Requests")}
-                {sortableTh("ad_requests", "Ad Requests")}
-                {sortableTh("matched_ad_requests", "Matched Requests")}
-                {sortableTh("clicks", "VZ Clicks")}
-                {sortableTh("page_views", "Page Views")}
-                {sortableTh("video_views", "Video Views")}
-                {staticTh("domain_name", "Domain")}
+                {/* Metric columns — ordered by columnOrder */}
+                {columnOrder.map((key) => {
+                  const col = METRIC_COLS[key];
+                  if (!col) return null;
+                  if (col.sortKey) return sortableTh(col.sortKey, col.label);
+                  return staticTh(key, col.label);
+                })}
               </tr>
             </thead>
 
@@ -704,18 +730,45 @@ export function PerformanceTable({
                     </td>
 
                     {/* Campaign name */}
-                    <td className="px-3 py-2.5 max-w-[260px]">
-                      <button
-                        onClick={() => setDrilldown({
-                          id: r.ad_squad_id,
-                          name: r.ad_squad_name,
-                          accountId: detail?.ad_account_id ?? "",
-                        })}
-                        className="text-left text-sm font-medium text-gray-900 hover:text-blue-600 hover:underline truncate block w-full"
-                        title={r.ad_squad_name}
-                      >
-                        {r.ad_squad_name}
-                      </button>
+                    <td className={`px-3 py-2.5 ${expandedNames.has(r.ad_squad_id) ? "" : "max-w-[260px]"}`}>
+                      <div className="flex items-start gap-1">
+                        <button
+                          onClick={() => setDrilldown({
+                            id: r.ad_squad_id,
+                            name: r.ad_squad_name,
+                            accountId: detail?.ad_account_id ?? "",
+                          })}
+                          className={`text-left text-sm font-medium text-gray-900 hover:text-blue-600 hover:underline flex-1 min-w-0 ${
+                            expandedNames.has(r.ad_squad_id) ? "break-all whitespace-normal" : "truncate block"
+                          }`}
+                          title={r.ad_squad_name}
+                        >
+                          {r.ad_squad_name}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedNames((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(r.ad_squad_id)) next.delete(r.ad_squad_id);
+                              else next.add(r.ad_squad_id);
+                              return next;
+                            });
+                          }}
+                          className="flex-shrink-0 mt-0.5 text-gray-300 hover:text-blue-500 transition-colors"
+                          title={expandedNames.has(r.ad_squad_id) ? "Collapse" : "Show full name"}
+                        >
+                          {expandedNames.has(r.ad_squad_id) ? (
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
+                            </svg>
+                          ) : (
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
                     </td>
 
                     {/* Status toggle */}
@@ -816,32 +869,12 @@ export function PerformanceTable({
                       ) : <span className="text-xs text-gray-300">…</span>}
                     </td>
 
-                    {/* Metric cells */}
-                    {optTd("spend_usd", fmt$(r.spend_usd), "text-gray-900 font-medium")}
-                    {optTd("revenue_usd", fmt$(r.revenue_usd), "text-gray-900")}
-                    {optTd("roi_pct", <span className={`font-semibold ${roiColor(r.roi_pct)}`}>{fmtRoi(r.roi_pct)}</span>)}
-                    {optTd("roi_1d", <span className={`font-semibold ${roiColor(r.roi_1d)}`}>{fmtRoi(r.roi_1d)}</span>)}
-                    {optTd("roi_2d", <span className={`font-semibold ${roiColor(r.roi_2d)}`}>{fmtRoi(r.roi_2d)}</span>)}
-                    {optTd("roi_3d", <span className={`font-semibold ${roiColor(r.roi_3d)}`}>{fmtRoi(r.roi_3d)}</span>)}
-                    {optTd("profit", <span className={r.profit >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>{fmt$(r.profit)}</span>)}
-                    {optTd("rpc", r.rpc !== null ? fmt$(r.rpc) : "—", "text-gray-700")}
-                    {optTd("ctr", fmtPct(r.ctr), "text-gray-700")}
-                    {optTd("cpm", r.cpm !== null ? fmt$(r.cpm) : "—", "text-gray-700")}
-                    {optTd("cpc", r.cpc !== null ? fmt$(r.cpc) : "—", "text-gray-700")}
-                    {optTd("cvr", fmtPct(r.cvr), "text-gray-700")}
-                    {optTd("cpr", r.cpr !== null ? fmt$(r.cpr) : "—", "text-gray-700")}
-                    {optTd("rpr", r.rpr !== null ? fmt$(r.rpr) : "—", "text-gray-700")}
-                    {optTd("impressions", fmtNum(r.impressions), "text-gray-700")}
-                    {optTd("swipes", fmtNum(r.swipes), "text-gray-700")}
-                    {optTd("funnel_clicks", fmtNum(r.funnel_clicks), "text-gray-700")}
-                    {optTd("funnel_impressions", fmtNum(r.funnel_impressions), "text-gray-700")}
-                    {optTd("funnel_requests", fmtNum(r.funnel_requests), "text-gray-700")}
-                    {optTd("ad_requests", fmtNum(r.ad_requests), "text-gray-700")}
-                    {optTd("matched_ad_requests", fmtNum(r.matched_ad_requests), "text-gray-700")}
-                    {optTd("clicks", fmtNum(r.clicks), "text-gray-700")}
-                    {optTd("page_views", fmtNum(r.page_views), "text-gray-700")}
-                    {optTd("video_views", fmtNum(r.video_views), "text-gray-700")}
-                    {optTd("domain_name", <span className="text-xs text-gray-500">{r.domain_name || "—"}</span>)}
+                    {/* Metric cells — ordered by columnOrder */}
+                    {columnOrder.map((key) => {
+                      const col = METRIC_COLS[key];
+                      if (!col) return null;
+                      return optTd(key, col.render(r), col.tdClass ?? "");
+                    })}
                   </tr>
                 );
               })}
