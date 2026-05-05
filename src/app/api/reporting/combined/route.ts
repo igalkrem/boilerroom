@@ -89,6 +89,7 @@ export async function GET(request: NextRequest) {
         AND s.stat_date    = k.record_date
       WHERE s.ad_account_id = ${adAccountId}
         AND s.stat_date BETWEEN ${startDate} AND ${endDate}
+        AND (s.impressions > 0 OR s.spend_micro > 0)
       ORDER BY s.stat_date DESC, s.spend_micro DESC
     `,
   ]);
