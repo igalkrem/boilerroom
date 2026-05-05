@@ -76,9 +76,19 @@
       "Bash(grep -n \"sql\\\\`\\\\|BETWEEN\\\\|stat_date\" /Users/igalkremer/Desktop/BoilerRoom/src/app/api/reporting/sync/route.ts)",
       "Bash(node -e \"const cur = new Date\\('invalid'\\); const end = new Date\\('2026-01-01'\\); let i=0; while\\(cur <= end && i < 5\\) { i++; } console.log\\('iterations:', i\\)\")",
       "Bash(node -e \"console.log\\(new URL\\('//evil.com/v1/something', 'https://adsapi.snapchat.com'\\).href\\)\")",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(curl -s -H \"Authorization: Bearer 9c48f7b63b2046ecbfdf6bba968da9f0\" \"https://partnerhub-api.kingsroad.io/api/v3/report/?start_date=2026-04-01&end_date=2026-04-30&page_size=5\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('COUNT:', d.get\\('count'\\)\\); [print\\(r\\) for r in d.get\\('results',[]\\)]\")",
+      "Bash(curl -s -w \"\\\\nHTTP_STATUS:%{http_code}\" -H \"Authorization: Bearer 9c48f7b63b2046ecbfdf6bba968da9f0\" \"https://partnerhub-api.kingsroad.io/api/v3/report/?start_date=2026-04-29&end_date=2026-05-02&page_size=5\")",
+      "Bash(curl -s -w \"\\\\nHTTP_STATUS:%{http_code}\" -H \"Authorization: Bearer 9c48f7b63b2046ecbfdf6bba968da9f0\" \"https://partnerhub-api.kingsroad.io/api/v3/report/?start_date=2026-04-27&end_date=2026-04-28&page_size=3\")",
+      "Bash(curl -s -w \"\\\\nHTTP_STATUS:%{http_code}\" -H \"Authorization: Bearer 9c48f7b63b2046ecbfdf6bba968da9f0\" \"https://partnerhub-api.kingsroad.io/api/v3/report/?start_date=2026-05-01&end_date=2026-05-02&page_size=3\")",
+      "Bash(curl -s -w '\\\\nHTTP_STATUS:%{http_code}' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzMDYzMTU1LCJpYXQiOjE3NzcyNzg1MTIsImp0aSI6ImNmMzhiNjM0ZDhiNTRiNjJiNDg5ZmU0N2Y2YmNhMDkxIiwidXNlcl9pZCI6NzI3fQ.U2g2Ss1RGccNGz7lSK-rb_NzHYfAaIxlt2xGUfNkRo0' 'https://partnerhub-api.kingsroad.io/api/v3/report/?start_date=2026-05-01&end_date=2026-05-02&page_size=3')",
+      "WebFetch(domain:docs.rivery.io)",
+      "WebFetch(domain:github.com)",
+      "Bash(git rm *)"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "vercel"
   ],
@@ -117,6 +127,5 @@
         ]
       }
     ]
-  },
-  "enableAllProjectMcpServers": true
+  }
 }
