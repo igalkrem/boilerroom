@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
+import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
 import { sql } from "@/lib/db";
 import { getEurToUsd } from "@/lib/fx-rate";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
@@ -9,10 +9,6 @@ export async function GET(request: NextRequest) {
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
-  if (!isSnapchatConnected(session)) {
-    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
-  }
-
   const { searchParams } = request.nextUrl;
   const adAccountId = searchParams.get("adAccountId") ?? "";
   const adSquadId = searchParams.get("adSquadId") ?? "";
@@ -58,7 +54,7 @@ export async function GET(request: NextRequest) {
           SUM(funnel_clicks)::bigint         AS funnel_clicks,
           SUM(funnel_impressions)::bigint    AS funnel_impressions,
           SUM(funnel_requests)::bigint       AS funnel_requests,
-          MIN(domain_name)                   AS domain_name
+          MIN(NULLIF(domain_name, ''))        AS domain_name
         FROM kingsroad_report
         GROUP BY custom_channel_name, record_date
       ) k

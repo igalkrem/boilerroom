@@ -33,7 +33,7 @@ type SortKey =
 function microToDollar(micro: number) { return micro / 1_000_000; }
 function dollarToMicro(dollars: number) { return Math.round(dollars * 1_000_000); }
 function fmt$(n: number) { return `$${n.toFixed(2)}`; }
-function fmtPct(n: number | null) { return n === null ? "—" : n.toFixed(1) + "%"; }
+function fmtPct(n: number | null) { return n === null ? "—" : n.toFixed(2) + "%"; }
 function fmtRoi(pct: number | null) { return pct === null ? "—" : pct.toFixed(1) + "%"; }
 function roiColor(pct: number | null) {
   if (pct === null) return "text-gray-400";
@@ -120,6 +120,7 @@ export function PerformanceTable({
   const [bulkBid, setBulkBid] = useState("");
   const [bulkStatus, setBulkStatus] = useState<"ACTIVE" | "PAUSED">("ACTIVE");
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
 
   const y1 = dateMinus(startDate, 1);
   const y2 = dateMinus(startDate, 2);
@@ -196,8 +197,8 @@ export function PerformanceTable({
         cpm: a.impressions > 0 ? (a.spend_usd / a.impressions) * 1000 : null,
         cpc: a.swipes > 0 ? a.spend_usd / a.swipes : null,
         ctr: a.impressions > 0 ? (a.swipes / a.impressions) * 100 : null,
-        cpr: a.funnel_clicks > 0 ? a.spend_usd / a.funnel_clicks : null,
-        rpr: a.funnel_clicks >= 10 ? a.revenue_usd / a.funnel_clicks : null,
+        cpr: a.funnel_requests > 0 ? a.spend_usd / a.funnel_requests : null,
+        rpr: a.funnel_requests > 0 ? a.revenue_usd / a.funnel_requests : null,
         profit: a.revenue_usd - a.spend_usd,
         cvr: a.swipes > 0 ? (a.funnel_clicks / a.swipes) * 100 : null,
       }))
@@ -315,6 +316,14 @@ export function PerformanceTable({
   async function applyBulk(field: "budget" | "bid" | "status") {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
+    setBulkError(null);
+    if (field === "budget") {
+      const v = parseFloat(bulkBudget);
+      if (isNaN(v) || v < 20) { setBulkError("Budget must be at least $20.00"); return; }
+    } else if (field === "bid") {
+      const v = parseFloat(bulkBid);
+      if (isNaN(v) || v <= 0) { setBulkError("Bid must be greater than $0.00"); return; }
+    }
     setBulkSaving(true);
     await Promise.allSettled(
       ids.map((squadId) => {
@@ -322,13 +331,9 @@ export function PerformanceTable({
         if (!detail) return Promise.resolve();
         const body: Record<string, unknown> = { adAccountId: detail.ad_account_id, squadId };
         if (field === "budget") {
-          const v = parseFloat(bulkBudget);
-          if (isNaN(v) || v < 20) return Promise.resolve();
-          body.daily_budget_micro = dollarToMicro(v);
+          body.daily_budget_micro = dollarToMicro(parseFloat(bulkBudget));
         } else if (field === "bid") {
-          const v = parseFloat(bulkBid);
-          if (isNaN(v) || v <= 0) return Promise.resolve();
-          body.bid_micro = dollarToMicro(v);
+          body.bid_micro = dollarToMicro(parseFloat(bulkBid));
         } else {
           body.status = bulkStatus;
         }
@@ -559,6 +564,7 @@ export function PerformanceTable({
               </button>
             </div>
             {bulkSaving && <span className="text-xs text-blue-500 ml-1">Saving…</span>}
+            {bulkError && <span className="text-xs text-red-500 ml-1">{bulkError}</span>}
           </div>
         )}
 
