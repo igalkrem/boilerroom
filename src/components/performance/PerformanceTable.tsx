@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import type { ReactNode } from "react";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import { DrilldownModal } from "./DrilldownModal";
@@ -146,7 +146,31 @@ export function PerformanceTable({
   const [filterQuery, setFilterQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkEdit, setShowBulkEdit] = useState(false);
-  const [expandedNames, setExpandedNames] = useState<Set<string>>(new Set());
+
+  // Name column resizing
+  const [nameColWidth, setNameColWidth] = useState(() => {
+    if (typeof window === "undefined") return 260;
+    return parseInt(localStorage.getItem("br_perf_name_col_w") ?? "260", 10) || 260;
+  });
+  const resizeStartX = useRef(0);
+  const resizeStartWidth = useRef(0);
+  const onResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = nameColWidth;
+    function onMove(ev: MouseEvent) {
+      const next = Math.max(120, resizeStartWidth.current + ev.clientX - resizeStartX.current);
+      setNameColWidth(next);
+    }
+    function onUp(ev: MouseEvent) {
+      const next = Math.max(120, resizeStartWidth.current + ev.clientX - resizeStartX.current);
+      localStorage.setItem("br_perf_name_col_w", String(next));
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [nameColWidth]);
 
   // Inline budget/bid editing
   const [editingBudget, setEditingBudget] = useState<string | null>(null);
@@ -666,9 +690,19 @@ export function PerformanceTable({
                   />
                 </th>
 
-                {/* Name — always visible */}
-                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap min-w-[200px]">
+                {/* Name — always visible, resizable */}
+                <th
+                  className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap relative select-none"
+                  style={{ width: nameColWidth, minWidth: nameColWidth, maxWidth: nameColWidth }}
+                >
                   Name
+                  <div
+                    onMouseDown={onResizeMouseDown}
+                    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize group flex items-center justify-center"
+                    title="Drag to resize"
+                  >
+                    <div className="w-0.5 h-4 bg-gray-300 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                 </th>
 
                 {/* Status toggle — always visible */}
@@ -730,45 +764,21 @@ export function PerformanceTable({
                     </td>
 
                     {/* Campaign name */}
-                    <td className={`px-3 py-2.5 ${expandedNames.has(r.ad_squad_id) ? "" : "max-w-[260px]"}`}>
-                      <div className="flex items-start gap-1">
-                        <button
-                          onClick={() => setDrilldown({
-                            id: r.ad_squad_id,
-                            name: r.ad_squad_name,
-                            accountId: detail?.ad_account_id ?? "",
-                          })}
-                          className={`text-left text-sm font-medium text-gray-900 hover:text-blue-600 hover:underline flex-1 min-w-0 ${
-                            expandedNames.has(r.ad_squad_id) ? "break-all whitespace-normal" : "truncate block"
-                          }`}
-                          title={r.ad_squad_name}
-                        >
-                          {r.ad_squad_name}
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setExpandedNames((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(r.ad_squad_id)) next.delete(r.ad_squad_id);
-                              else next.add(r.ad_squad_id);
-                              return next;
-                            });
-                          }}
-                          className="flex-shrink-0 mt-0.5 text-gray-300 hover:text-blue-500 transition-colors"
-                          title={expandedNames.has(r.ad_squad_id) ? "Collapse" : "Show full name"}
-                        >
-                          {expandedNames.has(r.ad_squad_id) ? (
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
-                            </svg>
-                          ) : (
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                            </svg>
-                          )}
-                        </button>
-                      </div>
+                    <td
+                      className="px-3 py-2.5 overflow-hidden"
+                      style={{ width: nameColWidth, minWidth: nameColWidth, maxWidth: nameColWidth }}
+                    >
+                      <button
+                        onClick={() => setDrilldown({
+                          id: r.ad_squad_id,
+                          name: r.ad_squad_name,
+                          accountId: detail?.ad_account_id ?? "",
+                        })}
+                        className="text-left text-sm font-medium text-gray-900 hover:text-blue-600 hover:underline truncate block w-full"
+                        title={r.ad_squad_name}
+                      >
+                        {r.ad_squad_name}
+                      </button>
                     </td>
 
                     {/* Status toggle */}
