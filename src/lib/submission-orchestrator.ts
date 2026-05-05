@@ -94,46 +94,57 @@ export async function runSubmission(
 
   console.log(`[orchestrator] uploadMedia: ${creatives.length} creative(s)`, creatives.map(c => ({ id: c.id, hasFile: !!c.mediaFile, mediaId: c.mediaId || null })));
 
-  await Promise.all(
-    creatives.map(async (cr) => {
-      // Case 1: cached Snapchat mediaId (Silo pre-upload or re-submission)
-      if (!cr.mediaFile && !cr.siloAssetBlobUrl) {
-        if (cr.mediaId) {
-          mediaIdMap.set(cr.id, cr.mediaId);
-          console.log(`[orchestrator] ${cr.name}: using cached mediaId ${cr.mediaId}`);
-        } else {
-          console.warn(`[orchestrator] ${cr.name}: no mediaFile, no blobUrl, and no mediaId — will be skipped`);
-        }
-        return;
+  // Limit to 2 concurrent uploads — Snapchat returns E3002 when too many uploads
+  // hit the same ad account simultaneously (3+ parallel triggers this reliably).
+  const UPLOAD_CONCURRENCY = 2;
+  const uploadQueue = creatives.map((cr) => async () => {
+    // Case 1: cached Snapchat mediaId (Silo pre-upload or re-submission)
+    if (!cr.mediaFile && !cr.siloAssetBlobUrl) {
+      if (cr.mediaId) {
+        mediaIdMap.set(cr.id, cr.mediaId);
+        console.log(`[orchestrator] ${cr.name}: using cached mediaId ${cr.mediaId}`);
+      } else {
+        console.warn(`[orchestrator] ${cr.name}: no mediaFile, no blobUrl, and no mediaId — will be skipped`);
       }
+      return;
+    }
 
-      // Case 2: Silo asset without cached mediaId — server-side upload (any file size, READY immediately)
-      if (cr.siloAssetBlobUrl && !cr.mediaFile) {
-        try {
-          const mediaId = await uploadBlobToSnapchat(
-            cr.siloAssetBlobUrl,
-            cr.siloAssetOriginalFileName ?? cr.mediaFileName ?? "media",
-            adAccountId,
-            cr.siloAssetMediaType ?? "VIDEO",
-          );
-          mediaIdMap.set(cr.id, mediaId);
-          results.uploadMedia.push({ clientId: cr.id, snapId: mediaId, name: cr.name });
-        } catch (err) {
-          console.error(`[orchestrator] ${cr.name}: silo blob upload failed —`, String(err));
-          results.uploadMedia.push({ clientId: cr.id, snapId: "", name: cr.name, error: String(err) });
-        }
-        return;
-      }
-
-      // Case 3: local File (direct drop or small Silo fallback)
-      const mediaType = cr.mediaFile!.type.startsWith("video/") ? "VIDEO" : "IMAGE";
+    // Case 2: Silo asset without cached mediaId — server-side upload (any file size, READY immediately)
+    if (cr.siloAssetBlobUrl && !cr.mediaFile) {
       try {
-        const mediaId = await uploadMediaToSnapchat(cr.mediaFile!, adAccountId, mediaType);
+        const mediaId = await uploadBlobToSnapchat(
+          cr.siloAssetBlobUrl,
+          cr.siloAssetOriginalFileName ?? cr.mediaFileName ?? "media",
+          adAccountId,
+          cr.siloAssetMediaType ?? "VIDEO",
+        );
         mediaIdMap.set(cr.id, mediaId);
         results.uploadMedia.push({ clientId: cr.id, snapId: mediaId, name: cr.name });
       } catch (err) {
-        console.error(`[orchestrator] ${cr.name}: upload failed —`, String(err));
+        console.error(`[orchestrator] ${cr.name}: silo blob upload failed —`, String(err));
         results.uploadMedia.push({ clientId: cr.id, snapId: "", name: cr.name, error: String(err) });
+      }
+      return;
+    }
+
+    // Case 3: local File (direct drop or small Silo fallback)
+    const mediaType = cr.mediaFile!.type.startsWith("video/") ? "VIDEO" : "IMAGE";
+    try {
+      const mediaId = await uploadMediaToSnapchat(cr.mediaFile!, adAccountId, mediaType);
+      mediaIdMap.set(cr.id, mediaId);
+      results.uploadMedia.push({ clientId: cr.id, snapId: mediaId, name: cr.name });
+    } catch (err) {
+      console.error(`[orchestrator] ${cr.name}: upload failed —`, String(err));
+      results.uploadMedia.push({ clientId: cr.id, snapId: "", name: cr.name, error: String(err) });
+    }
+  });
+
+  const runQueue = [...uploadQueue];
+  await Promise.all(
+    Array.from({ length: Math.min(UPLOAD_CONCURRENCY, uploadQueue.length) }, async () => {
+      while (runQueue.length > 0) {
+        const task = runQueue.shift();
+        if (task) await task();
       }
     })
   );
