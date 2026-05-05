@@ -1,6 +1,6 @@
 import { getSession, isSessionValid, isSnapchatConnected } from "@/lib/session";
 import { refreshAccessToken } from "@/lib/snapchat/auth";
-import { rateLimitedCall } from "@/lib/rate-limiter";
+import { rateLimitedFetch } from "@/lib/rate-limiter";
 
 const BASE_URL = "https://adsapi.snapchat.com/v1";
 
@@ -48,16 +48,19 @@ export async function snapFetch<T>(
 
   const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
 
-  const res = await rateLimitedCall(() => fetch(url, {
+  const makeHeaders = (token: string) => ({
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+    ...options.headers,
+  });
+
+  // rateLimitedFetch throttles to MAX_RPS and retries 429s with exponential backoff.
+  const res = await rateLimitedFetch(() => fetch(url, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-      ...options.headers,
-    },
+    headers: makeHeaders(accessToken),
   }));
 
-  // On 401, try refreshing once and retry
+  // On 401, try refreshing once and retry (also via rateLimitedFetch for 429 safety).
   if (res.status === 401) {
     const session = await getSession();
     if (!isSnapchatConnected(session)) throw new Error("snapchat_not_connected");
@@ -68,13 +71,9 @@ export async function snapFetch<T>(
     session.snapExpiresAt = Date.now() + tokens.expires_in * 1000;
     await session.save();
 
-    const retry = await rateLimitedCall(() => fetch(url, {
+    const retry = await rateLimitedFetch(() => fetch(url, {
       ...options,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${tokens.access_token}`,
-        ...options.headers,
-      },
+      headers: makeHeaders(tokens.access_token),
     }));
 
     if (!retry.ok) {
