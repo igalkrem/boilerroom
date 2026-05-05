@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import { getValidAccessToken } from "@/lib/snapchat/client";
+import { rateLimitedFetch } from "@/lib/rate-limiter";
 import { z } from "zod";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 // Server fetches the file from Vercel Blob and uploads it directly to Snapchat's
 // simple upload endpoint. Bypasses the 4.5 MB Vercel request-body limit that
@@ -70,11 +71,13 @@ export async function POST(request: NextRequest) {
   const uploadForm = new FormData();
   uploadForm.append("file", fileBlob, fileName ?? "media");
 
-  const snapRes = await fetch(`https://adsapi.snapchat.com/v1/media/${mediaId}/upload`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: uploadForm,
-  });
+  const snapRes = await rateLimitedFetch(() =>
+    fetch(`https://adsapi.snapchat.com/v1/media/${mediaId}/upload`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: uploadForm,
+    })
+  );
 
   if (!snapRes.ok) {
     const errText = await snapRes.text();
