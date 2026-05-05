@@ -70,7 +70,7 @@ export async function updateAdSquad(
   const current = await getAdSquad(adSquadId);
   const merged = { ...stripForPut(current), ...updates };
   const data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
-    `/adsquads/${adSquadId}`,
+    `/campaigns/${current.campaign_id}/adsquads`,
     {
       method: "PUT",
       body: JSON.stringify({ adsquads: [merged] }),
