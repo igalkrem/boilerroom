@@ -19,6 +19,7 @@ interface Props {
   onColumnsChange: (cols: Set<string>) => void;
   squadDetails: Map<string, SquadDetail>;
   historicalRows: CombinedRow[];
+  startDate: string;
   onSquadUpdated: () => void;
 }
 
@@ -42,9 +43,9 @@ function roiColor(pct: number | null) {
 }
 function fmtNum(n: number) { return n.toLocaleString(); }
 
-function dateOffset(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
+function dateMinus(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - days);
   return d.toISOString().slice(0, 10);
 }
 
@@ -97,7 +98,7 @@ function SortArrow({ active, desc }: { active: boolean; desc: boolean }) {
 }
 
 export function PerformanceTable({
-  rows, eurToUsd, visibleColumns, onColumnsChange, squadDetails, historicalRows, onSquadUpdated,
+  rows, eurToUsd, visibleColumns, onColumnsChange, squadDetails, historicalRows, startDate, onSquadUpdated,
 }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("spend_usd");
   const [sortDesc, setSortDesc] = useState(true);
@@ -120,9 +121,9 @@ export function PerformanceTable({
   const [bulkStatus, setBulkStatus] = useState<"ACTIVE" | "PAUSED">("ACTIVE");
   const [bulkSaving, setBulkSaving] = useState(false);
 
-  const y1 = dateOffset(-1);
-  const y2 = dateOffset(-2);
-  const y3 = dateOffset(-3);
+  const y1 = dateMinus(startDate, 1);
+  const y2 = dateMinus(startDate, 2);
+  const y3 = dateMinus(startDate, 3);
 
   const aggregated = useMemo<AggrRow[]>(() => {
     function dailyRoi(squadId: string, date: string): number | null {
