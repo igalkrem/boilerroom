@@ -1,0 +1,132 @@
+"use client";
+
+import { useMemo } from "react";
+import type { CombinedRow } from "@/app/api/reporting/combined/route";
+
+interface Props {
+  rows: CombinedRow[];
+  isLoading: boolean;
+}
+
+function fmt$(n: number) { return `$${n.toFixed(2)}`; }
+function fmtK(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
+}
+function fmtPct(n: number | null) { return n === null ? "—" : n.toFixed(2) + "%"; }
+
+function roiBg(roi: number | null) {
+  if (roi === null) return "";
+  if (roi >= 100) return "bg-green-50 border-green-100";
+  if (roi >= 50) return "bg-amber-50 border-amber-100";
+  return "bg-red-50 border-red-100";
+}
+
+function roiValueColor(roi: number | null) {
+  if (roi === null) return "text-gray-900";
+  if (roi >= 100) return "text-green-700";
+  if (roi >= 50) return "text-amber-600";
+  return "text-red-600";
+}
+
+function profitColor(profit: number) {
+  if (profit > 0) return "text-green-700";
+  if (profit < 0) return "text-red-600";
+  return "text-gray-900";
+}
+
+export function KpiSummaryBar({ rows, isLoading }: Props) {
+  const totals = useMemo(() => {
+    const spend = rows.reduce((s, r) => s + r.spend_usd, 0);
+    const revenue = rows.reduce((s, r) => s + r.revenue_usd, 0);
+    const impressions = rows.reduce((s, r) => s + r.impressions, 0);
+    const swipes = rows.reduce((s, r) => s + r.swipes, 0);
+    const funnel_clicks = rows.reduce((s, r) => s + r.funnel_clicks, 0);
+    const roi = spend > 0 ? (revenue / spend) * 100 : null;
+    const profit = revenue - spend;
+    const ctr = impressions > 0 ? (swipes / impressions) * 100 : null;
+    return { spend, revenue, roi, profit, impressions, swipes, funnel_clicks, ctr };
+  }, [rows]);
+
+  if (isLoading) {
+    return (
+      <div className="flex border border-gray-200 rounded-lg overflow-hidden mb-5 shadow-sm">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div
+            key={i}
+            className={`flex-1 min-w-[110px] px-4 py-3 bg-white ${i > 0 ? "border-l border-gray-200" : ""}`}
+          >
+            <div className="h-3 w-16 bg-gray-200 rounded animate-pulse mb-2" />
+            <div className="h-5 w-20 bg-gray-200 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const cards = [
+    {
+      label: "Amount Spent",
+      value: fmt$(totals.spend),
+      valueClass: "text-gray-900",
+      cardClass: "bg-white",
+    },
+    {
+      label: "Revenue",
+      value: fmt$(totals.revenue),
+      valueClass: "text-gray-900",
+      cardClass: "bg-white",
+    },
+    {
+      label: "ROI",
+      value: fmtPct(totals.roi),
+      valueClass: roiValueColor(totals.roi),
+      cardClass: `${roiBg(totals.roi) || "bg-white"}`,
+    },
+    {
+      label: "Profit",
+      value: fmt$(totals.profit),
+      valueClass: profitColor(totals.profit),
+      cardClass: "bg-white",
+    },
+    {
+      label: "Impressions",
+      value: fmtK(totals.impressions),
+      valueClass: "text-gray-900",
+      cardClass: "bg-white",
+    },
+    {
+      label: "Clicks",
+      value: fmtK(totals.swipes),
+      valueClass: "text-gray-900",
+      cardClass: "bg-white",
+    },
+    {
+      label: "Funnel Clicks",
+      value: fmtK(totals.funnel_clicks),
+      valueClass: "text-gray-900",
+      cardClass: "bg-white",
+    },
+    {
+      label: "CTR",
+      value: fmtPct(totals.ctr),
+      valueClass: "text-gray-900",
+      cardClass: "bg-white",
+    },
+  ];
+
+  return (
+    <div className="flex border border-gray-200 rounded-lg overflow-x-auto mb-5 shadow-sm">
+      {cards.map((card, i) => (
+        <div
+          key={card.label}
+          className={`flex-1 min-w-[110px] px-4 py-3 ${card.cardClass} ${i > 0 ? "border-l border-gray-200" : ""}`}
+        >
+          <p className="text-xs text-gray-500 mb-0.5 whitespace-nowrap">{card.label}</p>
+          <p className={`text-base font-bold whitespace-nowrap ${card.valueClass}`}>{card.value}</p>
+        </div>
+      ))}
+    </div>
+  );
+}

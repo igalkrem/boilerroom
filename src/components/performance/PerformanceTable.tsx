@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import { DrilldownModal } from "./DrilldownModal";
+import { ColumnSelector } from "./ColumnSelector";
 
 export interface SquadDetail {
   daily_budget_micro: number;
@@ -15,6 +16,7 @@ interface Props {
   rows: CombinedRow[];
   eurToUsd: number;
   visibleColumns: Set<string>;
+  onColumnsChange: (cols: Set<string>) => void;
   squadDetails: Map<string, SquadDetail>;
   historicalRows: CombinedRow[];
   onSquadUpdated: () => void;
@@ -31,10 +33,7 @@ function microToDollar(micro: number) { return micro / 1_000_000; }
 function dollarToMicro(dollars: number) { return Math.round(dollars * 1_000_000); }
 function fmt$(n: number) { return `$${n.toFixed(2)}`; }
 function fmtPct(n: number | null) { return n === null ? "—" : n.toFixed(1) + "%"; }
-function fmtRoi(pct: number | null) {
-  if (pct === null) return "—";
-  return pct.toFixed(1) + "%";
-}
+function fmtRoi(pct: number | null) { return pct === null ? "—" : pct.toFixed(1) + "%"; }
 function roiColor(pct: number | null) {
   if (pct === null) return "text-gray-400";
   if (pct >= 100) return "text-green-600";
@@ -80,12 +79,32 @@ interface AggrRow {
   cvr: number | null;
 }
 
-export function PerformanceTable({ rows, eurToUsd, visibleColumns, squadDetails, historicalRows, onSquadUpdated }: Props) {
+function SortArrow({ active, desc }: { active: boolean; desc: boolean }) {
+  if (!active) return (
+    <svg className="w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l4-4 4 4M16 15l-4 4-4-4" />
+    </svg>
+  );
+  return desc ? (
+    <svg className="w-3 h-3 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+  ) : (
+    <svg className="w-3 h-3 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+    </svg>
+  );
+}
+
+export function PerformanceTable({
+  rows, eurToUsd, visibleColumns, onColumnsChange, squadDetails, historicalRows, onSquadUpdated,
+}: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("spend_usd");
   const [sortDesc, setSortDesc] = useState(true);
   const [drilldown, setDrilldown] = useState<{ id: string; name: string; accountId: string } | null>(null);
   const [filterQuery, setFilterQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
 
   // Inline budget/bid editing
   const [editingBudget, setEditingBudget] = useState<string | null>(null);
@@ -199,37 +218,39 @@ export function PerformanceTable({ rows, eurToUsd, visibleColumns, squadDetails,
     else { setSortKey(key); setSortDesc(true); }
   }
 
-  function thOpt(key: SortKey, label: string) {
-    if (!visibleColumns.has(key)) return null;
-    const active = key === sortKey;
+  function sortableTh(colKey: SortKey, label: string) {
+    if (!visibleColumns.has(colKey)) return null;
+    const active = colKey === sortKey;
     return (
       <th
-        key={key}
-        onClick={() => toggleSort(key)}
-        className={`px-3 py-2 text-left text-xs font-semibold whitespace-nowrap cursor-pointer select-none ${
-          active ? "text-cyan-600" : "text-gray-500 hover:text-gray-700"
+        key={colKey}
+        onClick={() => toggleSort(colKey)}
+        className={`group px-3 py-3 text-left text-xs font-semibold whitespace-nowrap cursor-pointer select-none ${
+          active ? "text-blue-600" : "text-gray-600 hover:text-gray-900"
         }`}
       >
-        {label}{active ? (sortDesc ? " ↓" : " ↑") : ""}
+        <div className="flex items-center gap-1">
+          {label}
+          <SortArrow active={active} desc={sortDesc} />
+        </div>
       </th>
     );
   }
 
-  function thOptStr(key: string, label: string) {
-    if (!visibleColumns.has(key)) return null;
+  function staticTh(colKey: string, label: string) {
+    if (!visibleColumns.has(colKey)) return null;
     return (
-      <th key={key} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">
+      <th key={colKey} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
         {label}
       </th>
     );
   }
 
-  function tdOpt(key: string, content: React.ReactNode, extraClass = "") {
-    if (!visibleColumns.has(key)) return null;
-    return <td key={key} className={`px-3 py-2 whitespace-nowrap ${extraClass}`}>{content}</td>;
+  function optTd(colKey: string, content: React.ReactNode, extraClass = "") {
+    if (!visibleColumns.has(colKey)) return null;
+    return <td key={colKey} className={`px-3 py-2.5 whitespace-nowrap ${extraClass}`}>{content}</td>;
   }
 
-  // Inline budget save
   async function saveBudget(squadId: string) {
     const dollars = parseFloat(budgetDraft);
     if (isNaN(dollars) || dollars < 20) { setInlineError("Min $20.00"); return; }
@@ -290,7 +311,6 @@ export function PerformanceTable({ rows, eurToUsd, visibleColumns, squadDetails,
     }
   }
 
-  // Bulk actions
   async function applyBulk(field: "budget" | "bid" | "status") {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
@@ -320,6 +340,7 @@ export function PerformanceTable({ rows, eurToUsd, visibleColumns, squadDetails,
     );
     setBulkSaving(false);
     setSelectedIds(new Set());
+    setShowBulkEdit(false);
     onSquadUpdated();
   }
 
@@ -328,9 +349,61 @@ export function PerformanceTable({ rows, eurToUsd, visibleColumns, squadDetails,
   function toggleSelectAll() {
     if (allSelected) {
       setSelectedIds(new Set());
+      setShowBulkEdit(false);
     } else {
       setSelectedIds(new Set(filtered.map(r => r.ad_squad_id)));
     }
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+    setShowBulkEdit(false);
+  }
+
+  function downloadCsv() {
+    const headers = [
+      "Campaign", "Spend ($)", "Revenue ($)", "ROI (%)", "Profit ($)",
+      "Impressions", "Clicks", "Funnel Clicks", "CTR (%)", "CPM", "CPC",
+      "CVR (%)", "CPR", "RPR", "RPC", "Page Views", "VZ Clicks",
+      "Ad Requests", "Matched Requests", "Funnel Impressions", "Funnel Requests",
+      "Domain", "Budget ($)", "Bid ($)", "Status", "-1D ROI", "-2D ROI", "-3D ROI",
+    ];
+    const csvRows = filtered.map(r => {
+      const detail = squadDetails.get(r.ad_squad_id);
+      return [
+        `"${r.ad_squad_name.replace(/"/g, '""')}"`,
+        r.spend_usd.toFixed(2), r.revenue_usd.toFixed(2),
+        r.roi_pct !== null ? r.roi_pct.toFixed(1) : "",
+        r.profit.toFixed(2),
+        r.impressions, r.swipes, r.funnel_clicks,
+        r.ctr !== null ? r.ctr.toFixed(2) : "",
+        r.cpm !== null ? r.cpm.toFixed(2) : "",
+        r.cpc !== null ? r.cpc.toFixed(2) : "",
+        r.cvr !== null ? r.cvr.toFixed(2) : "",
+        r.cpr !== null ? r.cpr.toFixed(2) : "",
+        r.rpr !== null ? r.rpr.toFixed(2) : "",
+        r.rpc !== null ? r.rpc.toFixed(2) : "",
+        r.page_views, r.clicks, r.ad_requests, r.matched_ad_requests,
+        r.funnel_impressions, r.funnel_requests,
+        `"${r.domain_name || ""}"`,
+        detail ? microToDollar(detail.daily_budget_micro).toFixed(2) : "",
+        detail ? microToDollar(detail.bid_micro).toFixed(2) : "",
+        detail ? detail.status : "",
+        r.roi_1d !== null ? r.roi_1d.toFixed(1) : "",
+        r.roi_2d !== null ? r.roi_2d.toFixed(1) : "",
+        r.roi_3d !== null ? r.roi_3d.toFixed(1) : "",
+      ].join(",");
+    });
+    const content = [headers.join(","), ...csvRows].join("\n");
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "performance.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   if (aggregated.length === 0) {
@@ -341,265 +414,137 @@ export function PerformanceTable({ rows, eurToUsd, visibleColumns, squadDetails,
     );
   }
 
+  const hasSelection = selectedIds.size > 0;
+
   return (
     <>
-      <p className="text-xs text-gray-400 mb-2">
-        Revenue converted at 1 EUR = ${eurToUsd.toFixed(4)} USD · Click any row for daily breakdown
+      <p className="text-xs text-gray-400 mb-3">
+        Revenue converted at 1 EUR = ${eurToUsd.toFixed(4)} USD · Click any campaign name for daily breakdown
       </p>
-
-      {/* Campaign filter */}
-      <div className="mb-3">
-        <input
-          type="text"
-          placeholder="Filter campaigns…"
-          value={filterQuery}
-          onChange={(e) => setFilterQuery(e.target.value)}
-          className="w-64 border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500"
-        />
-      </div>
 
       {inlineError && (
         <p className="text-xs text-red-500 mb-2">{inlineError}</p>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-3 py-2 w-8">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleSelectAll}
-                  className="w-3.5 h-3.5 rounded border-gray-300 text-cyan-500"
-                />
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">Campaign</th>
-              {thOpt("spend_usd", "Spend ($)")}
-              {thOpt("revenue_usd", "Revenue ($)")}
-              {thOpt("roi_pct", "ROI")}
-              {thOpt("roi_1d", "-1D ROI")}
-              {thOpt("roi_2d", "-2D ROI")}
-              {thOpt("roi_3d", "-3D ROI")}
-              {thOpt("profit", "Profit")}
-              {thOpt("rpc", "RPC")}
-              {thOpt("ctr", "CTR")}
-              {thOpt("cpm", "CPM")}
-              {thOpt("cpc", "CPC")}
-              {thOpt("cvr", "CVR")}
-              {thOpt("cpr", "CPR")}
-              {thOpt("rpr", "RPR")}
-              {thOpt("impressions", "Impressions")}
-              {thOpt("swipes", "Clicks")}
-              {thOpt("funnel_clicks", "Funnel Clicks")}
-              {thOpt("funnel_impressions", "Funnel Impressions")}
-              {thOpt("funnel_requests", "Funnel Requests")}
-              {thOpt("ad_requests", "Ad Requests")}
-              {thOpt("matched_ad_requests", "Matched Requests")}
-              {thOpt("clicks", "VZ Clicks")}
-              {thOpt("page_views", "Page Views")}
-              {thOpt("video_views", "Video Views")}
-              {thOptStr("domain_name", "Domain")}
-              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">Budget</th>
-              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">Bid</th>
-              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {filtered.map((r) => {
-              const detail = squadDetails.get(r.ad_squad_id);
-              const isSelected = selectedIds.has(r.ad_squad_id);
-              return (
-                <tr
-                  key={r.ad_squad_id}
-                  className={`hover:bg-yellow-50 transition-colors ${isSelected ? "bg-cyan-50" : ""}`}
+      <div className="rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+
+        {/* Toolbar */}
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-white border-b border-gray-200">
+          <div className="flex items-center gap-2">
+            {hasSelection ? (
+              <>
+                <span className="text-sm font-medium text-gray-700 pl-1">{selectedIds.size} selected</span>
+                <button
+                  onClick={() => setShowBulkEdit(v => !v)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 text-sm rounded-md border transition-colors ${
+                    showBulkEdit
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "text-blue-600 border-blue-300 hover:bg-blue-50"
+                  }`}
                 >
-                  <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => {
-                        const next = new Set(selectedIds);
-                        if (next.has(r.ad_squad_id)) next.delete(r.ad_squad_id);
-                        else next.add(r.ad_squad_id);
-                        setSelectedIds(next);
-                      }}
-                      className="w-3.5 h-3.5 rounded border-gray-300 text-cyan-500"
-                    />
-                  </td>
-                  <td
-                    className="px-3 py-2 font-medium text-gray-900 max-w-[220px] truncate cursor-pointer"
-                    onClick={() => setDrilldown({
-                      id: r.ad_squad_id,
-                      name: r.ad_squad_name,
-                      accountId: detail?.ad_account_id ?? "",
-                    })}
-                  >
-                    {r.ad_squad_name}
-                  </td>
-                  {tdOpt("spend_usd", fmt$(r.spend_usd), "text-gray-900")}
-                  {tdOpt("revenue_usd", fmt$(r.revenue_usd), "text-gray-900")}
-                  {tdOpt("roi_pct", <span className={`font-semibold ${roiColor(r.roi_pct)}`}>{fmtRoi(r.roi_pct)}</span>)}
-                  {tdOpt("roi_1d", <span className={`font-semibold ${roiColor(r.roi_1d)}`}>{fmtRoi(r.roi_1d)}</span>)}
-                  {tdOpt("roi_2d", <span className={`font-semibold ${roiColor(r.roi_2d)}`}>{fmtRoi(r.roi_2d)}</span>)}
-                  {tdOpt("roi_3d", <span className={`font-semibold ${roiColor(r.roi_3d)}`}>{fmtRoi(r.roi_3d)}</span>)}
-                  {tdOpt("profit", <span className={r.profit >= 0 ? "text-green-600" : "text-red-600"}>{fmt$(r.profit)}</span>)}
-                  {tdOpt("rpc", r.rpc !== null ? fmt$(r.rpc) : "—", "text-gray-700")}
-                  {tdOpt("ctr", fmtPct(r.ctr), "text-gray-700")}
-                  {tdOpt("cpm", r.cpm !== null ? fmt$(r.cpm) : "—", "text-gray-700")}
-                  {tdOpt("cpc", r.cpc !== null ? fmt$(r.cpc) : "—", "text-gray-700")}
-                  {tdOpt("cvr", fmtPct(r.cvr), "text-gray-700")}
-                  {tdOpt("cpr", r.cpr !== null ? fmt$(r.cpr) : "—", "text-gray-700")}
-                  {tdOpt("rpr", r.rpr !== null ? fmt$(r.rpr) : "—", "text-gray-700")}
-                  {tdOpt("impressions", fmtNum(r.impressions), "text-gray-700")}
-                  {tdOpt("swipes", fmtNum(r.swipes), "text-gray-700")}
-                  {tdOpt("funnel_clicks", fmtNum(r.funnel_clicks), "text-gray-700")}
-                  {tdOpt("funnel_impressions", fmtNum(r.funnel_impressions), "text-gray-700")}
-                  {tdOpt("funnel_requests", fmtNum(r.funnel_requests), "text-gray-700")}
-                  {tdOpt("ad_requests", fmtNum(r.ad_requests), "text-gray-700")}
-                  {tdOpt("matched_ad_requests", fmtNum(r.matched_ad_requests), "text-gray-700")}
-                  {tdOpt("clicks", fmtNum(r.clicks), "text-gray-700")}
-                  {tdOpt("page_views", fmtNum(r.page_views), "text-gray-700")}
-                  {tdOpt("video_views", fmtNum(r.video_views), "text-gray-700")}
-                  {tdOpt("domain_name", <span className="text-xs text-gray-500">{r.domain_name || "—"}</span>)}
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit
+                </button>
+                <button
+                  disabled
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-sm text-gray-400 border border-gray-200 rounded-md cursor-not-allowed"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Delete
+                </button>
+                <button
+                  onClick={clearSelection}
+                  className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                  title="Clear selection"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </>
+            ) : (
+              <span className="text-xs text-gray-400 pl-1 select-none">Select rows to take action</span>
+            )}
+          </div>
 
-                  {/* Budget inline */}
-                  <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                    {detail ? (
-                      editingBudget === r.ad_squad_id ? (
-                        <input
-                          autoFocus
-                          type="number"
-                          min={20}
-                          step={0.01}
-                          value={budgetDraft}
-                          onChange={(e) => setBudgetDraft(e.target.value)}
-                          onBlur={() => void saveBudget(r.ad_squad_id)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") void saveBudget(r.ad_squad_id);
-                            if (e.key === "Escape") setEditingBudget(null);
-                          }}
-                          className="w-20 border border-cyan-400 rounded px-1.5 py-0.5 text-xs text-right focus:outline-none"
-                        />
-                      ) : (
-                        <button
-                          onClick={() => {
-                            setBudgetDraft(microToDollar(detail.daily_budget_micro).toFixed(2));
-                            setEditingBudget(r.ad_squad_id);
-                            setInlineError(null);
-                          }}
-                          className="group flex items-center gap-1 text-xs text-gray-700 hover:text-cyan-600"
-                        >
-                          {savingInline === r.ad_squad_id + "_budget" ? "…" : fmt$(microToDollar(detail.daily_budget_micro))}
-                          <svg className="w-3 h-3 text-gray-300 group-hover:text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.536-6.536a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
-                          </svg>
-                        </button>
-                      )
-                    ) : <span className="text-xs text-gray-300">…</span>}
-                  </td>
-
-                  {/* Bid inline */}
-                  <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                    {detail ? (
-                      editingBid === r.ad_squad_id ? (
-                        <input
-                          autoFocus
-                          type="number"
-                          min={0.01}
-                          step={0.01}
-                          value={bidDraft}
-                          onChange={(e) => setBidDraft(e.target.value)}
-                          onBlur={() => void saveBid(r.ad_squad_id)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") void saveBid(r.ad_squad_id);
-                            if (e.key === "Escape") setEditingBid(null);
-                          }}
-                          className="w-16 border border-cyan-400 rounded px-1.5 py-0.5 text-xs text-right focus:outline-none"
-                        />
-                      ) : (
-                        <button
-                          onClick={() => {
-                            setBidDraft(microToDollar(detail.bid_micro).toFixed(2));
-                            setEditingBid(r.ad_squad_id);
-                            setInlineError(null);
-                          }}
-                          className="group flex items-center gap-1 text-xs text-gray-700 hover:text-cyan-600"
-                        >
-                          {savingInline === r.ad_squad_id + "_bid" ? "…" : fmt$(microToDollar(detail.bid_micro))}
-                          <svg className="w-3 h-3 text-gray-300 group-hover:text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.536-6.536a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
-                          </svg>
-                        </button>
-                      )
-                    ) : <span className="text-xs text-gray-300">…</span>}
-                  </td>
-
-                  {/* Status toggle */}
-                  <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                    {detail ? (
-                      <button
-                        onClick={() => void toggleStatus(r.ad_squad_id)}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                          detail.status === "ACTIVE" ? "bg-green-400" : "bg-gray-200"
-                        }`}
-                      >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                          detail.status === "ACTIVE" ? "translate-x-4" : "translate-x-0.5"
-                        }`} />
-                      </button>
-                    ) : <span className="text-xs text-gray-300">…</span>}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-
-        {/* Bulk action bar */}
-        {selectedIds.size > 0 && (
-          <div className="border-t border-gray-200 bg-gray-50 px-4 py-3 flex flex-wrap items-center gap-4">
-            <span className="text-sm font-medium text-gray-700">{selectedIds.size} selected</span>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-500">Budget $</span>
+          <div className="ml-auto flex items-center gap-2">
+            {/* Search */}
+            <div className="relative">
+              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
               <input
-                type="number" min={20} step={0.01}
-                placeholder="20.00"
+                type="text"
+                placeholder="Search campaigns…"
+                value={filterQuery}
+                onChange={(e) => setFilterQuery(e.target.value)}
+                className="pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-md w-52 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* Column selector */}
+            <ColumnSelector visible={visibleColumns} onChange={onColumnsChange} />
+
+            {/* Download CSV */}
+            <button
+              onClick={downloadCsv}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors whitespace-nowrap"
+            >
+              <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              CSV
+            </button>
+          </div>
+        </div>
+
+        {/* Bulk edit panel */}
+        {showBulkEdit && hasSelection && (
+          <div className="bg-blue-50 border-b border-blue-100 px-4 py-2.5 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-blue-700">Budget $</span>
+              <input
+                type="number" min={20} step={0.01} placeholder="20.00"
                 value={bulkBudget}
                 onChange={(e) => setBulkBudget(e.target.value)}
-                className="w-20 border border-gray-300 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                className="w-20 border border-blue-200 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
               />
               <button
                 onClick={() => void applyBulk("budget")}
                 disabled={bulkSaving}
-                className="px-2 py-0.5 text-xs bg-cyan-500 text-white rounded hover:bg-cyan-600 disabled:opacity-50"
+                className="px-2.5 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 font-medium"
               >
                 Apply
               </button>
             </div>
+            <div className="w-px h-4 bg-blue-200" />
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-500">Bid $</span>
+              <span className="text-xs font-medium text-blue-700">Bid $</span>
               <input
-                type="number" min={0.01} step={0.01}
-                placeholder="1.00"
+                type="number" min={0.01} step={0.01} placeholder="1.00"
                 value={bulkBid}
                 onChange={(e) => setBulkBid(e.target.value)}
-                className="w-16 border border-gray-300 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                className="w-16 border border-blue-200 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
               />
               <button
                 onClick={() => void applyBulk("bid")}
                 disabled={bulkSaving}
-                className="px-2 py-0.5 text-xs bg-cyan-500 text-white rounded hover:bg-cyan-600 disabled:opacity-50"
+                className="px-2.5 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 font-medium"
               >
                 Apply
               </button>
             </div>
+            <div className="w-px h-4 bg-blue-200" />
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-500">Status</span>
+              <span className="text-xs font-medium text-blue-700">Status</span>
               <select
                 value={bulkStatus}
                 onChange={(e) => setBulkStatus(e.target.value as "ACTIVE" | "PAUSED")}
-                className="border border-gray-300 rounded px-2 py-0.5 text-xs focus:outline-none"
+                className="border border-blue-200 rounded px-2 py-0.5 text-xs focus:outline-none bg-white"
               >
                 <option value="ACTIVE">Active</option>
                 <option value="PAUSED">Paused</option>
@@ -607,17 +552,262 @@ export function PerformanceTable({ rows, eurToUsd, visibleColumns, squadDetails,
               <button
                 onClick={() => void applyBulk("status")}
                 disabled={bulkSaving}
-                className="px-2 py-0.5 text-xs bg-cyan-500 text-white rounded hover:bg-cyan-600 disabled:opacity-50"
+                className="px-2.5 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 font-medium"
               >
                 Apply
               </button>
             </div>
-            <button
-              onClick={() => setSelectedIds(new Set())}
-              className="ml-auto text-xs text-gray-400 hover:text-gray-600"
-            >
-              Clear selection
-            </button>
+            {bulkSaving && <span className="text-xs text-blue-500 ml-1">Saving…</span>}
+          </div>
+        )}
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                {/* Master checkbox */}
+                <th className="w-10 px-3 py-3">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </th>
+
+                {/* Name — always visible */}
+                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap min-w-[200px]">
+                  Name
+                </th>
+
+                {/* Status toggle — always visible */}
+                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                  Status
+                </th>
+
+                {/* Delivery badge — always visible */}
+                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                  Delivery
+                </th>
+
+                {/* Budget — always visible */}
+                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                  Budget
+                </th>
+
+                {/* Bid — always visible */}
+                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                  Bid
+                </th>
+
+                {/* Metric columns */}
+                {sortableTh("spend_usd", "Spend ($)")}
+                {sortableTh("revenue_usd", "Revenue ($)")}
+                {sortableTh("roi_pct", "ROI")}
+                {sortableTh("roi_1d", "-1D ROI")}
+                {sortableTh("roi_2d", "-2D ROI")}
+                {sortableTh("roi_3d", "-3D ROI")}
+                {sortableTh("profit", "Profit")}
+                {sortableTh("rpc", "RPC")}
+                {sortableTh("ctr", "CTR")}
+                {sortableTh("cpm", "CPM")}
+                {sortableTh("cpc", "CPC")}
+                {sortableTh("cvr", "CVR")}
+                {sortableTh("cpr", "CPR")}
+                {sortableTh("rpr", "RPR")}
+                {sortableTh("impressions", "Impressions")}
+                {sortableTh("swipes", "Clicks")}
+                {sortableTh("funnel_clicks", "Funnel Clicks")}
+                {sortableTh("funnel_impressions", "Funnel Impressions")}
+                {sortableTh("funnel_requests", "Funnel Requests")}
+                {sortableTh("ad_requests", "Ad Requests")}
+                {sortableTh("matched_ad_requests", "Matched Requests")}
+                {sortableTh("clicks", "VZ Clicks")}
+                {sortableTh("page_views", "Page Views")}
+                {sortableTh("video_views", "Video Views")}
+                {staticTh("domain_name", "Domain")}
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {filtered.map((r) => {
+                const detail = squadDetails.get(r.ad_squad_id);
+                const isSelected = selectedIds.has(r.ad_squad_id);
+                const isActive = detail ? detail.status === "ACTIVE" : false;
+
+                return (
+                  <tr
+                    key={r.ad_squad_id}
+                    className={`transition-colors ${
+                      isSelected ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-slate-50"
+                    }`}
+                  >
+                    {/* Checkbox */}
+                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {
+                          const next = new Set(selectedIds);
+                          if (next.has(r.ad_squad_id)) next.delete(r.ad_squad_id);
+                          else next.add(r.ad_squad_id);
+                          setSelectedIds(next);
+                        }}
+                        className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
+
+                    {/* Campaign name */}
+                    <td className="px-3 py-2.5 max-w-[260px]">
+                      <button
+                        onClick={() => setDrilldown({
+                          id: r.ad_squad_id,
+                          name: r.ad_squad_name,
+                          accountId: detail?.ad_account_id ?? "",
+                        })}
+                        className="text-left text-sm font-medium text-gray-900 hover:text-blue-600 hover:underline truncate block w-full"
+                        title={r.ad_squad_name}
+                      >
+                        {r.ad_squad_name}
+                      </button>
+                    </td>
+
+                    {/* Status toggle */}
+                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      {detail ? (
+                        <button
+                          onClick={() => void toggleStatus(r.ad_squad_id)}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                            isActive ? "bg-green-500" : "bg-gray-300"
+                          }`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                            isActive ? "translate-x-4" : "translate-x-0.5"
+                          }`} />
+                        </button>
+                      ) : <span className="text-xs text-gray-300">…</span>}
+                    </td>
+
+                    {/* Delivery badge */}
+                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      {detail ? (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                          isActive
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-500"
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-green-500" : "bg-gray-400"}`} />
+                          {isActive ? "Active" : "Paused"}
+                        </span>
+                      ) : <span className="text-xs text-gray-300">…</span>}
+                    </td>
+
+                    {/* Budget inline */}
+                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      {detail ? (
+                        editingBudget === r.ad_squad_id ? (
+                          <input
+                            autoFocus
+                            type="number" min={20} step={0.01}
+                            value={budgetDraft}
+                            onChange={(e) => setBudgetDraft(e.target.value)}
+                            onBlur={() => void saveBudget(r.ad_squad_id)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") void saveBudget(r.ad_squad_id);
+                              if (e.key === "Escape") setEditingBudget(null);
+                            }}
+                            className="w-20 border border-blue-400 rounded px-1.5 py-0.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setBudgetDraft(microToDollar(detail.daily_budget_micro).toFixed(2));
+                              setEditingBudget(r.ad_squad_id);
+                              setInlineError(null);
+                            }}
+                            className="group flex items-center gap-1 text-xs text-gray-700 hover:text-blue-600"
+                          >
+                            {savingInline === r.ad_squad_id + "_budget" ? "…" : fmt$(microToDollar(detail.daily_budget_micro))}
+                            <svg className="w-3 h-3 text-gray-300 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.536-6.536a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
+                            </svg>
+                          </button>
+                        )
+                      ) : <span className="text-xs text-gray-300">…</span>}
+                    </td>
+
+                    {/* Bid inline */}
+                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      {detail ? (
+                        editingBid === r.ad_squad_id ? (
+                          <input
+                            autoFocus
+                            type="number" min={0.01} step={0.01}
+                            value={bidDraft}
+                            onChange={(e) => setBidDraft(e.target.value)}
+                            onBlur={() => void saveBid(r.ad_squad_id)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") void saveBid(r.ad_squad_id);
+                              if (e.key === "Escape") setEditingBid(null);
+                            }}
+                            className="w-16 border border-blue-400 rounded px-1.5 py-0.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setBidDraft(microToDollar(detail.bid_micro).toFixed(2));
+                              setEditingBid(r.ad_squad_id);
+                              setInlineError(null);
+                            }}
+                            className="group flex items-center gap-1 text-xs text-gray-700 hover:text-blue-600"
+                          >
+                            {savingInline === r.ad_squad_id + "_bid" ? "…" : fmt$(microToDollar(detail.bid_micro))}
+                            <svg className="w-3 h-3 text-gray-300 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.536-6.536a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
+                            </svg>
+                          </button>
+                        )
+                      ) : <span className="text-xs text-gray-300">…</span>}
+                    </td>
+
+                    {/* Metric cells */}
+                    {optTd("spend_usd", fmt$(r.spend_usd), "text-gray-900 font-medium")}
+                    {optTd("revenue_usd", fmt$(r.revenue_usd), "text-gray-900")}
+                    {optTd("roi_pct", <span className={`font-semibold ${roiColor(r.roi_pct)}`}>{fmtRoi(r.roi_pct)}</span>)}
+                    {optTd("roi_1d", <span className={`font-semibold ${roiColor(r.roi_1d)}`}>{fmtRoi(r.roi_1d)}</span>)}
+                    {optTd("roi_2d", <span className={`font-semibold ${roiColor(r.roi_2d)}`}>{fmtRoi(r.roi_2d)}</span>)}
+                    {optTd("roi_3d", <span className={`font-semibold ${roiColor(r.roi_3d)}`}>{fmtRoi(r.roi_3d)}</span>)}
+                    {optTd("profit", <span className={r.profit >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>{fmt$(r.profit)}</span>)}
+                    {optTd("rpc", r.rpc !== null ? fmt$(r.rpc) : "—", "text-gray-700")}
+                    {optTd("ctr", fmtPct(r.ctr), "text-gray-700")}
+                    {optTd("cpm", r.cpm !== null ? fmt$(r.cpm) : "—", "text-gray-700")}
+                    {optTd("cpc", r.cpc !== null ? fmt$(r.cpc) : "—", "text-gray-700")}
+                    {optTd("cvr", fmtPct(r.cvr), "text-gray-700")}
+                    {optTd("cpr", r.cpr !== null ? fmt$(r.cpr) : "—", "text-gray-700")}
+                    {optTd("rpr", r.rpr !== null ? fmt$(r.rpr) : "—", "text-gray-700")}
+                    {optTd("impressions", fmtNum(r.impressions), "text-gray-700")}
+                    {optTd("swipes", fmtNum(r.swipes), "text-gray-700")}
+                    {optTd("funnel_clicks", fmtNum(r.funnel_clicks), "text-gray-700")}
+                    {optTd("funnel_impressions", fmtNum(r.funnel_impressions), "text-gray-700")}
+                    {optTd("funnel_requests", fmtNum(r.funnel_requests), "text-gray-700")}
+                    {optTd("ad_requests", fmtNum(r.ad_requests), "text-gray-700")}
+                    {optTd("matched_ad_requests", fmtNum(r.matched_ad_requests), "text-gray-700")}
+                    {optTd("clicks", fmtNum(r.clicks), "text-gray-700")}
+                    {optTd("page_views", fmtNum(r.page_views), "text-gray-700")}
+                    {optTd("video_views", fmtNum(r.video_views), "text-gray-700")}
+                    {optTd("domain_name", <span className="text-xs text-gray-500">{r.domain_name || "—"}</span>)}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Empty filtered state */}
+        {filtered.length === 0 && filterQuery && (
+          <div className="py-10 text-center text-sm text-gray-400">
+            No campaigns match &ldquo;{filterQuery}&rdquo;
           </div>
         )}
       </div>
