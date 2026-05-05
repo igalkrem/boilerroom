@@ -91,6 +91,16 @@ export default function SiloPage() {
     })
     .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
 
+  const allFilteredSelected = filtered.length > 0 && filtered.every((a) => selectedIds.has(a.id));
+
+  function toggleSelectAll() {
+    if (allFilteredSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((a) => a.id)));
+    }
+  }
+
   const selectCls =
     "border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500";
 
@@ -103,6 +113,11 @@ export default function SiloPage() {
           <p className="text-sm text-gray-500 mt-1">Your media library. Upload once, reuse everywhere.</p>
         </div>
         <div className="flex gap-2">
+          {bulkMode && filtered.length > 0 && (
+            <Button variant="secondary" onClick={toggleSelectAll}>
+              {allFilteredSelected ? "Deselect all" : `Select all (${filtered.length})`}
+            </Button>
+          )}
           {assets.length > 0 && (
             <Button variant="secondary" onClick={bulkMode ? exitBulkMode : () => setBulkMode(true)}>
               {bulkMode ? "Done" : "Select"}
