@@ -9,7 +9,7 @@ import { DateRangePicker } from "@/components/performance/DateRangePicker";
 import { loadSavedColumns, loadSavedOrder } from "@/components/performance/ColumnSelector";
 import { KpiSummaryBar } from "@/components/performance/KpiSummaryBar";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
-import type { SquadDetail } from "@/components/performance/PerformanceTable";
+import type { SquadDetail, AggrRow } from "@/components/performance/PerformanceTable";
 import type { SnapAdAccount } from "@/types/snapchat";
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
@@ -43,6 +43,8 @@ export default function PerformancePage() {
   const [error, setError] = useState<string | null>(null);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [minutesAgo, setMinutesAgo] = useState<number | null>(null);
+
+  const [kpiRows, setKpiRows] = useState<AggrRow[]>([]);
 
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => loadSavedColumns());
   const [columnOrder, setColumnOrder] = useState<string[]>(() => loadSavedOrder());
@@ -244,7 +246,7 @@ export default function PerformancePage() {
         <p className="text-xs text-amber-600 mb-2">{squadDetailsError}</p>
       )}
 
-      <KpiSummaryBar rows={rows} isLoading={syncing || loading} />
+      <KpiSummaryBar rows={kpiRows} isLoading={syncing || loading} />
 
       {!syncing && !loading && rows.length > 0 && (
         <PerformanceTable
@@ -259,6 +261,7 @@ export default function PerformancePage() {
           startDate={startDate}
           onSquadUpdated={() => void loadSquadDetails(activeAccounts)}
           onSquadPatched={updateSquadDetail}
+          onFilteredRowsChange={setKpiRows}
         />
       )}
 
