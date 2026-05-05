@@ -58,7 +58,7 @@ export default function PerformancePage() {
         fetch("/api/reporting/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ adAccountId: a.id, startDate: start, endDate: end }),
+          body: JSON.stringify({ adAccountId: a.id, startDate: start, endDate: end, timezone: a.timezone }),
         })
       )
     );

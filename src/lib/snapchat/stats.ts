@@ -37,26 +37,33 @@ function toMicro(spend: number | undefined): number {
   return Math.round(spend ?? 0);
 }
 
-function laOffset(dateStr: string): string {
+function tzOffset(dateStr: string, timezone: string): string {
   const d = new Date(dateStr + "T12:00:00Z");
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
+    timeZone: timezone,
     timeZoneName: "shortOffset",
   }).formatToParts(d);
-  const tz = parts.find((p) => p.type === "timeZoneName")?.value ?? "GMT-8";
-  return tz === "GMT-7" ? "-07:00" : "-08:00";
+  const tz = parts.find((p) => p.type === "timeZoneName")?.value ?? "GMT+0";
+  // Parse "GMT-7", "GMT+3", "GMT+5:30", etc.
+  const m = tz.match(/GMT([+-])(\d+)(?::(\d+))?/);
+  if (!m) return "+00:00";
+  const sign = m[1];
+  const hours = m[2].padStart(2, "0");
+  const mins = (m[3] ?? "0").padStart(2, "0");
+  return `${sign}${hours}:${mins}`;
 }
 
 export async function getAdSquadStats(
   adSquadId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  timezone = "America/Los_Angeles"
 ): Promise<AdSquadStatRow[]> {
-  const startTime = `${startDate}T00:00:00.000${laOffset(startDate)}`;
+  const startTime = `${startDate}T00:00:00.000${tzOffset(startDate, timezone)}`;
   const endDateExclusive = new Date(endDate + "T00:00:00Z");
   endDateExclusive.setUTCDate(endDateExclusive.getUTCDate() + 1);
   const endDateStr = endDateExclusive.toISOString().slice(0, 10);
-  const endTime = `${endDateStr}T00:00:00.000${laOffset(endDateStr)}`;
+  const endTime = `${endDateStr}T00:00:00.000${tzOffset(endDateStr, timezone)}`;
 
   const data = await snapFetch<SnapStatsResponse>(
     `/adsquads/${adSquadId}/stats?granularity=DAY&fields=impressions,swipes,spend,video_views&start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`

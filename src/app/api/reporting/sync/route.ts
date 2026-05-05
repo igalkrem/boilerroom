@@ -13,6 +13,7 @@ const syncBodySchema = z.object({
   adAccountId: z.string().min(1),
   startDate: z.string().regex(DATE_RE, "startDate must be YYYY-MM-DD"),
   endDate: z.string().regex(DATE_RE, "endDate must be YYYY-MM-DD"),
+  timezone: z.string().optional(),
 }).refine((d) => {
   const start = new Date(d.startDate);
   const end = new Date(d.endDate);
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
-  const { adAccountId, startDate, endDate } = parsed.data;
+  const { adAccountId, startDate, endDate, timezone = "America/Los_Angeles" } = parsed.data;
 
   if (!isAdAccountAllowed(session, adAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -210,7 +211,7 @@ export async function POST(request: NextRequest) {
       await Promise.all(
         adSquads.map(async (squad) => {
           try {
-            const statRows = await getAdSquadStats(squad.id, snapStart, snapEnd);
+            const statRows = await getAdSquadStats(squad.id, snapStart, snapEnd, timezone);
             debugStatRows += statRows.length;
             for (const r of statRows) {
               await sql`
