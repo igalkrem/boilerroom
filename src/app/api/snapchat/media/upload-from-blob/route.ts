@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
     console.error("[upload-from-blob] Blob fetch failed:", blobRes.status, blobUrl);
     return NextResponse.json({ error: "failed_to_fetch_blob" }, { status: 500 });
   }
+  console.log("[upload-from-blob] blob content-type:", blobRes.headers.get("content-type"), "size:", blobRes.headers.get("content-length"), "file:", fileName);
   // Explicitly preserve the content-type from Vercel Blob's response headers.
   // In the Node.js runtime, .blob() doesn't reliably carry Content-Type onto the
   // Blob object, so Snapchat would receive application/octet-stream and reject
@@ -78,7 +79,14 @@ export async function POST(request: NextRequest) {
   if (!snapRes.ok) {
     const errText = await snapRes.text();
     console.error("[upload-from-blob] Snapchat upload failed:", snapRes.status, errText);
-    return NextResponse.json({ error: "upload_failed" }, { status: 500 });
+    let userMessage: string | undefined;
+    try {
+      const errJson = JSON.parse(errText);
+      if (errJson.error_code === "E2601") {
+        userMessage = "Snapchat rejected this file: format not supported. Videos must be H.264 MP4; images must be JPEG or PNG.";
+      }
+    } catch { /* not JSON — leave userMessage undefined */ }
+    return NextResponse.json({ error: "upload_failed", userMessage }, { status: 500 });
   }
 
   return NextResponse.json({ mediaId, status: "READY" });

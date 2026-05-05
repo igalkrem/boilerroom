@@ -131,7 +131,7 @@ export async function uploadBlobToSnapchat(
     body: JSON.stringify({ blobUrl, mediaId, adAccountId, fileName: safeName }),
   });
   const uploadData = await safeJson(uploadRes);
-  if (uploadData.error) throw new Error(uploadData.error);
+  if (uploadData.error) throw new Error(uploadData.userMessage ?? uploadData.error);
 
   return mediaId;
 }
