@@ -46,7 +46,7 @@ interface CanvasStore {
   removeCreativeFromGroup: (groupId: string, assetId: string) => void;
   toggleGroupToProvider: (groupId: string, feedProviderId: string) => void;
 
-  toggleProviderToArticle: (feedProviderId: string, articleId: string) => void;
+  toggleProviderToArticle: (feedProviderId: string, articleId: string, defaultHeadline?: string, defaultHeadlineRac?: string) => void;
   setArticleContent: (feedProviderId: string, articleId: string, headline: string, callToAction: string, headlineRac?: string) => void;
   toggleArticleToPreset: (articleId: string, presetId: string) => void;
   setDuplications: (articleId: string, presetId: string, count: number) => void;
@@ -142,7 +142,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       return { edges };
     }),
 
-  toggleProviderToArticle: (feedProviderId, articleId) =>
+  toggleProviderToArticle: (feedProviderId, articleId, defaultHeadline?, defaultHeadlineRac?) =>
     set((s) => {
       const exists = s.edges.providerToArticle.some(
         (e) => e.feedProviderId === feedProviderId && e.articleId === articleId
@@ -153,7 +153,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
             ...s.edges,
             providerToArticle: [
               ...s.edges.providerToArticle,
-              { feedProviderId, articleId, headline: "", headlineRac: "", callToAction: "" },
+              { feedProviderId, articleId, headline: defaultHeadline ?? "", headlineRac: defaultHeadlineRac ?? "", callToAction: "" },
             ],
           },
         };

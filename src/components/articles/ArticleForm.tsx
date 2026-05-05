@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -51,6 +51,13 @@ interface ArticleFormProps {
 export function ArticleForm({ article }: ArticleFormProps) {
   const router = useRouter();
   const [providers, setProviders] = useState<FeedProvider[]>([]);
+  const [defaultHeadlineIndex, setDefaultHeadlineIndex] = useState<number | undefined>(
+    article?.defaultHeadlineIndex
+  );
+
+  const toggleDefault = useCallback((i: number) => {
+    setDefaultHeadlineIndex((prev) => (prev === i ? undefined : i));
+  }, []);
 
   useEffect(() => {
     setProviders(loadFeedProviders());
@@ -107,6 +114,15 @@ export function ArticleForm({ article }: ArticleFormProps) {
   ];
 
   const onSubmit = (data: ArticleFormValues) => {
+    // Build filtered list, tracking original indices to remap defaultHeadlineIndex
+    const filteredWithIdx = data.allowedHeadlines
+      .map((h, i) => ({ h, origIdx: i }))
+      .filter(({ h }) => h.text.trim().length > 0);
+    const savedDefaultIndex =
+      defaultHeadlineIndex !== undefined
+        ? filteredWithIdx.findIndex(({ origIdx }) => origIdx === defaultHeadlineIndex)
+        : -1;
+
     const saved: Article = {
       id: article?.id ?? uuid(),
       feedProviderId: data.feedProviderId,
@@ -116,9 +132,8 @@ export function ArticleForm({ article }: ArticleFormProps) {
       previewUrl: data.previewUrl.trim() || undefined,
       domain: data.domain || undefined,
       locale: data.locale || undefined,
-      allowedHeadlines: data.allowedHeadlines
-        .filter((h) => h.text.trim().length > 0)
-        .map((h) => ({ text: h.text.trim(), rac: h.rac.trim() })),
+      allowedHeadlines: filteredWithIdx.map(({ h }) => ({ text: h.text.trim(), rac: h.rac.trim() })),
+      defaultHeadlineIndex: savedDefaultIndex >= 0 ? savedDefaultIndex : undefined,
       createdAt: article?.createdAt ?? new Date().toISOString(),
     };
     upsertArticle(saved);
@@ -238,8 +253,17 @@ export function ArticleForm({ article }: ArticleFormProps) {
           <div className="space-y-3 max-w-md">
             {fields.map((field, i) => (
               <div key={field.id} className="space-y-1">
-                {/* Headline text row with remove button */}
+                {/* Headline text row with default star + remove button */}
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    title={defaultHeadlineIndex === i ? "Remove default" : "Set as default"}
+                    onClick={() => toggleDefault(i)}
+                    className="shrink-0 text-lg leading-none focus:outline-none"
+                    style={{ color: defaultHeadlineIndex === i ? "#f59e0b" : "#d1d5db" }}
+                  >
+                    ★
+                  </button>
                   <input
                     placeholder="Enter headline (max 34 chars)"
                     maxLength={34}
@@ -253,7 +277,12 @@ export function ArticleForm({ article }: ArticleFormProps) {
                     variant="ghost"
                     size="sm"
                     className="text-red-400 hover:text-red-600 shrink-0"
-                    onClick={() => remove(i)}
+                    onClick={() => {
+                      if (defaultHeadlineIndex === i) setDefaultHeadlineIndex(undefined);
+                      else if (defaultHeadlineIndex !== undefined && defaultHeadlineIndex > i)
+                        setDefaultHeadlineIndex(defaultHeadlineIndex - 1);
+                      remove(i);
+                    }}
                   >
                     ✕
                   </Button>
@@ -266,10 +295,15 @@ export function ArticleForm({ article }: ArticleFormProps) {
                   placeholder="RAC"
                   maxLength={100}
                   {...register(`allowedHeadlines.${i}.rac`)}
-                  className="w-full px-3 py-1.5 text-xs text-gray-400 placeholder-gray-300 border border-gray-100 bg-gray-50 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-300 focus:border-cyan-300"
+                  className="ml-7 w-[calc(100%-1.75rem)] px-3 py-1.5 text-xs text-gray-400 placeholder-gray-300 border border-gray-100 bg-gray-50 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-300 focus:border-cyan-300"
                 />
               </div>
             ))}
+            {fields.length > 0 && (
+              <p className="text-xs text-gray-400">
+                ★ = default headline — auto-selected in the wizard.
+              </p>
+            )}
           </div>
         )}
       </div>

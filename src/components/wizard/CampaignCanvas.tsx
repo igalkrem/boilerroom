@@ -439,7 +439,12 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           store.setNodePosition(router.id, { x: COLUMN_X.router, y: provPos.y });
         }
 
-        store.toggleProviderToArticle(providerId, articleId);
+        const articleForDefault = articles.find((a) => a.id === articleId);
+        const dh =
+          articleForDefault?.defaultHeadlineIndex !== undefined
+            ? articleForDefault.allowedHeadlines[articleForDefault.defaultHeadlineIndex]
+            : undefined;
+        store.toggleProviderToArticle(providerId, articleId, dh?.text, dh?.rac);
 
       } else if (srcType === "article" && tgtType === "account") {
         const articleId = source.replace(/^article-/, "");

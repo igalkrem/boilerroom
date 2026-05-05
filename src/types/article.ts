@@ -8,5 +8,6 @@ export interface Article {
   domain?: string;
   locale?: string; // e.g. "en_US"
   allowedHeadlines: { text: string; rac: string }[];
+  defaultHeadlineIndex?: number; // index into allowedHeadlines; auto-selected in wizard
   createdAt: string;
 }
