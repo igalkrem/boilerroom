@@ -2,7 +2,7 @@ import type { AssetMediaType } from "@/types/silo";
 
 // ── Video transcoding (ffmpeg.wasm) ──────────────────────────────────────────
 // Singleton + sequential lock: FFmpeg doesn't support concurrent exec() on one instance.
-// The core (~31 MB) is lazy-loaded from CDN on first use.
+// Core files are served locally from /ffmpeg/ (copied at build time by scripts/copy-ffmpeg.mjs).
 
 type FFmpegModule = import("@ffmpeg/ffmpeg").FFmpeg;
 let _ffmpegInstance: FFmpegModule | null = null;
@@ -14,12 +14,10 @@ async function loadFFmpeg(): Promise<FFmpegModule> {
   if (_ffmpegLoadPromise) return _ffmpegLoadPromise;
   _ffmpegLoadPromise = (async () => {
     const { FFmpeg } = await import("@ffmpeg/ffmpeg");
-    const { toBlobURL } = await import("@ffmpeg/util");
     const ffmpeg = new FFmpeg();
-    const base = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
     await ffmpeg.load({
-      coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm"),
+      coreURL: "/ffmpeg/ffmpeg-core.js",
+      wasmURL: "/ffmpeg/ffmpeg-core.wasm",
     });
     _ffmpegInstance = ffmpeg;
     return ffmpeg;
