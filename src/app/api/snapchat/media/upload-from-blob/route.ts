@@ -58,7 +58,13 @@ export async function POST(request: NextRequest) {
     console.error("[upload-from-blob] Blob fetch failed:", blobRes.status, blobUrl);
     return NextResponse.json({ error: "failed_to_fetch_blob" }, { status: 500 });
   }
-  const fileBlob = await blobRes.blob();
+  // Explicitly preserve the content-type from Vercel Blob's response headers.
+  // In the Node.js runtime, .blob() doesn't reliably carry Content-Type onto the
+  // Blob object, so Snapchat would receive application/octet-stream and reject
+  // the file as unrecognisable (E2601).
+  const contentType = blobRes.headers.get("content-type") ?? "application/octet-stream";
+  const arrayBuffer = await blobRes.arrayBuffer();
+  const fileBlob = new Blob([arrayBuffer], { type: contentType });
 
   const uploadForm = new FormData();
   uploadForm.append("file", fileBlob, fileName ?? "media");
