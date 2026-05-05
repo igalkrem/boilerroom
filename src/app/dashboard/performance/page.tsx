@@ -6,7 +6,8 @@ import { loadAdAccountConfigs } from "@/lib/adAccounts";
 import { Spinner, Alert } from "@/components/ui";
 import { PerformanceTable } from "@/components/performance/PerformanceTable";
 import { DateRangePicker } from "@/components/performance/DateRangePicker";
-import { ColumnSelector, loadSavedColumns } from "@/components/performance/ColumnSelector";
+import { loadSavedColumns } from "@/components/performance/ColumnSelector";
+import { KpiSummaryBar } from "@/components/performance/KpiSummaryBar";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import type { SquadDetail } from "@/components/performance/PerformanceTable";
 import type { SnapAdAccount } from "@/types/snapchat";
@@ -186,7 +187,6 @@ export default function PerformancePage() {
 
       <div className="flex flex-wrap gap-3 mb-5 items-center">
         <DateRangePicker startDate={startDate} endDate={endDate} onChange={handleDateChange} />
-        <ColumnSelector visible={visibleColumns} onChange={setVisibleColumns} />
         {(syncing || loading) && (
           <div className="flex items-center gap-1.5 text-gray-400 text-sm">
             <Spinner />
@@ -195,18 +195,21 @@ export default function PerformancePage() {
         )}
         {!syncing && !loading && minutesAgo !== null && (
           <span className="text-xs text-gray-400">
-            Last refreshed {minutesAgo === 0 ? "just now" : `${minutesAgo} min ago`}
+            ↻ {minutesAgo === 0 ? "just now" : `${minutesAgo} min ago`}
           </span>
         )}
       </div>
 
       {error && <Alert type="error" className="mb-4">{error}</Alert>}
 
+      <KpiSummaryBar rows={rows} isLoading={syncing || loading} />
+
       {!syncing && !loading && rows.length > 0 && (
         <PerformanceTable
           rows={rows}
           eurToUsd={eurToUsd}
           visibleColumns={visibleColumns}
+          onColumnsChange={setVisibleColumns}
           squadDetails={squadDetails}
           historicalRows={historicalRows}
           onSquadUpdated={() => void loadSquadDetails(activeAccounts)}
