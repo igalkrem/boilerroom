@@ -1,10 +1,17 @@
 "use client";
 
 import { useMemo } from "react";
-import type { CombinedRow } from "@/app/api/reporting/combined/route";
+
+interface KpiRow {
+  spend_usd: number;
+  revenue_usd: number;
+  impressions: number;
+  swipes: number;
+  funnel_clicks: number;
+}
 
 interface Props {
-  rows: CombinedRow[];
+  rows: KpiRow[];
   isLoading: boolean;
 }
 

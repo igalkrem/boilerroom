@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import type { ReactNode } from "react";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import { DrilldownModal } from "./DrilldownModal";
@@ -25,6 +25,7 @@ interface Props {
   startDate: string;
   onSquadUpdated: () => void;
   onSquadPatched?: (squadId: string, patch: Partial<SquadDetail>) => void;
+  onFilteredRowsChange?: (rows: AggrRow[]) => void;
 }
 
 type SortKey =
@@ -53,7 +54,7 @@ function dateMinus(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-interface AggrRow {
+export interface AggrRow {
   ad_squad_id: string;
   ad_squad_name: string;
   spend_usd: number;
@@ -138,7 +139,7 @@ function SortArrow({ active, desc }: { active: boolean; desc: boolean }) {
 
 export function PerformanceTable({
   rows, eurToUsd, visibleColumns, onColumnsChange, columnOrder, onColumnOrderChange,
-  squadDetails, historicalRows, startDate, onSquadUpdated, onSquadPatched,
+  squadDetails, historicalRows, startDate, onSquadUpdated, onSquadPatched, onFilteredRowsChange,
 }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("spend_usd");
   const [sortDesc, setSortDesc] = useState(true);
@@ -282,6 +283,10 @@ export function PerformanceTable({
       return r.ad_squad_name.toLowerCase().includes(filterQuery.toLowerCase());
     });
   }, [aggregated, filterQuery, squadDetails]);
+
+  useEffect(() => {
+    onFilteredRowsChange?.(filtered);
+  }, [filtered, onFilteredRowsChange]);
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) setSortDesc((d) => !d);
