@@ -31,6 +31,7 @@ function upcast(raw: Record<string, unknown>): Article {
             rac: (h as Record<string, string>).rac ?? "",
           }
     ),
+    defaultHeadlineIndex: typeof raw.defaultHeadlineIndex === "number" ? raw.defaultHeadlineIndex : undefined,
     createdAt: raw.createdAt as string,
   };
 }
