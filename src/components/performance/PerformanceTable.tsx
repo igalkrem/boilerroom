@@ -21,6 +21,7 @@ interface Props {
   historicalRows: CombinedRow[];
   startDate: string;
   onSquadUpdated: () => void;
+  onSquadPatched?: (squadId: string, patch: Partial<SquadDetail>) => void;
 }
 
 type SortKey =
@@ -98,7 +99,7 @@ function SortArrow({ active, desc }: { active: boolean; desc: boolean }) {
 }
 
 export function PerformanceTable({
-  rows, eurToUsd, visibleColumns, onColumnsChange, squadDetails, historicalRows, startDate, onSquadUpdated,
+  rows, eurToUsd, visibleColumns, onColumnsChange, squadDetails, historicalRows, startDate, onSquadUpdated, onSquadPatched,
 }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("spend_usd");
   const [sortDesc, setSortDesc] = useState(true);
@@ -253,6 +254,15 @@ export function PerformanceTable({
     return <td key={colKey} className={`px-3 py-2.5 whitespace-nowrap ${extraClass}`}>{content}</td>;
   }
 
+  async function readPatchError(res: Response): Promise<string> {
+    try {
+      const body = (await res.json()) as { error?: string; message?: string };
+      return body.message || body.error || `HTTP ${res.status}`;
+    } catch {
+      return `HTTP ${res.status}`;
+    }
+  }
+
   async function saveBudget(squadId: string) {
     const dollars = parseFloat(budgetDraft);
     if (isNaN(dollars) || dollars < 20) { setInlineError("Min $20.00"); return; }
@@ -260,16 +270,18 @@ export function PerformanceTable({
     if (!detail) return;
     setSavingInline(squadId + "_budget");
     setInlineError(null);
+    const newMicro = dollarToMicro(dollars);
     try {
       const res = await fetch("/api/snapchat/adsquads", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adAccountId: detail.ad_account_id, squadId, daily_budget_micro: dollarToMicro(dollars) }),
+        body: JSON.stringify({ adAccountId: detail.ad_account_id, squadId, daily_budget_micro: newMicro }),
       });
-      if (!res.ok) throw new Error("Update failed");
+      if (!res.ok) throw new Error(await readPatchError(res));
+      onSquadPatched?.(squadId, { daily_budget_micro: newMicro });
       onSquadUpdated();
-    } catch {
-      setInlineError("Save failed");
+    } catch (err) {
+      setInlineError(`Budget save failed: ${err instanceof Error ? err.message : "unknown"}`);
     }
     setSavingInline(null);
     setEditingBudget(null);
@@ -282,16 +294,18 @@ export function PerformanceTable({
     if (!detail) return;
     setSavingInline(squadId + "_bid");
     setInlineError(null);
+    const newMicro = dollarToMicro(dollars);
     try {
       const res = await fetch("/api/snapchat/adsquads", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adAccountId: detail.ad_account_id, squadId, bid_micro: dollarToMicro(dollars) }),
+        body: JSON.stringify({ adAccountId: detail.ad_account_id, squadId, bid_micro: newMicro }),
       });
-      if (!res.ok) throw new Error("Update failed");
+      if (!res.ok) throw new Error(await readPatchError(res));
+      onSquadPatched?.(squadId, { bid_micro: newMicro });
       onSquadUpdated();
-    } catch {
-      setInlineError("Save failed");
+    } catch (err) {
+      setInlineError(`Bid save failed: ${err instanceof Error ? err.message : "unknown"}`);
     }
     setSavingInline(null);
     setEditingBid(null);
@@ -302,15 +316,17 @@ export function PerformanceTable({
     if (!detail) return;
     const newStatus = detail.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
     try {
-      await fetch("/api/snapchat/adsquads", {
+      const res = await fetch("/api/snapchat/adsquads", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ adAccountId: detail.ad_account_id, squadId, status: newStatus }),
       });
+      if (!res.ok) throw new Error(await readPatchError(res));
+      onSquadPatched?.(squadId, { status: newStatus });
       onSquadUpdated();
-    } catch {
-      console.error("status toggle failed");
-      setInlineError("Status update failed");
+    } catch (err) {
+      console.error("status toggle failed", err);
+      setInlineError(`Status update failed: ${err instanceof Error ? err.message : "unknown"}`);
     }
   }
 
@@ -326,31 +342,40 @@ export function PerformanceTable({
       if (isNaN(v) || v < 0.01) { setBulkError("Bid must be at least $0.01"); return; }
     }
     setBulkSaving(true);
+    let patch: Partial<SquadDetail> = {};
+    if (field === "budget") patch = { daily_budget_micro: dollarToMicro(parseFloat(bulkBudget)) };
+    else if (field === "bid") patch = { bid_micro: dollarToMicro(parseFloat(bulkBid)) };
+    else patch = { status: bulkStatus };
+
     const results = await Promise.allSettled(
-      ids.map((squadId) => {
+      ids.map(async (squadId) => {
         const detail = squadDetails.get(squadId);
-        if (!detail) return Promise.resolve();
-        const body: Record<string, unknown> = { adAccountId: detail.ad_account_id, squadId };
-        if (field === "budget") {
-          body.daily_budget_micro = dollarToMicro(parseFloat(bulkBudget));
-        } else if (field === "bid") {
-          body.bid_micro = dollarToMicro(parseFloat(bulkBid));
-        } else {
-          body.status = bulkStatus;
-        }
-        return fetch("/api/snapchat/adsquads", {
+        if (!detail) throw new Error("squad not loaded");
+        const body: Record<string, unknown> = { adAccountId: detail.ad_account_id, squadId, ...patch };
+        const res = await fetch("/api/snapchat/adsquads", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
+        if (!res.ok) throw new Error(await readPatchError(res));
+        return squadId;
       })
     );
-    const failures = results.filter(
-      (r) => r.status === "rejected" || (r.status === "fulfilled" && r.value instanceof Response && !r.value.ok)
-    ).length;
+
+    let firstErrorMsg = "";
+    let failures = 0;
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        onSquadPatched?.(r.value, patch);
+      } else {
+        failures++;
+        if (!firstErrorMsg) firstErrorMsg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+      }
+    }
+
     setBulkSaving(false);
     if (failures > 0) {
-      setBulkError(`${failures} of ${ids.length} update${ids.length === 1 ? "" : "s"} failed. Please retry.`);
+      setBulkError(`${failures} of ${ids.length} update${ids.length === 1 ? "" : "s"} failed: ${firstErrorMsg}`);
     } else {
       setSelectedIds(new Set());
       setShowBulkEdit(false);

@@ -113,6 +113,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ adsquad: updated });
   } catch (err) {
     console.error("Update ad squad error:", err);
-    return NextResponse.json({ error: "internal_error" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "internal_error";
+    return NextResponse.json({ error: "update_failed", message }, { status: 502 });
   }
 }
