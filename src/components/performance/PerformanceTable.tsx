@@ -211,10 +211,13 @@ export function PerformanceTable({
   }, [rows, historicalRows, sortKey, sortDesc, y1, y2, y3]);
 
   const filtered = useMemo(() => {
-    if (!filterQuery.trim()) return aggregated;
-    const q = filterQuery.toLowerCase();
-    return aggregated.filter(r => r.ad_squad_name.toLowerCase().includes(q));
-  }, [aggregated, filterQuery]);
+    return aggregated.filter((r) => {
+      const status = squadDetails.get(r.ad_squad_id)?.status;
+      if (status === "PAUSED" && r.impressions === 0) return false;
+      if (!filterQuery.trim()) return true;
+      return r.ad_squad_name.toLowerCase().includes(filterQuery.toLowerCase());
+    });
+  }, [aggregated, filterQuery, squadDetails]);
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) setSortDesc((d) => !d);
