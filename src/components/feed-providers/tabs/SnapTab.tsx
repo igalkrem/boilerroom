@@ -11,10 +11,11 @@ import { UrlParametersTab } from "./UrlParametersTab";
 // ─── Naming template ──────────────────────────────────────────────────────────
 
 const NAMING_MACROS = [
-  { key: "preset.tag",   label: "Preset Tag",   description: "Value from the preset's Tag field" },
-  { key: "article.name", label: "Article Name", description: "Article slug / keyword" },
-  { key: "date_ddmm",    label: "Date (DDMM)",  description: "e.g. 3004 for 30 April" },
-  { key: "unique_id_4",  label: "Unique ID",    description: "Random 4-char alphanumeric, generated per campaign" },
+  { key: "preset.tag",      label: "Preset Tag",       description: "Value from the preset's Tag field" },
+  { key: "article.name",    label: "Article Name",     description: "Article slug / keyword" },
+  { key: "date_ddmm",       label: "Date (DDMM)",      description: "e.g. 3004 for 30 April" },
+  { key: "unique_id_4",     label: "Unique ID",        description: "Random 4-char alphanumeric, generated per campaign" },
+  { key: "creative.vname",  label: "Creative Version", description: "Version label from asset tag (e.g. V1, V2)" },
 ];
 
 function resolvePreview(segments: NamingSegment[]): string {
@@ -28,7 +29,8 @@ function resolvePreview(segments: NamingSegment[]): string {
         case "preset.tag":   return "T1";
         case "article.name": return "demo-article";
         case "date_ddmm":    return `${dd}${mm}`;
-        case "unique_id_4":  return "A3X9";
+        case "unique_id_4":     return "A3X9";
+        case "creative.vname":  return "V1";
         case "preset.name":  return "My Preset";
         case "index":        return "1";
         default:             return seg.value;

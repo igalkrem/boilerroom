@@ -26,6 +26,7 @@ const assetSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   tagId: z.string().optional(),
+  vname: z.string().optional(),
   mediaType: z.enum(["IMAGE", "VIDEO"]),
   fileFormat: z.string().min(1),
   fileSize: z.number().positive(),
@@ -57,7 +58,12 @@ export function loadAssets(): SiloAsset[] {
       localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
       return [];
     }
-    return parsed.filter((item) => assetSchema.safeParse(item).success) as SiloAsset[];
+    return (parsed.filter((item) => assetSchema.safeParse(item).success) as SiloAsset[])
+      .map((a) => {
+        if (a.vname !== undefined) return a;
+        const m = a.name.match(/_v_(\d+)$/i);
+        return m ? { ...a, vname: "V" + parseInt(m[1], 10) } : a;
+      });
   } catch {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
     return [];

@@ -9,6 +9,7 @@ type ResolveContext = {
   presetName: string;
   articleSlug: string;
   creativeFilename: string;
+  creativeVname?: string;
   presetTag?: string;
   uniqueId4?: string;
 };
@@ -30,6 +31,7 @@ export function resolveCampaignName(
           case "preset.tag":   return context.presetTag ?? "";
           case "article.name": return context.articleSlug;
           case "date_ddmm":    return `${dd}${mm}`;
+          case "creative.vname": return context.creativeVname ?? "";
           case "unique_id_4":  return context.uniqueId4 ?? generateUniqueId4();
           case "preset.name":  return context.presetName;
           case "index":        return String(item.duplicationIndex + 1);
@@ -46,6 +48,7 @@ export function resolveCampaignName(
     .replace(/\{\{preset\.name\}\}/gi, context.presetName)
     .replace(/\{\{article\.name\}\}/gi, context.articleSlug)
     .replace(/\{\{creative\.filename\}\}/gi, context.creativeFilename)
+    .replace(/\{\{creative\.vname\}\}/gi, context.creativeVname ?? "")
     .replace(/\{\{date\}\}/gi, today)
     .replace(/\{\{index\}\}/gi, String(item.duplicationIndex + 1));
 }
