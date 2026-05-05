@@ -30,7 +30,11 @@ const ALL_COLUMNS = [
   { key: "video_views",          label: "Video Views" },
 ] as const;
 
+const ALL_KEYS = ALL_COLUMNS.map((c) => c.key as string);
+const LABEL_MAP = Object.fromEntries(ALL_COLUMNS.map((c) => [c.key, c.label]));
+
 const LS_KEY = "br_perf_cols";
+const LS_ORDER_KEY = "br_perf_cols_order";
 
 export const DEFAULT_VISIBLE_COLUMNS = new Set<string>([
   "spend_usd", "revenue_usd", "roi_pct", "roi_1d", "roi_2d", "roi_3d",
@@ -50,14 +54,34 @@ export function loadSavedColumns(): Set<string> {
   }
 }
 
-interface Props {
-  visible: Set<string>;
-  onChange: (cols: Set<string>) => void;
+export function loadSavedOrder(): string[] {
+  if (typeof window === "undefined") return ALL_KEYS;
+  try {
+    const raw = localStorage.getItem(LS_ORDER_KEY);
+    if (!raw) return ALL_KEYS;
+    const arr = JSON.parse(raw) as unknown;
+    if (!Array.isArray(arr)) return ALL_KEYS;
+    const known = new Set(ALL_KEYS);
+    const saved = (arr as string[]).filter((k) => known.has(k));
+    const missing = ALL_KEYS.filter((k) => !saved.includes(k));
+    return [...saved, ...missing];
+  } catch {
+    return ALL_KEYS;
+  }
 }
 
-export function ColumnSelector({ visible, onChange }: Props) {
+interface Props {
+  visible: Set<string>;
+  order: string[];
+  onChange: (cols: Set<string>) => void;
+  onOrderChange: (order: string[]) => void;
+}
+
+export function ColumnSelector({ visible, order, onChange, onOrderChange }: Props) {
   const [open, setOpen] = useState(false);
+  const [dragOver, setDragOver] = useState<number | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const dragIdx = useRef<number | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -76,6 +100,22 @@ export function ColumnSelector({ visible, onChange }: Props) {
     localStorage.setItem(LS_KEY, JSON.stringify([...next]));
   }
 
+  function handleDragOver(e: React.DragEvent, idx: number) {
+    e.preventDefault();
+    setDragOver(idx);
+  }
+
+  function handleDrop(idx: number) {
+    setDragOver(null);
+    if (dragIdx.current === null || dragIdx.current === idx) return;
+    const next = [...order];
+    const [moved] = next.splice(dragIdx.current, 1);
+    next.splice(idx, 0, moved);
+    onOrderChange(next);
+    localStorage.setItem(LS_ORDER_KEY, JSON.stringify(next));
+    dragIdx.current = null;
+  }
+
   return (
     <div className="relative" ref={ref}>
       <button
@@ -92,21 +132,50 @@ export function ColumnSelector({ visible, onChange }: Props) {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-44 max-h-80 overflow-y-auto">
-          {ALL_COLUMNS.map(({ key, label }) => (
-            <label
-              key={key}
-              className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                checked={visible.has(key)}
-                onChange={() => toggle(key)}
-                className="w-3.5 h-3.5 rounded border-gray-300 text-cyan-500 focus:ring-cyan-500"
-              />
-              {label}
-            </label>
-          ))}
+        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-56 max-h-[380px] overflow-y-auto">
+          <p className="px-3 py-1.5 text-xs text-gray-400 border-b border-gray-100 mb-0.5">
+            Drag to reorder · check to show
+          </p>
+          {order.map((key, i) => {
+            const label = LABEL_MAP[key];
+            if (!label) return null;
+            return (
+              <div
+                key={key}
+                draggable
+                onDragStart={() => { dragIdx.current = i; }}
+                onDragOver={(e) => handleDragOver(e, i)}
+                onDragLeave={() => setDragOver(null)}
+                onDrop={() => handleDrop(i)}
+                onDragEnd={() => { setDragOver(null); dragIdx.current = null; }}
+                className={`flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors ${
+                  dragOver === i ? "border-t-2 border-blue-400 bg-blue-50" : ""
+                }`}
+              >
+                <span
+                  className="flex-shrink-0 cursor-grab text-gray-300 hover:text-gray-500 select-none"
+                  draggable={false}
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                    <circle cx="7" cy="4"  r="1.5" />
+                    <circle cx="13" cy="4"  r="1.5" />
+                    <circle cx="7" cy="10" r="1.5" />
+                    <circle cx="13" cy="10" r="1.5" />
+                    <circle cx="7" cy="16" r="1.5" />
+                    <circle cx="13" cy="16" r="1.5" />
+                  </svg>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={visible.has(key)}
+                  onChange={() => toggle(key)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-3.5 h-3.5 rounded border-gray-300 text-cyan-500 focus:ring-cyan-500 flex-shrink-0"
+                />
+                <span className="select-none">{label}</span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

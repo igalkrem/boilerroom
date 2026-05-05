@@ -6,7 +6,7 @@ import { loadAdAccountConfigs } from "@/lib/adAccounts";
 import { Spinner, Alert } from "@/components/ui";
 import { PerformanceTable } from "@/components/performance/PerformanceTable";
 import { DateRangePicker } from "@/components/performance/DateRangePicker";
-import { loadSavedColumns } from "@/components/performance/ColumnSelector";
+import { loadSavedColumns, loadSavedOrder } from "@/components/performance/ColumnSelector";
 import { KpiSummaryBar } from "@/components/performance/KpiSummaryBar";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import type { SquadDetail } from "@/components/performance/PerformanceTable";
@@ -45,6 +45,7 @@ export default function PerformancePage() {
   const [minutesAgo, setMinutesAgo] = useState<number | null>(null);
 
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => loadSavedColumns());
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => loadSavedOrder());
 
   const isRefreshing = useRef(false);
 
@@ -251,6 +252,8 @@ export default function PerformancePage() {
           eurToUsd={eurToUsd}
           visibleColumns={visibleColumns}
           onColumnsChange={setVisibleColumns}
+          columnOrder={columnOrder}
+          onColumnOrderChange={setColumnOrder}
           squadDetails={squadDetails}
           historicalRows={historicalRows}
           startDate={startDate}
