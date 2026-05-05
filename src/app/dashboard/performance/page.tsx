@@ -13,8 +13,10 @@ import type { SquadDetail } from "@/components/performance/PerformanceTable";
 import type { SnapAdAccount } from "@/types/snapchat";
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
-function dateOffset(n: number) {
-  const d = new Date(); d.setDate(d.getDate() + n);
+
+function dateMinus(dateStr: string, days: number) {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - days);
   return d.toISOString().slice(0, 10);
 }
 
@@ -77,9 +79,9 @@ export default function PerformancePage() {
     const first = results.find((r) => r.status === "fulfilled");
     if (first?.status === "fulfilled") setEurToUsd(first.value.eur_to_usd ?? 1.08);
 
-    // Also fetch historical data (last 3 days) for -1D/-2D/-3D ROI columns
-    const histStart = dateOffset(-3);
-    const histEnd = dateOffset(-1);
+    // Also fetch historical data (3 days before selected range) for -1D/-2D/-3D ROI columns
+    const histEnd = dateMinus(start, 1);
+    const histStart = dateMinus(start, 3);
     const histResults = await Promise.allSettled(
       accts.map((a) =>
         fetch(`/api/reporting/combined?adAccountId=${a.id}&startDate=${histStart}&endDate=${histEnd}`)
@@ -212,6 +214,7 @@ export default function PerformancePage() {
           onColumnsChange={setVisibleColumns}
           squadDetails={squadDetails}
           historicalRows={historicalRows}
+          startDate={startDate}
           onSquadUpdated={() => void loadSquadDetails(activeAccounts)}
         />
       )}
