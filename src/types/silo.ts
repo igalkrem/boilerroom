@@ -31,6 +31,7 @@ export interface SiloAsset {
   id: string;
   name: string;
   tagId?: string;
+  vname?: string;
   mediaType: AssetMediaType;
   fileFormat: string;
   fileSize: number;

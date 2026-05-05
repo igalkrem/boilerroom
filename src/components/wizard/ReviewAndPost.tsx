@@ -13,6 +13,7 @@ const NAME_MACROS = [
   { label: "{{preset.name}}", title: "Preset name" },
   { label: "{{article.name}}", title: "Article name" },
   { label: "{{creative.filename}}", title: "Creative filename" },
+  { label: "{{creative.vname}}", title: "Creative version from tag (e.g. V1)" },
   { label: "{{date}}", title: "Today YYYY-MM-DD" },
   { label: "{{index}}", title: "1-based duplication index" },
 ];
@@ -59,6 +60,7 @@ export function ReviewAndPost({ onBack, onLaunch, launching, launchProgress }: R
       presetName: preset?.name ?? item.presetId,
       articleSlug: article?.slug ?? item.articleId,
       creativeFilename,
+      creativeVname: firstAsset?.vname,
       presetTag: preset?.tag,
       uniqueId4,
     };

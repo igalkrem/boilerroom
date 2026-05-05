@@ -138,12 +138,14 @@ async function processAndUpload(
 
     // 4. Determine asset name
     let name = safeBase.replace(/\.[^.]+$/, "");
+    let vname: string | undefined;
     if (tagId) {
       try {
         const tag = getTagById(tagId);
         if (tag) {
           const index = consumeNextIndex(tagId);
           name = buildAssetName(tag, index);
+          vname = "V" + index;
         }
       } catch { /* fall back to filename */ }
     }
@@ -152,6 +154,7 @@ async function processAndUpload(
       id: assetId,
       name,
       tagId,
+      vname,
       mediaType,
       fileFormat: file.type,
       fileSize: file.size,
