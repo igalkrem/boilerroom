@@ -37,17 +37,26 @@ function toMicro(spend: number | undefined): number {
   return Math.round(spend ?? 0);
 }
 
+function laOffset(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00Z");
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    timeZoneName: "shortOffset",
+  }).formatToParts(d);
+  const tz = parts.find((p) => p.type === "timeZoneName")?.value ?? "GMT-8";
+  return tz === "GMT-7" ? "-07:00" : "-08:00";
+}
+
 export async function getAdSquadStats(
   adSquadId: string,
   startDate: string,
   endDate: string
 ): Promise<AdSquadStatRow[]> {
-  // Use PST (-08:00) year-round to never miss the start of a day.
-  // During PDT (summer) the window opens 1h before local midnight — harmless overlap.
-  const startTime = `${startDate}T00:00:00.000-08:00`;
+  const startTime = `${startDate}T00:00:00.000${laOffset(startDate)}`;
   const endDateExclusive = new Date(endDate + "T00:00:00Z");
   endDateExclusive.setUTCDate(endDateExclusive.getUTCDate() + 1);
-  const endTime = endDateExclusive.toISOString().slice(0, 10) + "T00:00:00.000-08:00";
+  const endDateStr = endDateExclusive.toISOString().slice(0, 10);
+  const endTime = `${endDateStr}T00:00:00.000${laOffset(endDateStr)}`;
 
   const data = await snapFetch<SnapStatsResponse>(
     `/adsquads/${adSquadId}/stats?granularity=DAY&fields=impressions,swipes,spend,video_views&start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`
