@@ -47,7 +47,7 @@ export default function PerformancePage() {
 
   const isRefreshing = useRef(false);
 
-  const refresh = useCallback(async (accts: SnapAdAccount[], start: string, end: string) => {
+  const refresh = useCallback(async (accts: SnapAdAccount[], start: string, end: string, force = false) => {
     if (accts.length === 0 || isRefreshing.current) return;
     isRefreshing.current = true;
     setSyncing(true);
@@ -58,7 +58,7 @@ export default function PerformancePage() {
         fetch("/api/reporting/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ adAccountId: a.id, startDate: start, endDate: end, timezone: a.timezone }),
+          body: JSON.stringify({ adAccountId: a.id, startDate: start, endDate: end, timezone: a.timezone, force }),
         })
       )
     );
@@ -177,7 +177,7 @@ export default function PerformancePage() {
   function handleDateChange(start: string, end: string) {
     setStartDate(start);
     setEndDate(end);
-    void refresh(activeAccounts, start, end);
+    void refresh(activeAccounts, start, end, true);
   }
 
   return (

@@ -29,8 +29,8 @@ interface SnapStatsResponse {
   }>;
 }
 
-function toDate(isoString: string): string {
-  return isoString.slice(0, 10);
+function toLocalDate(isoString: string, timezone: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date(isoString));
 }
 
 function toMicro(spend: number | undefined): number {
@@ -75,7 +75,7 @@ export async function getAdSquadStats(
 
   for (const ts of stat.timeseries ?? []) {
     rows.push({
-      date: toDate(ts.start_time),
+      date: toLocalDate(ts.start_time, timezone),
       country_code: "",
       impressions: ts.stats.impressions ?? 0,
       swipes: ts.stats.swipes ?? 0,

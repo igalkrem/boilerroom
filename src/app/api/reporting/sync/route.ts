@@ -14,6 +14,7 @@ const syncBodySchema = z.object({
   startDate: z.string().regex(DATE_RE, "startDate must be YYYY-MM-DD"),
   endDate: z.string().regex(DATE_RE, "endDate must be YYYY-MM-DD"),
   timezone: z.string().optional(),
+  force: z.boolean().optional(),
 }).refine((d) => {
   const start = new Date(d.startDate);
   const end = new Date(d.endDate);
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
-  const { adAccountId, startDate, endDate, timezone = "America/Los_Angeles" } = parsed.data;
+  const { adAccountId, startDate, endDate, timezone = "America/Los_Angeles", force = false } = parsed.data;
 
   if (!isAdAccountAllowed(session, adAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest) {
   // ── KingsRoad: fetch per-date if needed ──────────────────────────────────
   const kingsroadDatesToFetch: string[] = [];
   for (const date of dates) {
-    if (await shouldSkip("kingsroad", date, "")) {
+    if (!force && await shouldSkip("kingsroad", date, "")) {
       kingsroadSkipped++;
     } else {
       kingsroadDatesToFetch.push(date);
@@ -171,7 +172,7 @@ export async function POST(request: NextRequest) {
   // ── Snapchat: list all ad squads, always backfill names, fetch stats if needed ──
   const snapDatesToFetch: string[] = [];
   for (const date of dates) {
-    if (await shouldSkip("snapchat", date, adAccountId)) {
+    if (!force && await shouldSkip("snapchat", date, adAccountId)) {
       snapchatSkipped++;
     } else {
       snapDatesToFetch.push(date);
