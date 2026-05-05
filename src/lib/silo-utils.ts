@@ -1,5 +1,82 @@
 import type { AssetMediaType } from "@/types/silo";
 
+// ── Video transcoding (ffmpeg.wasm) ──────────────────────────────────────────
+// Singleton + sequential lock: FFmpeg doesn't support concurrent exec() on one instance.
+// The core (~31 MB) is lazy-loaded from CDN on first use.
+
+type FFmpegModule = import("@ffmpeg/ffmpeg").FFmpeg;
+let _ffmpegInstance: FFmpegModule | null = null;
+let _ffmpegLoadPromise: Promise<FFmpegModule> | null = null;
+let _ffmpegLock: Promise<void> = Promise.resolve();
+
+async function loadFFmpeg(): Promise<FFmpegModule> {
+  if (_ffmpegInstance) return _ffmpegInstance;
+  if (_ffmpegLoadPromise) return _ffmpegLoadPromise;
+  _ffmpegLoadPromise = (async () => {
+    const { FFmpeg } = await import("@ffmpeg/ffmpeg");
+    const { toBlobURL } = await import("@ffmpeg/util");
+    const ffmpeg = new FFmpeg();
+    const base = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
+      wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm"),
+    });
+    _ffmpegInstance = ffmpeg;
+    return ffmpeg;
+  })().catch((e) => { _ffmpegLoadPromise = null; throw e; });
+  return _ffmpegLoadPromise;
+}
+
+export async function transcodeVideoToH264(
+  file: File,
+  onProgress?: (msg: string) => void
+): Promise<File> {
+  // Acquire the sequential lock — only one transcode runs at a time.
+  let release!: () => void;
+  const myTurn = new Promise<void>((resolve) => { release = resolve; });
+  const prevLock = _ffmpegLock;
+  _ffmpegLock = myTurn;
+  await prevLock;
+
+  try {
+    onProgress?.("Loading transcoder…");
+    const ffmpeg = await loadFFmpeg();
+    const { fetchFile } = await import("@ffmpeg/util");
+
+    const stamp = Date.now();
+    const ext = file.name.split(".").pop()?.toLowerCase() || "mp4";
+    const inputName = `in_${stamp}.${ext}`;
+    const outputName = `out_${stamp}.mp4`;
+
+    const progressHandler = ({ progress }: { progress: number }) => {
+      onProgress?.(`Transcoding… ${Math.min(99, Math.round(progress * 100))}%`);
+    };
+    ffmpeg.on("progress", progressHandler);
+    try {
+      await ffmpeg.writeFile(inputName, await fetchFile(file));
+      const exitCode = await ffmpeg.exec([
+        "-i", inputName,
+        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+        "-c:a", "aac", "-b:a", "128k",
+        "-movflags", "+faststart",
+        outputName,
+      ]);
+      if (exitCode !== 0) throw new Error(`ffmpeg exited with code ${exitCode}`);
+      const raw = await ffmpeg.readFile(outputName) as Uint8Array;
+      await ffmpeg.deleteFile(inputName).catch(() => {});
+      await ffmpeg.deleteFile(outputName).catch(() => {});
+      // Uint8Array.from() copies into a plain ArrayBuffer (not SharedArrayBuffer),
+      // which is required by the File/Blob constructors.
+      const outName = file.name.replace(/\.[^.]+$/, ".mp4");
+      return new File([Uint8Array.from(raw).buffer], outName, { type: "video/mp4" });
+    } finally {
+      ffmpeg.off("progress", progressHandler);
+    }
+  } finally {
+    release();
+  }
+}
+
 export async function computeHash(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
   const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);

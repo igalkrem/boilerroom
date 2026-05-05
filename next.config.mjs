@@ -15,12 +15,14 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               // Dev mode: webpack wraps modules in eval() for fast refresh
-              isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self' 'unsafe-inline'",
+              // 'wasm-unsafe-eval' allows WebAssembly compilation (ffmpeg.wasm)
+              isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'" : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://*.public.blob.vercel-storage.com https://lh3.googleusercontent.com",
               "media-src 'self' blob: https://*.public.blob.vercel-storage.com",
-              "connect-src 'self' https://adsapi.snapchat.com https://accounts.snapchat.com https://*.public.blob.vercel-storage.com https://blob.vercel-storage.com https://vercel.com",
-              "worker-src 'none'",
+              "connect-src 'self' https://adsapi.snapchat.com https://accounts.snapchat.com https://*.public.blob.vercel-storage.com https://blob.vercel-storage.com https://vercel.com https://unpkg.com",
+              // blob: required for ffmpeg.wasm Web Worker
+              "worker-src blob:",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",

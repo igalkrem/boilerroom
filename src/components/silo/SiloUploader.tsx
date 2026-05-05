@@ -14,12 +14,13 @@ import {
   getVideoDuration,
   getImageResolution,
   formatFileSize,
+  transcodeVideoToH264,
 } from "@/lib/silo-utils";
 import { findByHash, upsertAsset } from "@/lib/silo";
 import { getTagById, consumeNextIndex, buildAssetName } from "@/lib/silo-tags";
 import type { SiloAsset, AssetMediaType } from "@/types/silo";
 
-type FileStage = "queued" | "hashing" | "processing" | "uploading" | "done" | "failed" | "duplicate";
+type FileStage = "queued" | "hashing" | "processing" | "transcoding" | "uploading" | "done" | "failed" | "duplicate";
 
 interface FileProgress {
   id: string;
@@ -69,19 +70,34 @@ async function processAndUpload(
   let durationSeconds: number | undefined;
 
   try {
-    const [thumbResult, metaResult] = await Promise.all([
-      generateThumbnail(file, mediaType),
-      mediaType === "IMAGE"
-        ? Promise.all([optimizeImage(file), getImageResolution(file)]).then(([opt, res]) => ({ opt, res }))
-        : getVideoDuration(file).then((dur) => ({ dur })),
-    ]);
-    thumbnailBlob = thumbResult;
+    if (mediaType === "IMAGE") {
+      const [thumbResult, optResult, res] = await Promise.all([
+        generateThumbnail(file, mediaType),
+        optimizeImage(file),
+        getImageResolution(file),
+      ]);
+      thumbnailBlob = thumbResult;
+      optimizedFile = optResult;
+      resolution = res;
+    } else {
+      // Generate thumbnail + duration in parallel (fast), then transcode (slow + sequential).
+      const [thumbResult, dur] = await Promise.all([
+        generateThumbnail(file, mediaType),
+        getVideoDuration(file),
+      ]);
+      thumbnailBlob = thumbResult;
+      durationSeconds = dur;
 
-    if (mediaType === "IMAGE" && "opt" in metaResult) {
-      optimizedFile = metaResult.opt;
-      resolution = metaResult.res;
-    } else if ("dur" in metaResult) {
-      durationSeconds = metaResult.dur;
+      onUpdate({ stage: "transcoding", progress: 0 });
+      try {
+        optimizedFile = await transcodeVideoToH264(file, (msg) => {
+          const pct = msg.match(/(\d+)%/);
+          onUpdate({ stage: "transcoding", progress: pct ? parseInt(pct[1]) : 0 });
+        });
+      } catch (err) {
+        onUpdate({ stage: "failed", error: `Transcoding failed: ${String(err)}` });
+        return null;
+      }
     }
   } catch (err) {
     onUpdate({ stage: "failed", error: `Processing failed: ${String(err)}` });
@@ -108,9 +124,10 @@ async function processAndUpload(
       }).then((r) => r.url)
     );
 
-    // Optimized image
+    // Optimized image (JPEG) or transcoded video (MP4)
     if (optimizedFile) {
-      const optName = safeBase.replace(/\.[^.]+$/, ".jpg");
+      const optExt = optimizedFile.name.match(/\.[^.]+$/)?.[0] ?? ".jpg";
+      const optName = safeBase.replace(/\.[^.]+$/, optExt);
       uploadPromises.push(
         upload(`silo/${assetId}/optimized_${optName}`, optimizedFile, {
           access: "public",
@@ -254,6 +271,7 @@ export function SiloUploader({ tagId, onComplete }: SiloUploaderProps) {
       case "queued": return "Queued";
       case "hashing": return "Checking…";
       case "processing": return "Optimizing…";
+      case "transcoding": return `Transcoding ${f.progress}%`;
       case "uploading": return `Uploading ${f.progress}%`;
       case "done": return "Done ✅";
       case "failed": return `Failed ❌`;
@@ -288,7 +306,7 @@ export function SiloUploader({ tagId, onComplete }: SiloUploaderProps) {
         <input {...getInputProps()} />
         <div className="text-3xl mb-2">↑</div>
         <p className="text-sm text-gray-600 font-medium">Drag & drop images or videos here, or click to browse</p>
-        <p className="text-xs text-gray-400 mt-1">PNG/JPG/MP4 · Batch upload supported · Max 500 MB per file</p>
+        <p className="text-xs text-gray-400 mt-1">Images (PNG/JPG) or any video format · Videos auto-converted to H.264 MP4 · Max 500 MB</p>
       </div>
 
       {/* File list */}
@@ -302,10 +320,10 @@ export function SiloUploader({ tagId, onComplete }: SiloUploaderProps) {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-800 truncate">{fp.file.name}</p>
                 <p className="text-xs text-gray-400">{formatFileSize(fp.file.size)}</p>
-                {fp.stage === "uploading" && (
+                {(fp.stage === "transcoding" || fp.stage === "uploading") && (
                   <div className="mt-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-cyan-500 transition-all duration-300"
+                      className={`h-full transition-all duration-300 ${fp.stage === "transcoding" ? "bg-violet-500" : "bg-cyan-500"}`}
                       style={{ width: `${fp.progress}%` }}
                     />
                   </div>
