@@ -267,6 +267,7 @@ src/
   | `unique_id_4` | `generateUniqueId4()` | Fresh random 4-char alphanumeric per campaign at launch time; preview uses stable per-row mock |
   | `preset.name` | `preset.name` | Full preset name |
   | `index` | `duplicationIndex + 1` | 1-based duplication count |
+  | `creative.vname` | `asset.vname` | Version label from asset tag (e.g. `"V1"`, `"V2"`); stored at upload time; backfilled on load from name pattern `_v_NNN` |
 
   `resolveCampaignName(fallback, item, ctx, providerTemplate?)` — if `providerTemplate` is non-empty, resolves segments and joins with `" | "`; otherwise falls back to the old string-replace logic using `fallback`.
 
