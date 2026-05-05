@@ -67,6 +67,7 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
           presetName: preset.name,
           articleSlug: article.slug,
           creativeFilename: assets[0].originalFileName,
+          creativeVname: assets[0].vname,
           presetTag: preset.tag,
           uniqueId4: generateUniqueId4(),
         };
