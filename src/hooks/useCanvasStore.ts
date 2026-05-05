@@ -153,7 +153,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
             ...s.edges,
             providerToArticle: [
               ...s.edges.providerToArticle,
-              { feedProviderId, articleId, headline: defaultHeadline ?? "", headlineRac: defaultHeadlineRac ?? "", callToAction: "" },
+              { feedProviderId, articleId, headline: defaultHeadline ?? "", headlineRac: defaultHeadlineRac ?? "", callToAction: "MORE" },
             ],
           },
         };
