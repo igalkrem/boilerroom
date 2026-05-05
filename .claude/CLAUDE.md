@@ -127,7 +127,7 @@ src/
 │   │   │   ├── CreativeGroupNode.tsx  # Group card: thumbnail grid (1–5), click-to-preview modal, + Add creative footer, source handle right
 │   │   │   ├── ProviderNode.tsx       # Left accent bar + group count; hidden until first group added; no "+ Router" button
 │   │   │   ├── RouterNode.tsx         # Sleek circle (⑃ icon) — auto-inserted when provider gets second article
-│   │   │   ├── ArticleNode.tsx        # Slug + query + inline headline/CTA editor (expand ▼); 📄 icon
+│   │   │   ├── ArticleNode.tsx        # Slug + query + inline headline/CTA editor (expand ▼); 📄 icon; new edges default CTA to "MORE"
 │   │   │   ├── AdAccountNode.tsx      # Initials avatar; connected state from articleToAdAccount edges (no click-select)
 │   │   │   └── PresetNode.tsx         # Name + config + duplication rows; no Creatives/set control (replaced by groups)
 │   │   ├── edges/
@@ -237,7 +237,7 @@ src/
 - **synthesizeCampaign():** `lib/synthesize-campaign.ts` converts one `CampaignBuildItem` + resolved `(provider, article, preset, assets[])` into the `{campaigns[], adSquads[], creatives[]}` shape the orchestrator expects. One campaign + one ad squad are created; `creatives[]` has one entry per asset (all share the same `adSquadId`). When multiple assets are passed, creative names are suffixed `[1]`, `[2]`, etc. It calls `buildUrlTemplate()` which resolves static URL macros now (`{{article.name}}`, `{{article.query}}`, `{{creative.headline}}`, `{{creative.rac}}`, `{{organization_id}}`), passing each resolved value through `encodeURIComponent` so spaces and special chars are safe. Any remaining `{{...}}` that aren't `{{campaign.id}}`, `{{adset.id}}`, `{{ad.id}}`, or `{{channel.id}}` are stripped (replaced with `""`) — Snapchat rejects both literal and percent-encoded unknown macros (E2712). The three Snapchat native macros and `{{channel.id}}` are left untouched — Snapchat substitutes the native ones at click time; the orchestrator resolves `{{channel.id}}`.
 
 - **Submission orchestrator:** `lib/submission-orchestrator.ts` runs **five stages** in sequence:
-  1. **uploadMedia** — all creatives upload in parallel
+  1. **uploadMedia** — creatives upload with concurrency capped at 2 (Snapchat returns E3002 on 3+ simultaneous uploads to the same ad account)
   2. **Channel assignment** — if `provider.channelConfig.type === "provider-supplied"`, calls `POST /api/feed-providers/channels/assign`; if `addChannelIdToCampaignName`, appends `-{channelId}` to all campaign/squad/ad names; resolves `{{channel.id}}` in each creative's URL
   3. **campaigns** — create campaigns in Snapchat
   4. **adSquads** — create ad squads in Snapchat
