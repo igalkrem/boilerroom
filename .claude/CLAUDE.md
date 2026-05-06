@@ -101,7 +101,7 @@ src/
 │   │       ├── campaigns/
 │   │       ├── adsquads/
 │   │       ├── creatives/
-│   │       │   └── [id]/              # PATCH — update creative web_view_properties.url (for {{ad.id}} injection after ad creation)
+│   │       │   └── [id]/              # PATCH — fetches existing creative first, then PUT with preserved type/media fields + new web_view_properties.url (for {{ad.id}} injection after ad creation)
 │   │       ├── ads/
 │   │       ├── ad-accounts/
 │   │       ├── profiles/              # GET ?adAccountId= → first profile_id for creative payload
@@ -147,7 +147,7 @@ src/
 │   ├── silo/
 │   │   ├── SiloUploader.tsx           # Batch uploader: hash → optimize → Blob upload (3 concurrent)
 │   │   ├── SiloBrowser.tsx            # Picker modal for canvas wizard integration
-│   │   ├── AssetCard.tsx              # Thumbnail card with quick actions; bulk-mode checkbox overlay; single "Snap ✓" badge; portrait preview capped at max-h-[280px]
+│   │   ├── AssetCard.tsx              # Thumbnail card with quick actions; bulk-mode checkbox overlay; single "Snap ✓" badge; portrait preview capped at max-h-[280px]; amber ⚠ "Re-upload for Snap" badge on VIDEO assets with no optimizedUrl (uploaded before H.264 pipeline)
 │   │   ├── AssetPreviewModal.tsx      # Full preview + metadata + usage history
 │   │   └── SnapchatUploadModal.tsx    # Pre-upload to Snapchat — accepts assets: SiloAsset[] (single or bulk); 2-concurrent per asset
 │   ├── layout/
@@ -312,7 +312,7 @@ src/
 
 - **All Snapchat API calls are server-side.** Never call the Snapchat Marketing API from the browser.
 
-- **Silo — media library:** Asset metadata lives in localStorage (`boilerroom_silo_v1`). Upload pipeline: **Images** — SHA-256 hash → `optimizeImage` (canvas → 1080×1920 JPEG) + thumbnail in parallel → `upload()` to Vercel Blob (original + optimized + thumb). **Videos** — SHA-256 hash → thumbnail + duration in parallel → `transcodeVideoToH264` (ffmpeg.wasm, sequential lock, libx264 fast CRF 23) → `upload()` to Vercel Blob (original + transcoded H.264 MP4 + thumb). The transcoded video is stored as `optimizedUrl`; `siloAssetBlobUrl` in synthesize-campaign uses `optimizedUrl ?? originalUrl`, so Snapchat always receives H.264. ffmpeg core (~31 MB) is served from `/ffmpeg/ffmpeg-core.{js,wasm}` (same-origin, copied at build time — no external CDN fetch); singleton + sequential mutex prevents concurrent ffmpeg exec calls. Snapchat mediaIds cached per-ad-account in `snapchatUploads[]`. Cross-account reuse tries `media_copy` first; falls back to `uploadBlobToSnapchat`. `SnapchatUploadModal` accepts `assets: SiloAsset[]` — works for single or bulk; 2-concurrent uploads per asset. Grid uses `repeat(auto-fill, minmax(180px, 240px))` so cards stay compact on wide screens. `AssetCard` portrait preview is capped at `max-h-[280px]`. **Bulk mode:** "Select" button in Silo header enables checkbox selection; sticky action bar appears with "Delete (N)" and "→ Snapchat (N)" when items are selected. `AssetCard` shows a single "Snap ✓" badge regardless of how many ad accounts have the asset cached (was: one badge per account).
+- **Silo — media library:** Asset metadata lives in localStorage (`boilerroom_silo_v1`). Upload pipeline: **Images** — SHA-256 hash → `optimizeImage` (canvas → 1080×1920 JPEG) + thumbnail in parallel → `upload()` to Vercel Blob (original + optimized + thumb). **Videos** — SHA-256 hash → thumbnail + duration in parallel → `transcodeVideoToH264` (ffmpeg.wasm, sequential lock, libx264 fast CRF 23) → `upload()` to Vercel Blob (original + transcoded H.264 MP4 + thumb). The transcoded video is stored as `optimizedUrl`; `siloAssetBlobUrl` in synthesize-campaign uses `optimizedUrl ?? originalUrl`, so Snapchat always receives H.264. ffmpeg core (~31 MB) is served from `/ffmpeg/ffmpeg-core.{js,wasm}` (same-origin, copied at build time — no external CDN fetch); singleton + sequential mutex prevents concurrent ffmpeg exec calls. Snapchat mediaIds cached per-ad-account in `snapchatUploads[]`. Cross-account reuse tries `media_copy` first; falls back to `uploadBlobToSnapchat`. `SnapchatUploadModal` accepts `assets: SiloAsset[]` — works for single or bulk; 2-concurrent uploads per asset. Grid uses `repeat(auto-fill, minmax(180px, 240px))` so cards stay compact on wide screens. `AssetCard` portrait preview is capped at `max-h-[280px]`. **Pre-transcoding assets:** VIDEO assets without `optimizedUrl` (uploaded before the H.264 pipeline) show an amber ⚠ "Re-upload for Snap" badge — they will fail with E2601 when sent to Snapchat because the original file may not be H.264. Users must re-upload these through Silo to get the transcoded version. **Bulk mode:** "Select" button in Silo header enables checkbox selection; "Select all (N)" / "Deselect all" toggles appear in the header; sticky action bar appears with "Delete (N)" and "→ Snapchat (N)" when items are selected. `AssetCard` shows a single "Snap ✓" badge regardless of how many ad accounts have the asset cached (was: one badge per account).
 
 - **KV Sync — persistent metadata storage:** All localStorage-backed stores call `syncToKV(key, data)` on every write — debounced 1.5s, fire-and-forget POST to `/api/data`. Blob paths: `metadata/{googleUserId}/{key}.json`. Blobs are stored with `access: "public"` (the `boilerroom-silo` store is a public store; private access is not supported). Server reads use `getDownloadUrl` from `@vercel/blob`. `KVHydrationProvider` blocks render on fresh session until KV data loaded; merges in background if localStorage already populated. Valid keys whitelisted in `/api/data`.
 
@@ -344,7 +344,7 @@ src/
 - Ad squad `delivery_constraint` is required — `"DAILY_BUDGET"` or `"LIFETIME_BUDGET"`. `conversion_location` is NOT valid (E1001).
 - Valid optimization goals (SALES + WEB): `PIXEL_PURCHASE`, `PIXEL_SIGNUP`, `PIXEL_ADD_TO_CART`, `PIXEL_PAGE_VIEW`, `LANDING_PAGE_VIEW`. Do not add goals from other objectives — they return E2844 with SALES objective.
 - Ad squad pixel tracking: only `pixel_id` sent, always optional. `pixel_conversion_event` is NOT valid (E1001).
-- Creative destination URL: `web_view_properties.url` (WEB_VIEW) or `deep_link_properties.deep_link_url` (DEEP_LINK/APP_INSTALL).
+- Creative destination URL: `web_view_properties.url` (WEB_VIEW) or `deep_link_properties.deep_link_uri` (DEEP_LINK). `app_install_properties` is not used — APP_INSTALL also uses `deep_link_properties`.
 - Ad destination URL: URL fields are NOT sent on the Ad payload — Creative only. Ad payload: `ad_squad_id`, `creative_id`, `name`, `type`, `status`.
 - Ad `type` for WEB_VIEW creatives is `"REMOTE_WEBPAGE"`. `AD_TYPE_MAP`: `WEB_VIEW → REMOTE_WEBPAGE`, all others → `SNAP_AD`.
 - Interaction type is hardcoded to WEB_VIEW. **`call_to_action` is valid on `WEB_VIEW` creatives.** Do NOT send `call_to_action` on `SNAP_AD` creatives (E2002).
