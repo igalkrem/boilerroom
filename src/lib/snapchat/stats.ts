@@ -57,7 +57,8 @@ export async function getAdSquadStats(
   adSquadId: string,
   startDate: string,
   endDate: string,
-  timezone = "America/Los_Angeles"
+  timezone = "America/Los_Angeles",
+  token?: string
 ): Promise<AdSquadStatRow[]> {
   const startTime = `${startDate}T00:00:00.000${tzOffset(startDate, timezone)}`;
   const endDateExclusive = new Date(endDate + "T00:00:00Z");
@@ -66,7 +67,9 @@ export async function getAdSquadStats(
   const endTime = `${endDateStr}T00:00:00.000${tzOffset(endDateStr, timezone)}`;
 
   const data = await snapFetch<SnapStatsResponse>(
-    `/adsquads/${adSquadId}/stats?granularity=DAY&fields=impressions,swipes,spend,video_views&start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`
+    `/adsquads/${adSquadId}/stats?granularity=DAY&fields=impressions,swipes,spend,video_views&start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`,
+    {},
+    token
   );
 
   const rows: AdSquadStatRow[] = [];

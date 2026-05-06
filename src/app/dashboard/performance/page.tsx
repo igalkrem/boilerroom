@@ -41,7 +41,7 @@ export default function PerformancePage() {
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  const [lastLoaded, setLastLoaded] = useState<Date | null>(null);
   const [minutesAgo, setMinutesAgo] = useState<number | null>(null);
 
   const [kpiRows, setKpiRows] = useState<AggrRow[]>([]);
@@ -51,7 +51,39 @@ export default function PerformancePage() {
 
   const isRefreshing = useRef(false);
 
-  const refresh = useCallback(async (accts: SnapAdAccount[], start: string, end: string, force = false) => {
+  // ── Load from DB only (fast — no sync) ────────────────────────────────────
+  const loadFromDb = useCallback(async (accts: SnapAdAccount[], start: string, end: string) => {
+    if (accts.length === 0) return;
+    setLoading(true);
+    setError(null);
+
+    const [currentResults, histResults] = await Promise.all([
+      Promise.allSettled(
+        accts.map((a) =>
+          fetch(`/api/reporting/combined?adAccountId=${a.id}&startDate=${start}&endDate=${end}`)
+            .then((r) => r.json() as Promise<{ rows: CombinedRow[]; eur_to_usd: number }>)
+        )
+      ),
+      Promise.allSettled(
+        accts.map((a) =>
+          fetch(`/api/reporting/combined?adAccountId=${a.id}&startDate=${dateMinus(start, 3)}&endDate=${dateMinus(start, 1)}`)
+            .then((r) => r.json() as Promise<{ rows: CombinedRow[] }>)
+        )
+      ),
+    ]);
+
+    const allRows = currentResults.flatMap((r) => r.status === "fulfilled" ? (r.value.rows ?? []) : []);
+    setRows(allRows);
+    const first = currentResults.find((r) => r.status === "fulfilled");
+    if (first?.status === "fulfilled") setEurToUsd(first.value.eur_to_usd ?? 1.08);
+    setHistoricalRows(histResults.flatMap((r) => r.status === "fulfilled" ? (r.value.rows ?? []) : []));
+    setLastLoaded(new Date());
+    setLoading(false);
+    return allRows.length;
+  }, []);
+
+  // ── Sync then reload (slow — hits Snapchat + KingsRoad APIs) ──────────────
+  const syncAndReload = useCallback(async (accts: SnapAdAccount[], start: string, end: string, force = true) => {
     if (accts.length === 0 || isRefreshing.current) return;
     isRefreshing.current = true;
     setSyncing(true);
@@ -68,36 +100,9 @@ export default function PerformancePage() {
     );
 
     setSyncing(false);
-    setLoading(true);
-
-    const results = await Promise.allSettled(
-      accts.map((a) =>
-        fetch(`/api/reporting/combined?adAccountId=${a.id}&startDate=${start}&endDate=${end}`)
-          .then((r) => r.json() as Promise<{ rows: CombinedRow[]; eur_to_usd: number }>)
-      )
-    );
-
-    const allRows = results.flatMap((r) => r.status === "fulfilled" ? (r.value.rows ?? []) : []);
-    setRows(allRows);
-
-    const first = results.find((r) => r.status === "fulfilled");
-    if (first?.status === "fulfilled") setEurToUsd(first.value.eur_to_usd ?? 1.08);
-
-    // Also fetch historical data (3 days before selected range) for -1D/-2D/-3D ROI columns
-    const histEnd = dateMinus(start, 1);
-    const histStart = dateMinus(start, 3);
-    const histResults = await Promise.allSettled(
-      accts.map((a) =>
-        fetch(`/api/reporting/combined?adAccountId=${a.id}&startDate=${histStart}&endDate=${histEnd}`)
-          .then((r) => r.json() as Promise<{ rows: CombinedRow[] }>)
-      )
-    );
-    setHistoricalRows(histResults.flatMap((r) => r.status === "fulfilled" ? (r.value.rows ?? []) : []));
-
-    setLastSynced(new Date());
-    setLoading(false);
+    await loadFromDb(accts, start, end);
     isRefreshing.current = false;
-  }, []);
+  }, [loadFromDb]);
 
   const loadSquadDetails = useCallback(async (accts: SnapAdAccount[]) => {
     if (accts.length === 0) return;
@@ -134,7 +139,6 @@ export default function PerformancePage() {
         const r = results[i];
         const a = accts[i];
         if (r.status === "fulfilled") {
-          // Replace squads for this account; keep entries from other accounts intact.
           for (const [squadId, d] of next) {
             if (d.ad_account_id === a.id) next.delete(squadId);
           }
@@ -171,52 +175,50 @@ export default function PerformancePage() {
     });
   }, []);
 
-  // Auto-load on first available accounts
+  // ── On mount: load from DB immediately (cron keeps it fresh) ──────────────
   const didLoad = useRef(false);
   useEffect(() => {
     if (activeAccounts.length > 0 && !didLoad.current) {
       didLoad.current = true;
-      void refresh(activeAccounts, startDate, endDate);
+      void loadFromDb(activeAccounts, startDate, endDate).then((count) => {
+        // If DB has no data for this range, auto-sync to seed it.
+        if (count === 0) {
+          void syncAndReload(activeAccounts, startDate, endDate, true);
+        }
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAccounts]);
 
-  // Load squad details after rows populate
+  // ── Load squad details after rows populate ─────────────────────────────────
   useEffect(() => {
     if (rows.length > 0 && activeAccounts.length > 0) {
       void loadSquadDetails(activeAccounts);
     }
   }, [rows, activeAccounts, loadSquadDetails]);
 
-  // Auto-refresh every 15 min using a ref to avoid stale closure
-  const latestParams = useRef({ accts: activeAccounts, start: startDate, end: endDate });
+  // ── "X min ago" display clock ──────────────────────────────────────────────
   useEffect(() => {
-    latestParams.current = { accts: activeAccounts, start: startDate, end: endDate };
-  }, [activeAccounts, startDate, endDate]);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      const { accts, start, end } = latestParams.current;
-      void refresh(accts, start, end);
-    }, 15 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [refresh]);
-
-  // "X min ago" display clock
-  useEffect(() => {
-    if (!lastSynced) return;
+    if (!lastLoaded) return;
     function tick() {
-      setMinutesAgo(Math.floor((Date.now() - lastSynced!.getTime()) / 60_000));
+      setMinutesAgo(Math.floor((Date.now() - lastLoaded!.getTime()) / 60_000));
     }
     tick();
     const id = setInterval(tick, 60_000);
     return () => clearInterval(id);
-  }, [lastSynced]);
+  }, [lastLoaded]);
 
   function handleDateChange(start: string, end: string) {
     setStartDate(start);
     setEndDate(end);
-    void refresh(activeAccounts, start, end, true);
+    // Load from DB first; if empty, the auto-seed in loadFromDb's .then handles it.
+    void loadFromDb(activeAccounts, start, end).then((count) => {
+      if (count === 0) void syncAndReload(activeAccounts, start, end, true);
+    });
+  }
+
+  function handleManualRefresh() {
+    void syncAndReload(activeAccounts, startDate, endDate, true);
   }
 
   return (
@@ -228,15 +230,26 @@ export default function PerformancePage() {
 
       <div className="flex flex-wrap gap-3 mb-5 items-center">
         <DateRangePicker startDate={startDate} endDate={endDate} onChange={handleDateChange} />
-        {(syncing || loading) && (
+
+        {/* Manual refresh button */}
+        <button
+          onClick={handleManualRefresh}
+          disabled={syncing || loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {syncing ? <Spinner /> : <span>↻</span>}
+          {syncing ? "Syncing…" : "Refresh"}
+        </button>
+
+        {loading && !syncing && (
           <div className="flex items-center gap-1.5 text-gray-400 text-sm">
             <Spinner />
-            {syncing ? "Syncing…" : "Loading…"}
+            Loading…
           </div>
         )}
         {!syncing && !loading && minutesAgo !== null && (
           <span className="text-xs text-gray-400">
-            ↻ {minutesAgo === 0 ? "just now" : `${minutesAgo} min ago`}
+            Updated {minutesAgo === 0 ? "just now" : `${minutesAgo} min ago`}
           </span>
         )}
       </div>
@@ -246,9 +259,9 @@ export default function PerformancePage() {
         <p className="text-xs text-amber-600 mb-2">{squadDetailsError}</p>
       )}
 
-      <KpiSummaryBar rows={kpiRows} isLoading={syncing || loading} />
+      <KpiSummaryBar rows={kpiRows} isLoading={loading && rows.length === 0} />
 
-      {!syncing && !loading && rows.length > 0 && (
+      {rows.length > 0 && (
         <PerformanceTable
           rows={rows}
           eurToUsd={eurToUsd}
@@ -265,13 +278,13 @@ export default function PerformancePage() {
         />
       )}
 
-      {!syncing && !loading && rows.length === 0 && lastSynced && (
+      {!loading && !syncing && rows.length === 0 && lastLoaded && (
         <p className="text-sm text-gray-500 mt-8 text-center">
-          No data found for the selected date range. Try a different range.
+          No data found for the selected date range. Try a different range or click Refresh.
         </p>
       )}
 
-      {!lastSynced && !syncing && !loading && activeAccounts.length === 0 && accounts.length > 0 && (
+      {!lastLoaded && !loading && !syncing && activeAccounts.length === 0 && accounts.length > 0 && (
         <p className="text-sm text-gray-400 mt-12 text-center">
           Loading account data…
         </p>

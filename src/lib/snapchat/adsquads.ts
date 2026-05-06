@@ -2,9 +2,11 @@ import { snapFetch } from "./client";
 import { getCampaigns } from "./campaigns";
 import type { SnapAdSquadPayload, SnapAdSquad, SnapBatchResponse, SnapApiItem } from "@/types/snapchat";
 
-export async function getAdSquads(campaignId: string): Promise<SnapAdSquad[]> {
+export async function getAdSquads(campaignId: string, token?: string): Promise<SnapAdSquad[]> {
   const data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
-    `/campaigns/${campaignId}/adsquads`
+    `/campaigns/${campaignId}/adsquads`,
+    {},
+    token
   );
   return (data.adsquads ?? [])
     .filter((item) => item.sub_request_status === "SUCCESS" && item.adsquad)
@@ -20,9 +22,9 @@ export async function getAdSquad(adSquadId: string): Promise<SnapAdSquad> {
   return item.adsquad;
 }
 
-export async function getAdSquadsForAccount(adAccountId: string): Promise<SnapAdSquad[]> {
-  const campaigns = await getCampaigns(adAccountId);
-  const results = await Promise.allSettled(campaigns.map((c) => getAdSquads(c.id)));
+export async function getAdSquadsForAccount(adAccountId: string, token?: string): Promise<SnapAdSquad[]> {
+  const campaigns = await getCampaigns(adAccountId, token);
+  const results = await Promise.allSettled(campaigns.map((c) => getAdSquads(c.id, token)));
   return results
     .filter((r): r is PromiseFulfilledResult<SnapAdSquad[]> => r.status === "fulfilled")
     .flatMap((r) => r.value);
@@ -74,7 +76,12 @@ export async function updateAdSquad(
   updates: { daily_budget_micro?: number; bid_micro?: number; status?: "ACTIVE" | "PAUSED" }
 ): Promise<SnapAdSquad> {
   const current = await getAdSquad(adSquadId);
-  const merged = { ...stripForPut(current), ...updates };
+  // Filter undefined values — spreading undefined overrides valid values from stripForPut,
+  // causing bid_micro to disappear from the PUT body and triggering E2771 on non-auto-bid squads.
+  const cleanUpdates = Object.fromEntries(
+    Object.entries(updates).filter(([, v]) => v !== undefined)
+  );
+  const merged = { ...stripForPut(current), ...cleanUpdates };
   const data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
     `/campaigns/${current.campaign_id}/adsquads`,
     {

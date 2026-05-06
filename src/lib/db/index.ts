@@ -1,6 +1,7 @@
 import { sql } from "@vercel/postgres";
 import { readFileSync } from "fs";
 import path from "path";
+import { encryptToken, decryptToken } from "./token-crypto";
 
 export { sql };
 
@@ -126,4 +127,56 @@ export async function releaseChannel(campaignSnapId: string, googleUserId: strin
       AND google_user_id = ${googleUserId}
       AND status = 'in-use'
   `;
+}
+
+// ─── Snapchat token storage (for server-side cron sync) ────────────────────
+// Only the refresh_token is persisted — access tokens are transient and
+// fetched fresh at sync time. Tokens are AES-256-GCM encrypted at rest.
+
+export interface UserTokenRow {
+  google_user_id: string;
+  refresh_token: string; // decrypted
+  ad_account_ids: Array<{ id: string; timezone: string }>;
+}
+
+export async function upsertUserToken(
+  googleUserId: string,
+  refreshToken: string
+): Promise<void> {
+  const enc = encryptToken(refreshToken);
+  await sql`
+    INSERT INTO user_snapchat_tokens (google_user_id, refresh_token_enc, updated_at)
+    VALUES (${googleUserId}, ${enc}, NOW())
+    ON CONFLICT (google_user_id)
+    DO UPDATE SET refresh_token_enc = EXCLUDED.refresh_token_enc, updated_at = NOW()
+  `;
+}
+
+export async function updateAdAccountIds(
+  googleUserId: string,
+  accounts: Array<{ id: string; timezone: string }>
+): Promise<void> {
+  await sql`
+    UPDATE user_snapchat_tokens
+    SET ad_account_ids = ${JSON.stringify(accounts)}::jsonb, updated_at = NOW()
+    WHERE google_user_id = ${googleUserId}
+  `;
+}
+
+export async function getAllUserTokens(): Promise<UserTokenRow[]> {
+  const { rows } = await sql<{
+    google_user_id: string;
+    refresh_token_enc: string;
+    ad_account_ids: Array<{ id: string; timezone: string }>;
+  }>`SELECT google_user_id, refresh_token_enc, ad_account_ids FROM user_snapchat_tokens`;
+
+  return rows.map((r) => ({
+    google_user_id: r.google_user_id,
+    refresh_token: decryptToken(r.refresh_token_enc),
+    ad_account_ids: r.ad_account_ids ?? [],
+  }));
+}
+
+export async function deleteUserToken(googleUserId: string): Promise<void> {
+  await sql`DELETE FROM user_snapchat_tokens WHERE google_user_id = ${googleUserId}`;
 }
