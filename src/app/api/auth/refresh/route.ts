@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { refreshAccessToken } from "@/lib/snapchat/auth";
 import { getSession, isSessionValid, isSnapchatConnected } from "@/lib/session";
+import { upsertUserToken } from "@/lib/db";
 
 export async function POST() {
   const session = await getSession();
@@ -28,6 +29,16 @@ export async function POST() {
     }
     session.snapExpiresAt = Date.now() + tokens.expires_in * 1000;
     await session.save();
+
+    // Keep DB token in sync so the cron always has a fresh refresh token.
+    if (session.googleUserId && (tokens.refresh_token || session.snapRefreshToken)) {
+      const rt = tokens.refresh_token || session.snapRefreshToken!;
+      try {
+        await upsertUserToken(session.googleUserId, rt);
+      } catch (e) {
+        console.warn("[auth/refresh] failed to persist token:", e);
+      }
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {

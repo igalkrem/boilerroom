@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, isSessionValid } from "@/lib/session";
+import { deleteUserToken } from "@/lib/db";
 
 export async function POST() {
   const session = await getSession();
@@ -27,12 +28,21 @@ export async function POST() {
     }
   }
 
+  const googleUserId = session.googleUserId;
   session.snapAccessToken = undefined;
   session.snapRefreshToken = undefined;
   session.snapExpiresAt = undefined;
   session.snapUserId = undefined;
   session.allowedAdAccountIds = undefined;
   await session.save();
+
+  if (googleUserId) {
+    try {
+      await deleteUserToken(googleUserId);
+    } catch (e) {
+      console.warn("[snapchat/disconnect] failed to delete stored token:", e);
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }

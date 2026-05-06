@@ -42,9 +42,10 @@ export async function getValidAccessToken(): Promise<string> {
 
 export async function snapFetch<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  tokenOverride?: string // optional token for server-side cron (skips session lookup)
 ): Promise<T> {
-  const accessToken = await getValidAccessToken();
+  const accessToken = tokenOverride ?? await getValidAccessToken();
 
   const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
 
@@ -60,8 +61,8 @@ export async function snapFetch<T>(
     headers: makeHeaders(accessToken),
   }));
 
-  // On 401, try refreshing once and retry (also via rateLimitedFetch for 429 safety).
-  if (res.status === 401) {
+  // On 401, try refreshing once and retry (only for session-based calls; cron uses a pre-refreshed token).
+  if (res.status === 401 && !tokenOverride) {
     const session = await getSession();
     if (!isSnapchatConnected(session)) throw new Error("snapchat_not_connected");
 

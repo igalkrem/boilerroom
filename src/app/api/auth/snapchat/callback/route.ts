@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeCodeForTokens } from "@/lib/snapchat/auth";
 import { getSession, isSessionValid } from "@/lib/session";
+import { upsertUserToken } from "@/lib/db";
 
 const SNAPCHAT_API_BASE = "https://adsapi.snapchat.com/v1";
 
@@ -53,6 +54,15 @@ export async function GET(request: NextRequest) {
     }
 
     await session.save();
+
+    // Persist refresh token in DB so the server-side cron can sync without a browser session.
+    if (session.googleUserId && tokens.refresh_token) {
+      try {
+        await upsertUserToken(session.googleUserId, tokens.refresh_token);
+      } catch (e) {
+        console.warn("[auth/snapchat/callback] failed to persist token:", e);
+      }
+    }
 
     return NextResponse.redirect(`${appUrl}/dashboard/traffic-sources`);
   } catch (err) {

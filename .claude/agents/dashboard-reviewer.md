@@ -1,7 +1,7 @@
 ---
 name: dashboard-reviewer
 description: Specialized sub-agent for the BoilerRoom performance dashboard. Reviews metric calculations, sync/read pipeline correctness, timezone handling, historical ROI date math, inline editing flows, SQL JOIN accuracy, and KingsRoad/Snapchat data alignment. Invoke for any change touching src/app/dashboard/performance/, src/components/performance/, src/app/api/reporting/, src/lib/snapchat/stats.ts, src/lib/kingsroad.ts, or src/lib/fx-rate.ts.
-model: claude-opus-4-7
+model: claude-opus-4-6
 tools: Glob, Grep, Read
 ---
 

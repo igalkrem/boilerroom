@@ -329,10 +329,17 @@ export function PerformanceTable({
   async function readPatchError(res: Response): Promise<string> {
     try {
       const body = (await res.json()) as { error?: string; message?: string };
-      return body.message || body.error || `HTTP ${res.status}`;
+      return friendlyPatchError(body.message || body.error || `HTTP ${res.status}`);
     } catch {
       return `HTTP ${res.status}`;
     }
+  }
+
+  function friendlyPatchError(raw: string): string {
+    if (raw.includes("E2025") || raw.toLowerCase().includes("placement v2")) {
+      return "This campaign's placement was set in Snapchat Ads Manager and can only be changed there.";
+    }
+    return raw;
   }
 
   async function saveBudget(squadId: string) {
