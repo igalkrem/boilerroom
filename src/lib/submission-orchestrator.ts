@@ -388,18 +388,14 @@ export async function runSubmission(
       // call_to_action is not valid on SNAP_AD type creatives (E2002 "call to action must be null")
       call_to_action: creativeType !== "SNAP_AD" && cr.callToAction ? cr.callToAction : undefined,
       top_snap_media_id: mediaIdMap.get(cr.id) ?? cr.mediaId ?? "",
-      ...(snapProfileId ? { profile_properties: { profile_id: snapProfileId } } : {}),
+      profile_properties: { profile_id: snapProfileId! },
       web_view_properties:
         cr.interactionType === "WEB_VIEW" && cr.webViewUrl
           ? { url: cr.webViewUrl }
           : undefined,
       deep_link_properties:
         cr.interactionType === "DEEP_LINK" && cr.deepLinkUrl
-          ? { deep_link_url: cr.deepLinkUrl }
-          : undefined,
-      app_install_properties:
-        cr.interactionType === "APP_INSTALL" && cr.deepLinkUrl
-          ? { app_link_url: cr.deepLinkUrl }
+          ? { deep_link_uri: cr.deepLinkUrl }
           : undefined,
     };
   });

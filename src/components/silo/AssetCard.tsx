@@ -123,6 +123,13 @@ export function AssetCard({
             {Math.floor(asset.durationSeconds / 60)}:{String(Math.round(asset.durationSeconds % 60)).padStart(2, "0")}
           </div>
         )}
+
+        {/* Warn if video has no transcoded version — uploaded before H.264 pipeline */}
+        {asset.mediaType === "VIDEO" && !asset.optimizedUrl && (
+          <div className="absolute bottom-2 left-2 text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded font-medium">
+            ⚠ Re-upload for Snap
+          </div>
+        )}
       </div>
 
       {/* Info */}
