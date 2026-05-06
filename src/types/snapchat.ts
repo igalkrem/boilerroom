@@ -77,8 +77,8 @@ export interface SnapAdSquadPayload {
   targeting: {
     geos: Array<{ country_code: string }>;
     demographics?: Array<{
-      min_age?: number;
-      max_age?: number;
+      min_age?: string;
+      max_age?: string;
       genders?: Array<"MALE" | "FEMALE">;
     }>;
     devices?: Array<{
@@ -87,6 +87,7 @@ export interface SnapAdSquadPayload {
     }>;
   };
   placement_v2: {
+    // "CONTENT" (Stories/Publisher Stories) is not in the public spec but is accepted by the API.
     config: "AUTOMATIC" | "CONTENT" | "CUSTOM";
   };
   delivery_constraint: "DAILY_BUDGET" | "LIFETIME_BUDGET" | "REACH_AND_FREQUENCY";
@@ -113,8 +114,7 @@ export type CreativeType =
   | "SNAP_AD"
   | "APP_INSTALL"
   | "WEB_VIEW"
-  | "DEEP_LINK"
-  | "LONGFORM_VIDEO";
+  | "DEEP_LINK";
 
 export interface SnapCreativePayload {
   ad_account_id: string;
@@ -124,10 +124,9 @@ export interface SnapCreativePayload {
   top_snap_media_id: string;
   call_to_action?: string;
   brand_name?: string;
-  profile_properties?: { profile_id: string };
+  profile_properties: { profile_id: string };
   web_view_properties?: { url: string };
-  deep_link_properties?: { deep_link_url: string };
-  app_install_properties?: { app_link_url: string };
+  deep_link_properties?: { deep_link_uri: string };
 }
 
 export interface SnapCreative extends SnapCreativePayload {

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import { snapFetch } from "@/lib/snapchat/client";
+import { getCreative } from "@/lib/snapchat/creatives";
 import { z } from "zod";
 
 const bodySchema = z.object({
@@ -41,6 +42,9 @@ export async function PATCH(
   }
 
   try {
+    // Fetch current creative first — Snapchat PUT replaces the full object,
+    // so omitting fields like type/top_snap_media_id would reset them to defaults.
+    const existing = await getCreative(creativeId);
     const data = await snapFetch<{ creatives: Array<{ creative?: { id: string }; sub_request_status?: string }> }>(
       `/adaccounts/${body.adAccountId}/creatives`,
       {
@@ -49,7 +53,15 @@ export async function PATCH(
           creatives: [
             {
               id: creativeId,
-              name: body.creativeName,
+              ad_account_id: existing.ad_account_id,
+              name: existing.name,
+              type: existing.type,
+              top_snap_media_id: existing.top_snap_media_id,
+              ...(existing.headline !== undefined ? { headline: existing.headline } : {}),
+              ...(existing.call_to_action ? { call_to_action: existing.call_to_action } : {}),
+              ...(existing.brand_name ? { brand_name: existing.brand_name } : {}),
+              ...(existing.profile_properties ? { profile_properties: existing.profile_properties } : {}),
+              ...(existing.deep_link_properties ? { deep_link_properties: existing.deep_link_properties } : {}),
               web_view_properties: { url: body.webViewUrl },
             },
           ],
