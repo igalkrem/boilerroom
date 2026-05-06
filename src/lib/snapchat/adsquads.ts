@@ -30,8 +30,10 @@ export async function getAdSquadsForAccount(adAccountId: string): Promise<SnapAd
 
 // Fields Snapchat will accept on a PUT /adsquads/{id} body. Anything else
 // (created_at, updated_at, delivery_status, effective_status, forced_view_eligibility,
-// auto_bid, ranking_score, etc.) is server-computed and causes sub_request_status: "ERROR"
-// when echoed back, which manifests as a silent no-op (HTTP 200 with old object).
+// auto_bid, ranking_score, placement_v2, etc.) is server-computed or locked and causes
+// sub_request_status: "ERROR" or E2025 when echoed back.
+// placement_v2 is intentionally excluded: squads created with placement_v2 return E2025
+// ("Update is not supported for this entity") when it appears in the PUT body.
 const ADSQUAD_PUT_ALLOWED_FIELDS = [
   "id",
   "campaign_id",
@@ -39,7 +41,6 @@ const ADSQUAD_PUT_ALLOWED_FIELDS = [
   "type",
   "status",
   "targeting",
-  "placement_v2",
   "delivery_constraint",
   "billing_event",
   "optimization_goal",
@@ -58,7 +59,12 @@ function stripForPut(adsquad: SnapAdSquad): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const k of ADSQUAD_PUT_ALLOWED_FIELDS) {
     const v = (adsquad as unknown as Record<string, unknown>)[k];
-    if (v !== undefined) out[k] = v;
+    // Exclude null/undefined — null from the API response is not the same as "not set"
+    // and sending bid_micro: null triggers E2771 "Bid is required on ad squad".
+    // Also exclude bid_micro: 0 (auto-bid squads return 0; Snapchat still rejects it).
+    if (v == null) continue;
+    if (k === "bid_micro" && (typeof v !== "number" || v <= 0)) continue;
+    out[k] = v;
   }
   return out;
 }
