@@ -96,8 +96,14 @@ export async function GET(request: NextRequest) {
       ) k
         ON  s.ad_squad_id  = k.custom_channel_name
         AND s.stat_date    = k.record_date
-      LEFT JOIN feed_provider_channels fpc
-        ON  fpc.ad_squad_snap_id = s.ad_squad_id
+      LEFT JOIN LATERAL (
+        SELECT channel_id FROM feed_provider_channels WHERE ad_squad_snap_id = s.ad_squad_id
+        UNION ALL
+        SELECT channel_id FROM feed_provider_channels
+        WHERE SPLIT_PART(channel_id, '+', 1) != ''
+          AND s.ad_squad_name ILIKE '%' || SPLIT_PART(channel_id, '+', 1) || '%'
+        LIMIT 1
+      ) fpc ON true
       LEFT JOIN (
         SELECT
           custom_channel_id,
