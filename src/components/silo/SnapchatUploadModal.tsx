@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { updateSnapchatUpload, getAssetById } from "@/lib/silo";
 import { uploadBlobToSnapchat, PollTimeoutError } from "@/lib/uploadMediaToSnapchat";
+import { loadAdAccountConfigs } from "@/lib/adAccounts";
 import type { SiloAsset, SnapchatUploadStatus, SnapchatUploadStage } from "@/types/silo";
 import type { SnapAdAccount } from "@/types/snapchat";
 
@@ -56,12 +57,17 @@ export function SnapchatUploadModal({ assets, isOpen, onClose, onComplete }: Sna
     fetch("/api/snapchat/ad-accounts")
       .then((r) => r.json())
       .then((data) => {
-        const rows: AccountRow[] = (data.accounts ?? []).map((a: SnapAdAccount) => ({
-          ...a,
-          uploadStatus: isBulk
-            ? undefined
-            : currentAsset.snapchatUploads.find((s) => s.adAccountId === a.id),
-        }));
+        const hiddenIds = new Set(
+          loadAdAccountConfigs().filter((c) => c.hidden).map((c) => c.id)
+        );
+        const rows: AccountRow[] = (data.accounts ?? [])
+          .filter((a: SnapAdAccount) => !hiddenIds.has(a.id))
+          .map((a: SnapAdAccount) => ({
+            ...a,
+            uploadStatus: isBulk
+              ? undefined
+              : currentAsset.snapchatUploads.find((s) => s.adAccountId === a.id),
+          }));
         setAccounts(rows);
       })
       .catch(() => setAccounts([]))
