@@ -1,5 +1,4 @@
 import { snapFetch } from "./client";
-import { getCampaigns } from "./campaigns";
 import type { SnapAdSquadPayload, SnapAdSquad, SnapBatchResponse, SnapApiItem } from "@/types/snapchat";
 
 export async function getAdSquads(campaignId: string, token?: string): Promise<SnapAdSquad[]> {
@@ -22,12 +21,19 @@ export async function getAdSquad(adSquadId: string): Promise<SnapAdSquad> {
   return item.adsquad;
 }
 
+export async function getAdSquadsByAccount(adAccountId: string, token?: string): Promise<SnapAdSquad[]> {
+  const data = await snapFetch<{ adsquads?: Array<SnapApiItem<SnapAdSquad>> }>(
+    `/adaccounts/${adAccountId}/adsquads`,
+    {},
+    token
+  );
+  return (data.adsquads ?? [])
+    .filter((item) => item.sub_request_status === "SUCCESS" && item.adsquad)
+    .map((item) => item.adsquad!);
+}
+
 export async function getAdSquadsForAccount(adAccountId: string, token?: string): Promise<SnapAdSquad[]> {
-  const campaigns = await getCampaigns(adAccountId, token);
-  const results = await Promise.allSettled(campaigns.map((c) => getAdSquads(c.id, token)));
-  return results
-    .filter((r): r is PromiseFulfilledResult<SnapAdSquad[]> => r.status === "fulfilled")
-    .flatMap((r) => r.value);
+  return getAdSquadsByAccount(adAccountId, token);
 }
 
 // Fields Snapchat will accept on a PUT /adsquads/{id} body. Anything else

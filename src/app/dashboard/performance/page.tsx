@@ -211,7 +211,10 @@ export default function PerformancePage() {
   function handleDateChange(start: string, end: string) {
     setStartDate(start);
     setEndDate(end);
-    void syncAndReload(activeAccounts, start, end, true);
+    // Load from DB first; if empty, the auto-seed in loadFromDb's .then handles it.
+    void loadFromDb(activeAccounts, start, end).then((count) => {
+      if (count === 0) void syncAndReload(activeAccounts, start, end, true);
+    });
   }
 
   function handleManualRefresh() {

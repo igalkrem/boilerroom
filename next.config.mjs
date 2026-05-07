@@ -16,7 +16,7 @@ const nextConfig = {
               "default-src 'self'",
               // Dev mode: webpack wraps modules in eval() for fast refresh
               // 'wasm-unsafe-eval' allows WebAssembly compilation (ffmpeg.wasm)
-              isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'" : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
+              isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'" : "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://*.public.blob.vercel-storage.com https://lh3.googleusercontent.com",
               "media-src 'self' blob: https://*.public.blob.vercel-storage.com",

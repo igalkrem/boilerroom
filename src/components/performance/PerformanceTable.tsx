@@ -287,7 +287,7 @@ export function PerformanceTable({
         cpc: a.swipes > 0 ? a.spend_usd / a.swipes : null,
         ctr: a.impressions > 0 ? (a.swipes / a.impressions) * 100 : null,
         cpr: a.funnel_requests > 0 ? a.spend_usd / a.funnel_requests : null,
-        rpr: a.funnel_clicks >= 10 && a.funnel_requests > 0 ? a.revenue_usd / a.funnel_requests : null,
+        rpr: a.funnel_requests > 0 ? a.revenue_usd / a.funnel_requests : null,
         profit: a.revenue_usd - a.spend_usd,
         cvr: a.swipes > 0 ? (a.funnel_clicks / a.swipes) * 100 : null,
         snap_cost_per_result: a.snap_results > 0 ? a.spend_usd / a.snap_results : null,
