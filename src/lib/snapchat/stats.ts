@@ -75,11 +75,22 @@ export async function getAdSquadStats(
   const endDateStr = endDateExclusive.toISOString().slice(0, 10);
   const endTime = `${endDateStr}T00:00:00.000${tzOffset(endDateStr, timezone)}`;
 
-  const data = await snapFetch<SnapStatsResponse>(
-    `/adsquads/${adSquadId}/stats?granularity=DAY&fields=impressions,swipes,spend,video_views,conversion_purchases,conversion_purchase_value&start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`,
-    {},
-    token
-  );
+  const baseFields = "impressions,swipes,spend,video_views";
+  const conversionFields = "conversion_purchases,conversion_purchase_value";
+  const buildUrl = (fields: string) =>
+    `/adsquads/${adSquadId}/stats?granularity=DAY&fields=${fields}&start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`;
+
+  let data: SnapStatsResponse;
+  try {
+    data = await snapFetch<SnapStatsResponse>(buildUrl(`${baseFields},${conversionFields}`), {}, token);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("E1004") && msg.includes("conversion_purchase_value")) {
+      data = await snapFetch<SnapStatsResponse>(buildUrl(baseFields), {}, token);
+    } else {
+      throw err;
+    }
+  }
 
   const rows: AdSquadStatRow[] = [];
   const stat = data.timeseries_stats?.[0]?.timeseries_stat;
