@@ -359,7 +359,7 @@ export function PerformanceTable({
 
   function friendlyPatchError(raw: string): string {
     if (raw.includes("E2025") || raw.toLowerCase().includes("placement v2")) {
-      return "This campaign's placement was set in Snapchat Ads Manager and can only be changed there.";
+      return "This ad squad's settings are locked — placement was set at creation and cannot be changed via API. Create a new campaign to modify it.";
     }
     return raw;
   }

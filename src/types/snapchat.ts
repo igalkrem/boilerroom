@@ -86,8 +86,10 @@ export interface SnapAdSquadPayload {
       os_type?: string;
     }>;
   };
-  placement_v2: {
+  placement_v2?: {
     // "CONTENT" (Stories/Publisher Stories) is not in the public spec but is accepted by the API.
+    // Omit this field for AUTOMATIC placement — sending it (even with config: "AUTOMATIC") causes
+    // Snapchat to lock the squad so budget/bid/status cannot be updated via API (E2025).
     config: "AUTOMATIC" | "CONTENT" | "CUSTOM";
   };
   delivery_constraint: "DAILY_BUDGET" | "LIFETIME_BUDGET" | "REACH_AND_FREQUENCY";
