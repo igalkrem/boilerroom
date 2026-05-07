@@ -79,9 +79,9 @@ export default function SiloTagsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Tags</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Tags</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Tags group creatives and control auto-naming. Files uploaded under a tag are named <span className="font-mono text-gray-700">prefix_v_001</span>, <span className="font-mono text-gray-700">prefix_v_002</span>…
+            Tags group creatives and control auto-naming. Files uploaded under a tag are named <span className="font-mono text-gray-700 dark:text-gray-300">prefix_v_001</span>, <span className="font-mono text-gray-700 dark:text-gray-300">prefix_v_002</span>…
           </p>
         </div>
         <Button variant="ghost" onClick={() => router.push("/dashboard/silo")}>
@@ -90,8 +90,8 @@ export default function SiloTagsPage() {
       </div>
 
       {/* Create form */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-800">Create New Tag</h2>
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
+        <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Create New Tag</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
           <Input
             label="Tag Name"
@@ -112,7 +112,7 @@ export default function SiloTagsPage() {
         </div>
         {newPrefix && (
           <p className="text-xs text-gray-500">
-            First file will be named: <span className="font-mono font-medium text-gray-700">{newPrefix}_v_001</span>
+            First file will be named: <span className="font-mono font-medium text-gray-700 dark:text-gray-300">{newPrefix}_v_001</span>
           </p>
         )}
         <Button onClick={handleCreate}>+ Create Tag</Button>
@@ -120,7 +120,7 @@ export default function SiloTagsPage() {
 
       {/* Tags list */}
       {tags.length === 0 ? (
-        <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center">
+        <div className="bg-white dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-12 text-center">
           <p className="text-gray-500 text-sm">No tags yet. Create one above.</p>
         </div>
       ) : (
@@ -147,17 +147,17 @@ export default function SiloTagsPage() {
               ) : (
                 <>
                   <div>
-                    <h2 className="font-semibold text-gray-900 text-base">{tag.name}</h2>
+                    <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">{tag.name}</h2>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Prefix: <span className="font-mono text-gray-700">{tag.prefix}</span>
-                      {" · "}Next: <span className="font-mono text-gray-700">{tag.prefix}_v_{String(tag.nextIndex).padStart(3, "0")}</span>
+                      Prefix: <span className="font-mono text-gray-700 dark:text-gray-300">{tag.prefix}</span>
+                      {" · "}Next: <span className="font-mono text-gray-700 dark:text-gray-300">{tag.prefix}_v_{String(tag.nextIndex).padStart(3, "0")}</span>
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="gray">{assetCounts[tag.id] ?? 0} asset{(assetCounts[tag.id] ?? 0) !== 1 ? "s" : ""}</Badge>
                   </div>
                   <p className="text-xs text-gray-400">Created {new Date(tag.createdAt).toLocaleDateString()}</p>
-                  <div className="flex gap-2 mt-auto pt-2 border-t border-gray-100">
+                  <div className="flex gap-2 mt-auto pt-2 border-t border-gray-100 dark:border-gray-700">
                     <Button size="sm" variant="secondary" className="flex-1" onClick={() => startEdit(tag)}>Edit</Button>
                     <Button size="sm" variant="ghost" className="flex-1 text-red-600 hover:text-red-700" onClick={() => handleDelete(tag)}>Delete</Button>
                   </div>

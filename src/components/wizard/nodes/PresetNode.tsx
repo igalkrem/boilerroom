@@ -29,7 +29,7 @@ export function PresetNode({ data }: {
         data.disabled
           ? "opacity-40 cursor-not-allowed"
           : "cursor-pointer hover:shadow-md"
-      } ${connected ? "" : "border-gray-200 bg-white hover:border-gray-300"}`}
+      } ${connected ? "" : "border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-500"}`}
       onClick={() => {
         if (data.disabled) return;
         const activeArticleIds = new Set(store.edges.providerToArticle.map((e) => e.articleId));
@@ -56,7 +56,7 @@ export function PresetNode({ data }: {
           <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: data.color }} />
         )}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-800 truncate">{data.preset.name}</p>
+          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{data.preset.name}</p>
           <p className="text-xs text-gray-400">
             {data.preset.adSquads[0]?.geoCountryCodes?.join(", ") ?? ""}
             {data.preset.adSquads[0]?.dailyBudgetUsd ? ` · $${data.preset.adSquads[0].dailyBudgetUsd}/day` : ""}
@@ -75,15 +75,15 @@ export function PresetNode({ data }: {
                   <button
                     type="button"
                     onClick={() => store.setDuplications(pe.articleId, data.preset.id, pe.duplications - 1)}
-                    className="w-5 h-5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded flex items-center justify-center"
+                    className="w-5 h-5 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-600 rounded flex items-center justify-center"
                   >
                     −
                   </button>
-                  <span className="text-xs font-medium text-gray-700 w-5 text-center">{pe.duplications}</span>
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300 w-5 text-center">{pe.duplications}</span>
                   <button
                     type="button"
                     onClick={() => store.setDuplications(pe.articleId, data.preset.id, pe.duplications + 1)}
-                    className="w-5 h-5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded flex items-center justify-center"
+                    className="w-5 h-5 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-600 rounded flex items-center justify-center"
                   >
                     +
                   </button>

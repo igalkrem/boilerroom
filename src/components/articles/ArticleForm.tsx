@@ -142,10 +142,10 @@ export function ArticleForm({ article }: ArticleFormProps) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
         <div className="space-y-4 max-w-md">
           {providers.length === 0 ? (
-            <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+            <div className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3">
               No feed providers yet.{" "}
               <a href="/dashboard/feed-providers" className="underline font-medium">
                 Create one first
@@ -229,10 +229,10 @@ export function ArticleForm({ article }: ArticleFormProps) {
       </div>
 
       {/* Allowed Headlines */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-semibold text-gray-800">Allowed Headlines</h2>
+            <h2 className="font-semibold text-gray-800 dark:text-gray-200">Allowed Headlines</h2>
             <p className="text-xs text-gray-500 mt-0.5">Max 34 characters each (Snapchat limit).</p>
           </div>
           <Button
@@ -268,8 +268,8 @@ export function ArticleForm({ article }: ArticleFormProps) {
                     placeholder="Enter headline (max 34 chars)"
                     maxLength={34}
                     {...register(`allowedHeadlines.${i}.text`)}
-                    className={`flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400 ${
-                      errors.allowedHeadlines?.[i]?.text ? "border-red-400" : "border-gray-200"
+                    className={`flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400 dark:bg-gray-700 dark:text-gray-100 ${
+                      errors.allowedHeadlines?.[i]?.text ? "border-red-400" : "border-gray-200 dark:border-gray-600"
                     }`}
                   />
                   <Button
@@ -295,7 +295,7 @@ export function ArticleForm({ article }: ArticleFormProps) {
                   placeholder="RAC"
                   maxLength={100}
                   {...register(`allowedHeadlines.${i}.rac`)}
-                  className="ml-7 w-[calc(100%-1.75rem)] px-3 py-1.5 text-xs text-gray-400 placeholder-gray-300 border border-gray-100 bg-gray-50 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-300 focus:border-cyan-300"
+                  className="ml-7 w-[calc(100%-1.75rem)] px-3 py-1.5 text-xs text-gray-400 placeholder-gray-300 border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-300 focus:border-cyan-300"
                 />
               </div>
             ))}
@@ -308,7 +308,7 @@ export function ArticleForm({ article }: ArticleFormProps) {
         )}
       </div>
 
-      <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+      <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
         <Button
           type="button"
           variant="ghost"

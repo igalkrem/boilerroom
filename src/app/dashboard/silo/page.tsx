@@ -102,14 +102,14 @@ export default function SiloPage() {
   }
 
   const selectCls =
-    "border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500";
+    "border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-300 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-500";
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Silo</h1>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Silo</h1>
           <p className="text-sm text-gray-500 mt-1">Your media library. Upload once, reuse everywhere.</p>
         </div>
         <div className="flex gap-2">
@@ -134,8 +134,8 @@ export default function SiloPage() {
 
       {/* Bulk action bar */}
       {bulkMode && selectedIds.size > 0 && (
-        <div className="sticky top-0 z-10 bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
-          <span className="text-sm font-medium text-gray-700">{selectedIds.size} selected</span>
+        <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{selectedIds.size} selected</span>
           <div className="flex gap-2">
             <button
               onClick={handleBulkDelete}
@@ -152,7 +152,7 @@ export default function SiloPage() {
           </div>
           <button
             onClick={() => setSelectedIds(new Set())}
-            className="ml-auto text-xs text-gray-400 hover:text-gray-600"
+            className="ml-auto text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
           >
             Deselect all
           </button>
@@ -188,14 +188,14 @@ export default function SiloPage() {
 
       {/* Grid */}
       {assets.length === 0 ? (
-        <div className="bg-white border border-dashed border-gray-300 rounded-xl p-16 text-center space-y-3">
+        <div className="bg-white dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-16 text-center space-y-3">
           <p className="text-gray-500 text-sm">No media in your library yet.</p>
           <Button variant="secondary" onClick={() => router.push("/dashboard/silo/upload")}>
             Upload your first file
           </Button>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center">
+        <div className="bg-white dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-12 text-center">
           <p className="text-gray-500 text-sm">No assets match your filters.</p>
         </div>
       ) : (

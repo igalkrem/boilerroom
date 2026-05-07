@@ -67,9 +67,9 @@ export function FeedProviderModal({ provider, onClose, onSaved }: FeedProviderMo
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
       onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-700">
           <div className="flex-1 max-w-xs">
             <Input
               placeholder="Feed Provider Name"
@@ -82,14 +82,14 @@ export function FeedProviderModal({ provider, onClose, onSaved }: FeedProviderMo
           <button
             type="button"
             onClick={onClose}
-            className="ml-4 text-gray-400 hover:text-gray-600 text-xl leading-none"
+            className="ml-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none"
           >
             ✕
           </button>
         </div>
 
         {/* Tab bar */}
-        <div className="flex border-b border-gray-100 px-6">
+        <div className="flex border-b border-gray-100 dark:border-gray-700 px-6">
           {TABS.map((tab) => (
             <button
               key={tab.id}
@@ -97,8 +97,8 @@ export function FeedProviderModal({ provider, onClose, onSaved }: FeedProviderMo
               onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
-                  ? "border-gray-900 text-gray-900"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
+                  ? "border-gray-900 text-gray-900 dark:border-gray-100 dark:text-gray-100"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
               }`}
             >
               {tab.label}
@@ -145,7 +145,7 @@ export function FeedProviderModal({ provider, onClose, onSaved }: FeedProviderMo
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 dark:border-gray-700">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button onClick={handleSave}>
             {provider ? "Save Changes" : "Create Feed Provider"}

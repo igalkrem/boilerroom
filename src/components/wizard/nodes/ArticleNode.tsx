@@ -19,7 +19,7 @@ export function ArticleNode({ data }: {
   return (
     <div
       style={connected ? { borderColor: data.color, backgroundColor: `${data.color}12`, borderWidth: 2 } : undefined}
-      className={`relative rounded-2xl border-2 p-3 w-60 shadow-sm ${connected ? "" : "border-gray-200 bg-white"}`}
+      className={`relative rounded-2xl border-2 p-3 w-60 shadow-sm ${connected ? "" : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"}`}
     >
       <Handle
         type="target"
@@ -38,7 +38,7 @@ export function ArticleNode({ data }: {
       <div className="flex items-start gap-2">
         <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: data.color }} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-800 truncate">{data.article.slug}</p>
+          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{data.article.slug}</p>
           {data.article.query && (
             <p className="text-xs text-gray-400 truncate">{data.article.query}</p>
           )}
@@ -61,7 +61,7 @@ export function ArticleNode({ data }: {
       {connected && expanded && articleEdges.map((ae) => (
         <div
           key={`${ae.feedProviderId}-${ae.articleId}`}
-          className="nodrag mt-2 border border-blue-200 rounded-xl p-2 space-y-2 bg-blue-50/40"
+          className="nodrag mt-2 border border-blue-200 dark:border-blue-700 rounded-xl p-2 space-y-2 bg-blue-50/40 dark:bg-blue-900/20"
         >
           <div>
             <label className="text-xs text-gray-500 block mb-0.5">Headline</label>
@@ -73,7 +73,7 @@ export function ArticleNode({ data }: {
                   const rac = data.article.allowedHeadlines.find((h) => h.text === val)?.rac ?? "";
                   store.setArticleContent(ae.feedProviderId, data.article.id, val, ae.callToAction, rac);
                 }}
-                className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none"
+                className="w-full text-xs border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-2 py-1 focus:outline-none"
               >
                 <option value="">— Select headline —</option>
                 {data.article.allowedHeadlines.map((h) => (
@@ -89,7 +89,7 @@ export function ArticleNode({ data }: {
                 onChange={(e) =>
                   store.setArticleContent(ae.feedProviderId, data.article.id, e.target.value, ae.callToAction, "")
                 }
-                className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none"
+                className="w-full text-xs border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-2 py-1 focus:outline-none"
               />
             )}
           </div>
@@ -100,7 +100,7 @@ export function ArticleNode({ data }: {
               onChange={(e) =>
                 store.setArticleContent(ae.feedProviderId, data.article.id, ae.headline, e.target.value, ae.headlineRac)
               }
-              className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none"
+              className="w-full text-xs border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-2 py-1 focus:outline-none"
             >
               <option value="">— None —</option>
               {CTA_OPTIONS.map((c) => (

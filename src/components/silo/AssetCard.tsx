@@ -40,7 +40,7 @@ function snapAccountBadge(asset: SiloAsset, highlightAdAccountId?: string) {
       <span
         className={clsx(
           "text-[10px] px-1.5 py-0.5 rounded font-medium",
-          isCachedForHighlighted ? "bg-cyan-100 text-cyan-800" : "bg-gray-100 text-gray-500"
+          isCachedForHighlighted ? "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400" : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
         )}
       >
         {isCachedForHighlighted ? "✓ Cached" : "Snap ✓"}
@@ -72,15 +72,15 @@ export function AssetCard({
   return (
     <div
       className={clsx(
-        "bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col",
+        "bg-white dark:bg-gray-800 border rounded-xl overflow-hidden shadow-sm flex flex-col",
         isInteractive && "cursor-pointer transition-all",
         bulkMode && selected
           ? "border-cyan-400 shadow-md"
           : bulkMode
-          ? "border-gray-200 hover:border-cyan-300 hover:shadow-md"
+          ? "border-gray-200 dark:border-gray-700 hover:border-cyan-300 hover:shadow-md"
           : selectMode
-          ? "border-gray-200 hover:border-cyan-400 hover:shadow-md"
-          : "border-gray-200"
+          ? "border-gray-200 dark:border-gray-700 hover:border-cyan-400 hover:shadow-md"
+          : "border-gray-200 dark:border-gray-700"
       )}
       onClick={isInteractive ? handleClick : undefined}
     >
@@ -134,7 +134,7 @@ export function AssetCard({
 
       {/* Info */}
       <div className="p-3 flex flex-col gap-1.5 flex-1">
-        <p className="text-sm font-semibold text-gray-900 leading-snug truncate" title={asset.name}>
+        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug truncate" title={asset.name}>
           {asset.name}
         </p>
         {asset.originalFileName && (
@@ -154,7 +154,7 @@ export function AssetCard({
 
       {/* Actions — hidden in bulk or select mode */}
       {!isInteractive && (
-        <div className="px-3 pb-3 flex gap-1.5 flex-wrap border-t border-gray-100 pt-2.5">
+        <div className="px-3 pb-3 flex gap-1.5 flex-wrap border-t border-gray-100 dark:border-gray-700 pt-2.5">
           <Button size="sm" variant="secondary" onClick={() => onPreview(asset)}>
             Preview
           </Button>

@@ -13,7 +13,7 @@ function DataRow({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-[10px] text-gray-400 uppercase tracking-wide">{label}</p>
-      <p className="text-xs font-medium text-gray-700 truncate">{value}</p>
+      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">{value}</p>
     </div>
   );
 }
@@ -21,13 +21,13 @@ function DataRow({ label, value }: { label: string; value: string }) {
 function TrafficSourceBadge({ source }: { source: "snap" | "facebook" }) {
   if (source === "facebook") {
     return (
-      <span className="text-[10px] font-semibold bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-full shrink-0">
+      <span className="text-[10px] font-semibold bg-blue-50 text-blue-600 border border-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-700 px-2 py-0.5 rounded-full shrink-0">
         Facebook
       </span>
     );
   }
   return (
-    <span className="text-[10px] font-semibold bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded-full shrink-0">
+    <span className="text-[10px] font-semibold bg-yellow-50 text-yellow-700 border border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700 px-2 py-0.5 rounded-full shrink-0">
       Snap
     </span>
   );
@@ -85,13 +85,13 @@ export default function PresetsPage() {
     setPresets(loadPresets());
   }
 
-  const btnBase = "text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors";
+  const btnBase = "text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors dark:border-gray-600 dark:text-gray-400";
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Campaign Presets</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Campaign Presets</h1>
           <p className="text-sm text-gray-500 mt-1">
             Reusable ad set configurations — select a preset in the wizard canvas.
           </p>
@@ -105,7 +105,7 @@ export default function PresetsPage() {
       </div>
 
       {presets.length === 0 ? (
-        <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center space-y-3">
+        <div className="bg-white dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-12 text-center space-y-3">
           <p className="text-gray-500 text-sm">No presets saved yet.</p>
           <button
             onClick={() => router.push("/dashboard/presets/new")}
@@ -124,18 +124,18 @@ export default function PresetsPage() {
             return (
               <div
                 key={preset.id}
-                className="bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col"
+                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden flex flex-col"
               >
                 {/* Header */}
-                <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-2 border-b border-gray-100">
-                  <h2 className="font-semibold text-gray-900 text-sm leading-snug">{preset.name}</h2>
+                <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-2 border-b border-gray-100 dark:border-gray-700">
+                  <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug">{preset.name}</h2>
                   <TrafficSourceBadge source={preset.trafficSource ?? "snap"} />
                 </div>
 
                 {/* Provider warning */}
                 {preset.feedProviderId && !providerMap[preset.feedProviderId] && (
-                  <div className="px-4 py-1.5 bg-amber-50 border-b border-amber-100">
-                    <span className="text-xs text-amber-600">Provider not found</span>
+                  <div className="px-4 py-1.5 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-800">
+                    <span className="text-xs text-amber-600 dark:text-amber-400">Provider not found</span>
                   </div>
                 )}
 
@@ -150,7 +150,7 @@ export default function PresetsPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-2">
+                <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700 flex items-center gap-2">
                   <button
                     onClick={() => router.push(`/dashboard/presets/${preset.id}/edit`)}
                     className={`${btnBase} border-gray-200 text-gray-600 hover:border-gray-300 hover:text-gray-900`}

@@ -151,12 +151,12 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
   return (
     <div className="flex flex-col h-full">
       {/* Top nav */}
-      <div className="shrink-0 flex items-center gap-3 px-6 py-3 border-b border-gray-100 bg-white">
-        <span className="text-sm font-medium text-gray-700">Campaign Builder</span>
+      <div className="shrink-0 flex items-center gap-3 px-6 py-3 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900">
+        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Campaign Builder</span>
         <span className="text-gray-300 ml-2">·</span>
         <span
           className={`text-sm px-2 py-0.5 rounded-full font-medium ${
-            mode === "canvas" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"
+            mode === "canvas" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
           }`}
         >
           Build
@@ -164,7 +164,7 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
         <span className="text-gray-300">→</span>
         <span
           className={`text-sm px-2 py-0.5 rounded-full font-medium ${
-            mode === "review" ? "bg-blue-100 text-blue-700" : mode === "done" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400"
+            mode === "review" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : mode === "done" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-400"
           }`}
         >
           Review & Launch
@@ -172,7 +172,7 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
         {mode === "done" && (
           <>
             <span className="text-gray-300">→</span>
-            <span className="text-sm px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">
+            <span className="text-sm px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
               Done
             </span>
           </>
@@ -184,7 +184,7 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
         {mode === "done" ? (
           <div className="flex flex-col items-center justify-center h-full gap-4">
             <div className="text-4xl">{totalFailed === 0 ? "🎉" : "⚠️"}</div>
-            <h2 className="text-xl font-semibold text-gray-800">
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
               {totalSucceeded} campaign{totalSucceeded !== 1 ? "s" : ""} launched
               {totalFailed > 0 && `, ${totalFailed} failed`}
             </h2>

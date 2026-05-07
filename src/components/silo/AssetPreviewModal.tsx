@@ -43,14 +43,14 @@ export function AssetPreviewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           {editingName ? (
             <div className="flex items-center gap-2 flex-1">
               <input
-                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                className="border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 value={nameInput}
                 onChange={(e) => setNameInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") saveName(); if (e.key === "Escape") setEditingName(false); }}
@@ -61,9 +61,9 @@ export function AssetPreviewModal({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-gray-900">{asset.name}</h2>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{asset.name}</h2>
               <button
-                className="text-gray-400 hover:text-gray-600 text-sm"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-sm"
                 onClick={() => { setNameInput(asset.name); setEditingName(true); }}
                 title="Edit name"
               >
@@ -71,7 +71,7 @@ export function AssetPreviewModal({
               </button>
             </div>
           )}
-          <button className="text-gray-400 hover:text-gray-600 text-xl ml-4" onClick={onClose}>✕</button>
+          <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl ml-4" onClick={onClose}>✕</button>
         </div>
 
         {/* Body */}
@@ -102,21 +102,21 @@ export function AssetPreviewModal({
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Details</h3>
               <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
                 <dt className="text-gray-500">Type</dt>
-                <dd className="text-gray-900 font-medium">{asset.mediaType}</dd>
+                <dd className="text-gray-900 dark:text-gray-100 font-medium">{asset.mediaType}</dd>
                 <dt className="text-gray-500">Format</dt>
-                <dd className="text-gray-900">{asset.fileFormat}</dd>
+                <dd className="text-gray-900 dark:text-gray-100">{asset.fileFormat}</dd>
                 <dt className="text-gray-500">Size</dt>
-                <dd className="text-gray-900">{formatFileSize(asset.fileSize)}</dd>
+                <dd className="text-gray-900 dark:text-gray-100">{formatFileSize(asset.fileSize)}</dd>
                 {asset.resolution && (
                   <>
                     <dt className="text-gray-500">Resolution</dt>
-                    <dd className="text-gray-900">{asset.resolution}</dd>
+                    <dd className="text-gray-900 dark:text-gray-100">{asset.resolution}</dd>
                   </>
                 )}
                 {asset.durationSeconds != null && (
                   <>
                     <dt className="text-gray-500">Duration</dt>
-                    <dd className="text-gray-900">
+                    <dd className="text-gray-900 dark:text-gray-100">
                       {Math.floor(asset.durationSeconds / 60)}m {Math.round(asset.durationSeconds % 60)}s
                     </dd>
                   </>
@@ -128,7 +128,7 @@ export function AssetPreviewModal({
                   </>
                 )}
                 <dt className="text-gray-500">Uploaded</dt>
-                <dd className="text-gray-900">{new Date(asset.uploadDate).toLocaleString()}</dd>
+                <dd className="text-gray-900 dark:text-gray-100">{new Date(asset.uploadDate).toLocaleString()}</dd>
               </dl>
             </div>
 
@@ -142,14 +142,14 @@ export function AssetPreviewModal({
                   {readyUploads.map((s) => (
                     <li key={s.adAccountId} className="flex items-center gap-2 text-sm">
                       <span className="text-green-600">✅</span>
-                      <span className="text-gray-700">{s.adAccountName}</span>
+                      <span className="text-gray-700 dark:text-gray-300">{s.adAccountName}</span>
                       <span className="text-xs text-gray-400 font-mono truncate">{s.snapMediaId}</span>
                     </li>
                   ))}
                   {pendingUploads.map((s) => (
                     <li key={s.adAccountId} className="flex items-center gap-2 text-sm">
                       <span className="text-yellow-500">⏳</span>
-                      <span className="text-gray-700">{s.adAccountName}</span>
+                      <span className="text-gray-700 dark:text-gray-300">{s.adAccountName}</span>
                       <span className="text-xs text-gray-500">{s.stage}</span>
                     </li>
                   ))}
@@ -167,17 +167,17 @@ export function AssetPreviewModal({
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="text-gray-400 border-b border-gray-100">
+                      <tr className="text-gray-400 border-b border-gray-100 dark:border-gray-700">
                         <th className="text-left pb-1 font-medium">Campaign</th>
                         <th className="text-left pb-1 font-medium">Creative</th>
                         <th className="text-left pb-1 font-medium">Date</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
                       {asset.usageHistory.map((u, i) => (
                         <tr key={i}>
-                          <td className="py-1 text-gray-700 truncate max-w-[120px]">{u.campaignName}</td>
-                          <td className="py-1 text-gray-700 truncate max-w-[100px]">{u.creativeName}</td>
+                          <td className="py-1 text-gray-700 dark:text-gray-300 truncate max-w-[120px]">{u.campaignName}</td>
+                          <td className="py-1 text-gray-700 dark:text-gray-300 truncate max-w-[100px]">{u.creativeName}</td>
                           <td className="py-1 text-gray-400 whitespace-nowrap">{new Date(u.usedAt).toLocaleDateString()}</td>
                         </tr>
                       ))}

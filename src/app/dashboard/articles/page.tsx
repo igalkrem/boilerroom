@@ -140,14 +140,14 @@ export default function ArticlesPage() {
     "px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide cursor-pointer select-none hover:text-gray-700 whitespace-nowrap";
   const thStatic =
     "px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap";
-  const tdClass = "px-4 py-3 text-sm text-gray-700 align-middle";
+  const tdClass = "px-4 py-3 text-sm text-gray-700 dark:text-gray-300 align-middle";
 
   return (
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Articles</h1>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Articles</h1>
           <p className="text-sm text-gray-500 mt-1">
             Landing pages for paid campaigns. Each article belongs to a feed provider.
           </p>
@@ -158,7 +158,7 @@ export default function ArticlesPage() {
       </div>
 
       {articles.length === 0 ? (
-        <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center space-y-3">
+        <div className="bg-white dark:bg-gray-900 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-12 text-center space-y-3">
           <p className="text-gray-500 text-sm">No articles saved yet.</p>
           {providers.length === 0 && (
             <p className="text-xs text-gray-400">
@@ -185,12 +185,12 @@ export default function ArticlesPage() {
               placeholder="Search by keyword…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              className="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-cyan-400"
             />
             <select
               value={filterProvider}
               onChange={(e) => setFilterProvider(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              className="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
             >
               <option value="all">All providers</option>
               {providers.map((p) => (
@@ -210,10 +210,10 @@ export default function ArticlesPage() {
               <p className="text-gray-500 text-sm">No articles match your search.</p>
             </div>
           ) : (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
-                  <thead className="bg-gray-50 border-b border-gray-200">
+                  <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                     <tr>
                       <th className={thClass} onClick={() => toggleSort("provider")}>
                         Provider <SortIcon active={sortCol === "provider"} dir={sortDir} />
@@ -241,7 +241,7 @@ export default function ArticlesPage() {
                         <>
                           <tr
                             key={article.id}
-                            className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${i % 2 === 0 ? "" : "bg-gray-50/40"} ${isExpanded ? "border-b-0" : "last:border-0"}`}
+                            className={`border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${i % 2 === 0 ? "" : "bg-gray-50/40 dark:bg-gray-800/20"} ${isExpanded ? "border-b-0" : "last:border-0"}`}
                             style={{ borderLeft: `3px solid ${color}` }}
                           >
                             {/* Provider */}
@@ -262,7 +262,7 @@ export default function ArticlesPage() {
 
                             {/* Keyword */}
                             <td className={tdClass}>
-                              <span className="font-mono text-xs text-gray-800 break-all">
+                              <span className="font-mono text-xs text-gray-800 dark:text-gray-200 break-all">
                                 {article.slug}
                               </span>
                             </td>
@@ -270,7 +270,7 @@ export default function ArticlesPage() {
                             {/* Language */}
                             <td className={tdClass}>
                               {article.locale ? (
-                                <span className="text-xs text-gray-600">
+                                <span className="text-xs text-gray-600 dark:text-gray-300">
                                   {LOCALES[article.locale] ?? article.locale}
                                 </span>
                               ) : (
@@ -281,7 +281,7 @@ export default function ArticlesPage() {
                             {/* Domain */}
                             <td className={tdClass}>
                               {article.domain ? (
-                                <span className="text-xs font-mono text-gray-600 truncate max-w-[140px] block" title={article.domain}>
+                                <span className="text-xs font-mono text-gray-600 dark:text-gray-300 truncate max-w-[140px] block" title={article.domain}>
                                   {article.domain}
                                 </span>
                               ) : (
@@ -297,7 +297,7 @@ export default function ArticlesPage() {
                                 <button
                                   type="button"
                                   onClick={() => toggleExpand(article.id)}
-                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-cyan-100 hover:text-cyan-700 cursor-pointer transition-colors"
+                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-cyan-100 hover:text-cyan-700 cursor-pointer transition-colors"
                                 >
                                   {article.allowedHeadlines.length}
                                   <span className="ml-1 text-gray-400">{isExpanded ? "▲" : "▼"}</span>
@@ -316,7 +316,7 @@ export default function ArticlesPage() {
                                 <button
                                   type="button"
                                   onClick={() => router.push(`/dashboard/articles/${article.id}/edit`)}
-                                  className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                                  className="px-3 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                                 >
                                   Edit
                                 </button>
@@ -324,7 +324,7 @@ export default function ArticlesPage() {
                                   <button
                                     type="button"
                                     onClick={() => window.open(article.previewUrl, "_blank", "noopener")}
-                                    className="px-3 py-1 text-xs font-medium bg-cyan-50 text-cyan-700 border border-cyan-200 rounded-lg hover:bg-cyan-100 transition-colors"
+                                    className="px-3 py-1 text-xs font-medium bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 border border-cyan-200 rounded-lg hover:bg-cyan-100 transition-colors"
                                   >
                                     Preview
                                   </button>
@@ -332,7 +332,7 @@ export default function ArticlesPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleDelete(article.id, article.slug)}
-                                  className="px-3 py-1 text-xs font-medium bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                                  className="px-3 py-1 text-xs font-medium bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
                                 >
                                   Delete
                                 </button>
@@ -344,17 +344,17 @@ export default function ArticlesPage() {
                           {isExpanded && article.allowedHeadlines.length > 0 && (
                             <tr
                               key={`${article.id}-expanded`}
-                              className="bg-gray-50/80 border-b border-gray-100 last:border-0"
+                              className="bg-gray-50/80 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700 last:border-0"
                               style={{ borderLeft: `3px solid ${color}` }}
                             >
                               <td colSpan={TOTAL_COLS} className="px-8 py-3">
                                 <div className="space-y-1.5">
                                   {article.allowedHeadlines.map((h, idx) => (
                                     <div key={idx} className="flex items-center gap-3 text-xs">
-                                      <span className="text-gray-300 w-4 text-right shrink-0 font-mono">
+                                      <span className="text-gray-300 dark:text-gray-600 w-4 text-right shrink-0 font-mono">
                                         {idx + 1}.
                                       </span>
-                                      <span className="font-mono text-gray-800 flex-1">{h.text}</span>
+                                      <span className="font-mono text-gray-800 dark:text-gray-200 flex-1">{h.text}</span>
                                       {h.rac && (
                                         <span className="text-gray-400 shrink-0">
                                           rac:{" "}

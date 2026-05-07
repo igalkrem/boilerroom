@@ -98,7 +98,7 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
   return (
     <div className="space-y-5">
       <div>
-        <p className="text-sm font-medium text-gray-700 mb-2">Channel Setup Type</p>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Channel Setup Type</p>
         <div className="flex gap-4">
           {(["provider-supplied", "parameter-based"] as const).map((type) => (
             <label key={type} className="flex items-center gap-2 cursor-pointer">
@@ -107,7 +107,7 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
                 checked={channelConfig.type === type}
                 onChange={() => onChange({ ...channelConfig, type })}
               />
-              <span className="text-sm text-gray-700">
+              <span className="text-sm text-gray-700 dark:text-gray-300">
                 {type === "provider-supplied" ? "Provider supplies channel list" : "Parameter-based (URL Parameters tab)"}
               </span>
             </label>
@@ -116,7 +116,7 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
       </div>
 
       {channelConfig.type === "parameter-based" && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-600">
+        <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 text-sm text-gray-600 dark:text-gray-300">
           Configure the channel parameter in the <strong>URL Parameters</strong> tab using the{" "}
           <code className="bg-gray-100 px-1 rounded">{"{{adSet.id}}"}</code> macro or similar.
         </div>
@@ -131,11 +131,11 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
               onChange={(e) => onChange({ ...channelConfig, addChannelIdToCampaignName: e.target.checked })}
               className="rounded border-gray-300"
             />
-            <span className="text-sm text-gray-700">Add channel ID to campaign name (appended with <code>-</code>)</span>
+            <span className="text-sm text-gray-700 dark:text-gray-300">Add channel ID to campaign name (appended with <code>-</code>)</span>
           </label>
 
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">Upload Channel List (CSV)</p>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Upload Channel List (CSV)</p>
             <p className="text-xs text-gray-500 mb-2">Column A: Channel ID — Column B: Traffic source (default: Snap)</p>
             <div className="flex gap-2">
               <input
@@ -153,7 +153,7 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
                 type="button"
                 disabled={uploading}
                 onClick={() => fileRef.current?.click()}
-                className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                className="px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
               >
                 {uploading ? "Uploading…" : "Choose CSV…"}
               </button>
@@ -170,23 +170,23 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
                 const label = group === "inUse" ? "In Use" : group.charAt(0).toUpperCase() + group.slice(1);
                 const color = group === "available" ? "green" : group === "inUse" ? "blue" : "yellow";
                 return (
-                  <div key={group} className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div key={group} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                     <button
                       type="button"
                       onClick={() => setExpandedGroup(expandedGroup === group ? null : group)}
-                      className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 text-left"
+                      className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
                     >
-                      <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
                         <span className={`inline-block w-2 h-2 rounded-full bg-${color}-400`} />
                         {label}
                       </span>
                       <span className="text-xs text-gray-500">{items.length} channels {expandedGroup === group ? "▲" : "▼"}</span>
                     </button>
                     {expandedGroup === group && items.length > 0 && (
-                      <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                      <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-48 overflow-y-auto">
                         {items.map((ch) => (
                           <div key={ch.id} className="flex items-center gap-3 px-4 py-2 text-xs">
-                            <span className="font-mono text-gray-800">{ch.channel_id}</span>
+                            <span className="font-mono text-gray-800 dark:text-gray-200">{ch.channel_id}</span>
                             <span className="text-gray-400">{ch.traffic_source}</span>
                             {ch.campaign_snap_id && (
                               <span className="text-gray-300 font-mono ml-auto">{ch.campaign_snap_id.slice(0, 12)}…</span>

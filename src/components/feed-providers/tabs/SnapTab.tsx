@@ -79,13 +79,13 @@ function NamingTemplateEditor({ segments, onChange }: NamingTemplateEditorProps)
               <span className="text-xs text-violet-300 select-none px-0.5">|</span>
             )}
             {seg.type === "literal" ? (
-              <div className="flex items-center gap-1 bg-white border border-violet-200 rounded-lg px-2 py-1">
+              <div className="flex items-center gap-1 bg-white dark:bg-gray-800 border border-violet-200 rounded-lg px-2 py-1">
                 <input
                   type="text"
                   value={seg.value}
                   onChange={(e) => updateLiteral(idx, e.target.value)}
                   placeholder="text…"
-                  className="text-xs text-gray-700 outline-none bg-transparent"
+                  className="text-xs text-gray-700 dark:text-gray-300 outline-none bg-transparent"
                   style={{ width: `${Math.max(48, (seg.value.length + 3) * 7)}px` }}
                 />
                 <button
@@ -120,7 +120,7 @@ function NamingTemplateEditor({ segments, onChange }: NamingTemplateEditorProps)
         <button
           type="button"
           onClick={addLiteral}
-          className="px-2 py-1 text-xs bg-white border border-violet-200 text-violet-600 rounded-lg hover:bg-violet-50 font-medium"
+          className="px-2 py-1 text-xs bg-white dark:bg-gray-800 border border-violet-200 text-violet-600 rounded-lg hover:bg-violet-50 font-medium"
         >
           Text
         </button>
@@ -141,7 +141,7 @@ function NamingTemplateEditor({ segments, onChange }: NamingTemplateEditorProps)
       {segments.length > 0 && (
         <div className="flex items-center gap-2 pt-1">
           <span className="text-xs text-violet-500 font-medium shrink-0">Preview:</span>
-          <span className="font-mono text-xs bg-white rounded-lg px-3 py-1.5 border border-violet-100 text-violet-700 truncate">
+          <span className="font-mono text-xs bg-white dark:bg-gray-800 rounded-lg px-3 py-1.5 border border-violet-100 text-violet-700 dark:text-violet-400 truncate">
             {preview}
           </span>
         </div>
@@ -204,7 +204,7 @@ export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: 
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-sm font-medium text-gray-700">Assigned Ad Accounts</p>
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Assigned Ad Accounts</p>
           <Link
             href="/dashboard/traffic-sources"
             className="text-xs text-cyan-600 hover:text-cyan-700 underline"
@@ -220,11 +220,11 @@ export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: 
             </Link>
           </p>
         ) : (
-          <div className="space-y-1 border border-gray-200 rounded-lg p-2 bg-gray-50">
+          <div className="space-y-1 border border-gray-200 dark:border-gray-700 rounded-lg p-2 bg-gray-50 dark:bg-gray-800">
             {assignedAccountNames.map((acc) => (
               <div key={acc.id} className="flex items-center gap-2 px-1.5 py-1">
                 <span className="w-2 h-2 rounded-full bg-cyan-500 shrink-0" />
-                <span className="text-sm text-gray-800">{acc.name}</span>
+                <span className="text-sm text-gray-800 dark:text-gray-200">{acc.name}</span>
                 <span className="text-xs text-gray-400 font-mono ml-auto">{acc.id.slice(0, 8)}…</span>
               </div>
             ))}
@@ -233,7 +233,7 @@ export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: 
       </div>
 
       <div>
-        <p className="text-sm font-medium text-gray-700 mb-2">Allowed Pixels</p>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Allowed Pixels</p>
         {pixelOptions.length === 0 ? (
           <p className="text-xs text-gray-400">
             No pixels saved.{" "}
@@ -242,16 +242,16 @@ export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: 
             </Link>
           </p>
         ) : (
-          <div className="space-y-1 border border-gray-200 rounded-lg p-2">
+          <div className="space-y-1 border border-gray-200 dark:border-gray-700 rounded-lg p-2">
             {pixelOptions.map((px) => (
-              <label key={px.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer">
+              <label key={px.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={snapConfig.allowedPixelIds.includes(px.id)}
                   onChange={() => togglePixel(px.id)}
                   className="rounded border-gray-300"
                 />
-                <span className="text-sm text-gray-800">{px.name}</span>
+                <span className="text-sm text-gray-800 dark:text-gray-200">{px.name}</span>
                 <span className="text-xs text-gray-400 font-mono ml-auto">{px.pixelId.slice(0, 10)}…</span>
               </label>
             ))}
@@ -259,10 +259,10 @@ export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: 
         )}
       </div>
 
-      <hr className="border-gray-100" />
+      <hr className="border-gray-100 dark:border-gray-700" />
 
       <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-4">URL Parameters</h3>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">URL Parameters</h3>
         <UrlParametersTab
           urlConfig={urlConfig}
           onChange={onUrlConfigChange}
@@ -270,18 +270,18 @@ export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: 
         />
       </div>
 
-      <hr className="border-gray-100" />
+      <hr className="border-gray-100 dark:border-gray-700" />
 
       {/* Campaign Naming Template */}
-      <div className="bg-violet-50 border border-violet-100 rounded-xl p-4 space-y-4">
+      <div className="bg-violet-50 dark:bg-violet-900/20 border border-violet-100 dark:border-violet-800 rounded-xl p-4 space-y-4">
         <div className="flex items-center gap-2">
           <svg className="w-4 h-4 text-violet-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
           </svg>
-          <h3 className="text-sm font-semibold text-violet-800">Campaign Naming Template</h3>
+          <h3 className="text-sm font-semibold text-violet-800 dark:text-violet-400">Campaign Naming Template</h3>
         </div>
-        <p className="text-xs text-violet-600">
+        <p className="text-xs text-violet-600 dark:text-violet-400">
           Defines how campaign, ad set, and ad names are generated for Snap campaigns under this provider.
           Segments are joined with{" "}
           <code className="bg-white px-1 rounded border border-violet-100 font-mono"> | </code>.

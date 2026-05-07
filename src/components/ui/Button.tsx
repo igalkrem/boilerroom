@@ -24,9 +24,9 @@ export function Button({
         {
           "bg-cyan-500 hover:bg-cyan-400 text-gray-950 focus:ring-cyan-500":
             variant === "primary",
-          "bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 focus:ring-gray-300":
+          "bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 focus:ring-gray-300":
             variant === "secondary",
-          "hover:bg-gray-100 text-gray-700 focus:ring-gray-300": variant === "ghost",
+          "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 focus:ring-gray-300": variant === "ghost",
           "bg-red-600 hover:bg-red-700 text-white focus:ring-red-500":
             variant === "danger",
         },
