@@ -20,7 +20,7 @@ interface SnapTimeseriesEntry {
     spend?: number;
     video_views?: number;
     conversion_purchases?: number;
-    conversion_purchase_value?: number;
+    conversion_purchases_value?: number;
   };
 }
 
@@ -81,19 +81,19 @@ export async function getAdSquadStats(
 
   const isConvValueError = (e: unknown) => {
     const msg = e instanceof Error ? e.message : String(e);
-    return msg.includes("E1004") && msg.includes("conversion_purchase_value");
+    return msg.includes("E1004") && msg.includes("conversion_purchases_value");
   };
 
   let data: SnapStatsResponse;
   try {
     data = await snapFetch<SnapStatsResponse>(
-      buildUrl(`${baseFields},conversion_purchases,conversion_purchase_value`),
+      buildUrl(`${baseFields},conversion_purchases,conversion_purchases_value`),
       {},
       token
     );
   } catch (err) {
     if (!isConvValueError(err)) throw err;
-    // conversion_purchase_value rejected — try keeping conversion_purchases alone
+    // conversion_purchases_value rejected — try keeping conversion_purchases alone
     try {
       data = await snapFetch<SnapStatsResponse>(
         buildUrl(`${baseFields},conversion_purchases`),
@@ -120,7 +120,7 @@ export async function getAdSquadStats(
       spend_micro: toMicro(ts.stats.spend),
       video_views: ts.stats.video_views ?? 0,
       conversion_purchases: ts.stats.conversion_purchases ?? 0,
-      conversion_purchase_value_micro: toMicro(ts.stats.conversion_purchase_value),
+      conversion_purchase_value_micro: toMicro(ts.stats.conversion_purchases_value),
     });
   }
 
