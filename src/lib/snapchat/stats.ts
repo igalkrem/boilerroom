@@ -76,19 +76,34 @@ export async function getAdSquadStats(
   const endTime = `${endDateStr}T00:00:00.000${tzOffset(endDateStr, timezone)}`;
 
   const baseFields = "impressions,swipes,spend,video_views";
-  const conversionFields = "conversion_purchases,conversion_purchase_value";
   const buildUrl = (fields: string) =>
     `/adsquads/${adSquadId}/stats?granularity=DAY&fields=${fields}&start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`;
 
+  const isConvValueError = (e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    return msg.includes("E1004") && msg.includes("conversion_purchase_value");
+  };
+
   let data: SnapStatsResponse;
   try {
-    data = await snapFetch<SnapStatsResponse>(buildUrl(`${baseFields},${conversionFields}`), {}, token);
+    data = await snapFetch<SnapStatsResponse>(
+      buildUrl(`${baseFields},conversion_purchases,conversion_purchase_value`),
+      {},
+      token
+    );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("E1004") && msg.includes("conversion_purchase_value")) {
+    if (!isConvValueError(err)) throw err;
+    // conversion_purchase_value rejected — try keeping conversion_purchases alone
+    try {
+      data = await snapFetch<SnapStatsResponse>(
+        buildUrl(`${baseFields},conversion_purchases`),
+        {},
+        token
+      );
+    } catch (err2) {
+      if (!isConvValueError(err2)) throw err2;
+      // Both conversion fields rejected — fetch base fields only
       data = await snapFetch<SnapStatsResponse>(buildUrl(baseFields), {}, token);
-    } else {
-      throw err;
     }
   }
 
