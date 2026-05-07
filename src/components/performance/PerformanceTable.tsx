@@ -344,7 +344,7 @@ export function PerformanceTable({
 
   async function saveBudget(squadId: string) {
     const dollars = parseFloat(budgetDraft);
-    if (isNaN(dollars) || dollars < 20) { setInlineError("Min $20.00"); return; }
+    if (isNaN(dollars) || dollars <= 0) { setInlineError("Budget must be > $0"); return; }
     const detail = squadDetails.get(squadId);
     if (!detail) return;
     setSavingInline(squadId + "_budget");
@@ -415,7 +415,7 @@ export function PerformanceTable({
     setBulkError(null);
     if (field === "budget") {
       const v = parseFloat(bulkBudget);
-      if (isNaN(v) || v < 20) { setBulkError("Budget must be at least $20.00"); return; }
+      if (isNaN(v) || v <= 0) { setBulkError("Budget must be > $0"); return; }
     } else if (field === "bid") {
       const v = parseFloat(bulkBid);
       if (isNaN(v) || v < 0.01) { setBulkError("Bid must be at least $0.01"); return; }
@@ -633,7 +633,7 @@ export function PerformanceTable({
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-medium text-blue-700">Budget $</span>
               <input
-                type="number" min={20} step={0.01} placeholder="20.00"
+                type="number" min={0.01} step={0.01} placeholder="0.00"
                 value={bulkBudget}
                 onChange={(e) => setBulkBudget(e.target.value)}
                 className="w-20 border border-blue-200 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
@@ -829,7 +829,7 @@ export function PerformanceTable({
                         editingBudget === r.ad_squad_id ? (
                           <input
                             autoFocus
-                            type="number" min={20} step={0.01}
+                            type="number" min={0.01} step={0.01}
                             value={budgetDraft}
                             onChange={(e) => setBudgetDraft(e.target.value)}
                             onBlur={() => void saveBudget(r.ad_squad_id)}
