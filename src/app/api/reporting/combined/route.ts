@@ -100,8 +100,8 @@ export async function GET(request: NextRequest) {
         SELECT channel_id FROM feed_provider_channels WHERE ad_squad_snap_id = s.ad_squad_id
         UNION ALL
         SELECT channel_id FROM feed_provider_channels
-        WHERE SPLIT_PART(channel_id, '+', 1) != ''
-          AND s.ad_squad_name ILIKE '%' || SPLIT_PART(channel_id, '+', 1) || '%'
+        WHERE channel_id != ''
+          AND s.ad_squad_name ILIKE '%' || channel_id || '%'
         LIMIT 1
       ) fpc ON true
       LEFT JOIN (
