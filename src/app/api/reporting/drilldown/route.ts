@@ -44,7 +44,12 @@ export async function GET(request: NextRequest) {
         COALESCE(k.funnel_requests, 0)::bigint    AS funnel_requests,
         COALESCE(k.domain_name, '')               AS domain_name,
         s.conversion_purchases::bigint            AS conversion_purchases,
-        s.conversion_purchase_value::bigint       AS conversion_purchase_value
+        s.conversion_purchase_value::bigint       AS conversion_purchase_value,
+        COALESCE(p.revenue_usd, 0)               AS predicto_revenue_usd,
+        COALESCE(p.clicks, 0)::bigint            AS predicto_clicks,
+        COALESCE(p.funnel_clicks, 0)::bigint     AS predicto_funnel_clicks,
+        COALESCE(p.funnel_impressions, 0)::bigint AS predicto_funnel_impressions,
+        COALESCE(p.funnel_requests, 0)::bigint   AS predicto_funnel_requests
       FROM snapchat_ad_squad_stats s
       LEFT JOIN (
         SELECT
@@ -64,6 +69,22 @@ export async function GET(request: NextRequest) {
       ) k
         ON  s.ad_squad_id  = k.custom_channel_name
         AND s.stat_date    = k.record_date
+      LEFT JOIN feed_provider_channels fpc
+        ON  fpc.ad_squad_snap_id = s.ad_squad_id
+      LEFT JOIN (
+        SELECT
+          custom_channel_id,
+          record_date,
+          SUM(revenue_usd)               AS revenue_usd,
+          SUM(clicks)::bigint            AS clicks,
+          SUM(funnel_clicks)::bigint     AS funnel_clicks,
+          SUM(funnel_impressions)::bigint AS funnel_impressions,
+          SUM(funnel_requests)::bigint   AS funnel_requests
+        FROM predicto_report
+        GROUP BY custom_channel_id, record_date
+      ) p
+        ON  p.custom_channel_id = SPLIT_PART(fpc.channel_id, '+', 1)
+        AND p.record_date       = s.stat_date
       WHERE s.ad_account_id = ${adAccountId}
         AND s.ad_squad_id   = ${adSquadId}
       ORDER BY s.stat_date DESC
@@ -73,7 +94,7 @@ export async function GET(request: NextRequest) {
   const combined: CombinedRow[] = rows.map((r) => {
     const spendUsd = Number(r.spend_micro) / 1_000_000;
     const revenueEur = Number(r.earnings_eur);
-    const revenueUsd = revenueEur * eurToUsd;
+    const revenueUsd = revenueEur * eurToUsd + Number(r.predicto_revenue_usd);
     const roiPct = spendUsd > 0 ? (revenueUsd / spendUsd) * 100 : null;
     return {
       ad_squad_id: r.ad_squad_id as string,
@@ -84,16 +105,16 @@ export async function GET(request: NextRequest) {
       swipes: Number(r.swipes),
       spend_usd: spendUsd,
       video_views: Number(r.video_views),
-      clicks: Number(r.clicks),
+      clicks: Number(r.clicks) + Number(r.predicto_clicks),
       revenue_eur: revenueEur,
       revenue_usd: revenueUsd,
       roi_pct: roiPct,
       page_views: Number(r.page_views),
       ad_requests: Number(r.ad_requests),
       matched_ad_requests: Number(r.matched_ad_requests),
-      funnel_clicks: Number(r.funnel_clicks),
-      funnel_impressions: Number(r.funnel_impressions),
-      funnel_requests: Number(r.funnel_requests),
+      funnel_clicks: Number(r.funnel_clicks) + Number(r.predicto_funnel_clicks),
+      funnel_impressions: Number(r.funnel_impressions) + Number(r.predicto_funnel_impressions),
+      funnel_requests: Number(r.funnel_requests) + Number(r.predicto_funnel_requests),
       domain_name: r.domain_name as string,
       snap_results: Number(r.conversion_purchases),
       snap_purchase_value_usd: Number(r.conversion_purchase_value) / 1_000_000,
