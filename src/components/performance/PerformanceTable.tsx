@@ -108,39 +108,39 @@ interface MetricColDef {
 }
 
 const METRIC_COLS: Record<string, MetricColDef> = {
-  spend_usd:           { label: "Spend ($)",          sortKey: "spend_usd",           render: (r) => fmt$(r.spend_usd),   tdClass: "text-gray-900 font-medium" },
-  revenue_usd:         { label: "Revenue ($)",         sortKey: "revenue_usd",         render: (r) => fmt$(r.revenue_usd), tdClass: "text-gray-900" },
+  spend_usd:           { label: "Spend ($)",          sortKey: "spend_usd",           render: (r) => fmt$(r.spend_usd),   tdClass: "text-gray-900 dark:text-gray-100 font-medium" },
+  revenue_usd:         { label: "Revenue ($)",         sortKey: "revenue_usd",         render: (r) => fmt$(r.revenue_usd), tdClass: "text-gray-900 dark:text-gray-100" },
   roi_pct:             { label: "ROI",                 sortKey: "roi_pct",             render: (r) => roiHeatmap(r.roi_pct) },
   roi_1d:              { label: "-1D ROI",             sortKey: "roi_1d",              render: (r) => roiHeatmap(r.roi_1d) },
   roi_2d:              { label: "-2D ROI",             sortKey: "roi_2d",              render: (r) => roiHeatmap(r.roi_2d) },
   roi_3d:              { label: "-3D ROI",             sortKey: "roi_3d",              render: (r) => roiHeatmap(r.roi_3d) },
   profit:              { label: "Profit",              sortKey: "profit",              render: (r) => <span className={r.profit >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>{fmt$(r.profit)}</span> },
-  rpc:                 { label: "RPC",                 sortKey: "rpc",                 render: (r) => r.rpc !== null ? fmt$(r.rpc) : "—",          tdClass: "text-gray-700" },
-  ctr:                 { label: "CTR",                 sortKey: "ctr",                 render: (r) => fmtPct(r.ctr),                               tdClass: "text-gray-700" },
-  cpm:                 { label: "CPM",                 sortKey: "cpm",                 render: (r) => r.cpm !== null ? fmt$(r.cpm) : "—",          tdClass: "text-gray-700" },
-  cpc:                 { label: "CPC",                 sortKey: "cpc",                 render: (r) => r.cpc !== null ? fmt$(r.cpc) : "—",          tdClass: "text-gray-700" },
-  cvr:                 { label: "CVR",                 sortKey: "cvr",                 render: (r) => fmtPct0(r.cvr),                              tdClass: "text-gray-700" },
-  cpr:                 { label: "CPR",                 sortKey: "cpr",                 render: (r) => r.cpr !== null ? fmt$(r.cpr) : "—",          tdClass: "text-gray-700" },
-  rpr:                 { label: "RPR",                 sortKey: "rpr",                 render: (r) => r.rpr !== null ? fmt$(r.rpr) : "—",          tdClass: "text-gray-700" },
-  impressions:         { label: "Impressions",         sortKey: "impressions",         render: (r) => fmtNum(r.impressions),                       tdClass: "text-gray-700" },
-  swipes:              { label: "Clicks",              sortKey: "swipes",              render: (r) => fmtNum(r.swipes),                            tdClass: "text-gray-700" },
-  funnel_clicks:       { label: "Funnel Clicks",       sortKey: "funnel_clicks",       render: (r) => fmtNum(r.funnel_clicks),                     tdClass: "text-gray-700" },
-  funnel_impressions:  { label: "Funnel Impressions",  sortKey: "funnel_impressions",  render: (r) => fmtNum(r.funnel_impressions),                tdClass: "text-gray-700" },
-  funnel_requests:     { label: "Funnel Requests",     sortKey: "funnel_requests",     render: (r) => fmtNum(r.funnel_requests),                   tdClass: "text-gray-700" },
-  ad_requests:         { label: "Ad Requests",         sortKey: "ad_requests",         render: (r) => fmtNum(r.ad_requests),                       tdClass: "text-gray-700" },
-  matched_ad_requests: { label: "Matched Requests",    sortKey: "matched_ad_requests", render: (r) => fmtNum(r.matched_ad_requests),               tdClass: "text-gray-700" },
-  clicks:              { label: "VZ Clicks",           sortKey: "clicks",              render: (r) => fmtNum(r.clicks),                            tdClass: "text-gray-700" },
-  page_views:          { label: "Page Views",          sortKey: "page_views",          render: (r) => fmtNum(r.page_views),                        tdClass: "text-gray-700" },
-  video_views:         { label: "Video Views",         sortKey: "video_views",         render: (r) => fmtNum(r.video_views),                       tdClass: "text-gray-700" },
+  rpc:                 { label: "RPC",                 sortKey: "rpc",                 render: (r) => r.rpc !== null ? fmt$(r.rpc) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
+  ctr:                 { label: "CTR",                 sortKey: "ctr",                 render: (r) => fmtPct(r.ctr),                               tdClass: "text-gray-700 dark:text-gray-300" },
+  cpm:                 { label: "CPM",                 sortKey: "cpm",                 render: (r) => r.cpm !== null ? fmt$(r.cpm) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
+  cpc:                 { label: "CPC",                 sortKey: "cpc",                 render: (r) => r.cpc !== null ? fmt$(r.cpc) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
+  cvr:                 { label: "CVR",                 sortKey: "cvr",                 render: (r) => fmtPct0(r.cvr),                              tdClass: "text-gray-700 dark:text-gray-300" },
+  cpr:                 { label: "CPR",                 sortKey: "cpr",                 render: (r) => r.cpr !== null ? fmt$(r.cpr) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
+  rpr:                 { label: "RPR",                 sortKey: "rpr",                 render: (r) => r.rpr !== null ? fmt$(r.rpr) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
+  impressions:         { label: "Impressions",         sortKey: "impressions",         render: (r) => fmtNum(r.impressions),                       tdClass: "text-gray-700 dark:text-gray-300" },
+  swipes:              { label: "Clicks",              sortKey: "swipes",              render: (r) => fmtNum(r.swipes),                            tdClass: "text-gray-700 dark:text-gray-300" },
+  funnel_clicks:       { label: "Funnel Clicks",       sortKey: "funnel_clicks",       render: (r) => fmtNum(r.funnel_clicks),                     tdClass: "text-gray-700 dark:text-gray-300" },
+  funnel_impressions:  { label: "Funnel Impressions",  sortKey: "funnel_impressions",  render: (r) => fmtNum(r.funnel_impressions),                tdClass: "text-gray-700 dark:text-gray-300" },
+  funnel_requests:     { label: "Funnel Requests",     sortKey: "funnel_requests",     render: (r) => fmtNum(r.funnel_requests),                   tdClass: "text-gray-700 dark:text-gray-300" },
+  ad_requests:         { label: "Ad Requests",         sortKey: "ad_requests",         render: (r) => fmtNum(r.ad_requests),                       tdClass: "text-gray-700 dark:text-gray-300" },
+  matched_ad_requests: { label: "Matched Requests",    sortKey: "matched_ad_requests", render: (r) => fmtNum(r.matched_ad_requests),               tdClass: "text-gray-700 dark:text-gray-300" },
+  clicks:              { label: "VZ Clicks",           sortKey: "clicks",              render: (r) => fmtNum(r.clicks),                            tdClass: "text-gray-700 dark:text-gray-300" },
+  page_views:          { label: "Page Views",          sortKey: "page_views",          render: (r) => fmtNum(r.page_views),                        tdClass: "text-gray-700 dark:text-gray-300" },
+  video_views:         { label: "Video Views",         sortKey: "video_views",         render: (r) => fmtNum(r.video_views),                       tdClass: "text-gray-700 dark:text-gray-300" },
   domain_name:              { label: "Domain",            render: (r) => <span className="text-xs text-gray-500">{r.domain_name || "—"}</span> },
-  snap_results:             { label: "Results",           sortKey: "snap_results",             render: (r) => fmtNum(r.snap_results),                                                                tdClass: "text-gray-700" },
-  snap_cost_per_result:     { label: "Cost per Result",   sortKey: "snap_cost_per_result",     render: (r) => r.snap_cost_per_result !== null ? fmt$(r.snap_cost_per_result) : "—",                  tdClass: "text-gray-700" },
-  snap_purchase_value_usd:  { label: "Purchase Value",    sortKey: "snap_purchase_value_usd",  render: (r) => fmt$(r.snap_purchase_value_usd),                                                       tdClass: "text-gray-700" },
+  snap_results:             { label: "Results",           sortKey: "snap_results",             render: (r) => fmtNum(r.snap_results),                                                                tdClass: "text-gray-700 dark:text-gray-300" },
+  snap_cost_per_result:     { label: "Cost per Result",   sortKey: "snap_cost_per_result",     render: (r) => r.snap_cost_per_result !== null ? fmt$(r.snap_cost_per_result) : "—",                  tdClass: "text-gray-700 dark:text-gray-300" },
+  snap_purchase_value_usd:  { label: "Purchase Value",    sortKey: "snap_purchase_value_usd",  render: (r) => fmt$(r.snap_purchase_value_usd),                                                       tdClass: "text-gray-700 dark:text-gray-300" },
 };
 
 function SortArrow({ active, desc }: { active: boolean; desc: boolean }) {
   if (!active) return (
-    <svg className="w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+    <svg className="w-3 h-3 text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l4-4 4 4M16 15l-4 4-4-4" />
     </svg>
   );
@@ -325,7 +325,7 @@ export function PerformanceTable({
         key={colKey}
         onClick={() => toggleSort(colKey)}
         className={`group px-3 py-3 text-left text-xs font-semibold whitespace-nowrap cursor-pointer select-none ${
-          active ? "text-blue-600" : "text-gray-600 hover:text-gray-900"
+          active ? "text-blue-600" : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
         }`}
       >
         <div className="flex items-center gap-1">
@@ -339,7 +339,7 @@ export function PerformanceTable({
   function staticTh(colKey: string, label: string) {
     if (!visibleColumns.has(colKey)) return null;
     return (
-      <th key={colKey} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+      <th key={colKey} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">
         {label}
       </th>
     );
@@ -574,20 +574,20 @@ export function PerformanceTable({
         <p className="text-xs text-red-500 mb-2">{inlineError}</p>
       )}
 
-      <div className="rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
 
         {/* Toolbar */}
-        <div className="flex items-center gap-2 px-3 py-2.5 bg-white border-b border-gray-200">
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-2">
             {hasSelection ? (
               <>
-                <span className="text-sm font-medium text-gray-700 pl-1">{selectedIds.size} selected</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 pl-1">{selectedIds.size} selected</span>
                 <button
                   onClick={() => { setShowBulkEdit(v => !v); setBulkError(null); }}
                   className={`flex items-center gap-1.5 px-2.5 py-1 text-sm rounded-md border transition-colors ${
                     showBulkEdit
                       ? "bg-blue-600 text-white border-blue-600"
-                      : "text-blue-600 border-blue-300 hover:bg-blue-50"
+                      : "text-blue-600 border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                   }`}
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -597,7 +597,7 @@ export function PerformanceTable({
                 </button>
                 <button
                   disabled
-                  className="flex items-center gap-1.5 px-2.5 py-1 text-sm text-gray-400 border border-gray-200 rounded-md cursor-not-allowed"
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-sm text-gray-400 border border-gray-200 dark:border-gray-700 rounded-md cursor-not-allowed"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -630,7 +630,7 @@ export function PerformanceTable({
                 placeholder="Search campaigns…"
                 value={filterQuery}
                 onChange={(e) => setFilterQuery(e.target.value)}
-                className="pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-md w-52 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                className="pl-8 pr-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md w-52 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
               />
             </div>
 
@@ -645,7 +645,7 @@ export function PerformanceTable({
             {/* Download CSV */}
             <button
               onClick={downloadCsv}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors whitespace-nowrap"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors whitespace-nowrap"
             >
               <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -657,14 +657,14 @@ export function PerformanceTable({
 
         {/* Bulk edit panel */}
         {showBulkEdit && hasSelection && (
-          <div className="bg-blue-50 border-b border-blue-100 px-4 py-2.5 flex flex-wrap items-center gap-4">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800 px-4 py-2.5 flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-medium text-blue-700">Budget $</span>
               <input
                 type="number" min={0.01} step={0.01} placeholder="0.00"
                 value={bulkBudget}
                 onChange={(e) => setBulkBudget(e.target.value)}
-                className="w-20 border border-blue-200 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                className="w-20 border border-blue-200 dark:border-blue-700 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-800 dark:text-gray-100"
               />
               <button
                 onClick={() => void applyBulk("budget")}
@@ -681,7 +681,7 @@ export function PerformanceTable({
                 type="number" min={0.01} step={0.01} placeholder="1.00"
                 value={bulkBid}
                 onChange={(e) => setBulkBid(e.target.value)}
-                className="w-16 border border-blue-200 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                className="w-16 border border-blue-200 dark:border-blue-700 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-800 dark:text-gray-100"
               />
               <button
                 onClick={() => void applyBulk("bid")}
@@ -697,7 +697,7 @@ export function PerformanceTable({
               <select
                 value={bulkStatus}
                 onChange={(e) => setBulkStatus(e.target.value as "ACTIVE" | "PAUSED")}
-                className="border border-blue-200 rounded px-2 py-0.5 text-xs focus:outline-none bg-white"
+                className="border border-blue-200 dark:border-blue-700 rounded px-2 py-0.5 text-xs focus:outline-none bg-white dark:bg-gray-800 dark:text-gray-100"
               >
                 <option value="ACTIVE">Active</option>
                 <option value="PAUSED">Paused</option>
@@ -719,7 +719,7 @@ export function PerformanceTable({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
+              <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
                 {/* Master checkbox */}
                 <th className="w-10 px-3 py-3">
                   <input
@@ -732,7 +732,7 @@ export function PerformanceTable({
 
                 {/* Name — always visible, resizable */}
                 <th
-                  className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap relative select-none"
+                  className="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap relative select-none"
                   style={{ width: nameColWidth, minWidth: nameColWidth, maxWidth: nameColWidth }}
                 >
                   Name
@@ -741,27 +741,27 @@ export function PerformanceTable({
                     className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize group flex items-center justify-center"
                     title="Drag to resize"
                   >
-                    <div className="w-0.5 h-4 bg-gray-300 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="w-0.5 h-4 bg-gray-300 dark:bg-gray-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </th>
 
                 {/* Status toggle — always visible */}
-                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">
                   Status
                 </th>
 
                 {/* Delivery badge — always visible */}
-                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">
                   Delivery
                 </th>
 
                 {/* Budget — always visible */}
-                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">
                   Budget
                 </th>
 
                 {/* Bid — always visible */}
-                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">
                   Bid
                 </th>
 
@@ -775,7 +775,7 @@ export function PerformanceTable({
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-gray-100 bg-white">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-900">
               {filtered.map((r) => {
                 const detail = squadDetails.get(r.ad_squad_id);
                 const isSelected = selectedIds.has(r.ad_squad_id);
@@ -785,7 +785,7 @@ export function PerformanceTable({
                   <tr
                     key={r.ad_squad_id}
                     className={`transition-colors ${
-                      isSelected ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-slate-50"
+                      isSelected ? "bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30" : "hover:bg-slate-50 dark:hover:bg-gray-800"
                     }`}
                   >
                     {/* Checkbox */}
@@ -816,7 +816,7 @@ export function PerformanceTable({
                             name: r.ad_squad_name,
                             accountId: detail?.ad_account_id ?? "",
                           })}
-                          className="text-left text-sm font-medium text-gray-900 hover:text-blue-600 hover:underline truncate block min-w-0"
+                          className="text-left text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline truncate block min-w-0"
                           title={r.ad_squad_name}
                         >
                           {r.ad_squad_name}
@@ -830,7 +830,7 @@ export function PerformanceTable({
                         <button
                           onClick={() => void toggleStatus(r.ad_squad_id)}
                           className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                            isActive ? "bg-green-500" : "bg-gray-300"
+                            isActive ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"
                           }`}
                         >
                           <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
@@ -845,8 +845,8 @@ export function PerformanceTable({
                       {detail ? (
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                           isActive
-                            ? "bg-green-100 text-green-700"
-                            : "bg-gray-100 text-gray-500"
+                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                            : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
                         }`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-green-500" : "bg-gray-400"}`} />
                           {isActive ? "Active" : "Paused"}
@@ -868,7 +868,7 @@ export function PerformanceTable({
                               if (e.key === "Enter") void saveBudget(r.ad_squad_id);
                               if (e.key === "Escape") setEditingBudget(null);
                             }}
-                            className="w-20 border border-blue-400 rounded px-1.5 py-0.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-20 border border-blue-400 rounded px-1.5 py-0.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-800 dark:text-gray-100"
                           />
                         ) : (
                           <button
@@ -877,10 +877,10 @@ export function PerformanceTable({
                               setEditingBudget(r.ad_squad_id);
                               setInlineError(null);
                             }}
-                            className="group flex items-center gap-1 text-xs text-gray-700 hover:text-blue-600"
+                            className="group flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
                           >
                             {savingInline === r.ad_squad_id + "_budget" ? "…" : fmt$(microToDollar(detail.daily_budget_micro))}
-                            <svg className="w-3 h-3 text-gray-300 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <svg className="w-3 h-3 text-gray-300 dark:text-gray-600 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.536-6.536a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
                             </svg>
                           </button>
@@ -902,7 +902,7 @@ export function PerformanceTable({
                               if (e.key === "Enter") void saveBid(r.ad_squad_id);
                               if (e.key === "Escape") setEditingBid(null);
                             }}
-                            className="w-16 border border-blue-400 rounded px-1.5 py-0.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-16 border border-blue-400 rounded px-1.5 py-0.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-800 dark:text-gray-100"
                           />
                         ) : (
                           <button
@@ -911,10 +911,10 @@ export function PerformanceTable({
                               setEditingBid(r.ad_squad_id);
                               setInlineError(null);
                             }}
-                            className="group flex items-center gap-1 text-xs text-gray-700 hover:text-blue-600"
+                            className="group flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
                           >
                             {savingInline === r.ad_squad_id + "_bid" ? "…" : fmt$(microToDollar(detail.bid_micro))}
-                            <svg className="w-3 h-3 text-gray-300 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <svg className="w-3 h-3 text-gray-300 dark:text-gray-600 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.536-6.536a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
                             </svg>
                           </button>

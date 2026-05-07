@@ -123,7 +123,7 @@ export function ColumnSelector({ visible, order, onChange, onOrderChange }: Prop
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-md text-sm text-gray-700 bg-white hover:border-gray-400 hover:bg-gray-50 transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
       >
         <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" />
@@ -135,8 +135,8 @@ export function ColumnSelector({ visible, order, onChange, onOrderChange }: Prop
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-56 max-h-[380px] overflow-y-auto">
-          <p className="px-3 py-1.5 text-xs text-gray-400 border-b border-gray-100 mb-0.5">
+        <div className="absolute top-full left-0 mt-1 z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 w-56 max-h-[380px] overflow-y-auto">
+          <p className="px-3 py-1.5 text-xs text-gray-400 border-b border-gray-100 dark:border-gray-700 mb-0.5">
             Drag to reorder · check to show
           </p>
           {order.map((key, i) => {
@@ -151,12 +151,12 @@ export function ColumnSelector({ visible, order, onChange, onOrderChange }: Prop
                 onDragLeave={() => setDragOver(null)}
                 onDrop={() => handleDrop(i)}
                 onDragEnd={() => { setDragOver(null); dragIdx.current = null; }}
-                className={`flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors ${
-                  dragOver === i ? "border-t-2 border-blue-400 bg-blue-50" : ""
+                className={`flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
+                  dragOver === i ? "border-t-2 border-blue-400 bg-blue-50 dark:bg-blue-900/30" : ""
                 }`}
               >
                 <span
-                  className="flex-shrink-0 cursor-grab text-gray-300 hover:text-gray-500 select-none"
+                  className="flex-shrink-0 cursor-grab text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 select-none"
                   draggable={false}
                 >
                   <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">

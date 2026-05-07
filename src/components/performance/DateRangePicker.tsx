@@ -116,12 +116,12 @@ function CalendarMonth({
       return "bg-cyan-500 text-white rounded-full font-semibold hover:bg-cyan-600";
     }
     if (inRange) {
-      return "bg-cyan-100 text-gray-900 rounded-none";
+      return "bg-cyan-100 dark:bg-cyan-900/30 text-gray-900 dark:text-gray-100 rounded-none";
     }
     if (isToday) {
-      return "border border-cyan-400 text-cyan-700 rounded-full hover:bg-gray-100";
+      return "border border-cyan-400 text-cyan-700 dark:text-cyan-400 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700";
     }
-    return "text-gray-700 rounded-full hover:bg-gray-100";
+    return "text-gray-700 dark:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700";
   }
 
   return (
@@ -133,16 +133,16 @@ function CalendarMonth({
         {showPrevArrow ? (
           <button
             onClick={onPrevMonth}
-            className="p-1 hover:bg-gray-100 rounded text-gray-500 text-base leading-none"
+            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500 dark:text-gray-400 text-base leading-none"
           >
             ‹
           </button>
         ) : <div className="w-6" />}
-        <span className="font-semibold text-gray-800 text-sm">{monthName(month)} {year}</span>
+        <span className="font-semibold text-gray-800 dark:text-gray-200 text-sm">{monthName(month)} {year}</span>
         {showNextArrow ? (
           <button
             onClick={onNextMonth}
-            className="p-1 hover:bg-gray-100 rounded text-gray-500 text-base leading-none"
+            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500 dark:text-gray-400 text-base leading-none"
           >
             ›
           </button>
@@ -283,7 +283,7 @@ export function DateRangePicker({ startDate, endDate, onChange }: Props) {
       <button
         ref={triggerRef}
         onClick={openPanel}
-        className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-md text-sm text-gray-700 bg-white hover:border-gray-400 hover:bg-gray-50 transition-colors whitespace-nowrap"
+        className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors whitespace-nowrap"
       >
         <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -297,11 +297,11 @@ export function DateRangePicker({ startDate, endDate, onChange }: Props) {
       {open && (
         <div
           ref={panelRef}
-          className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-2xl flex overflow-hidden"
+          className="absolute top-full left-0 mt-1 z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl flex overflow-hidden"
           style={{ minWidth: 560 }}
         >
           {/* Left: Presets */}
-          <div className="w-44 shrink-0 border-r border-gray-100 py-2">
+          <div className="w-44 shrink-0 border-r border-gray-100 dark:border-gray-700 py-2">
             {PRESETS.map((p) => {
               const [ps, pe] = p.getRange();
               const isActive = activePreset === p.label;
@@ -310,7 +310,7 @@ export function DateRangePicker({ startDate, endDate, onChange }: Props) {
                   key={p.label}
                   onClick={() => applyPreset(ps, pe)}
                   className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                    isActive ? "bg-cyan-50 text-cyan-700 font-medium" : "text-gray-700 hover:bg-gray-50"
+                    isActive ? "bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 font-medium" : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                   }`}
                 >
                   {p.label}
@@ -318,14 +318,14 @@ export function DateRangePicker({ startDate, endDate, onChange }: Props) {
               );
             })}
 
-            <div className="border-t border-gray-100 mt-2 pt-2 px-3 space-y-2.5">
-              <div className="flex items-center gap-1.5 text-xs text-gray-600 flex-wrap">
+            <div className="border-t border-gray-100 dark:border-gray-700 mt-2 pt-2 px-3 space-y-2.5">
+              <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 flex-wrap">
                 <input
                   type="number" min={1} max={90}
                   value={customDaysToday}
                   onChange={(e) => setCustomDaysToday(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && applyCustomDays(customDaysToday, false)}
-                  className="w-12 border border-gray-300 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                  className="w-12 border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500 bg-white dark:bg-gray-800 dark:text-gray-100"
                 />
                 <span className="leading-tight">days up to today</span>
                 <button
@@ -335,13 +335,13 @@ export function DateRangePicker({ startDate, endDate, onChange }: Props) {
                   Apply
                 </button>
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-gray-600 flex-wrap">
+              <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 flex-wrap">
                 <input
                   type="number" min={1} max={90}
                   value={customDaysYesterday}
                   onChange={(e) => setCustomDaysYesterday(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && applyCustomDays(customDaysYesterday, true)}
-                  className="w-12 border border-gray-300 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                  className="w-12 border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500 bg-white dark:bg-gray-800 dark:text-gray-100"
                 />
                 <span className="leading-tight">days up to yest.</span>
                 <button
@@ -379,8 +379,8 @@ export function DateRangePicker({ startDate, endDate, onChange }: Props) {
               />
             </div>
 
-            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
-              <span className="text-xs text-gray-500">
+            <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <span className="text-xs text-gray-500 dark:text-gray-400">
                 {selectingEnd
                   ? "Click to set end date"
                   : formatDisplay(draftStart, draftEnd)}
@@ -388,7 +388,7 @@ export function DateRangePicker({ startDate, endDate, onChange }: Props) {
               <div className="flex gap-2">
                 <button
                   onClick={handleCancel}
-                  className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 rounded-md hover:bg-gray-100 transition-colors"
+                  className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
                   Cancel
                 </button>

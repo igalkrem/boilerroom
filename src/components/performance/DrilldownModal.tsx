@@ -18,9 +18,9 @@ function fmtRoi(pct: number | null) {
 }
 function roiColor(pct: number | null) {
   if (pct === null) return "text-gray-400";
-  if (pct >= 100) return "text-green-600";
-  if (pct >= 50) return "text-amber-500";
-  return "text-red-600";
+  if (pct >= 100) return "text-green-600 dark:text-green-400";
+  if (pct >= 50) return "text-amber-500 dark:text-amber-400";
+  return "text-red-600 dark:text-red-400";
 }
 function fmtNum(n: number) { return n.toLocaleString(); }
 
@@ -56,13 +56,13 @@ export function DrilldownModal({ adSquadName, adSquadId, adAccountId, onClose }:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">{adSquadName}</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{adSquadName}</h2>
             <p className="text-xs text-gray-500">All available dates</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none">×</button>
         </div>
 
         <div className="overflow-auto flex-1">
@@ -80,39 +80,39 @@ export function DrilldownModal({ adSquadName, adSquadId, adAccountId, onClose }:
           )}
           {!loading && !error && rows.length > 0 && (
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 sticky top-0">
+              <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
                 <tr>
                   {["Date", "Spend", "Revenue", "ROI", "Impressions", "Clicks", "Funnel Clicks", "Page Views"].map((h) => (
-                    <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">
+                    <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {rows.map((r, i) => (
-                  <tr key={i} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{r.stat_date}</td>
-                    <td className="px-4 py-2 text-gray-900 whitespace-nowrap">{fmt$(r.spend_usd)}</td>
-                    <td className="px-4 py-2 text-gray-900 whitespace-nowrap">{fmt$(r.revenue_usd)}</td>
+                  <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <td className="px-4 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{r.stat_date}</td>
+                    <td className="px-4 py-2 text-gray-900 dark:text-gray-100 whitespace-nowrap">{fmt$(r.spend_usd)}</td>
+                    <td className="px-4 py-2 text-gray-900 dark:text-gray-100 whitespace-nowrap">{fmt$(r.revenue_usd)}</td>
                     <td className={`px-4 py-2 font-medium whitespace-nowrap ${roiColor(r.roi_pct)}`}>{fmtRoi(r.roi_pct)}</td>
-                    <td className="px-4 py-2 text-gray-700">{fmtNum(r.impressions)}</td>
-                    <td className="px-4 py-2 text-gray-700">{fmtNum(r.swipes)}</td>
-                    <td className="px-4 py-2 text-gray-700">{fmtNum(r.funnel_clicks)}</td>
-                    <td className="px-4 py-2 text-gray-700">{fmtNum(r.page_views)}</td>
+                    <td className="px-4 py-2 text-gray-700 dark:text-gray-300">{fmtNum(r.impressions)}</td>
+                    <td className="px-4 py-2 text-gray-700 dark:text-gray-300">{fmtNum(r.swipes)}</td>
+                    <td className="px-4 py-2 text-gray-700 dark:text-gray-300">{fmtNum(r.funnel_clicks)}</td>
+                    <td className="px-4 py-2 text-gray-700 dark:text-gray-300">{fmtNum(r.page_views)}</td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+              <tfoot className="bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700">
                 <tr>
-                  <td className="px-4 py-2 text-xs font-semibold text-gray-500">TOTAL</td>
-                  <td className="px-4 py-2 font-semibold text-gray-900">{fmt$(totals.spend)}</td>
-                  <td className="px-4 py-2 font-semibold text-gray-900">{fmt$(totals.revenue)}</td>
+                  <td className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400">TOTAL</td>
+                  <td className="px-4 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmt$(totals.spend)}</td>
+                  <td className="px-4 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmt$(totals.revenue)}</td>
                   <td className={`px-4 py-2 font-semibold ${roiColor(totalRoi)}`}>{fmtRoi(totalRoi)}</td>
-                  <td className="px-4 py-2 font-semibold text-gray-900">{fmtNum(totals.impressions)}</td>
-                  <td className="px-4 py-2 font-semibold text-gray-900">{fmtNum(totals.swipes)}</td>
-                  <td className="px-4 py-2 font-semibold text-gray-900">{fmtNum(totals.funnel_clicks)}</td>
-                  <td className="px-4 py-2 font-semibold text-gray-900">{fmtNum(totals.page_views)}</td>
+                  <td className="px-4 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmtNum(totals.impressions)}</td>
+                  <td className="px-4 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmtNum(totals.swipes)}</td>
+                  <td className="px-4 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmtNum(totals.funnel_clicks)}</td>
+                  <td className="px-4 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmtNum(totals.page_views)}</td>
                 </tr>
               </tfoot>
             </table>
