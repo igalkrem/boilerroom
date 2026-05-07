@@ -49,12 +49,14 @@ function dollarToMicro(dollars: number) { return Math.round(dollars * 1_000_000)
 function fmt$(n: number) { return `$${n.toFixed(2)}`; }
 function fmtPct(n: number | null) { return n === null ? "—" : n.toFixed(2) + "%"; }
 function fmtPct0(n: number | null) { return n === null ? "—" : Math.round(n).toFixed(0) + "%"; }
-function fmtRoi(pct: number | null) { return pct === null ? "—" : Math.round(pct).toFixed(0) + "%"; }
-function roiColor(pct: number | null) {
-  if (pct === null) return "text-gray-400";
-  if (pct >= 100) return "text-green-600";
-  if (pct >= 50) return "text-amber-500";
-  return "text-red-600";
+function roiHeatmap(pct: number | null) {
+  if (pct === null) return <span className="text-gray-400">—</span>;
+  const bg = pct >= 120 ? "bg-green-500" : pct > 105 ? "bg-orange-400" : "bg-red-500";
+  return (
+    <span className={`inline-flex items-center justify-center min-w-[3rem] px-2 py-0.5 rounded font-semibold text-white text-sm ${bg}`}>
+      {Math.round(pct).toFixed(0)}%
+    </span>
+  );
 }
 function fmtNum(n: number) { return n.toLocaleString(); }
 
@@ -108,10 +110,10 @@ interface MetricColDef {
 const METRIC_COLS: Record<string, MetricColDef> = {
   spend_usd:           { label: "Spend ($)",          sortKey: "spend_usd",           render: (r) => fmt$(r.spend_usd),   tdClass: "text-gray-900 font-medium" },
   revenue_usd:         { label: "Revenue ($)",         sortKey: "revenue_usd",         render: (r) => fmt$(r.revenue_usd), tdClass: "text-gray-900" },
-  roi_pct:             { label: "ROI",                 sortKey: "roi_pct",             render: (r) => <span className={`font-semibold ${roiColor(r.roi_pct)}`}>{fmtRoi(r.roi_pct)}</span> },
-  roi_1d:              { label: "-1D ROI",             sortKey: "roi_1d",              render: (r) => <span className={`font-semibold ${roiColor(r.roi_1d)}`}>{fmtRoi(r.roi_1d)}</span> },
-  roi_2d:              { label: "-2D ROI",             sortKey: "roi_2d",              render: (r) => <span className={`font-semibold ${roiColor(r.roi_2d)}`}>{fmtRoi(r.roi_2d)}</span> },
-  roi_3d:              { label: "-3D ROI",             sortKey: "roi_3d",              render: (r) => <span className={`font-semibold ${roiColor(r.roi_3d)}`}>{fmtRoi(r.roi_3d)}</span> },
+  roi_pct:             { label: "ROI",                 sortKey: "roi_pct",             render: (r) => roiHeatmap(r.roi_pct) },
+  roi_1d:              { label: "-1D ROI",             sortKey: "roi_1d",              render: (r) => roiHeatmap(r.roi_1d) },
+  roi_2d:              { label: "-2D ROI",             sortKey: "roi_2d",              render: (r) => roiHeatmap(r.roi_2d) },
+  roi_3d:              { label: "-3D ROI",             sortKey: "roi_3d",              render: (r) => roiHeatmap(r.roi_3d) },
   profit:              { label: "Profit",              sortKey: "profit",              render: (r) => <span className={r.profit >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>{fmt$(r.profit)}</span> },
   rpc:                 { label: "RPC",                 sortKey: "rpc",                 render: (r) => r.rpc !== null ? fmt$(r.rpc) : "—",          tdClass: "text-gray-700" },
   ctr:                 { label: "CTR",                 sortKey: "ctr",                 render: (r) => fmtPct(r.ctr),                               tdClass: "text-gray-700" },
