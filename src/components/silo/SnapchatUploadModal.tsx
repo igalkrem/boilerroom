@@ -257,23 +257,23 @@ export function SnapchatUploadModal({ assets, isOpen, onClose, onComplete }: Sna
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">Upload to Snapchat</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Upload to Snapchat</h2>
             <p className="text-xs text-gray-500 mt-0.5 truncate max-w-xs">
               {isBulk ? `${assets.length} assets selected` : currentAsset.name}
             </p>
           </div>
-          <button className="text-gray-400 hover:text-gray-600 text-xl" onClick={onClose}>✕</button>
+          <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl" onClick={onClose}>✕</button>
         </div>
 
         <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
           {/* Bulk progress log */}
           {isBulk && bulkLog.length > 0 && (
-            <div className="bg-gray-50 rounded-lg p-3 space-y-1">
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 space-y-1">
               {bulkLog.map((line, i) => (
-                <p key={i} className="text-xs text-gray-600 font-mono">{line}</p>
+                <p key={i} className="text-xs text-gray-600 dark:text-gray-300 font-mono">{line}</p>
               ))}
             </div>
           )}
@@ -298,7 +298,7 @@ export function SnapchatUploadModal({ assets, isOpen, onClose, onComplete }: Sna
                 return (
                   <div
                     key={account.id}
-                    className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:bg-gray-50"
+                    className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
                   >
                     {(!isReady && !isRunningNow) && (
                       <input
@@ -312,7 +312,7 @@ export function SnapchatUploadModal({ assets, isOpen, onClose, onComplete }: Sna
                     {(isReady || isRunningNow) && <div className="w-4 h-4 shrink-0" />}
 
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{account.name}</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{account.name}</p>
                       {!isBulk && progressMsg[account.id] && (
                         <p className="text-xs text-gray-500 animate-pulse">{progressMsg[account.id]}</p>
                       )}
@@ -345,7 +345,7 @@ export function SnapchatUploadModal({ assets, isOpen, onClose, onComplete }: Sna
           )}
         </div>
 
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700">
           <Button variant="ghost" onClick={onClose} disabled={running}>Close</Button>
           {uploadableSelected.length > 0 && !running && !bulkDone && (
             <Button onClick={startUpload}>

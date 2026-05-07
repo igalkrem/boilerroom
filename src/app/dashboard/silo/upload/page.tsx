@@ -17,7 +17,7 @@ export default function SiloUploadPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Upload Media</h1>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Upload Media</h1>
           <p className="text-sm text-gray-500 mt-1">Files are stored in your Silo library and can be reused across campaigns.</p>
         </div>
         <Button variant="ghost" onClick={() => router.push("/dashboard/silo")}>
@@ -26,11 +26,11 @@ export default function SiloUploadPage() {
       </div>
 
       {/* Tag selector */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Tag (optional)</label>
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tag (optional)</label>
         <div className="flex gap-3 items-center flex-wrap">
           <select
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            className="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-300 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
             value={selectedTagId}
             onChange={(e) => setSelectedTagId(e.target.value)}
           >
@@ -51,7 +51,7 @@ export default function SiloUploadPage() {
       </div>
 
       {/* Uploader */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
         <SiloUploader
           tagId={selectedTagId || undefined}
           onComplete={(assets) => setUploaded((prev) => [...prev, ...assets])}
@@ -60,8 +60,8 @@ export default function SiloUploadPage() {
 
       {/* Post-upload actions */}
       {uploaded.length > 0 && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-5 space-y-3">
-          <p className="text-sm font-semibold text-green-800">
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-5 space-y-3">
+          <p className="text-sm font-semibold text-green-800 dark:text-green-400">
             ✅ {uploaded.length} file{uploaded.length !== 1 ? "s" : ""} uploaded successfully
           </p>
           <div className="flex gap-3">

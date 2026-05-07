@@ -47,11 +47,11 @@ interface CanvasControlsProps {
 
 export function CanvasControls({ onAutoLayout, onAddCreative, campaignCount, onReview, isValid }: CanvasControlsProps) {
   return (
-    <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-white shrink-0">
+    <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
       <div className="flex items-center gap-3">
-        <span className="text-sm font-semibold text-gray-700">Campaign Builder</span>
+        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Campaign Builder</span>
         {campaignCount > 0 && (
-          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+          <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2 py-0.5 rounded-full font-medium">
             {campaignCount} campaign{campaignCount !== 1 ? "s" : ""} ready
           </span>
         )}
@@ -61,7 +61,7 @@ export function CanvasControls({ onAutoLayout, onAddCreative, campaignCount, onR
         <button
           type="button"
           onClick={onAddCreative}
-          className="px-3 py-1.5 text-xs text-blue-600 hover:text-blue-700 border border-blue-200 hover:border-blue-400 rounded-lg font-medium transition-colors"
+          className="px-3 py-1.5 text-xs text-blue-600 hover:text-blue-700 border border-blue-200 hover:border-blue-400 dark:border-blue-700 dark:hover:border-blue-500 rounded-lg font-medium transition-colors"
         >
           + Add Creative
         </button>
@@ -69,7 +69,7 @@ export function CanvasControls({ onAutoLayout, onAddCreative, campaignCount, onR
           type="button"
           onClick={onAutoLayout}
           title="Auto-align nodes"
-          className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg font-medium transition-colors"
+          className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600 rounded-lg font-medium transition-colors"
         >
           ⊞ Auto-align
         </button>

@@ -32,14 +32,14 @@ export function CreativeGroupNode({ data }: { data: CreativeGroupNodeData }) {
   const empty = assets.length === 0;
 
   let borderStyle: React.CSSProperties = {};
-  let containerClass = "border-gray-200 bg-white";
+  let containerClass = "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800";
 
   if (empty) {
-    containerClass = "border-red-200 bg-red-50/30";
+    containerClass = "border-red-200 bg-red-50/30 dark:border-red-800 dark:bg-red-900/20";
   } else if (connected && connectedColors.length > 1) {
     borderStyle = {
       border: "2px solid transparent",
-      backgroundImage: `linear-gradient(white, white), linear-gradient(to right, ${connectedColors.join(", ")})`,
+      backgroundImage: `linear-gradient(var(--node-bg), var(--node-bg)), linear-gradient(to right, ${connectedColors.join(", ")})`,
       backgroundClip: "padding-box, border-box",
       backgroundOrigin: "border-box",
     };
@@ -90,7 +90,7 @@ export function CreativeGroupNode({ data }: { data: CreativeGroupNodeData }) {
                     />
                   ) : (
                     <div
-                      className="w-16 h-[88px] rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 text-xl cursor-pointer"
+                      className="w-16 h-[88px] rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 text-xl cursor-pointer"
                       onClick={() => setPreviewId(asset.id)}
                     >
                       {asset.mediaType === "VIDEO" ? "▶" : "🖼"}
@@ -118,7 +118,7 @@ export function CreativeGroupNode({ data }: { data: CreativeGroupNodeData }) {
 
           {/* Display name */}
           {displayName && (
-            <p className="text-xs font-medium text-gray-700 mt-2 truncate">{displayName}</p>
+            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mt-2 truncate">{displayName}</p>
           )}
 
           {/* Add creative button */}

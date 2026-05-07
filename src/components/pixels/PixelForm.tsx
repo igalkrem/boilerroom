@@ -47,7 +47,7 @@ export function PixelForm({ pixel }: PixelFormProps) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
         <div className="space-y-4 max-w-md">
           <Input
             label="Pixel Label"
@@ -67,7 +67,7 @@ export function PixelForm({ pixel }: PixelFormProps) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+      <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
         <Button
           type="button"
           variant="ghost"

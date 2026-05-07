@@ -20,7 +20,7 @@ export function AdAccountNode({ data }: {
     <div
       style={connected ? { borderColor: data.color, backgroundColor: `${data.color}12`, borderWidth: 2 } : undefined}
       className={`relative rounded-2xl border-2 p-3 w-44 shadow-sm transition-all select-none ${
-        connected ? "" : "border-gray-200 bg-white"
+        connected ? "" : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
       }`}
     >
       <Handle
@@ -46,7 +46,7 @@ export function AdAccountNode({ data }: {
           {initials || "?"}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-800 truncate">{data.name}</p>
+          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{data.name}</p>
           {connected && (
             <p className="text-xs text-gray-400 truncate">{data.accountId.slice(0, 8)}…</p>
           )}

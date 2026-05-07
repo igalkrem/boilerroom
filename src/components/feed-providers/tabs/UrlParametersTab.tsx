@@ -127,7 +127,7 @@ export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParame
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-sm font-medium text-gray-700">URL Parameters</p>
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">URL Parameters</p>
           <button
             type="button"
             onClick={addRow}
@@ -146,7 +146,7 @@ export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParame
                   placeholder="key"
                   value={param.key}
                   onChange={(e) => updateParam(i, "key", e.target.value)}
-                  className="w-32 shrink-0 px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  className="w-32 shrink-0 px-2.5 py-1.5 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                 />
                 <span className="text-gray-400 mt-1.5 text-sm">=</span>
                 <div className="flex-1">
@@ -157,7 +157,7 @@ export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParame
                     value={param.value}
                     onChange={(e) => updateParam(i, "value", e.target.value)}
                     onFocus={() => { lastActiveIndexRef.current = i; }}
-                    className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    className="w-full px-2.5 py-1.5 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                   />
                 </div>
                 <button
@@ -217,7 +217,7 @@ export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParame
       {(previewUrl || !hideBaseUrl) && (
         <div>
           <p className="text-xs font-medium text-gray-500 mb-1">Preview URL</p>
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 font-mono text-xs break-all text-gray-700 leading-relaxed">
+          <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 font-mono text-xs break-all text-gray-700 dark:text-gray-300 leading-relaxed">
             {previewUrl ? renderPreviewUrl(previewUrl) : (
               <span className="text-gray-400 italic">Set a domain Base URL to see preview</span>
             )}

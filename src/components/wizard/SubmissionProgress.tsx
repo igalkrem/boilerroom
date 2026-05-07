@@ -46,16 +46,16 @@ function StageRow({ stage, currentStage, results }: {
     <div className="flex items-start gap-3">
       <div className={clsx(
         "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mt-0.5 flex-shrink-0",
-        isPast && errorCount === 0 ? "bg-green-100 text-green-700" :
-        isPast && errorCount > 0 ? "bg-yellow-100 text-yellow-700" :
+        isPast && errorCount === 0 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+        isPast && errorCount > 0 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
         isActive ? "bg-yellow-400 text-gray-900 animate-pulse" :
-        "bg-gray-100 text-gray-400"
+        "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
       )}>
         {isPast && errorCount === 0 ? "✓" : isPast && errorCount > 0 ? "!" : isActive ? "…" : "○"}
       </div>
       <div className="flex-1">
         <div className="flex items-center gap-2">
-          <span className={clsx("text-sm font-medium", isPending ? "text-gray-400" : "text-gray-800")}>
+          <span className={clsx("text-sm font-medium", isPending ? "text-gray-400" : "text-gray-800 dark:text-gray-200")}>
             {stage.label}
           </span>
           {isPast && (
@@ -102,12 +102,12 @@ export function SubmissionProgress() {
     ].some((r) => r.error);
 
     return (
-      <div className="bg-white border border-gray-200 rounded-xl p-8 text-center space-y-4">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-8 text-center space-y-4">
         <div className="text-5xl">{hasErrors ? "⚠️" : "🎉"}</div>
-        <h2 className="text-xl font-bold text-gray-900">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
           {hasErrors ? "Campaign Created with Some Errors" : "Campaign Launched Successfully!"}
         </h2>
-        <div className="flex items-center justify-center gap-6 text-sm text-gray-600">
+        <div className="flex items-center justify-center gap-6 text-sm text-gray-600 dark:text-gray-400">
           <span>✅ {submissionResults.campaigns.filter((r) => !r.error).length} Campaign(s)</span>
           <span>✅ {submissionResults.adSquads.filter((r) => !r.error).length} Ad Set(s)</span>
           <span>✅ {submissionResults.ads.filter((r) => !r.error).length} Ad(s)</span>
@@ -145,8 +145,8 @@ export function SubmissionProgress() {
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
-      <h2 className="font-semibold text-gray-900">Launching your campaign...</h2>
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 space-y-4">
+      <h2 className="font-semibold text-gray-900 dark:text-gray-100">Launching your campaign...</h2>
       <div className="space-y-3">
         {STAGES.map((s) => (
           <StageRow

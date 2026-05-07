@@ -533,7 +533,8 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           onEdgesDelete={onEdgesDelete}
           nodeTypes={NODE_TYPES}
           edgeTypes={EDGE_TYPES}
-          style={{ background: "#f5f5f5" }}
+          colorMode="dark"
+          style={{ background: "#1f2937" }}
           fitView
           fitViewOptions={{ padding: 1.5, maxZoom: 0.75 }}
           deleteKeyCode={["Backspace", "Delete"]}
@@ -541,7 +542,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           maxZoom={2}
           proOptions={{ hideAttribution: true }}
         >
-          <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#d0d0d0" />
+          <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#374151" />
           <Controls showInteractive={false} />
           <MiniMap nodeStrokeWidth={3} zoomable pannable />
         </ReactFlow>
@@ -552,7 +553,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           <button
             type="button"
             onClick={openAddCreative}
-            className="pointer-events-auto border-2 border-dashed border-gray-300 rounded-2xl px-10 py-8 text-sm text-gray-400 hover:border-blue-300 hover:text-blue-500 transition-colors bg-white/80 backdrop-blur-sm shadow-sm"
+            className="pointer-events-auto border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl px-10 py-8 text-sm text-gray-400 hover:border-blue-300 hover:text-blue-500 transition-colors bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm shadow-sm"
           >
             + Add a Creative to start building
           </button>

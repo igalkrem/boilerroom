@@ -110,7 +110,7 @@ const CTA_OPTIONS = [
 ];
 
 const selectCls =
-  "w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 bg-white";
+  "w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 bg-white dark:bg-gray-800 dark:text-gray-100";
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -238,7 +238,7 @@ export function PresetForm({ preset }: PresetFormProps) {
     <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl space-y-8">
       {/* Traffic Source */}
       <div>
-        <p className="text-sm font-medium text-gray-700 mb-2">Traffic Source</p>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Traffic Source</p>
         <div className="flex gap-2">
           <button
             type="button"
@@ -246,7 +246,7 @@ export function PresetForm({ preset }: PresetFormProps) {
             className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
               trafficSource === "snap"
                 ? "bg-yellow-400 border-yellow-400 text-gray-900"
-                : "bg-white border-gray-300 text-gray-600 hover:border-gray-400"
+                : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400"
             }`}
           >
             {trafficSource === "snap" && <span>✓</span>}
@@ -256,10 +256,10 @@ export function PresetForm({ preset }: PresetFormProps) {
             type="button"
             disabled
             title="Coming soon"
-            className="px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-400 cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 dark:border-gray-700 text-gray-400 cursor-not-allowed flex items-center gap-2"
           >
             Facebook
-            <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded">
               soon
             </span>
           </button>
@@ -291,7 +291,7 @@ export function PresetForm({ preset }: PresetFormProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Feed Provider</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Feed Provider</label>
           <select
             value={feedProviderId}
             onChange={(e) => {
@@ -316,7 +316,7 @@ export function PresetForm({ preset }: PresetFormProps) {
 
         {comboOptions.length > 0 && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Combo (optional)
             </label>
             <select
@@ -335,7 +335,7 @@ export function PresetForm({ preset }: PresetFormProps) {
         )}
       </div>
 
-      <hr className="border-gray-100" />
+      <hr className="border-gray-100 dark:border-gray-700" />
 
       {/* Targeting */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -370,12 +370,12 @@ export function PresetForm({ preset }: PresetFormProps) {
         <Select label="Placements" options={PLACEMENT_OPTIONS} {...register("placementConfig")} />
       </div>
 
-      <hr className="border-gray-100" />
+      <hr className="border-gray-100 dark:border-gray-700" />
 
       {/* Bidding & Tracking */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Pixel (optional)</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Pixel (optional)</label>
           <select {...register("pixelId")} className={selectCls}>
             <option value="">— None —</option>
             {pixelOptions.map((o) => (
@@ -424,7 +424,7 @@ export function PresetForm({ preset }: PresetFormProps) {
         />
       </div>
 
-      <hr className="border-gray-100" />
+      <hr className="border-gray-100 dark:border-gray-700" />
 
       {/* Status */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -435,7 +435,7 @@ export function PresetForm({ preset }: PresetFormProps) {
         />
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Ad Status</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ad Status</label>
           <select
             value={adStatus}
             onChange={(e) => setAdStatus(e.target.value as "ACTIVE" | "PAUSED")}
@@ -447,7 +447,7 @@ export function PresetForm({ preset }: PresetFormProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Call to Action</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Call to Action</label>
           <select
             value={callToAction}
             onChange={(e) => setCallToAction(e.target.value)}
@@ -463,7 +463,7 @@ export function PresetForm({ preset }: PresetFormProps) {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+      <div className="flex items-center justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
         <Button type="button" variant="ghost" onClick={() => router.push("/dashboard/presets")}>
           Cancel
         </Button>

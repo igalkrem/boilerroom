@@ -3,9 +3,26 @@
 @tailwind utilities;
 
 body {
-  background-color: #f9fafb;
-  color: #111827;
+  background-color: #111827;
+  color: #f3f4f6;
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.dark {
+  --node-bg: #1f2937;
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark select,
+.dark textarea {
+  background-color: #1f2937;
+  color: #f3f4f6;
+  border-color: #4b5563;
+}
+
+.dark .react-flow__attribution {
+  background: #1f2937;
+  color: #9ca3af;
 }
 
 @layer utilities {

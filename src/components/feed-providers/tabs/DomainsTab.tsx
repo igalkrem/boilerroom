@@ -44,21 +44,21 @@ export function DomainsTab({ domains, onChange }: DomainsTabProps) {
       </div>
 
       {domains.length === 0 && (
-        <div className="border border-dashed border-gray-200 rounded-lg p-8 text-center text-sm text-gray-400">
+        <div className="border border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-8 text-center text-sm text-gray-400">
           No domains configured. Click &quot;+ Add domain&quot; to get started.
         </div>
       )}
 
       <div className="space-y-2">
         {domains.map((domain) => (
-          <div key={domain.id} className="border border-gray-200 rounded-lg p-3 space-y-2">
+          <div key={domain.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-2">
             <div className="flex items-center gap-3">
               <input
                 type="text"
                 placeholder="example.com"
                 value={domain.baseDomain}
                 onChange={(e) => updateDomain(domain.id, { baseDomain: e.target.value })}
-                className="flex-1 px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                className="flex-1 px-2.5 py-1.5 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
               />
               <div className="flex gap-2 shrink-0">
                 {TRAFFIC_SOURCES.map((src) => (
@@ -69,7 +69,7 @@ export function DomainsTab({ domains, onChange }: DomainsTabProps) {
                       onChange={() => toggleSource(domain, src)}
                       className="rounded border-gray-300"
                     />
-                    <span className="text-xs text-gray-600">{src}</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-300">{src}</span>
                   </label>
                 ))}
               </div>
@@ -86,7 +86,7 @@ export function DomainsTab({ domains, onChange }: DomainsTabProps) {
               placeholder="Base URL (e.g. https://example.com/lp)"
               value={domain.baseUrl ?? ""}
               onChange={(e) => updateDomain(domain.id, { baseUrl: e.target.value || undefined })}
-              className="w-full px-2.5 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              className="w-full px-2.5 py-1.5 text-xs text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 dark:bg-gray-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
             />
           </div>
         ))}

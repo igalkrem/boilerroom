@@ -32,10 +32,10 @@ export function LoadPresetBanner({ onLoad }: LoadPresetBannerProps) {
   }
 
   return (
-    <div className="bg-cyan-50 border border-cyan-200 rounded-xl p-4 mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+    <div className="bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded-xl p-4 mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-3">
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-cyan-900">Load from a saved preset</p>
-        <p className="text-xs text-cyan-700 mt-0.5">
+        <p className="text-sm font-medium text-cyan-900 dark:text-cyan-300">Load from a saved preset</p>
+        <p className="text-xs text-cyan-700 dark:text-cyan-400 mt-0.5">
           Pre-fill this wizard with your saved campaign &amp; ad set settings.
         </p>
       </div>
@@ -43,7 +43,7 @@ export function LoadPresetBanner({ onLoad }: LoadPresetBannerProps) {
         <select
           value={selectedId}
           onChange={(e) => setSelectedId(e.target.value)}
-          className="text-sm border border-cyan-300 rounded-md px-2 py-1.5 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+          className="text-sm border border-cyan-300 dark:border-cyan-700 rounded-md px-2 py-1.5 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-cyan-500"
         >
           {presets.map((p) => (
             <option key={p.id} value={p.id}>

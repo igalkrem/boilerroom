@@ -50,19 +50,19 @@ export function SiloBrowser({ isOpen, onClose, onSelect, adAccountId }: SiloBrow
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Select from Silo</h2>
+            <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Select from Silo</h2>
             <p className="text-xs text-gray-500 mt-0.5">Assets with ✓ are already cached for this ad account — no upload needed</p>
           </div>
-          <button className="text-gray-400 hover:text-gray-600 text-xl" onClick={onClose}>✕</button>
+          <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl" onClick={onClose}>✕</button>
         </div>
 
         {/* Filters */}
-        <div className="px-6 py-3 border-b border-gray-100 flex gap-3 flex-wrap">
+        <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-700 flex gap-3 flex-wrap">
           <div className="flex-1 min-w-[180px]">
             <Input
               placeholder="Search by name…"
@@ -71,7 +71,7 @@ export function SiloBrowser({ isOpen, onClose, onSelect, adAccountId }: SiloBrow
             />
           </div>
           <select
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            className="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-300 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
             value={filterTag}
             onChange={(e) => setFilterTag(e.target.value)}
           >
@@ -81,7 +81,7 @@ export function SiloBrowser({ isOpen, onClose, onSelect, adAccountId }: SiloBrow
             ))}
           </select>
           <select
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            className="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-300 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
             value={filterType}
             onChange={(e) => setFilterType(e.target.value as "" | "IMAGE" | "VIDEO")}
           >
@@ -119,7 +119,7 @@ export function SiloBrowser({ isOpen, onClose, onSelect, adAccountId }: SiloBrow
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-between items-center">
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
           <p className="text-xs text-gray-400">{sorted.length} asset{sorted.length !== 1 ? "s" : ""}</p>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
         </div>

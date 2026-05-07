@@ -69,7 +69,7 @@ export function CombosTab({ combos, snapConfig, domains, onChange }: CombosTabPr
       </div>
 
       {combos.length === 0 && editingId === null && (
-        <div className="border border-dashed border-gray-200 rounded-lg p-8 text-center text-sm text-gray-400">
+        <div className="border border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-8 text-center text-sm text-gray-400">
           No combos yet. Click &quot;+ New combo&quot; to create one.
         </div>
       )}
@@ -77,9 +77,9 @@ export function CombosTab({ combos, snapConfig, domains, onChange }: CombosTabPr
       <div className="space-y-2">
         {combos.map((combo) =>
           editingId === combo.id ? null : (
-            <div key={combo.id} className="flex items-center gap-3 border border-gray-200 rounded-lg p-3">
+            <div key={combo.id} className="flex items-center gap-3 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800">{combo.name}</p>
+                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{combo.name}</p>
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {combo.pixelId && (
                     <span className="text-xs bg-purple-50 text-purple-700 border border-purple-100 px-1.5 py-0.5 rounded">
@@ -101,7 +101,7 @@ export function CombosTab({ combos, snapConfig, domains, onChange }: CombosTabPr
               <button
                 type="button"
                 onClick={() => startEdit(combo)}
-                className="text-xs text-gray-500 hover:text-gray-700"
+                className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
               >
                 Edit
               </button>
@@ -117,23 +117,23 @@ export function CombosTab({ combos, snapConfig, domains, onChange }: CombosTabPr
         )}
 
         {editingId !== null && (
-          <div className="border-2 border-blue-200 rounded-lg p-4 space-y-3 bg-blue-50/30">
+          <div className="border-2 border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-3 bg-blue-50/30 dark:bg-blue-900/10">
             <input
               type="text"
               placeholder="Combo name"
               value={draft.name ?? ""}
               onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-              className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-2.5 py-1.5 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               autoFocus
             />
 
             {pixelOptions.length > 0 && (
               <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Pixel</label>
+                <label className="text-xs font-medium text-gray-600 dark:text-gray-300 block mb-1">Pixel</label>
                 <select
                   value={draft.pixelId ?? ""}
                   onChange={(e) => setDraft((d) => ({ ...d, pixelId: e.target.value || undefined }))}
-                  className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-2.5 py-1.5 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">— None —</option>
                   {pixelOptions.map((id) => (
@@ -145,11 +145,11 @@ export function CombosTab({ combos, snapConfig, domains, onChange }: CombosTabPr
 
             {domainOptions.length > 0 && (
               <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Domain</label>
+                <label className="text-xs font-medium text-gray-600 dark:text-gray-300 block mb-1">Domain</label>
                 <select
                   value={draft.domainId ?? ""}
                   onChange={(e) => setDraft((d) => ({ ...d, domainId: e.target.value || undefined }))}
-                  className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-2.5 py-1.5 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">— None —</option>
                   {domainOptions.map((d) => (
@@ -171,7 +171,7 @@ export function CombosTab({ combos, snapConfig, domains, onChange }: CombosTabPr
                 }
                 className="rounded border-gray-300"
               />
-              <span className="text-xs text-gray-700">Add channel ID to campaign name</span>
+              <span className="text-xs text-gray-700 dark:text-gray-300">Add channel ID to campaign name</span>
             </label>
 
             <div className="flex gap-2 pt-1">
