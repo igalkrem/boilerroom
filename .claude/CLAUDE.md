@@ -345,7 +345,7 @@ src/
 ## Snapchat API Field Notes
 
 - Campaign objective: `objective_v2_properties.objective_v2_type` is always `"SALES"` — hardcoded in the orchestrator and hidden from the UI.
-- Campaign budget: only `daily_budget_micro` is supported (`spendCapType: "DAILY_BUDGET" | "NO_BUDGET"`). Minimum: $20 (20,000,000 micro). Ad squads support both daily and lifetime.
+- Campaign budget: only `daily_budget_micro` is supported (`spendCapType: "DAILY_BUDGET" | "NO_BUDGET"`). Minimum: $20 (20,000,000 micro) at the campaign level. Ad squads support both daily and lifetime — no $20 floor applies; the UI enforces only `> $0` (do NOT add a $20 minimum to ad squad budget inputs).
 - `lifetime_spend_cap_micro` and `lifetime_budget_micro` are NOT sent on campaigns. `lifetime_budget_micro` is ad-squad only.
 - `spend_cap_type` is an ad squad field only, not valid on campaigns.
 - Ad squad `delivery_constraint` is required — `"DAILY_BUDGET"` or `"LIFETIME_BUDGET"`. `conversion_location` is NOT valid (E1001).
