@@ -186,11 +186,8 @@ export async function syncAccount(
       const snapStart = snapDatesToFetch[0];
       const snapEnd = snapDatesToFetch[snapDatesToFetch.length - 1];
 
-      // Skip stats for paused squads — historical data for finalized dates is already cached.
-      const activeSquads = adSquads.filter((s) => s.status === "ACTIVE");
-
       await Promise.all(
-        activeSquads.map(async (squad) => {
+        adSquads.map(async (squad) => {
           try {
             const statRows = await getAdSquadStats(squad.id, snapStart, snapEnd, timezone, accessToken);
             debugStatRows += statRows.length;
@@ -224,7 +221,7 @@ export async function syncAccount(
         })
       );
 
-      const allSquadsFailed = activeSquads.length > 0 && debugSquadErrors.length === activeSquads.length;
+      const allSquadsFailed = adSquads.length > 0 && debugSquadErrors.length === adSquads.length;
       if (!allSquadsFailed) {
         for (const date of snapDatesToFetch) {
           await markSynced("snapchat", date, adAccountId);
