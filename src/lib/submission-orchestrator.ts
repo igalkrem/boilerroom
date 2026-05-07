@@ -265,7 +265,12 @@ export async function runSubmission(
           geos: sq.geoCountryCodes.map((c) => ({ country_code: c.toLowerCase() })),
           ...buildDemographics(sq),
         },
-        placement_v2: { config: sq.placementConfig ?? "AUTOMATIC" },
+        // Only send placement_v2 for non-AUTOMATIC configs. Sending it (even with
+        // config: "AUTOMATIC") causes Snapchat to lock the squad — budget/bid/status
+        // updates return E2025 ("Update is not supported for this entity") after creation.
+        ...(sq.placementConfig && sq.placementConfig !== "AUTOMATIC"
+          ? { placement_v2: { config: sq.placementConfig } }
+          : {}),
         delivery_constraint: sq.spendCapType === "LIFETIME_BUDGET" ? "LIFETIME_BUDGET" : "DAILY_BUDGET",
         billing_event: "IMPRESSION",
         optimization_goal: sq.optimizationGoal,
