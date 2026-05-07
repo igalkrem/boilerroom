@@ -6,6 +6,14 @@ import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import { DrilldownModal } from "./DrilldownModal";
 import { ColumnSelector } from "./ColumnSelector";
 
+function SnapchatLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M12.166.002c.83-.005 3.39.229 4.643 2.848.422.88.338 2.352.269 3.562l-.012.2c-.006.09.049.125.106.101.225-.093.456-.24.7-.397.328-.21.664-.426 1.021-.506a1.53 1.53 0 01.379-.024c.498.032.938.346 1.106.785.217.567-.045 1.128-.779 1.663-.118.086-.247.164-.375.241-.403.241-.732.437-.665.671.044.152.19.332.364.553.536.677 1.344 1.7 1.344 3.414 0 2.618-1.83 4.62-4.99 5.544-.193.056-.236.151-.267.27-.046.175-.085.325-.296.484-.271.2-.68.3-1.252.302-.494.002-1.102-.08-1.76-.167-.77-.102-1.566-.209-2.27-.153-.703.055-1.377.22-2.018.379-.548.138-1.072.27-1.572.27h-.049c-.545-.008-.938-.106-1.198-.3-.208-.158-.248-.307-.291-.48-.03-.117-.072-.212-.265-.268C3.83 18.625 2 16.623 2 14.005c0-1.715.808-2.737 1.344-3.414.174-.22.32-.401.364-.553.068-.233-.262-.43-.665-.671a5.39 5.39 0 01-.375-.241C1.934 8.59 1.672 8.03 1.89 7.46c.167-.439.608-.753 1.106-.785a1.51 1.51 0 01.379.024c.357.08.693.296 1.021.506.244.157.475.304.7.397.056.023.112-.011.106-.1l-.012-.201C5.12 6.09 5.037 4.617 5.46 3.736 6.574 1.388 8.91.807 10.316.36 10.83.193 11.444.006 12.166.002z" />
+    </svg>
+  );
+}
+
 export interface SquadDetail {
   daily_budget_micro: number;
   bid_micro: number;
@@ -33,13 +41,15 @@ type SortKey =
   | "clicks" | "page_views" | "video_views" | "funnel_clicks" | "funnel_impressions"
   | "funnel_requests" | "ad_requests" | "matched_ad_requests"
   | "rpc" | "cpm" | "cpc" | "ctr" | "cpr" | "rpr" | "profit" | "cvr"
-  | "roi_1d" | "roi_2d" | "roi_3d";
+  | "roi_1d" | "roi_2d" | "roi_3d"
+  | "snap_results" | "snap_purchase_value_usd" | "snap_cost_per_result";
 
 function microToDollar(micro: number) { return micro / 1_000_000; }
 function dollarToMicro(dollars: number) { return Math.round(dollars * 1_000_000); }
 function fmt$(n: number) { return `$${n.toFixed(2)}`; }
 function fmtPct(n: number | null) { return n === null ? "—" : n.toFixed(2) + "%"; }
-function fmtRoi(pct: number | null) { return pct === null ? "—" : pct.toFixed(2) + "%"; }
+function fmtPct0(n: number | null) { return n === null ? "—" : Math.round(n).toFixed(0) + "%"; }
+function fmtRoi(pct: number | null) { return pct === null ? "—" : Math.round(pct).toFixed(0) + "%"; }
 function roiColor(pct: number | null) {
   if (pct === null) return "text-gray-400";
   if (pct >= 100) return "text-green-600";
@@ -83,6 +93,9 @@ export interface AggrRow {
   rpr: number | null;
   profit: number;
   cvr: number | null;
+  snap_results: number;
+  snap_purchase_value_usd: number;
+  snap_cost_per_result: number | null;
 }
 
 interface MetricColDef {
@@ -104,7 +117,7 @@ const METRIC_COLS: Record<string, MetricColDef> = {
   ctr:                 { label: "CTR",                 sortKey: "ctr",                 render: (r) => fmtPct(r.ctr),                               tdClass: "text-gray-700" },
   cpm:                 { label: "CPM",                 sortKey: "cpm",                 render: (r) => r.cpm !== null ? fmt$(r.cpm) : "—",          tdClass: "text-gray-700" },
   cpc:                 { label: "CPC",                 sortKey: "cpc",                 render: (r) => r.cpc !== null ? fmt$(r.cpc) : "—",          tdClass: "text-gray-700" },
-  cvr:                 { label: "CVR",                 sortKey: "cvr",                 render: (r) => fmtPct(r.cvr),                               tdClass: "text-gray-700" },
+  cvr:                 { label: "CVR",                 sortKey: "cvr",                 render: (r) => fmtPct0(r.cvr),                              tdClass: "text-gray-700" },
   cpr:                 { label: "CPR",                 sortKey: "cpr",                 render: (r) => r.cpr !== null ? fmt$(r.cpr) : "—",          tdClass: "text-gray-700" },
   rpr:                 { label: "RPR",                 sortKey: "rpr",                 render: (r) => r.rpr !== null ? fmt$(r.rpr) : "—",          tdClass: "text-gray-700" },
   impressions:         { label: "Impressions",         sortKey: "impressions",         render: (r) => fmtNum(r.impressions),                       tdClass: "text-gray-700" },
@@ -117,7 +130,10 @@ const METRIC_COLS: Record<string, MetricColDef> = {
   clicks:              { label: "VZ Clicks",           sortKey: "clicks",              render: (r) => fmtNum(r.clicks),                            tdClass: "text-gray-700" },
   page_views:          { label: "Page Views",          sortKey: "page_views",          render: (r) => fmtNum(r.page_views),                        tdClass: "text-gray-700" },
   video_views:         { label: "Video Views",         sortKey: "video_views",         render: (r) => fmtNum(r.video_views),                       tdClass: "text-gray-700" },
-  domain_name:         { label: "Domain",                                              render: (r) => <span className="text-xs text-gray-500">{r.domain_name || "—"}</span> },
+  domain_name:              { label: "Domain",            render: (r) => <span className="text-xs text-gray-500">{r.domain_name || "—"}</span> },
+  snap_results:             { label: "Results",           sortKey: "snap_results",             render: (r) => fmtNum(r.snap_results),                                                                tdClass: "text-gray-700" },
+  snap_cost_per_result:     { label: "Cost per Result",   sortKey: "snap_cost_per_result",     render: (r) => r.snap_cost_per_result !== null ? fmt$(r.snap_cost_per_result) : "—",                  tdClass: "text-gray-700" },
+  snap_purchase_value_usd:  { label: "Purchase Value",    sortKey: "snap_purchase_value_usd",  render: (r) => fmt$(r.snap_purchase_value_usd),                                                       tdClass: "text-gray-700" },
 };
 
 function SortArrow({ active, desc }: { active: boolean; desc: boolean }) {
@@ -217,6 +233,8 @@ export function PerformanceTable({
         ex.funnel_clicks += r.funnel_clicks;
         ex.funnel_impressions += r.funnel_impressions;
         ex.funnel_requests += r.funnel_requests;
+        ex.snap_results += r.snap_results;
+        ex.snap_purchase_value_usd += r.snap_purchase_value_usd;
         if (!ex.domain_name && r.domain_name) ex.domain_name = r.domain_name;
       } else {
         map.set(r.ad_squad_id, {
@@ -236,6 +254,8 @@ export function PerformanceTable({
           funnel_impressions: r.funnel_impressions,
           funnel_requests: r.funnel_requests,
           domain_name: r.domain_name,
+          snap_results: r.snap_results,
+          snap_purchase_value_usd: r.snap_purchase_value_usd,
           roi_pct: null,
           roi_1d: null,
           roi_2d: null,
@@ -248,6 +268,7 @@ export function PerformanceTable({
           rpr: null,
           profit: 0,
           cvr: null,
+          snap_cost_per_result: null,
         });
       }
     }
@@ -267,6 +288,7 @@ export function PerformanceTable({
         rpr: a.funnel_requests > 0 ? a.revenue_usd / a.funnel_requests : null,
         profit: a.revenue_usd - a.spend_usd,
         cvr: a.swipes > 0 ? (a.funnel_clicks / a.swipes) * 100 : null,
+        snap_cost_per_result: a.snap_results > 0 ? a.spend_usd / a.snap_results : null,
       }))
       .sort((a, b) => {
         const av = a[sortKey] ?? -Infinity;
@@ -487,6 +509,7 @@ export function PerformanceTable({
       "CVR (%)", "CPR", "RPR", "RPC", "Page Views", "VZ Clicks",
       "Ad Requests", "Matched Requests", "Funnel Impressions", "Funnel Requests",
       "Domain", "Budget ($)", "Bid ($)", "Status", "-1D ROI", "-2D ROI", "-3D ROI",
+      "Results", "Cost per Result", "Purchase Value ($)",
     ];
     const csvRows = filtered.map(r => {
       const detail = squadDetails.get(r.ad_squad_id);
@@ -512,6 +535,9 @@ export function PerformanceTable({
         r.roi_1d !== null ? r.roi_1d.toFixed(2) : "",
         r.roi_2d !== null ? r.roi_2d.toFixed(2) : "",
         r.roi_3d !== null ? r.roi_3d.toFixed(2) : "",
+        r.snap_results,
+        r.snap_cost_per_result !== null ? r.snap_cost_per_result.toFixed(2) : "",
+        r.snap_purchase_value_usd.toFixed(2),
       ].join(",");
     });
     const content = [headers.join(","), ...csvRows].join("\n");
@@ -780,17 +806,20 @@ export function PerformanceTable({
                       className="px-3 py-2.5 overflow-hidden"
                       style={{ width: nameColWidth, minWidth: nameColWidth, maxWidth: nameColWidth }}
                     >
-                      <button
-                        onClick={() => setDrilldown({
-                          id: r.ad_squad_id,
-                          name: r.ad_squad_name,
-                          accountId: detail?.ad_account_id ?? "",
-                        })}
-                        className="text-left text-sm font-medium text-gray-900 hover:text-blue-600 hover:underline truncate block w-full"
-                        title={r.ad_squad_name}
-                      >
-                        {r.ad_squad_name}
-                      </button>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <SnapchatLogo className="w-3.5 h-3.5 flex-shrink-0 text-yellow-400" />
+                        <button
+                          onClick={() => setDrilldown({
+                            id: r.ad_squad_id,
+                            name: r.ad_squad_name,
+                            accountId: detail?.ad_account_id ?? "",
+                          })}
+                          className="text-left text-sm font-medium text-gray-900 hover:text-blue-600 hover:underline truncate block min-w-0"
+                          title={r.ad_squad_name}
+                        >
+                          {r.ad_squad_name}
+                        </button>
+                      </div>
                     </td>
 
                     {/* Status toggle */}

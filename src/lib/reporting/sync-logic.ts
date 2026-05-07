@@ -198,10 +198,12 @@ export async function syncAccount(
               await sql`
                 INSERT INTO snapchat_ad_squad_stats
                   (ad_squad_id, ad_account_id, ad_squad_name, stat_date, country_code,
-                   impressions, swipes, spend_micro, video_views, fetched_at)
+                   impressions, swipes, spend_micro, video_views,
+                   conversion_purchases, conversion_purchase_value, fetched_at)
                 VALUES
                   (${squad.id}, ${adAccountId}, ${squad.name}, ${r.date}, ${r.country_code},
-                   ${r.impressions}, ${r.swipes}, ${r.spend_micro}, ${r.video_views}, NOW())
+                   ${r.impressions}, ${r.swipes}, ${r.spend_micro}, ${r.video_views},
+                   ${r.conversion_purchases}, ${r.conversion_purchase_value_micro}, NOW())
                 ON CONFLICT (ad_squad_id, stat_date, country_code)
                 DO UPDATE SET
                   ad_squad_name = EXCLUDED.ad_squad_name,
@@ -209,6 +211,8 @@ export async function syncAccount(
                   swipes = EXCLUDED.swipes,
                   spend_micro = EXCLUDED.spend_micro,
                   video_views = EXCLUDED.video_views,
+                  conversion_purchases = EXCLUDED.conversion_purchases,
+                  conversion_purchase_value = EXCLUDED.conversion_purchase_value,
                   fetched_at = NOW()
               `;
             }
