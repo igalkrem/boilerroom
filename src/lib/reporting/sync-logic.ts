@@ -1,5 +1,6 @@
 import { runMigrations, sql } from "@/lib/db";
 import { fetchKingsRoadReport } from "@/lib/kingsroad";
+import { fetchPredictoReport } from "@/lib/predicto";
 import { getAdSquadsByAccount } from "@/lib/snapchat/adsquads";
 import { getAdSquadStats } from "@/lib/snapchat/stats";
 
@@ -67,6 +68,7 @@ export function buildRanges(dates: string[]): Array<[string, string]> {
 export interface SyncResult {
   snapchat: { synced: number; skipped: number; error: string | null };
   kingsroad: { synced: number; skipped: number };
+  predicto: { synced: number; skipped: number };
   debug: {
     squads_found: number;
     squad_ids: Array<{ id: string; name: string }>;
@@ -91,6 +93,8 @@ export async function syncAccount(
   let snapchatSkipped = 0;
   let kingsroadSynced = 0;
   let kingsroadSkipped = 0;
+  let predictoSynced = 0;
+  let predictoSkipped = 0;
 
   // ── KingsRoad ─────────────────────────────────────────────────────────────
   const kingsroadDatesToFetch: string[] = [];
@@ -140,6 +144,52 @@ export async function syncAccount(
       }
     } catch (err) {
       console.error("[reporting/sync] KingsRoad fetch error:", err);
+    }
+  }
+
+  // ── Predicto ──────────────────────────────────────────────────────────────
+  const predictoDatesToFetch: string[] = [];
+  for (const date of dates) {
+    if (!force && await shouldSkip("predicto", date, "")) {
+      predictoSkipped++;
+    } else {
+      predictoDatesToFetch.push(date);
+    }
+  }
+
+  if (predictoDatesToFetch.length > 0) {
+    const ranges = buildRanges(predictoDatesToFetch);
+    try {
+      for (const [pStart, pEnd] of ranges) {
+        const rows = await fetchPredictoReport(pStart, pEnd);
+        for (const r of rows) {
+          await sql`
+            INSERT INTO predicto_report
+              (record_date, custom_channel_id,
+               revenue_usd, clicks, funnel_clicks, funnel_impressions, funnel_requests, requests,
+               fetched_at)
+            VALUES
+              (${r.date}, ${r.custom_channel_id},
+               ${r.revenue_usd}, ${r.clicks}, ${r.funnel_clicks}, ${r.funnel_impressions},
+               ${r.funnel_requests}, ${r.requests}, NOW())
+            ON CONFLICT (record_date, custom_channel_id)
+            DO UPDATE SET
+              revenue_usd        = EXCLUDED.revenue_usd,
+              clicks             = EXCLUDED.clicks,
+              funnel_clicks      = EXCLUDED.funnel_clicks,
+              funnel_impressions = EXCLUDED.funnel_impressions,
+              funnel_requests    = EXCLUDED.funnel_requests,
+              requests           = EXCLUDED.requests,
+              fetched_at         = NOW()
+          `;
+        }
+      }
+      for (const date of predictoDatesToFetch) {
+        await markSynced("predicto", date, "");
+        predictoSynced++;
+      }
+    } catch (err) {
+      console.error("[reporting/sync] Predicto fetch error:", err);
     }
   }
 
@@ -229,6 +279,7 @@ export async function syncAccount(
   return {
     snapchat: { synced: snapchatSynced, skipped: snapchatSkipped, error: snapchatError },
     kingsroad: { synced: kingsroadSynced, skipped: kingsroadSkipped },
+    predicto: { synced: predictoSynced, skipped: predictoSkipped },
     debug: {
       squads_found: debugSquads.length,
       squad_ids: debugSquads,

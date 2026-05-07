@@ -129,6 +129,14 @@ export async function releaseChannel(campaignSnapId: string, googleUserId: strin
   `;
 }
 
+export async function updateChannelAdSquadId(channelId: string, adSquadId: string): Promise<void> {
+  await sql`
+    UPDATE feed_provider_channels
+    SET ad_squad_snap_id = ${adSquadId}
+    WHERE channel_id = ${channelId} AND status = 'in-use'
+  `;
+}
+
 // ─── Snapchat token storage (for server-side cron sync) ────────────────────
 // Only the refresh_token is persisted — access tokens are transient and
 // fetched fresh at sync time. Tokens are AES-256-GCM encrypted at rest.

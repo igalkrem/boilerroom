@@ -326,6 +326,18 @@ export async function runSubmission(
     })
   );
 
+  // ── Store channel → ad squad mapping (Predicto revenue attribution) ────────
+  // After ad squads are created, record which ad squad this channel was assigned
+  // to so the reporting JOIN can link Predicto's custom_channel_id → ad_squad_id.
+  if (channelId && squadIdMap.size > 0) {
+    const firstAdSquadId = [...squadIdMap.values()][0];
+    fetch("/api/feed-providers/channels/link-squad", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId, adSquadId: firstAdSquadId }),
+    }).catch((err) => console.warn("[orchestrator] link-squad failed (non-fatal):", String(err)));
+  }
+
   // ── Resolve {{channel.id}} macro ─────────────────────────────────────────
   // {{campaign.id}}, {{adset.id}}, and {{ad.id}} are Snapchat native macros —
   // Snapchat substitutes them at click time, so we leave them as-is.

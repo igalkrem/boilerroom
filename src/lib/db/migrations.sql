@@ -64,3 +64,18 @@ CREATE TABLE IF NOT EXISTS user_snapchat_tokens (
   ad_account_ids    JSONB       NOT NULL DEFAULT '[]',
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS predicto_report (
+  record_date        DATE           NOT NULL,
+  custom_channel_id  TEXT           NOT NULL,
+  revenue_usd        NUMERIC(14, 4) NOT NULL DEFAULT 0,
+  clicks             BIGINT         NOT NULL DEFAULT 0,
+  funnel_clicks      BIGINT         NOT NULL DEFAULT 0,
+  funnel_impressions BIGINT         NOT NULL DEFAULT 0,
+  funnel_requests    BIGINT         NOT NULL DEFAULT 0,
+  requests           BIGINT         NOT NULL DEFAULT 0,
+  fetched_at         TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (record_date, custom_channel_id)
+);
+
+ALTER TABLE feed_provider_channels ADD COLUMN IF NOT EXISTS ad_squad_snap_id TEXT;
