@@ -18,12 +18,12 @@ export interface PredictoRow {
 interface ApiRow {
   date: string;
   custom_channel_id: string;
-  revenue?: number;
-  clicks?: number;
-  funnel_clicks?: number;
-  funnel_impressions?: number;
-  funnel_requests?: number;
-  requests?: number;
+  estimated_revenue?: number | string;
+  clicks?: number | string;
+  funnel_clicks?: number | string;
+  funnel_impressions?: number | string;
+  funnel_requests?: number | string;
+  requests?: number | string;
 }
 
 interface ApiResponse {
@@ -63,11 +63,11 @@ export async function fetchPredictoReport(startDate: string, endDate: string): P
   return (json.data ?? []).map((r) => ({
     date: r.date,
     custom_channel_id: r.custom_channel_id ?? "",
-    revenue_usd: r.revenue ?? 0,
-    clicks: r.clicks ?? 0,
-    funnel_clicks: r.funnel_clicks ?? 0,
-    funnel_impressions: r.funnel_impressions ?? 0,
-    funnel_requests: r.funnel_requests ?? 0,
-    requests: r.requests ?? 0,
+    revenue_usd: Number(r.estimated_revenue ?? 0),
+    clicks: Number(r.clicks ?? 0),
+    funnel_clicks: Number(r.funnel_clicks ?? 0),
+    funnel_impressions: Number(r.funnel_impressions ?? 0),
+    funnel_requests: Number(r.funnel_requests ?? 0),
+    requests: Number(r.requests ?? 0),
   }));
 }
