@@ -1,4 +1,4 @@
-const BASE_URL = "https://server.predicto.ai/api/v1/search/reporting/";
+const BASE_URL = "https://server.predicto.ai/api/v1/search/reporting";
 
 function token(): string | null {
   return process.env.PREDICTO_API_TOKEN ?? null;
