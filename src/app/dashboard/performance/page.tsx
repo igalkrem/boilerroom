@@ -223,7 +223,7 @@ export default function PerformancePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Performance</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Performance</h1>
       <p className="text-sm text-gray-500 mb-4">
         Full-funnel metrics — Snapchat spend joined with KingsRoad revenue.
       </p>
@@ -235,7 +235,7 @@ export default function PerformancePage() {
         <button
           onClick={handleManualRefresh}
           disabled={syncing || loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {syncing ? <Spinner /> : <span>↻</span>}
           {syncing ? "Syncing…" : "Refresh"}
@@ -279,7 +279,7 @@ export default function PerformancePage() {
       )}
 
       {!loading && !syncing && rows.length === 0 && lastLoaded && (
-        <p className="text-sm text-gray-500 mt-8 text-center">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-8 text-center">
           No data found for the selected date range. Try a different range or click Refresh.
         </p>
       )}
