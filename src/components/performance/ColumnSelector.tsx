@@ -28,6 +28,9 @@ const ALL_COLUMNS = [
   { key: "funnel_requests",      label: "Funnel Requests" },
   { key: "domain_name",          label: "Domain" },
   { key: "video_views",          label: "Video Views" },
+  { key: "snap_results",            label: "Results" },
+  { key: "snap_cost_per_result",    label: "Cost per Result" },
+  { key: "snap_purchase_value_usd", label: "Purchase Value" },
 ] as const;
 
 const ALL_KEYS = ALL_COLUMNS.map((c) => c.key as string);

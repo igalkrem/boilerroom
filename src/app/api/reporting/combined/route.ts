@@ -23,6 +23,8 @@ export interface CombinedRow {
   funnel_impressions: number;
   funnel_requests: number;
   domain_name: string;
+  snap_results: number;
+  snap_purchase_value_usd: number;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -67,7 +69,9 @@ export async function GET(request: NextRequest) {
         COALESCE(k.funnel_clicks, 0)::bigint      AS funnel_clicks,
         COALESCE(k.funnel_impressions, 0)::bigint AS funnel_impressions,
         COALESCE(k.funnel_requests, 0)::bigint    AS funnel_requests,
-        COALESCE(k.domain_name, '')               AS domain_name
+        COALESCE(k.domain_name, '')               AS domain_name,
+        s.conversion_purchases::bigint            AS conversion_purchases,
+        s.conversion_purchase_value::bigint       AS conversion_purchase_value
       FROM snapchat_ad_squad_stats s
       LEFT JOIN (
         SELECT
@@ -119,6 +123,8 @@ export async function GET(request: NextRequest) {
       funnel_impressions: Number(r.funnel_impressions),
       funnel_requests: Number(r.funnel_requests),
       domain_name: r.domain_name as string,
+      snap_results: Number(r.conversion_purchases),
+      snap_purchase_value_usd: Number(r.conversion_purchase_value) / 1_000_000,
     };
   });
 

@@ -7,12 +7,21 @@ export interface AdSquadStatRow {
   swipes: number;
   spend_micro: number;
   video_views: number;
+  conversion_purchases: number;
+  conversion_purchase_value_micro: number;
 }
 
 interface SnapTimeseriesEntry {
   start_time: string;
   end_time: string;
-  stats: { impressions?: number; swipes?: number; spend?: number; video_views?: number };
+  stats: {
+    impressions?: number;
+    swipes?: number;
+    spend?: number;
+    video_views?: number;
+    conversion_purchases?: number;
+    conversion_purchase_value?: number;
+  };
 }
 
 interface SnapStatsResponse {
@@ -67,7 +76,7 @@ export async function getAdSquadStats(
   const endTime = `${endDateStr}T00:00:00.000${tzOffset(endDateStr, timezone)}`;
 
   const data = await snapFetch<SnapStatsResponse>(
-    `/adsquads/${adSquadId}/stats?granularity=DAY&fields=impressions,swipes,spend,video_views&start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`,
+    `/adsquads/${adSquadId}/stats?granularity=DAY&fields=impressions,swipes,spend,video_views,conversion_purchases,conversion_purchase_value&start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`,
     {},
     token
   );
@@ -84,6 +93,8 @@ export async function getAdSquadStats(
       swipes: ts.stats.swipes ?? 0,
       spend_micro: toMicro(ts.stats.spend),
       video_views: ts.stats.video_views ?? 0,
+      conversion_purchases: ts.stats.conversion_purchases ?? 0,
+      conversion_purchase_value_micro: toMicro(ts.stats.conversion_purchase_value),
     });
   }
 
