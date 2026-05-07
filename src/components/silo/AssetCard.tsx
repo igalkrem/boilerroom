@@ -137,6 +137,11 @@ export function AssetCard({
         <p className="text-sm font-semibold text-gray-900 leading-snug truncate" title={asset.name}>
           {asset.name}
         </p>
+        {asset.originalFileName && (
+          <p className="text-[11px] text-gray-400 truncate" title={asset.originalFileName}>
+            {asset.originalFileName}
+          </p>
+        )}
         <div className="flex items-center gap-1.5 flex-wrap">
           {statusBadge(asset)}
           {tagName && <Badge variant="gray">{tagName}</Badge>}
