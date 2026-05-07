@@ -1,9 +1,7 @@
 import { runMigrations, sql } from "@/lib/db";
 import { fetchKingsRoadReport } from "@/lib/kingsroad";
-import { getCampaigns } from "@/lib/snapchat/campaigns";
-import { getAdSquads } from "@/lib/snapchat/adsquads";
+import { getAdSquadsByAccount } from "@/lib/snapchat/adsquads";
 import { getAdSquadStats } from "@/lib/snapchat/stats";
-import type { SnapAdSquad } from "@/types/snapchat";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -70,7 +68,6 @@ export interface SyncResult {
   snapchat: { synced: number; skipped: number; error: string | null };
   kingsroad: { synced: number; skipped: number };
   debug: {
-    campaigns_found: number;
     squads_found: number;
     squad_ids: Array<{ id: string; name: string }>;
     stat_rows_fetched: number;
@@ -156,21 +153,13 @@ export async function syncAccount(
     }
   }
 
-  let debugCampaigns: string[] = [];
   let debugSquads: Array<{ id: string; name: string }> = [];
   let debugStatRows = 0;
   let snapchatError: string | null = null;
   const debugSquadErrors: Array<{ id: string; error: string }> = [];
 
   try {
-    const campaigns = await getCampaigns(adAccountId, accessToken);
-    debugCampaigns = campaigns.map((c) => c.id);
-    const adSquadLists = await Promise.allSettled(
-      campaigns.map((c) => getAdSquads(c.id, accessToken))
-    );
-    const adSquads = adSquadLists
-      .filter((r): r is PromiseFulfilledResult<SnapAdSquad[]> => r.status === "fulfilled")
-      .flatMap((r) => r.value);
+    const adSquads = await getAdSquadsByAccount(adAccountId, accessToken);
     debugSquads = adSquads.map((s) => ({ id: s.id, name: s.name }));
 
     // Always backfill names for existing rows.
@@ -186,8 +175,11 @@ export async function syncAccount(
       const snapStart = snapDatesToFetch[0];
       const snapEnd = snapDatesToFetch[snapDatesToFetch.length - 1];
 
+      // Skip stats for paused squads — historical data for finalized dates is already cached.
+      const activeSquads = adSquads.filter((s) => s.status === "ACTIVE");
+
       await Promise.all(
-        adSquads.map(async (squad) => {
+        activeSquads.map(async (squad) => {
           try {
             const statRows = await getAdSquadStats(squad.id, snapStart, snapEnd, timezone, accessToken);
             debugStatRows += statRows.length;
@@ -221,7 +213,7 @@ export async function syncAccount(
         })
       );
 
-      const allSquadsFailed = adSquads.length > 0 && debugSquadErrors.length === adSquads.length;
+      const allSquadsFailed = activeSquads.length > 0 && debugSquadErrors.length === activeSquads.length;
       if (!allSquadsFailed) {
         for (const date of snapDatesToFetch) {
           await markSynced("snapchat", date, adAccountId);
@@ -238,7 +230,6 @@ export async function syncAccount(
     snapchat: { synced: snapchatSynced, skipped: snapchatSkipped, error: snapchatError },
     kingsroad: { synced: kingsroadSynced, skipped: kingsroadSkipped },
     debug: {
-      campaigns_found: debugCampaigns.length,
       squads_found: debugSquads.length,
       squad_ids: debugSquads,
       stat_rows_fetched: debugStatRows,
