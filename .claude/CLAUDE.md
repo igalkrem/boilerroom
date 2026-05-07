@@ -28,7 +28,7 @@ Do not skip any step. Do not ask for confirmation before running these commands.
 
 ## Stack
 
-- **Framework:** Next.js 14 (App Router), TypeScript, Tailwind CSS
+- **Framework:** Next.js 14 (App Router), TypeScript, Tailwind CSS — **permanent dark mode**: `darkMode: 'class'` in `tailwind.config.ts`, `<html class="dark">` set in `src/app/layout.tsx` (no toggle). All components use `dark:` Tailwind variants alongside their light classes. `src/app/globals.css` defines `--node-bg: #1f2937` (used by `CreativeGroupNode` gradient-border trick), a safety-net rule that forces dark backgrounds/text on any native input/select/textarea without explicit Tailwind dark classes, and a React Flow attribution override. Never remove the `dark` class from `<html>` and never add a light/dark toggle — the platform is dark-only.
 - **Canvas:** `@xyflow/react` (React Flow v12) + `@dagrejs/dagre` for auto-layout
 - **Auth:** Google OAuth2 (primary login) + Snapchat OAuth2 (traffic source, optional) + iron-session (encrypted HttpOnly cookies)
 - **Forms:** react-hook-form + Zod
