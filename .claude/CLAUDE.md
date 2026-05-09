@@ -279,13 +279,14 @@ src/
   | `preset.name` | `preset.name` | Full preset name |
   | `index` | `duplicationIndex + 1` | 1-based duplication count |
   | `creative.vname` | `asset.vname` | Version label from asset tag (e.g. `"V1"`, `"V2"`); stored at upload time; backfilled on load from name pattern `_v_NNN` |
+  | `channel.id` | assigned channel from Postgres | Resolved in orchestrator after channel assignment; shows as `{{channel.id}}` in preview (same phase as URL macro) |
 
   `resolveCampaignName(fallback, item, ctx, providerTemplate?)` — if `providerTemplate` is non-empty, resolves segments and joins with `" | "`; otherwise falls back to the old string-replace logic using `fallback`.
 
 - **Feed Providers (v3):** Full sell-side provider management. `FeedProvider` type lives in `src/types/feed-provider.ts` (not `article.ts`). Key fields:
   - `snapConfig` — `organizationId` (resolves `{{organization_id}}`), `allowedAdAccountIds[]`, `allowedPixelIds[]`, `campaignNamingTemplate?: NamingSegment[]` (Snap-specific; stored per-traffic-source — when Facebook is added it gets its own field)
   - `urlConfig` — `parameters: UrlParameter[]` (key/value with macro support). `baseUrl` is retained in the stored shape as a backward-compat fallback but is no longer shown in the UI — base URLs are now per-domain.
-  - `channelConfig` — `type: "provider-supplied" | "parameter-based"`, `addChannelIdToCampaignName?`, `channelParamKey?`
+  - `channelConfig` — `type: "provider-supplied" | "parameter-based"`, `channelParamKey?`
   - `domains[]` — `FeedProviderDomain` (`id`, `baseDomain`, `baseUrl?`, `trafficSources[]`). Each domain carries its own `baseUrl`. `buildUrlTemplate()` resolves base URL as `domain.baseUrl ?? provider.urlConfig.baseUrl ?? ""` (latter is the fallback for old records).
   - `combos[]` — `FeedProviderCombo` (named preset of pixel + domain + channel settings)
 
