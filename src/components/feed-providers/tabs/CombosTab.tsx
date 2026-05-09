@@ -39,7 +39,6 @@ export function CombosTab({ combos, snapConfig, domains, onChange }: CombosTabPr
       pixelId: draft.pixelId,
       adAccountIds: draft.adAccountIds,
       domainId: draft.domainId,
-      channelConfig: draft.channelConfig,
     };
     const exists = combos.find((c) => c.id === combo.id);
     onChange(exists ? combos.map((c) => (c.id === combo.id ? combo : c)) : [...combos, combo]);
@@ -89,11 +88,6 @@ export function CombosTab({ combos, snapConfig, domains, onChange }: CombosTabPr
                   {combo.domainId && (
                     <span className="text-xs bg-blue-50 text-blue-700 border border-blue-100 px-1.5 py-0.5 rounded">
                       {domainOptions.find((d) => d.id === combo.domainId)?.baseDomain ?? "domain"}
-                    </span>
-                  )}
-                  {combo.channelConfig?.addChannelIdToCampaignName && (
-                    <span className="text-xs bg-orange-50 text-orange-700 border border-orange-100 px-1.5 py-0.5 rounded">
-                      channel → name
                     </span>
                   )}
                 </div>
@@ -158,21 +152,6 @@ export function CombosTab({ combos, snapConfig, domains, onChange }: CombosTabPr
                 </select>
               </div>
             )}
-
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={draft.channelConfig?.addChannelIdToCampaignName ?? false}
-                onChange={(e) =>
-                  setDraft((d) => ({
-                    ...d,
-                    channelConfig: { addChannelIdToCampaignName: e.target.checked },
-                  }))
-                }
-                className="rounded border-gray-300"
-              />
-              <span className="text-xs text-gray-700 dark:text-gray-300">Add channel ID to campaign name</span>
-            </label>
 
             <div className="flex gap-2 pt-1">
               <button

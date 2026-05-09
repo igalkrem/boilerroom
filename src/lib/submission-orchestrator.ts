@@ -171,11 +171,13 @@ export async function runSubmission(
       console.warn("[orchestrator] channel assignment threw:", String(err));
     }
 
-    // Optionally append channel ID to all names
-    if (channelId && provider.channelConfig.addChannelIdToCampaignName) {
-      campaigns = campaigns.map((c) => ({ ...c, name: `${c.name}-${channelId}` }));
-      adSquads = adSquads.map((sq) => ({ ...sq, name: `${sq.name}-${channelId}` }));
-      creatives = creatives.map((cr) => ({ ...cr, name: `${cr.name}-${channelId}` }));
+    // Resolve {{channel.id}} macro in names
+    if (channelId) {
+      const cid = channelId;
+      const injectChannel = (s: string) => s.replace(/\{\{channel\.id\}\}/gi, cid);
+      campaigns = campaigns.map((c)  => ({ ...c,  name: injectChannel(c.name) }));
+      adSquads  = adSquads.map((sq)  => ({ ...sq, name: injectChannel(sq.name) }));
+      creatives = creatives.map((cr) => ({ ...cr, name: injectChannel(cr.name) }));
     }
   }
 

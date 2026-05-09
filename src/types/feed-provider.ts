@@ -24,7 +24,6 @@ export interface FeedProviderCombo {
   adAccountIds?: string[];
   urlConfig?: { baseUrl: string; parameters: UrlParameter[] };
   domainId?: string;
-  channelConfig?: { addChannelIdToCampaignName: boolean };
 }
 
 export interface FeedProvider {
@@ -45,7 +44,6 @@ export interface FeedProvider {
   // Channels tab
   channelConfig: {
     type: ChannelSetupType;
-    addChannelIdToCampaignName?: boolean; // provider-supplied only
     channelParamKey?: string; // parameter-based: e.g. "asid"
   };
   // Domains tab

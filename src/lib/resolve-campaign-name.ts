@@ -12,6 +12,7 @@ type ResolveContext = {
   creativeVname?: string;
   presetTag?: string;
   uniqueId4?: string;
+  channelId?: string;
 };
 
 export function resolveCampaignName(
@@ -33,6 +34,7 @@ export function resolveCampaignName(
           case "date_ddmm":    return `${dd}${mm}`;
           case "creative.vname": return context.creativeVname ?? "";
           case "unique_id_4":  return context.uniqueId4 ?? generateUniqueId4();
+          case "channel.id":   return context.channelId ?? "{{channel.id}}";
           case "preset.name":  return context.presetName;
           case "index":        return String(item.duplicationIndex + 1);
           default:             return seg.value;
