@@ -8,7 +8,7 @@ const MACROS: Array<{ label: string; title: string; source: "snap" | "br" }> = [
   { label: "{{campaign.id}}",      title: "Substituted by Snapchat at click time", source: "snap" },
   { label: "{{adSet.id}}",         title: "Substituted by Snapchat at click time", source: "snap" },
   { label: "{{ad.id}}",            title: "Substituted by Snapchat at click time", source: "snap" },
-  { label: "{{organization_id}}", title: "Snap org ID from provider settings",    source: "br" },
+  { label: "{{organization_id}}", title: "Substituted by Snapchat at click time", source: "snap" },
   { label: "{{channel.id}}",      title: "Assigned channel ID from BoilerRoom",   source: "br" },
   { label: "{{article.name}}",    title: "Article slug",                           source: "br" },
   { label: "{{article.query}}",   title: "Article search keyword",                source: "br" },
