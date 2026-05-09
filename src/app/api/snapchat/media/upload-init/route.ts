@@ -6,7 +6,7 @@ import { z } from "zod";
 
 export const maxDuration = 60;
 
-const BASE_URL = process.env.SNAPCHAT_API_BASE_URL ?? "https://adsapi.snapchat.com/v1";
+const BASE_URL = "https://adsapi.snapchat.com/v1";
 
 const bodySchema = z.object({
   adAccountId: z.string().min(1),

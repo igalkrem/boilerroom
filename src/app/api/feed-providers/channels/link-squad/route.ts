@@ -18,7 +18,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "channelId and adSquadId required" }, { status: 400 });
   }
   try {
-    await updateChannelAdSquadId(body.channelId, body.adSquadId);
+    await updateChannelAdSquadId(body.channelId, body.adSquadId, session.googleUserId);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });

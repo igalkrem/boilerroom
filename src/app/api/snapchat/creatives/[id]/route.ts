@@ -6,7 +6,20 @@ import { z } from "zod";
 
 const bodySchema = z.object({
   adAccountId: z.string().min(1),
-  webViewUrl: z.string().min(1),
+  webViewUrl: z
+    .string()
+    .url()
+    .refine(
+      (url) => {
+        try {
+          const { protocol } = new URL(url);
+          return protocol === "https:" || protocol === "http:";
+        } catch {
+          return false;
+        }
+      },
+      { message: "webViewUrl must use http or https scheme" }
+    ),
   creativeName: z.string().min(1),
 });
 

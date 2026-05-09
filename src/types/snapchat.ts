@@ -108,6 +108,7 @@ export interface SnapAdSquadPayload {
 
 export interface SnapAdSquad extends SnapAdSquadPayload {
   id: string;
+  ad_account_id?: string;
 }
 
 // ─── Creatives ───────────────────────────────────────────────────────────────
