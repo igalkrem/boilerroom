@@ -109,11 +109,14 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    const updated = await updateAdSquad(squadId, { daily_budget_micro, bid_micro, status });
+    const updated = await updateAdSquad(squadId, { daily_budget_micro, bid_micro, status }, adAccountId);
     return NextResponse.json({ adsquad: updated });
   } catch (err) {
     console.error("Update ad squad error:", err);
     const message = err instanceof Error ? err.message : "internal_error";
+    if (message.startsWith("forbidden:")) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
     return NextResponse.json({ error: "update_failed", message }, { status: 502 });
   }
 }

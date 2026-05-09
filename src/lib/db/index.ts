@@ -129,11 +129,13 @@ export async function releaseChannel(campaignSnapId: string, googleUserId: strin
   `;
 }
 
-export async function updateChannelAdSquadId(channelId: string, adSquadId: string): Promise<void> {
+export async function updateChannelAdSquadId(channelId: string, adSquadId: string, googleUserId: string): Promise<void> {
   await sql`
     UPDATE feed_provider_channels
     SET ad_squad_snap_id = ${adSquadId}
-    WHERE channel_id = ${channelId} AND status = 'in-use'
+    WHERE channel_id = ${channelId}
+      AND google_user_id = ${googleUserId}
+      AND status = 'in-use'
   `;
 }
 

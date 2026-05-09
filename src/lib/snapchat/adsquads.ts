@@ -79,9 +79,13 @@ function stripForPut(adsquad: SnapAdSquad): Record<string, unknown> {
 
 export async function updateAdSquad(
   adSquadId: string,
-  updates: { daily_budget_micro?: number; bid_micro?: number; status?: "ACTIVE" | "PAUSED" }
+  updates: { daily_budget_micro?: number; bid_micro?: number; status?: "ACTIVE" | "PAUSED" },
+  expectedAdAccountId: string
 ): Promise<SnapAdSquad> {
   const current = await getAdSquad(adSquadId);
+  if (current.ad_account_id && current.ad_account_id !== expectedAdAccountId) {
+    throw new Error("forbidden: ad squad does not belong to the specified ad account");
+  }
   // Filter undefined values — spreading undefined overrides valid values from stripForPut,
   // causing bid_micro to disappear from the PUT body and triggering E2771 on non-auto-bid squads.
   const cleanUpdates = Object.fromEntries(

@@ -7,8 +7,12 @@ export async function getSession(): Promise<IronSession<SessionData>> {
   if (!secret || secret.length < 32) {
     throw new Error("SESSION_SECRET env var must be set to at least 32 characters");
   }
+  const cookieName = process.env.SESSION_COOKIE_NAME;
+  if (!cookieName && process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_COOKIE_NAME must be set in production");
+  }
   const session = await getIronSession<SessionData>(await cookies(), {
-    cookieName: process.env.SESSION_COOKIE_NAME || "snap_ads_session",
+    cookieName: cookieName || "snap_ads_session",
     password: secret,
     cookieOptions: {
       secure: process.env.NODE_ENV === "production",
