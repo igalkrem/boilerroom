@@ -124,16 +124,6 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
 
       {channelConfig.type === "provider-supplied" && (
         <>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={channelConfig.addChannelIdToCampaignName ?? false}
-              onChange={(e) => onChange({ ...channelConfig, addChannelIdToCampaignName: e.target.checked })}
-              className="rounded border-gray-300"
-            />
-            <span className="text-sm text-gray-700 dark:text-gray-300">Add channel ID to campaign name (appended with <code>-</code>)</span>
-          </label>
-
           <div>
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Upload Channel List (CSV)</p>
             <p className="text-xs text-gray-500 mb-2">Column A: Channel ID — Column B: Traffic source (default: Snap)</p>
