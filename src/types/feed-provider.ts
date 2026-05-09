@@ -31,7 +31,6 @@ export interface FeedProvider {
   name: string;
   // Snap tab
   snapConfig: {
-    organizationId?: string; // Snapchat org ID (parent of all ad accounts) — resolves {{organization_id}} macro
     allowedAdAccountIds: string[];
     allowedPixelIds: string[];
     campaignNamingTemplate?: NamingSegment[]; // Snap-specific naming template; segments joined by " | "
