@@ -14,14 +14,14 @@ export function RouterNode({ data }: {
         type="target"
         position={Position.Left}
         id="in"
-        className="!w-5 !h-5 !rounded-full !bg-gray-400 !border-2 !border-white cursor-pointer"
+        className="!w-7 !h-7 !rounded-full !bg-gray-400 !border-2 !border-white cursor-pointer"
         onClick={() => data.onDisconnectTarget(data.routerId)}
       />
       <Handle
         type="source"
         position={Position.Right}
         id="out"
-        className="!w-5 !h-5 !rounded-full !bg-gray-400 !border-2 !border-white"
+        className="!w-7 !h-7 !rounded-full !bg-gray-400 !border-2 !border-white"
       />
 
       {/* Sleek circle */}

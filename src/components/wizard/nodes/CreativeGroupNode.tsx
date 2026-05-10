@@ -63,7 +63,7 @@ export function CreativeGroupNode({ data }: { data: CreativeGroupNodeData }) {
           type="source"
           position={Position.Right}
           id="out"
-          className="!w-5 !h-5 !rounded-full !bg-gray-400 !border-2 !border-white"
+          className="!w-7 !h-7 !rounded-full !bg-gray-400 !border-2 !border-white"
         />
 
         {/* Remove group button */}
