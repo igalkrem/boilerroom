@@ -267,9 +267,22 @@ export async function runSubmission(
           geos: sq.geoCountryCodes.map((c) => ({ country_code: c.toLowerCase() })),
           ...buildDemographics(sq),
         },
-        // Omit placement_v2 entirely — Snapchat treats absence as "all placements".
-        // Sending placement_v2 (even with config: "AUTOMATIC") locks the squad and
-        // prevents budget/bid/status updates via API (E2025).
+        // CUSTOM with all standard positions → Snapchat stores as placement:"UNSUPPORTED"
+        // which means all placements are active. E2025 is not a risk here because
+        // stripForPut() in lib/snapchat/adsquads.ts already excludes placement_v2 from
+        // every subsequent PUT, so budget/bid/status edits remain safe.
+        placement_v2: {
+          config: "CUSTOM",
+          platforms: ["SNAPCHAT"],
+          snapchat_positions: [
+            "INTERSTITIAL_USER",
+            "INTERSTITIAL_CONTENT",
+            "INTERSTITIAL_SPOTLIGHT",
+            "INSTREAM",
+            "PUBLIC_STORIES_INSTREAM",
+            "FEED",
+          ],
+        },
         delivery_constraint: sq.spendCapType === "LIFETIME_BUDGET" ? "LIFETIME_BUDGET" : "DAILY_BUDGET",
         billing_event: "IMPRESSION",
         optimization_goal: sq.optimizationGoal,
