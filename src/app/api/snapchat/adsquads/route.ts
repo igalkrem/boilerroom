@@ -27,6 +27,20 @@ export async function GET(request: NextRequest) {
 
   const adAccountId = request.nextUrl.searchParams.get("adAccountId");
   const adSquadId = request.nextUrl.searchParams.get("adSquadId");
+
+  // When fetching a single squad by ID, adAccountId is not required — the Snapchat
+  // API enforces ownership via the bearer token. adAccountId is still required for
+  // the list-by-account path.
+  if (adSquadId) {
+    try {
+      const adsquad = await getAdSquad(adSquadId);
+      return NextResponse.json({ adsquad });
+    } catch (err) {
+      console.error("Get ad squad error:", err);
+      return NextResponse.json({ error: "internal_error" }, { status: 500 });
+    }
+  }
+
   if (!adAccountId) {
     return NextResponse.json({ error: "adAccountId query param required" }, { status: 400 });
   }
@@ -35,10 +49,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    if (adSquadId) {
-      const adsquad = await getAdSquad(adSquadId);
-      return NextResponse.json({ adsquad });
-    }
     const adsquads = await getAdSquadsForAccount(adAccountId);
     return NextResponse.json({ adsquads });
   } catch (err) {

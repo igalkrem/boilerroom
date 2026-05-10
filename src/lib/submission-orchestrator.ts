@@ -267,18 +267,9 @@ export async function runSubmission(
           geos: sq.geoCountryCodes.map((c) => ({ country_code: c.toLowerCase() })),
           ...buildDemographics(sq),
         },
-        placement_v2: {
-          config: "CUSTOM",
-          platforms: ["SNAPCHAT"],
-          snapchat_positions: [
-            "INTERSTITIAL_USER",        // User Stories
-            "INTERSTITIAL_CONTENT",     // Publisher & Creator Stories
-            "INTERSTITIAL_SPOTLIGHT",   // Spotlight (requires ≥1 other — satisfied)
-            "INSTREAM",                 // Publisher Stories (within content)
-            "PUBLIC_STORIES_INSTREAM",  // Creator Stories
-            "FEED",                     // Discover Feed
-          ],
-        },
+        // Omit placement_v2 entirely — Snapchat treats absence as "all placements".
+        // Sending placement_v2 (even with config: "AUTOMATIC") locks the squad and
+        // prevents budget/bid/status updates via API (E2025).
         delivery_constraint: sq.spendCapType === "LIFETIME_BUDGET" ? "LIFETIME_BUDGET" : "DAILY_BUDGET",
         billing_event: "IMPRESSION",
         optimization_goal: sq.optimizationGoal,
