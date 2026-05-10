@@ -5,7 +5,8 @@ import type { Node, Edge } from "@xyflow/react";
 
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 90;
-const GROUP_HEIGHT = 160;
+const GROUP_CARD_W = 160;
+const GROUP_CARD_H = 285; // 160 × 16/9 portrait aspect ratio
 
 export function computeAutoLayout(nodes: Node[], edges: Edge[]): Record<string, { x: number; y: number }> {
   const g = new dagre.graphlib.Graph();
@@ -15,8 +16,8 @@ export function computeAutoLayout(nodes: Node[], edges: Edge[]): Record<string, 
   nodes.forEach((n) => {
     const isRouter = n.type === "router";
     const isGroup = n.type === "group";
-    const w = isRouter ? 36 : NODE_WIDTH;
-    const h = isRouter ? 36 : isGroup ? GROUP_HEIGHT : NODE_HEIGHT;
+    const w = isRouter ? 36 : isGroup ? GROUP_CARD_W : NODE_WIDTH;
+    const h = isRouter ? 36 : isGroup ? GROUP_CARD_H : NODE_HEIGHT;
     g.setNode(n.id, { width: w, height: h });
   });
   edges.forEach((e) => g.setEdge(e.source, e.target));
@@ -29,8 +30,8 @@ export function computeAutoLayout(nodes: Node[], edges: Edge[]): Record<string, 
     if (pos) {
       const isRouter = n.type === "router";
       const isGroup = n.type === "group";
-      const w = isRouter ? 36 : NODE_WIDTH;
-      const h = isRouter ? 36 : isGroup ? GROUP_HEIGHT : NODE_HEIGHT;
+      const w = isRouter ? 36 : isGroup ? GROUP_CARD_W : NODE_WIDTH;
+      const h = isRouter ? 36 : isGroup ? GROUP_CARD_H : NODE_HEIGHT;
       positions[n.id] = { x: pos.x - w / 2, y: pos.y - h / 2 };
     }
   });
