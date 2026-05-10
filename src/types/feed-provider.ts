@@ -31,6 +31,7 @@ export interface FeedProvider {
   name: string;
   // Snap tab
   snapConfig: {
+    organizationId?: string; // resolves {{organization_id}} macro in URL templates
     allowedAdAccountIds: string[];
     allowedPixelIds: string[];
     campaignNamingTemplate?: NamingSegment[]; // Snap-specific naming template; segments joined by " | "
