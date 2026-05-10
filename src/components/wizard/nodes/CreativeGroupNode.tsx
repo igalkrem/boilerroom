@@ -126,7 +126,7 @@ export function CreativeGroupNode({ data }: { data: CreativeGroupNodeData }) {
           type="source"
           position={Position.Right}
           id="out"
-          className="!w-7 !h-7 !rounded-full !bg-gray-400 !border-2 !border-white"
+          className="!w-7 !h-7 !rounded-full !bg-white !border-[3px] !border-gray-700 !shadow-md !z-20"
         />
 
         {/* Group-level remove button — ghost, appears on hover */}
@@ -189,7 +189,7 @@ export function CreativeGroupNode({ data }: { data: CreativeGroupNodeData }) {
               <CardFace
                 asset={assets[0]}
                 accentColors={connectedColors}
-                showRemoveButton={!multi || fanned}
+                showRemoveButton={fanned}
                 onPreview={() => setPreviewId(assets[0].id)}
                 onRemove={() => store.removeCreativeFromGroup(data.groupId, assets[0].id)}
                 addButton={addBtn}

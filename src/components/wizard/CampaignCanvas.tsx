@@ -182,6 +182,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         id: nodeId,
         type: "group",
         position: pos("group", i, nodeId),
+        style: { background: "transparent", border: "none", padding: 0 },
         data: {
           groupId: group.id,
           providerColorMap,
