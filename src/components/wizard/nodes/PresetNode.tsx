@@ -44,7 +44,7 @@ export function PresetNode({ data }: {
         type="target"
         position={Position.Left}
         id="in"
-        className="!w-5 !h-5 !rounded-full !bg-gray-400 !border-2 !border-white cursor-pointer"
+        className="!w-7 !h-7 !rounded-full !bg-gray-400 !border-2 !border-white cursor-pointer"
         onClick={(e) => {
           e.stopPropagation();
           data.onDisconnectTarget(`preset-${data.preset.id}`);

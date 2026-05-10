@@ -35,7 +35,7 @@ export function ProviderNode({ data }: {
         type="target"
         position={Position.Left}
         id="in"
-        className="!w-5 !h-5 !rounded-full !bg-gray-400 !border-2 !border-white cursor-pointer"
+        className="!w-7 !h-7 !rounded-full !bg-gray-400 !border-2 !border-white cursor-pointer"
         style={{ left: -10 }}
         onClick={() => data.onDisconnectTarget(`provider-${data.providerId}`)}
       />
@@ -43,7 +43,7 @@ export function ProviderNode({ data }: {
         type="source"
         position={Position.Right}
         id="out"
-        className="!w-5 !h-5 !rounded-full !bg-gray-400 !border-2 !border-white"
+        className="!w-7 !h-7 !rounded-full !bg-gray-400 !border-2 !border-white"
       />
 
       <div className="pl-4 pr-3 py-3">
