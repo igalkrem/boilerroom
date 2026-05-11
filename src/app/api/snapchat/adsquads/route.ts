@@ -88,7 +88,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ results });
   } catch (err) {
     console.error("Create adsquads error:", err);
-    return NextResponse.json({ error: "internal_error" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "internal_error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
