@@ -345,6 +345,7 @@ export async function runSubmission(
                 "INSTREAM",
                 "PUBLIC_STORIES_INSTREAM",
                 "FEED",
+                "CHAT_FEED",
               ],
             },
           }),
