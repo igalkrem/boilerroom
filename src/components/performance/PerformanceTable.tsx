@@ -53,7 +53,7 @@ function roiHeatmap(pct: number | null) {
   if (pct === null) return <span className="text-gray-400">—</span>;
   const bg = pct >= 120 ? "bg-green-500" : pct > 105 ? "bg-orange-400" : "bg-red-500";
   return (
-    <span className={`inline-flex items-center justify-center min-w-[3rem] px-2 py-0.5 rounded font-semibold text-white text-sm ${bg}`}>
+    <span className={`inline-flex items-center justify-center w-full px-1 py-0.5 rounded font-semibold text-white text-sm ${bg}`}>
       {Math.round(pct).toFixed(0)}%
     </span>
   );
@@ -112,10 +112,10 @@ interface MetricColDef {
 const METRIC_COLS: Record<string, MetricColDef> = {
   spend_usd:           { label: "Spend ($)",          sortKey: "spend_usd",           render: (r) => fmt$(r.spend_usd),   tdClass: "text-gray-900 dark:text-gray-100 font-medium" },
   revenue_usd:         { label: "Revenue ($)",         sortKey: "revenue_usd",         render: (r) => fmt$(r.revenue_usd), tdClass: "text-gray-900 dark:text-gray-100" },
-  roi_pct:             { label: "ROI",                 sortKey: "roi_pct",             render: (r) => roiHeatmap(r.roi_pct), thClass: "pl-3 pr-0 border-l border-gray-200 dark:border-gray-600", padX: "pl-3 pr-0 border-l border-gray-100 dark:border-gray-700/50" },
-  roi_1d:              { label: "-1D ROI",             sortKey: "roi_1d",              render: (r) => roiHeatmap(r.roi_1d), thClass: "px-0", padX: "px-0" },
-  roi_2d:              { label: "-2D ROI",             sortKey: "roi_2d",              render: (r) => roiHeatmap(r.roi_2d), thClass: "px-0", padX: "px-0" },
-  roi_3d:              { label: "-3D ROI",             sortKey: "roi_3d",              render: (r) => roiHeatmap(r.roi_3d), thClass: "pl-0 pr-3", padX: "pl-0 pr-3" },
+  roi_pct:             { label: "ROI",   sortKey: "roi_pct",  render: (r) => roiHeatmap(r.roi_pct), thClass: "pl-3 pr-0 border-l border-gray-200 dark:border-gray-600", padX: "pl-3 pr-0 border-l border-gray-100 dark:border-gray-700/50" },
+  roi_1d:              { label: "-1D",   sortKey: "roi_1d",   render: (r) => roiHeatmap(r.roi_1d),  thClass: "px-0", padX: "px-0" },
+  roi_2d:              { label: "-2D",   sortKey: "roi_2d",   render: (r) => roiHeatmap(r.roi_2d),  thClass: "px-0", padX: "px-0" },
+  roi_3d:              { label: "-3D",   sortKey: "roi_3d",   render: (r) => roiHeatmap(r.roi_3d),  thClass: "pl-0 pr-3", padX: "pl-0 pr-3" },
   profit:              { label: "Profit",              sortKey: "profit",              render: (r) => <span className={r.profit >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>{fmt$(r.profit)}</span> },
   rpc:                 { label: "RPC",                 sortKey: "rpc",                 render: (r) => r.rpc !== null ? fmt$(r.rpc) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
   ctr:                 { label: "CTR",                 sortKey: "ctr",                 render: (r) => fmtPct(r.ctr),                               tdClass: "text-gray-700 dark:text-gray-300" },
