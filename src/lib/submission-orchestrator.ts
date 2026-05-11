@@ -277,7 +277,6 @@ export async function runSubmission(
           snapchat_positions: [
             "INTERSTITIAL_USER",
             "INTERSTITIAL_CONTENT",
-            "INTERSTITIAL_SPOTLIGHT",
             "INSTREAM",
             "PUBLIC_STORIES_INSTREAM",
             "FEED",
