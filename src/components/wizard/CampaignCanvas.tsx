@@ -143,35 +143,38 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   );
 
   // ─── Disconnect callbacks (one per node type) ────────────────────────────────
+  // Uses getState() so it reads current store without closing over the store object,
+  // keeping this callback stable and preventing it from triggering buildNodes rebuilds.
   const makeDisconnectTarget = useCallback(
     (nodeId: string) => {
+      const s = useCanvasStore.getState();
       const type = nodeId.split("-")[0];
 
       if (type === "provider") {
         const providerId = nodeId.replace(/^provider-/, "");
-        const rows = store.edges.rowToProvider.filter((e) => e.feedProviderId === providerId);
-        rows.forEach((e) => store.disconnectRowFromProvider(e.rowId, providerId));
+        const rows = s.edges.rowToProvider.filter((e) => e.feedProviderId === providerId);
+        rows.forEach((e) => s.disconnectRowFromProvider(e.rowId, providerId));
 
       } else if (type === "router") {
-        store.removeRouter(nodeId);
+        s.removeRouter(nodeId);
 
       } else if (type === "article") {
         const articleId = nodeId.replace(/^article-/, "");
-        const incoming = store.edges.providerToArticle.filter((e) => e.articleId === articleId);
-        incoming.forEach((e) => store.toggleProviderToArticle(e.feedProviderId, articleId));
+        const incoming = s.edges.providerToArticle.filter((e) => e.articleId === articleId);
+        incoming.forEach((e) => s.toggleProviderToArticle(e.feedProviderId, articleId));
 
       } else if (type === "account") {
         const accountId = nodeId.replace(/^account-/, "");
-        const incoming = store.edges.articleToAdAccount.filter((e) => e.adAccountId === accountId);
-        incoming.forEach((e) => store.toggleArticleToAdAccount(e.articleId, accountId));
+        const incoming = s.edges.articleToAdAccount.filter((e) => e.adAccountId === accountId);
+        incoming.forEach((e) => s.toggleArticleToAdAccount(e.articleId, accountId));
 
       } else if (type === "preset") {
         const presetId = nodeId.replace(/^preset-/, "");
-        const incoming = store.edges.articleToPreset.filter((e) => e.presetId === presetId);
-        incoming.forEach((e) => store.toggleArticleToPreset(e.articleId, presetId));
+        const incoming = s.edges.articleToPreset.filter((e) => e.presetId === presetId);
+        incoming.forEach((e) => s.toggleArticleToPreset(e.articleId, presetId));
       }
     },
-    [store]
+    []
   );
 
   // ─── Build React Flow nodes ───────────────────────────────────────────────
