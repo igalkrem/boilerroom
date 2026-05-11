@@ -165,6 +165,24 @@ export function PerformanceTable({
   const [filterQuery, setFilterQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [hiddenSquadIds, setHiddenSquadIds] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const stored = localStorage.getItem("br_perf_hidden_squads");
+      return stored ? new Set(JSON.parse(stored) as string[]) : new Set();
+    } catch { return new Set(); }
+  });
+  const [showHidden, setShowHidden] = useState(false);
+
+  function toggleHideSquad(squadId: string) {
+    setHiddenSquadIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(squadId)) next.delete(squadId);
+      else next.add(squadId);
+      localStorage.setItem("br_perf_hidden_squads", JSON.stringify([...next]));
+      return next;
+    });
+  }
 
   // Name column resizing
   const [nameColWidth, setNameColWidth] = useState(() => {
@@ -303,10 +321,11 @@ export function PerformanceTable({
     return aggregated.filter((r) => {
       const status = squadDetails.get(r.ad_squad_id)?.status;
       if (status === "PAUSED" && r.impressions === 0) return false;
+      if (!showHidden && hiddenSquadIds.has(r.ad_squad_id)) return false;
       if (!filterQuery.trim()) return true;
       return r.ad_squad_name.toLowerCase().includes(filterQuery.toLowerCase());
     });
-  }, [aggregated, filterQuery, squadDetails]);
+  }, [aggregated, filterQuery, squadDetails, hiddenSquadIds, showHidden]);
 
   useEffect(() => {
     onFilteredRowsChange?.(filtered);
@@ -634,6 +653,27 @@ export function PerformanceTable({
               />
             </div>
 
+            {/* Show hidden toggle */}
+            {hiddenSquadIds.size > 0 && (
+              <button
+                onClick={() => setShowHidden((v) => !v)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md border transition-colors whitespace-nowrap ${
+                  showHidden
+                    ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-600"
+                    : "text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                }`}
+                title={showHidden ? "Hide ignored campaigns" : "Show ignored campaigns"}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  {showHidden
+                    ? <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    : <><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></>
+                  }
+                </svg>
+                Ignored ({hiddenSquadIds.size})
+              </button>
+            )}
+
             {/* Column selector */}
             <ColumnSelector
               visible={visibleColumns}
@@ -780,11 +820,14 @@ export function PerformanceTable({
                 const detail = squadDetails.get(r.ad_squad_id);
                 const isSelected = selectedIds.has(r.ad_squad_id);
                 const isActive = detail ? detail.status === "ACTIVE" : false;
+                const isHidden = hiddenSquadIds.has(r.ad_squad_id);
 
                 return (
                   <tr
                     key={r.ad_squad_id}
                     className={`transition-colors ${
+                      isHidden ? "opacity-40" : ""
+                    } ${
                       isSelected ? "bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30" : "hover:bg-slate-50 dark:hover:bg-gray-800"
                     }`}
                   >
@@ -808,7 +851,7 @@ export function PerformanceTable({
                       className="px-3 py-2.5 overflow-hidden"
                       style={{ width: nameColWidth, minWidth: nameColWidth, maxWidth: nameColWidth }}
                     >
-                      <div className="flex items-center gap-1.5 min-w-0">
+                      <div className="group/name flex items-center gap-1.5 min-w-0">
                         <SnapchatLogo className="w-3.5 h-3.5 flex-shrink-0 text-yellow-400" />
                         <button
                           onClick={() => setDrilldown({
@@ -820,6 +863,18 @@ export function PerformanceTable({
                           title={r.ad_squad_name}
                         >
                           {r.ad_squad_name}
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleHideSquad(r.ad_squad_id); }}
+                          className="flex-shrink-0 opacity-0 group-hover/name:opacity-100 transition-opacity p-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                          title={isHidden ? "Unhide campaign" : "Ignore campaign"}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            {isHidden
+                              ? <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              : <><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></>
+                            }
+                          </svg>
                         </button>
                       </div>
                     </td>
