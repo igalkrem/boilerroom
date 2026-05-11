@@ -528,13 +528,21 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     [store]
   );
 
-  // Auto-layout
+  // Auto-layout — skips nodes with no edges; runs automatically on structure changes
   const handleAutoLayout = useCallback(() => {
     const currentNodes = buildNodes();
     const currentEdges = buildEdges();
-    const positions = computeAutoLayout(currentNodes, currentEdges);
-    store.setNodePositions(positions);
-  }, [buildNodes, buildEdges, store]);
+    const connectedIds = new Set<string>();
+    currentEdges.forEach((e) => { connectedIds.add(e.source); connectedIds.add(e.target); });
+    const connectedNodes = currentNodes.filter((n) => connectedIds.has(n.id));
+    if (connectedNodes.length === 0) return;
+    const positions = computeAutoLayout(connectedNodes, currentEdges);
+    useCanvasStore.getState().setNodePositions(positions);
+    nodePositionsRef.current = { ...nodePositionsRef.current, ...positions };
+    setNodes((prev) => prev.map((n) => positions[n.id] ? { ...n, position: positions[n.id] } : n));
+  }, [buildNodes, buildEdges, setNodes]);
+
+  useEffect(() => { handleAutoLayout(); }, [handleAutoLayout]);
 
   const matrix = store.buildCampaignMatrix();
 
