@@ -1,9 +1,38 @@
 "use client";
 
 import { create } from "zustand";
-import type { CampaignBuildItem, CreativeGroup, CreativeRow, RowConfig } from "@/types/wizard";
+import type { CanvasEdges, CampaignBuildItem, CreativeGroup, CreativeRow } from "@/types/wizard";
+
+// ─── Cascade helpers ──────────────────────────────────────────────────────────
+
+// After removing a providerToArticle edge, drop articleToPreset edges for any
+// article that now has zero provider connections.
+function orphanArticle(
+  articleId: string,
+  remainingProviderToArticle: CanvasEdges["providerToArticle"],
+  articleToPreset: CanvasEdges["articleToPreset"]
+): CanvasEdges["articleToPreset"] {
+  const stillConnected = remainingProviderToArticle.some((e) => e.articleId === articleId);
+  return stillConnected ? articleToPreset : articleToPreset.filter((e) => e.articleId !== articleId);
+}
+
+// Remove all providerToArticle edges for a provider, then cascade to articleToPreset.
+function cascadeProviderRemoval(feedProviderId: string, edges: CanvasEdges): CanvasEdges {
+  const removedEdges = edges.providerToArticle.filter((e) => e.feedProviderId === feedProviderId);
+  const newP2A = edges.providerToArticle.filter((e) => e.feedProviderId !== feedProviderId);
+  let newA2P = edges.articleToPreset;
+  for (const { articleId } of removedEdges) {
+    newA2P = orphanArticle(articleId, newP2A, newA2P);
+  }
+  return { ...edges, providerToArticle: newP2A, articleToPreset: newA2P };
+}
 
 // ─── Store ────────────────────────────────────────────────────────────────────
+
+export interface RouterNode {
+  id: string;
+  feedProviderId: string;
+}
 
 const MAX_GROUPS_PER_ROW = 8;
 const MAX_CREATIVES_PER_GROUP = 5;
@@ -11,8 +40,9 @@ const MAX_CREATIVES_PER_GROUP = 5;
 interface CanvasStore {
   creativeRows: CreativeRow[];
   creativeGroups: CreativeGroup[];
-  rowConfigs: RowConfig[];
+  edges: CanvasEdges;
   nodePositions: Record<string, { x: number; y: number }>;
+  routerNodes: RouterNode[];
 
   // Row-level actions
   addRow: () => CreativeRow;
@@ -25,38 +55,32 @@ interface CanvasStore {
   addCreativeToGroup: (groupId: string, assetId: string) => void;
   removeCreativeFromGroup: (groupId: string, assetId: string) => void;
 
-  // Per-row config actions
-  addProviderToRow: (rowId: string, feedProviderId: string) => void;
-  removeProviderFromRow: (rowId: string, feedProviderId: string) => void;
-  toggleArticleInRow: (
-    rowId: string,
-    feedProviderId: string,
-    articleId: string,
-    headline?: string,
-    headlineRac?: string
-  ) => void;
-  setRowArticleContent: (
-    rowId: string,
-    feedProviderId: string,
-    articleId: string,
-    headline: string,
-    callToAction: string,
-    headlineRac?: string
-  ) => void;
-  toggleAdAccountInRow: (rowId: string, adAccountId: string) => void;
-  togglePresetInRow: (rowId: string, presetId: string) => void;
-  setRowPresetDuplications: (rowId: string, presetId: string, count: number) => void;
+  // Row → Provider edges
+  connectRowToProvider: (rowId: string, feedProviderId: string) => void;
+  disconnectRowFromProvider: (rowId: string, feedProviderId: string) => void;
+
+  toggleProviderToArticle: (feedProviderId: string, articleId: string, defaultHeadline?: string, defaultHeadlineRac?: string) => void;
+  setArticleContent: (feedProviderId: string, articleId: string, headline: string, callToAction: string, headlineRac?: string) => void;
+  toggleArticleToPreset: (articleId: string, presetId: string) => void;
+  setDuplications: (articleId: string, presetId: string, count: number) => void;
+
+  toggleArticleToAdAccount: (articleId: string, adAccountId: string) => void;
 
   setNodePosition: (nodeId: string, position: { x: number; y: number }) => void;
   setNodePositions: (positions: Record<string, { x: number; y: number }>) => void;
+  addRouter: (feedProviderId: string) => RouterNode;
+  removeRouter: (routerId: string) => void;
   reset: () => void;
 
   buildCampaignMatrix: () => CampaignBuildItem[];
 }
 
-function emptyRowConfig(rowId: string): RowConfig {
-  return { rowId, feedProviderIds: [], articles: [], adAccountIds: [], presets: [] };
-}
+const initialEdges: CanvasEdges = {
+  rowToProvider: [],
+  providerToArticle: [],
+  articleToPreset: [],
+  articleToAdAccount: [],
+};
 
 // Tiny counter to disambiguate IDs created in the same millisecond
 let idCounter = 0;
@@ -68,15 +92,13 @@ function freshId(prefix: string): string {
 export const useCanvasStore = create<CanvasStore>((set, get) => ({
   creativeRows: [],
   creativeGroups: [],
-  rowConfigs: [],
+  edges: { ...initialEdges },
   nodePositions: {},
+  routerNodes: [],
 
   addRow: () => {
     const newRow: CreativeRow = { id: freshId("row"), groupIds: [] };
-    set((s) => ({
-      creativeRows: [...s.creativeRows, newRow],
-      rowConfigs: [...s.rowConfigs, emptyRowConfig(newRow.id)],
-    }));
+    set((s) => ({ creativeRows: [...s.creativeRows, newRow] }));
     return newRow;
   },
 
@@ -84,10 +106,19 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     set((s) => {
       const row = s.creativeRows.find((r) => r.id === rowId);
       const removedGroupIds = new Set(row?.groupIds ?? []);
+      const removedProviders = s.edges.rowToProvider
+        .filter((e) => e.rowId === rowId)
+        .map((e) => e.feedProviderId);
+      const newR2P = s.edges.rowToProvider.filter((e) => e.rowId !== rowId);
+      let edges: CanvasEdges = { ...s.edges, rowToProvider: newR2P };
+      for (const feedProviderId of removedProviders) {
+        const stillHasRow = newR2P.some((e) => e.feedProviderId === feedProviderId);
+        if (!stillHasRow) edges = cascadeProviderRemoval(feedProviderId, edges);
+      }
       return {
         creativeRows: s.creativeRows.filter((r) => r.id !== rowId),
         creativeGroups: s.creativeGroups.filter((g) => !removedGroupIds.has(g.id)),
-        rowConfigs: s.rowConfigs.filter((c) => c.rowId !== rowId),
+        edges,
       };
     }),
 
@@ -105,21 +136,9 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       newGroupIds.push(copy.id);
     }
     const newRow: CreativeRow = { id: freshId("row"), groupIds: newGroupIds };
-    // Deep-copy the source row's config
-    const srcConfig = state.rowConfigs.find((c) => c.rowId === rowId);
-    const newConfig: RowConfig = srcConfig
-      ? {
-          rowId: newRow.id,
-          feedProviderIds: [...srcConfig.feedProviderIds],
-          articles: srcConfig.articles.map((a) => ({ ...a })),
-          adAccountIds: [...srcConfig.adAccountIds],
-          presets: srcConfig.presets.map((p) => ({ ...p })),
-        }
-      : emptyRowConfig(newRow.id);
     set((s) => ({
       creativeRows: [...s.creativeRows, newRow],
       creativeGroups: [...s.creativeGroups, ...newGroups],
-      rowConfigs: [...s.rowConfigs, newConfig],
     }));
     return newRow;
   },
@@ -187,121 +206,111 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     }
   },
 
-  // ─── Per-row config ────────────────────────────────────────────────────────
+  connectRowToProvider: (rowId, feedProviderId) =>
+    set((s) => {
+      const exists = s.edges.rowToProvider.some(
+        (e) => e.rowId === rowId && e.feedProviderId === feedProviderId
+      );
+      if (exists) return {};
+      return {
+        edges: {
+          ...s.edges,
+          rowToProvider: [...s.edges.rowToProvider, { rowId, feedProviderId }],
+        },
+      };
+    }),
 
-  addProviderToRow: (rowId, feedProviderId) =>
-    set((s) => ({
-      rowConfigs: s.rowConfigs.map((c) => {
-        if (c.rowId !== rowId) return c;
-        if (c.feedProviderIds.includes(feedProviderId)) return c;
-        return { ...c, feedProviderIds: [...c.feedProviderIds, feedProviderId] };
-      }),
-    })),
+  disconnectRowFromProvider: (rowId, feedProviderId) =>
+    set((s) => {
+      const newR2P = s.edges.rowToProvider.filter(
+        (e) => !(e.rowId === rowId && e.feedProviderId === feedProviderId)
+      );
+      const providerStillConnected = newR2P.some((e) => e.feedProviderId === feedProviderId);
+      let edges: CanvasEdges = { ...s.edges, rowToProvider: newR2P };
+      if (!providerStillConnected) edges = cascadeProviderRemoval(feedProviderId, edges);
+      return { edges };
+    }),
 
-  removeProviderFromRow: (rowId, feedProviderId) =>
-    set((s) => ({
-      rowConfigs: s.rowConfigs.map((c) =>
-        c.rowId !== rowId
-          ? c
-          : {
-              ...c,
-              feedProviderIds: c.feedProviderIds.filter((id) => id !== feedProviderId),
-              // Also drop any articles tied to this provider
-              articles: c.articles.filter((a) => a.feedProviderId !== feedProviderId),
-            }
-      ),
-    })),
-
-  toggleArticleInRow: (rowId, feedProviderId, articleId, headline, headlineRac) =>
-    set((s) => ({
-      rowConfigs: s.rowConfigs.map((c) => {
-        if (c.rowId !== rowId) return c;
-        const exists = c.articles.some(
-          (a) => a.feedProviderId === feedProviderId && a.articleId === articleId
-        );
-        if (exists) {
-          return {
-            ...c,
-            articles: c.articles.filter(
-              (a) => !(a.feedProviderId === feedProviderId && a.articleId === articleId)
-            ),
-          };
-        }
+  toggleProviderToArticle: (feedProviderId, articleId, defaultHeadline?, defaultHeadlineRac?) =>
+    set((s) => {
+      const exists = s.edges.providerToArticle.some(
+        (e) => e.feedProviderId === feedProviderId && e.articleId === articleId
+      );
+      if (!exists) {
         return {
-          ...c,
-          articles: [
-            ...c.articles,
-            {
-              feedProviderId,
-              articleId,
-              headline: headline ?? "",
-              headlineRac: headlineRac ?? "",
-              callToAction: "MORE",
-            },
-          ],
+          edges: {
+            ...s.edges,
+            providerToArticle: [
+              ...s.edges.providerToArticle,
+              { feedProviderId, articleId, headline: defaultHeadline ?? "", headlineRac: defaultHeadlineRac ?? "", callToAction: "MORE" },
+            ],
+          },
         };
-      }),
+      }
+      const newP2A = s.edges.providerToArticle.filter(
+        (e) => !(e.feedProviderId === feedProviderId && e.articleId === articleId)
+      );
+      const newA2P = orphanArticle(articleId, newP2A, s.edges.articleToPreset);
+      return { edges: { ...s.edges, providerToArticle: newP2A, articleToPreset: newA2P } };
+    }),
+
+  setArticleContent: (feedProviderId, articleId, headline, callToAction, headlineRac) =>
+    set((s) => ({
+      edges: {
+        ...s.edges,
+        providerToArticle: s.edges.providerToArticle.map((e) =>
+          e.feedProviderId === feedProviderId && e.articleId === articleId
+            ? { ...e, headline, callToAction, ...(headlineRac !== undefined ? { headlineRac } : {}) }
+            : e
+        ),
+      },
     })),
 
-  setRowArticleContent: (rowId, feedProviderId, articleId, headline, callToAction, headlineRac) =>
+  toggleArticleToPreset: (articleId, presetId) =>
+    set((s) => {
+      const exists = s.edges.articleToPreset.some(
+        (e) => e.articleId === articleId && e.presetId === presetId
+      );
+      return {
+        edges: {
+          ...s.edges,
+          articleToPreset: exists
+            ? s.edges.articleToPreset.filter(
+                (e) => !(e.articleId === articleId && e.presetId === presetId)
+              )
+            : [...s.edges.articleToPreset, { articleId, presetId, duplications: 1 }],
+        },
+      };
+    }),
+
+  setDuplications: (articleId, presetId, count) =>
     set((s) => ({
-      rowConfigs: s.rowConfigs.map((c) =>
-        c.rowId !== rowId
-          ? c
-          : {
-              ...c,
-              articles: c.articles.map((a) =>
-                a.feedProviderId === feedProviderId && a.articleId === articleId
-                  ? { ...a, headline, callToAction, ...(headlineRac !== undefined ? { headlineRac } : {}) }
-                  : a
-              ),
-            }
-      ),
+      edges: {
+        ...s.edges,
+        articleToPreset: s.edges.articleToPreset.map((e) =>
+          e.articleId === articleId && e.presetId === presetId
+            ? { ...e, duplications: Math.max(1, Math.min(10, count)) }
+            : e
+        ),
+      },
     })),
 
-  toggleAdAccountInRow: (rowId, adAccountId) =>
-    set((s) => ({
-      rowConfigs: s.rowConfigs.map((c) => {
-        if (c.rowId !== rowId) return c;
-        const exists = c.adAccountIds.includes(adAccountId);
-        return {
-          ...c,
-          adAccountIds: exists
-            ? c.adAccountIds.filter((id) => id !== adAccountId)
-            : [...c.adAccountIds, adAccountId],
-        };
-      }),
-    })),
-
-  togglePresetInRow: (rowId, presetId) =>
-    set((s) => ({
-      rowConfigs: s.rowConfigs.map((c) => {
-        if (c.rowId !== rowId) return c;
-        const exists = c.presets.some((p) => p.presetId === presetId);
-        return {
-          ...c,
-          presets: exists
-            ? c.presets.filter((p) => p.presetId !== presetId)
-            : [...c.presets, { presetId, duplications: 1 }],
-        };
-      }),
-    })),
-
-  setRowPresetDuplications: (rowId, presetId, count) =>
-    set((s) => ({
-      rowConfigs: s.rowConfigs.map((c) =>
-        c.rowId !== rowId
-          ? c
-          : {
-              ...c,
-              presets: c.presets.map((p) =>
-                p.presetId === presetId
-                  ? { ...p, duplications: Math.max(1, Math.min(10, count)) }
-                  : p
-              ),
-            }
-      ),
-    })),
+  toggleArticleToAdAccount: (articleId, adAccountId) =>
+    set((s) => {
+      const exists = s.edges.articleToAdAccount.some(
+        (e) => e.articleId === articleId && e.adAccountId === adAccountId
+      );
+      return {
+        edges: {
+          ...s.edges,
+          articleToAdAccount: exists
+            ? s.edges.articleToAdAccount.filter(
+                (e) => !(e.articleId === articleId && e.adAccountId === adAccountId)
+              )
+            : [...s.edges.articleToAdAccount, { articleId, adAccountId }],
+        },
+      };
+    }),
 
   setNodePosition: (nodeId, position) =>
     set((s) => ({ nodePositions: { ...s.nodePositions, [nodeId]: position } })),
@@ -309,26 +318,50 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   setNodePositions: (positions) =>
     set((s) => ({ nodePositions: { ...s.nodePositions, ...positions } })),
 
+  addRouter: (feedProviderId) => {
+    const newRouter: RouterNode = { id: freshId("router"), feedProviderId };
+    set((s) => ({ routerNodes: [...s.routerNodes, newRouter] }));
+    return newRouter;
+  },
+
+  removeRouter: (routerId) =>
+    set((s) => ({ routerNodes: s.routerNodes.filter((r) => r.id !== routerId) })),
+
   reset: () =>
     set({
       creativeRows: [],
       creativeGroups: [],
-      rowConfigs: [],
+      edges: { ...initialEdges },
       nodePositions: {},
+      routerNodes: [],
     }),
 
   buildCampaignMatrix: (): CampaignBuildItem[] => {
-    const { creativeRows, creativeGroups, rowConfigs } = get();
+    const { creativeRows, creativeGroups, edges } = get();
     const items: CampaignBuildItem[] = [];
-    for (const config of rowConfigs) {
-      const row = creativeRows.find((r) => r.id === config.rowId);
+
+    for (const { rowId, feedProviderId } of edges.rowToProvider) {
+      const row = creativeRows.find((r) => r.id === rowId);
       if (!row) continue;
+
       for (const groupId of row.groupIds) {
         const group = creativeGroups.find((g) => g.id === groupId);
         if (!group || group.creativeIds.length === 0) continue;
-        for (const { feedProviderId, articleId, headline, headlineRac, callToAction } of config.articles) {
-          for (const { presetId, duplications } of config.presets) {
-            for (const adAccountId of config.adAccountIds) {
+
+        const articleEdges = edges.providerToArticle.filter(
+          (e) => e.feedProviderId === feedProviderId
+        );
+
+        for (const { articleId, headline, headlineRac, callToAction } of articleEdges) {
+          const presetEdges = edges.articleToPreset.filter((e) => e.articleId === articleId);
+          const eligibleAccounts = edges.articleToAdAccount
+            .filter((e) => e.articleId === articleId)
+            .map((e) => e.adAccountId);
+
+          if (eligibleAccounts.length === 0) continue;
+
+          for (const { presetId, duplications } of presetEdges) {
+            for (const adAccountId of eligibleAccounts) {
               for (let i = 0; i < duplications; i++) {
                 items.push({
                   adAccountId,
