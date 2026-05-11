@@ -53,7 +53,7 @@ function roiHeatmap(pct: number | null) {
   if (pct === null) return <span className="text-gray-400">—</span>;
   const bg = pct >= 120 ? "bg-green-500" : pct > 105 ? "bg-orange-400" : "bg-red-500";
   return (
-    <span className={`inline-flex items-center justify-center w-full px-1 py-0.5 rounded font-semibold text-white text-sm ${bg}`}>
+    <span className={`inline-flex items-center justify-center w-full px-1 py-0.5 rounded font-semibold text-gray-900 text-sm ${bg}`}>
       {Math.round(pct).toFixed(0)}%
     </span>
   );
