@@ -267,16 +267,19 @@ export async function runSubmission(
           geos: sq.geoCountryCodes.map((c) => ({ country_code: c.toLowerCase() })),
           ...buildDemographics(sq),
         },
+        // CUSTOM placement with all standard positions — matches manually-configured ad sets
+        // (which show "placement": "UNSUPPORTED" in GET, meaning CUSTOM config was accepted).
+        // platforms + snapchat_positions are required for CUSTOM config.
+        // placement_v2 is excluded from ADSQUAD_PUT_ALLOWED_FIELDS so E2025 is not a risk on updates.
         placement_v2: {
           config: "CUSTOM",
           platforms: ["SNAPCHAT"],
-          // Only positions confirmed compatible with WEB_VIEW / PIXEL_PURCHASE.
-          // INTERSTITIAL_SPOTLIGHT excluded (VIDEO-only). FEED excluded (not in WEB_VIEW list).
           snapchat_positions: [
             "INTERSTITIAL_USER",
             "INTERSTITIAL_CONTENT",
             "INSTREAM",
             "PUBLIC_STORIES_INSTREAM",
+            "INTERSTITIAL_SPOTLIGHT",
           ],
         },
         delivery_constraint: sq.spendCapType === "LIFETIME_BUDGET" ? "LIFETIME_BUDGET" : "DAILY_BUDGET",
