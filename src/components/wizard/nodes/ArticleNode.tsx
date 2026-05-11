@@ -39,9 +39,6 @@ export function ArticleNode({ data }: {
         <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: data.color }} />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{data.article.slug}</p>
-          {data.article.query && (
-            <p className="text-xs text-gray-400 truncate">{data.article.query}</p>
-          )}
         </div>
         {/* Page icon + expand */}
         <div className="flex items-center gap-1 shrink-0">
