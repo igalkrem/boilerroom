@@ -105,15 +105,17 @@ interface MetricColDef {
   sortKey?: SortKey;
   render: (r: AggrRow) => ReactNode;
   tdClass?: string;
+  thClass?: string;
+  padX?: string;
 }
 
 const METRIC_COLS: Record<string, MetricColDef> = {
   spend_usd:           { label: "Spend ($)",          sortKey: "spend_usd",           render: (r) => fmt$(r.spend_usd),   tdClass: "text-gray-900 dark:text-gray-100 font-medium" },
   revenue_usd:         { label: "Revenue ($)",         sortKey: "revenue_usd",         render: (r) => fmt$(r.revenue_usd), tdClass: "text-gray-900 dark:text-gray-100" },
-  roi_pct:             { label: "ROI",                 sortKey: "roi_pct",             render: (r) => roiHeatmap(r.roi_pct) },
-  roi_1d:              { label: "-1D ROI",             sortKey: "roi_1d",              render: (r) => roiHeatmap(r.roi_1d) },
-  roi_2d:              { label: "-2D ROI",             sortKey: "roi_2d",              render: (r) => roiHeatmap(r.roi_2d) },
-  roi_3d:              { label: "-3D ROI",             sortKey: "roi_3d",              render: (r) => roiHeatmap(r.roi_3d) },
+  roi_pct:             { label: "ROI",                 sortKey: "roi_pct",             render: (r) => roiHeatmap(r.roi_pct), thClass: "pl-3 pr-1 border-l border-gray-200 dark:border-gray-600", padX: "pl-3 pr-1 border-l border-gray-100 dark:border-gray-700/50" },
+  roi_1d:              { label: "-1D ROI",             sortKey: "roi_1d",              render: (r) => roiHeatmap(r.roi_1d), thClass: "px-1", padX: "px-1" },
+  roi_2d:              { label: "-2D ROI",             sortKey: "roi_2d",              render: (r) => roiHeatmap(r.roi_2d), thClass: "px-1", padX: "px-1" },
+  roi_3d:              { label: "-3D ROI",             sortKey: "roi_3d",              render: (r) => roiHeatmap(r.roi_3d), thClass: "pl-1 pr-3", padX: "pl-1 pr-3" },
   profit:              { label: "Profit",              sortKey: "profit",              render: (r) => <span className={r.profit >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>{fmt$(r.profit)}</span> },
   rpc:                 { label: "RPC",                 sortKey: "rpc",                 render: (r) => r.rpc !== null ? fmt$(r.rpc) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
   ctr:                 { label: "CTR",                 sortKey: "ctr",                 render: (r) => fmtPct(r.ctr),                               tdClass: "text-gray-700 dark:text-gray-300" },
@@ -336,14 +338,14 @@ export function PerformanceTable({
     else { setSortKey(key); setSortDesc(true); }
   }
 
-  function sortableTh(colKey: SortKey, label: string) {
+  function sortableTh(colKey: SortKey, label: string, thClass = "px-3") {
     if (!visibleColumns.has(colKey)) return null;
     const active = colKey === sortKey;
     return (
       <th
         key={colKey}
         onClick={() => toggleSort(colKey)}
-        className={`group px-3 py-3 text-left text-xs font-semibold whitespace-nowrap cursor-pointer select-none ${
+        className={`group ${thClass} py-3 text-left text-xs font-semibold whitespace-nowrap cursor-pointer select-none ${
           active ? "text-blue-600" : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
         }`}
       >
@@ -355,18 +357,18 @@ export function PerformanceTable({
     );
   }
 
-  function staticTh(colKey: string, label: string) {
+  function staticTh(colKey: string, label: string, thClass = "px-3") {
     if (!visibleColumns.has(colKey)) return null;
     return (
-      <th key={colKey} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">
+      <th key={colKey} className={`${thClass} py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap`}>
         {label}
       </th>
     );
   }
 
-  function optTd(colKey: string, content: React.ReactNode, extraClass = "") {
+  function optTd(colKey: string, content: React.ReactNode, extraClass = "", padX = "px-3") {
     if (!visibleColumns.has(colKey)) return null;
-    return <td key={colKey} className={`px-3 py-2.5 whitespace-nowrap ${extraClass}`}>{content}</td>;
+    return <td key={colKey} className={`${padX} py-2.5 whitespace-nowrap ${extraClass}`}>{content}</td>;
   }
 
   async function readPatchError(res: Response): Promise<string> {
@@ -809,8 +811,8 @@ export function PerformanceTable({
                 {columnOrder.map((key) => {
                   const col = METRIC_COLS[key];
                   if (!col) return null;
-                  if (col.sortKey) return sortableTh(col.sortKey, col.label);
-                  return staticTh(key, col.label);
+                  if (col.sortKey) return sortableTh(col.sortKey, col.label, col.thClass);
+                  return staticTh(key, col.label, col.thClass);
                 })}
               </tr>
             </thead>
@@ -981,7 +983,7 @@ export function PerformanceTable({
                     {columnOrder.map((key) => {
                       const col = METRIC_COLS[key];
                       if (!col) return null;
-                      return optTd(key, col.render(r), col.tdClass ?? "");
+                      return optTd(key, col.render(r), col.tdClass ?? "", col.padX);
                     })}
                   </tr>
                 );
