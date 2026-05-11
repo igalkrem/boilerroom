@@ -128,21 +128,25 @@ export interface CreativeRow {
   groupIds: string[]; // ordered: index 0 = rightmost (oldest); new groups are prepended → appear leftmost
 }
 
-export interface CanvasEdges {
-  rowToProvider: Array<{ rowId: string; feedProviderId: string }>;
-  providerToArticle: Array<{
-    feedProviderId: string;
-    articleId: string;
-    headline: string;
-    headlineRac: string;
-    callToAction: string;
-  }>;
-  articleToPreset: Array<{
-    articleId: string;
-    presetId: string;
-    duplications: number;
-  }>;
-  articleToAdAccount: Array<{ articleId: string; adAccountId: string }>;
+export interface RowArticleSelection {
+  feedProviderId: string;
+  articleId: string;
+  headline: string;
+  headlineRac: string;
+  callToAction: string;
+}
+
+export interface RowPresetConfig {
+  presetId: string;
+  duplications: number;
+}
+
+export interface RowConfig {
+  rowId: string;
+  feedProviderIds: string[];
+  articles: RowArticleSelection[];
+  adAccountIds: string[];
+  presets: RowPresetConfig[];
 }
 
 export interface CampaignBuildItem {
