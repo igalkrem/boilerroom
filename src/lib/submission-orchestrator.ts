@@ -267,19 +267,16 @@ export async function runSubmission(
           geos: sq.geoCountryCodes.map((c) => ({ country_code: c.toLowerCase() })),
           ...buildDemographics(sq),
         },
-        // CUSTOM with all standard positions → Snapchat stores as placement:"UNSUPPORTED"
-        // which means all placements are active. E2025 is not a risk here because
-        // stripForPut() in lib/snapchat/adsquads.ts already excludes placement_v2 from
-        // every subsequent PUT, so budget/bid/status edits remain safe.
         placement_v2: {
           config: "CUSTOM",
           platforms: ["SNAPCHAT"],
+          // Only positions confirmed compatible with WEB_VIEW / PIXEL_PURCHASE.
+          // INTERSTITIAL_SPOTLIGHT excluded (VIDEO-only). FEED excluded (not in WEB_VIEW list).
           snapchat_positions: [
             "INTERSTITIAL_USER",
             "INTERSTITIAL_CONTENT",
             "INSTREAM",
             "PUBLIC_STORIES_INSTREAM",
-            "FEED",
           ],
         },
         delivery_constraint: sq.spendCapType === "LIFETIME_BUDGET" ? "LIFETIME_BUDGET" : "DAILY_BUDGET",
