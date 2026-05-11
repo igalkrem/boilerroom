@@ -49,11 +49,18 @@ function dollarToMicro(dollars: number) { return Math.round(dollars * 1_000_000)
 function fmt$(n: number) { return `$${n.toFixed(2)}`; }
 function fmtPct(n: number | null) { return n === null ? "—" : n.toFixed(2) + "%"; }
 function fmtPct0(n: number | null) { return n === null ? "—" : Math.round(n).toFixed(0) + "%"; }
-function roiHeatmap(pct: number | null) {
+function roiHeatmap(pct: number | null, meta?: { spend: number; revenue: number }) {
   if (pct === null) return <span className="inline-flex w-full justify-center text-gray-400">—</span>;
   const bg = pct >= 120 ? "bg-green-500" : pct > 105 ? "bg-orange-400" : "bg-red-500";
+  const profit = meta ? meta.revenue - meta.spend : null;
+  const titleText = meta
+    ? `Spend: ${fmt$(meta.spend)}\nRevenue: ${fmt$(meta.revenue)}\nProfit: ${profit! >= 0 ? "+" : ""}${fmt$(profit!)}`
+    : undefined;
   return (
-    <span className={`inline-flex items-center justify-center w-full px-1 py-0.5 rounded font-semibold text-gray-900 text-sm ${bg}`}>
+    <span
+      title={titleText}
+      className={`inline-flex items-center justify-center w-full px-1 py-0.5 rounded font-semibold text-gray-900 text-sm cursor-default ${bg}`}
+    >
       {Math.round(pct).toFixed(0)}%
     </span>
   );
@@ -87,6 +94,12 @@ export interface AggrRow {
   roi_1d: number | null;
   roi_2d: number | null;
   roi_3d: number | null;
+  spend_1d: number | null;
+  revenue_1d: number | null;
+  spend_2d: number | null;
+  revenue_2d: number | null;
+  spend_3d: number | null;
+  revenue_3d: number | null;
   rpc: number | null;
   cpm: number | null;
   cpc: number | null;
@@ -113,9 +126,9 @@ const METRIC_COLS: Record<string, MetricColDef> = {
   spend_usd:           { label: "Spend ($)",          sortKey: "spend_usd",           render: (r) => fmt$(r.spend_usd),   tdClass: "text-gray-900 dark:text-gray-100 font-medium" },
   revenue_usd:         { label: "Revenue ($)",         sortKey: "revenue_usd",         render: (r) => fmt$(r.revenue_usd), tdClass: "text-gray-900 dark:text-gray-100" },
   roi_pct:             { label: "ROI",   sortKey: "roi_pct",  render: (r) => roiHeatmap(r.roi_pct), thClass: "pl-3 pr-[1px] border-l border-gray-200 dark:border-gray-600", padX: "pl-3 pr-[1px] border-l border-gray-100 dark:border-gray-700/50" },
-  roi_1d:              { label: "-1D",   sortKey: "roi_1d",   render: (r) => roiHeatmap(r.roi_1d),  thClass: "px-[1px]", padX: "px-[1px]" },
-  roi_2d:              { label: "-2D",   sortKey: "roi_2d",   render: (r) => roiHeatmap(r.roi_2d),  thClass: "px-[1px]", padX: "px-[1px]" },
-  roi_3d:              { label: "-3D",   sortKey: "roi_3d",   render: (r) => roiHeatmap(r.roi_3d),  thClass: "pl-[1px] pr-3", padX: "pl-[1px] pr-3" },
+  roi_1d:              { label: "-1D",   sortKey: "roi_1d",   render: (r) => roiHeatmap(r.roi_1d,  r.spend_1d  !== null ? { spend: r.spend_1d,  revenue: r.revenue_1d! } : undefined), thClass: "px-[1px]", padX: "px-[1px]" },
+  roi_2d:              { label: "-2D",   sortKey: "roi_2d",   render: (r) => roiHeatmap(r.roi_2d,  r.spend_2d  !== null ? { spend: r.spend_2d,  revenue: r.revenue_2d! } : undefined), thClass: "px-[1px]", padX: "px-[1px]" },
+  roi_3d:              { label: "-3D",   sortKey: "roi_3d",   render: (r) => roiHeatmap(r.roi_3d,  r.spend_3d  !== null ? { spend: r.spend_3d,  revenue: r.revenue_3d! } : undefined), thClass: "pl-[1px] pr-3", padX: "pl-[1px] pr-3" },
   profit:              { label: "Profit",              sortKey: "profit",              render: (r) => <span className={r.profit >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>{fmt$(r.profit)}</span> },
   rpc:                 { label: "RPC",                 sortKey: "rpc",                 render: (r) => r.rpc !== null ? fmt$(r.rpc) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
   ctr:                 { label: "CTR",                 sortKey: "ctr",                 render: (r) => fmtPct(r.ctr),                               tdClass: "text-gray-700 dark:text-gray-300" },
@@ -231,11 +244,12 @@ export function PerformanceTable({
   const y3 = dateMinus(startDate, 3);
 
   const aggregated = useMemo<AggrRow[]>(() => {
-    function dailyRoi(squadId: string, date: string): number | null {
+    function dailyMetrics(squadId: string, date: string): { spend: number; revenue: number } | null {
       const matching = historicalRows.filter(r => r.ad_squad_id === squadId && r.stat_date === date);
+      if (matching.length === 0) return null;
       const spend = matching.reduce((s, r) => s + r.spend_usd, 0);
-      const rev = matching.reduce((s, r) => s + r.revenue_usd, 0);
-      return spend > 0 ? (rev / spend) * 100 : null;
+      const revenue = matching.reduce((s, r) => s + r.revenue_usd, 0);
+      return { spend, revenue };
     }
 
     const map = new Map<string, AggrRow>();
@@ -282,6 +296,12 @@ export function PerformanceTable({
           roi_1d: null,
           roi_2d: null,
           roi_3d: null,
+          spend_1d: null,
+          revenue_1d: null,
+          spend_2d: null,
+          revenue_2d: null,
+          spend_3d: null,
+          revenue_3d: null,
           rpc: null,
           cpm: null,
           cpc: null,
@@ -299,9 +319,22 @@ export function PerformanceTable({
       .map((a) => ({
         ...a,
         roi_pct: a.spend_usd > 0 ? (a.revenue_usd / a.spend_usd) * 100 : null,
-        roi_1d: dailyRoi(a.ad_squad_id, y1),
-        roi_2d: dailyRoi(a.ad_squad_id, y2),
-        roi_3d: dailyRoi(a.ad_squad_id, y3),
+        ...(() => {
+          const m1 = dailyMetrics(a.ad_squad_id, y1);
+          const m2 = dailyMetrics(a.ad_squad_id, y2);
+          const m3 = dailyMetrics(a.ad_squad_id, y3);
+          return {
+            roi_1d:     m1 && m1.spend > 0 ? (m1.revenue / m1.spend) * 100 : null,
+            spend_1d:   m1?.spend ?? null,
+            revenue_1d: m1?.revenue ?? null,
+            roi_2d:     m2 && m2.spend > 0 ? (m2.revenue / m2.spend) * 100 : null,
+            spend_2d:   m2?.spend ?? null,
+            revenue_2d: m2?.revenue ?? null,
+            roi_3d:     m3 && m3.spend > 0 ? (m3.revenue / m3.spend) * 100 : null,
+            spend_3d:   m3?.spend ?? null,
+            revenue_3d: m3?.revenue ?? null,
+          };
+        })(),
         rpc: a.funnel_clicks >= 10 ? a.revenue_usd / a.funnel_clicks : null,
         cpm: a.impressions > 0 ? (a.spend_usd / a.impressions) * 1000 : null,
         cpc: a.swipes > 0 ? a.spend_usd / a.swipes : null,
