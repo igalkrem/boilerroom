@@ -68,6 +68,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   const [siloOpen, setSiloOpen] = useState(false);
   const [targetRowId, setTargetRowId] = useState<string | null>(null);
   const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
+  const [articlePickerProviderId, setArticlePickerProviderId] = useState<string | null>(null);
   const [providers, setProviders] = useState<FeedProvider[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
   const [presets, setPresets] = useState<CampaignPreset[]>([]);
@@ -226,7 +227,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
             name: provider.name,
             color: providerColorMap[provider.id] ?? "#94a3b8",
             onDisconnectTarget: makeDisconnectTarget,
-            onAddArticle: () => {},
+            onAddArticle: setArticlePickerProviderId,
           },
         });
       });

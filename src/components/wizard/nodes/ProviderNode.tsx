@@ -9,6 +9,7 @@ export function ProviderNode({ data }: {
     name: string;
     color: string;
     onDisconnectTarget: (nodeId: string) => void;
+    onAddArticle?: (providerId: string) => void;
   };
 }) {
   const store = useCanvasStore();
@@ -55,6 +56,15 @@ export function ProviderNode({ data }: {
           <p className="text-xs text-gray-400 mt-0.5 pl-4">
             {connectedRows} row{connectedRows !== 1 ? "s" : ""}
           </p>
+        )}
+        {connected && data.onAddArticle && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); data.onAddArticle!(data.providerId); }}
+            className="nodrag mt-1 pl-4 pb-0.5 text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors"
+          >
+            + Pick articles
+          </button>
         )}
       </div>
     </div>
