@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import { DrilldownModal } from "./DrilldownModal";
@@ -49,20 +50,35 @@ function dollarToMicro(dollars: number) { return Math.round(dollars * 1_000_000)
 function fmt$(n: number) { return `$${n.toFixed(2)}`; }
 function fmtPct(n: number | null) { return n === null ? "—" : n.toFixed(2) + "%"; }
 function fmtPct0(n: number | null) { return n === null ? "—" : Math.round(n).toFixed(0) + "%"; }
-function roiHeatmap(pct: number | null, meta?: { spend: number; revenue: number }) {
+function RoiCell({ pct, meta }: { pct: number | null; meta?: { spend: number; revenue: number } }) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   if (pct === null) return <span className="inline-flex w-full justify-center text-gray-400">—</span>;
   const bg = pct >= 120 ? "bg-green-500" : pct > 105 ? "bg-orange-400" : "bg-red-500";
   const profit = meta ? meta.revenue - meta.spend : null;
-  const titleText = meta
-    ? `Spend: ${fmt$(meta.spend)}\nRevenue: ${fmt$(meta.revenue)}\nProfit: ${profit! >= 0 ? "+" : ""}${fmt$(profit!)}`
-    : undefined;
   return (
-    <span
-      title={titleText}
-      className={`inline-flex items-center justify-center w-full px-1 py-0.5 rounded font-semibold text-gray-900 text-sm cursor-default ${bg}`}
-    >
-      {Math.round(pct).toFixed(0)}%
-    </span>
+    <>
+      <span
+        className={`inline-flex items-center justify-center w-full px-1 py-0.5 rounded font-semibold text-gray-900 text-sm cursor-default ${bg}`}
+        onMouseEnter={meta ? (e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          setPos({ x: r.left + r.width / 2, y: r.top });
+        } : undefined}
+        onMouseLeave={meta ? () => setPos(null) : undefined}
+      >
+        {Math.round(pct).toFixed(0)}%
+      </span>
+      {pos && meta && createPortal(
+        <div
+          style={{ position: "fixed", left: pos.x, top: pos.y - 8, transform: "translate(-50%, -100%)", zIndex: 9999 }}
+          className="bg-gray-900 border border-gray-700 rounded-md px-2.5 py-1.5 text-xs text-gray-300 shadow-xl pointer-events-none whitespace-nowrap"
+        >
+          <div>Spend: <span className="text-white font-medium">{fmt$(meta.spend)}</span></div>
+          <div>Revenue: <span className="text-white font-medium">{fmt$(meta.revenue)}</span></div>
+          <div>Profit: <span className={`font-medium ${profit! >= 0 ? "text-green-400" : "text-red-400"}`}>{profit! >= 0 ? "+" : ""}{fmt$(profit!)}</span></div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 function fmtNum(n: number) { return n.toLocaleString(); }
@@ -125,10 +141,10 @@ interface MetricColDef {
 const METRIC_COLS: Record<string, MetricColDef> = {
   spend_usd:           { label: "Spend ($)",          sortKey: "spend_usd",           render: (r) => fmt$(r.spend_usd),   tdClass: "text-gray-900 dark:text-gray-100 font-medium" },
   revenue_usd:         { label: "Revenue ($)",         sortKey: "revenue_usd",         render: (r) => fmt$(r.revenue_usd), tdClass: "text-gray-900 dark:text-gray-100" },
-  roi_pct:             { label: "ROI",   sortKey: "roi_pct",  render: (r) => roiHeatmap(r.roi_pct), thClass: "pl-3 pr-[1px] border-l border-gray-200 dark:border-gray-600", padX: "pl-3 pr-[1px] border-l border-gray-100 dark:border-gray-700/50" },
-  roi_1d:              { label: "-1D",   sortKey: "roi_1d",   render: (r) => roiHeatmap(r.roi_1d,  r.spend_1d  !== null ? { spend: r.spend_1d,  revenue: r.revenue_1d! } : undefined), thClass: "px-[1px]", padX: "px-[1px]" },
-  roi_2d:              { label: "-2D",   sortKey: "roi_2d",   render: (r) => roiHeatmap(r.roi_2d,  r.spend_2d  !== null ? { spend: r.spend_2d,  revenue: r.revenue_2d! } : undefined), thClass: "px-[1px]", padX: "px-[1px]" },
-  roi_3d:              { label: "-3D",   sortKey: "roi_3d",   render: (r) => roiHeatmap(r.roi_3d,  r.spend_3d  !== null ? { spend: r.spend_3d,  revenue: r.revenue_3d! } : undefined), thClass: "pl-[1px] pr-3", padX: "pl-[1px] pr-3" },
+  roi_pct:             { label: "ROI",   sortKey: "roi_pct",  render: (r) => <RoiCell pct={r.roi_pct} />, thClass: "pl-3 pr-[1px] border-l border-gray-200 dark:border-gray-600", padX: "pl-3 pr-[1px] border-l border-gray-100 dark:border-gray-700/50" },
+  roi_1d:              { label: "-1D",   sortKey: "roi_1d",   render: (r) => <RoiCell pct={r.roi_1d}  meta={r.spend_1d  !== null ? { spend: r.spend_1d,  revenue: r.revenue_1d! } : undefined} />, thClass: "px-[1px]", padX: "px-[1px]" },
+  roi_2d:              { label: "-2D",   sortKey: "roi_2d",   render: (r) => <RoiCell pct={r.roi_2d}  meta={r.spend_2d  !== null ? { spend: r.spend_2d,  revenue: r.revenue_2d! } : undefined} />, thClass: "px-[1px]", padX: "px-[1px]" },
+  roi_3d:              { label: "-3D",   sortKey: "roi_3d",   render: (r) => <RoiCell pct={r.roi_3d}  meta={r.spend_3d  !== null ? { spend: r.spend_3d,  revenue: r.revenue_3d! } : undefined} />, thClass: "pl-[1px] pr-3", padX: "pl-[1px] pr-3" },
   profit:              { label: "Profit",              sortKey: "profit",              render: (r) => <span className={r.profit >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>{fmt$(r.profit)}</span> },
   rpc:                 { label: "RPC",                 sortKey: "rpc",                 render: (r) => r.rpc !== null ? fmt$(r.rpc) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
   ctr:                 { label: "CTR",                 sortKey: "ctr",                 render: (r) => fmtPct(r.ctr),                               tdClass: "text-gray-700 dark:text-gray-300" },
