@@ -7,14 +7,9 @@ import {
   Controls,
   MiniMap,
   useNodesState,
-  useEdgesState,
   type Node,
-  type Edge,
-  type Connection,
   type NodeChange,
-  type EdgeChange,
   applyNodeChanges,
-  applyEdgeChanges,
   BackgroundVariant,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -32,29 +27,14 @@ import type { CampaignPreset } from "@/types/preset";
 import type { AdAccountConfig } from "@/types/ad-account";
 import { computeAutoLayout, CanvasControls } from "./CanvasControls";
 import { CreativeGroupNode } from "./nodes/CreativeGroupNode";
-import { ProviderNode } from "./nodes/ProviderNode";
-import { RouterNode } from "./nodes/RouterNode";
-import { ArticleNode } from "./nodes/ArticleNode";
-import { AdAccountNode } from "./nodes/AdAccountNode";
-import { PresetNode } from "./nodes/PresetNode";
-import { ProviderEdge } from "./edges/ProviderEdge";
 
 const PROVIDER_COLORS = ["#3b82f6", "#f97316", "#8b5cf6", "#10b981", "#ec4899", "#f59e0b"] as const;
 
 const NODE_TYPES = {
   group: CreativeGroupNode,
-  provider: ProviderNode,
-  router: RouterNode,
-  article: ArticleNode,
-  adaccount: AdAccountNode,
-  preset: PresetNode,
 };
 
-const EDGE_TYPES = {
-  provider: ProviderEdge,
-};
-
-const COLUMN_X = { group: 0, provider: 300, router: 520, article: 740, adaccount: 1040, preset: 1320 };
+const COLUMN_X = { group: 0 };
 const ROW_GAP = 130;
 const ROW_CARD_STEP = 172; // CARD_W (160) + CARD_GAP (12) — used to shift row left when prepending a card
 
@@ -68,7 +48,6 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   const [siloOpen, setSiloOpen] = useState(false);
   const [targetRowId, setTargetRowId] = useState<string | null>(null);
   const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
-  const [articlePickerProviderId, setArticlePickerProviderId] = useState<string | null>(null);
   const [providers, setProviders] = useState<FeedProvider[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
   const [presets, setPresets] = useState<CampaignPreset[]>([]);
@@ -97,93 +76,41 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     return map;
   }, [sortedByCreation]);
 
-  // ─── Visibility logic ────────────────────────────────────────────────────────
-  // All memoized — filter/Set always return new references; must be stable to avoid
-  // buildNodes→setNodes→re-render loop (#185).
-  const activeProviderIdsFromArticles = useMemo(
-    () => new Set(store.edges.providerToArticle.map((e) => e.feedProviderId)),
-    [store.edges.providerToArticle]
-  );
-
-  const visibleArticles = useMemo(
-    () => articles.filter((a) => store.edges.providerToArticle.some((e) => e.articleId === a.id)),
-    [articles, store.edges.providerToArticle]
-  );
-  const visiblePresets = useMemo(
-    () => presets.filter((p) => !p.feedProviderId || activeProviderIdsFromArticles.has(p.feedProviderId)),
-    [presets, activeProviderIdsFromArticles]
-  );
+  // Visible accounts: filter out hidden ones; pass {id, name} to row node config panel
   const visibleAccounts = useMemo(
-    () => allAccounts.filter((a) => {
-      const cfg = adAccountConfigs.find((c) => c.id === a.id);
-      if (cfg?.hidden) return false;
-      if (cfg && cfg.feedProviderIds.length > 0) {
-        return [...activeProviderIdsFromArticles].some((pid) => cfg.feedProviderIds.includes(pid));
-      }
-      // Show all unhidden accounts once any article is connected
-      return activeProviderIdsFromArticles.size > 0;
-    }),
-    [allAccounts, adAccountConfigs, activeProviderIdsFromArticles]
-  );
-
-  // Presets are enabled once any account is wired to any article
-  const canSelectPresets = useMemo(
-    () => store.edges.articleToAdAccount.length > 0,
-    [store.edges.articleToAdAccount]
-  );
-
-  // ─── Disconnect callbacks (one per node type) ────────────────────────────────
-  const makeDisconnectTarget = useCallback(
-    (nodeId: string) => {
-      const type = nodeId.split("-")[0];
-
-      if (type === "provider") {
-        const providerId = nodeId.replace(/^provider-/, "");
-        const rows = store.edges.rowToProvider.filter((e) => e.feedProviderId === providerId);
-        rows.forEach((e) => store.disconnectRowFromProvider(e.rowId, providerId));
-
-      } else if (type === "router") {
-        store.removeRouter(nodeId);
-
-      } else if (type === "article") {
-        const articleId = nodeId.replace(/^article-/, "");
-        const incoming = store.edges.providerToArticle.filter((e) => e.articleId === articleId);
-        incoming.forEach((e) => store.toggleProviderToArticle(e.feedProviderId, articleId));
-
-      } else if (type === "account") {
-        const accountId = nodeId.replace(/^account-/, "");
-        const incoming = store.edges.articleToAdAccount.filter((e) => e.adAccountId === accountId);
-        incoming.forEach((e) => store.toggleArticleToAdAccount(e.articleId, accountId));
-
-      } else if (type === "preset") {
-        const presetId = nodeId.replace(/^preset-/, "");
-        const incoming = store.edges.articleToPreset.filter((e) => e.presetId === presetId);
-        incoming.forEach((e) => store.toggleArticleToPreset(e.articleId, presetId));
-      }
-    },
-    [store]
+    () =>
+      allAccounts
+        .filter((a) => {
+          const cfg = adAccountConfigs.find((c) => c.id === a.id);
+          return !cfg?.hidden;
+        })
+        .map((a) => ({ id: a.id, name: a.name })),
+    [allAccounts, adAccountConfigs]
   );
 
   // ─── Build React Flow nodes ───────────────────────────────────────────────
   const buildNodes = useCallback((): Node[] => {
     const nodes: Node[] = [];
 
-    const pos = (col: keyof typeof COLUMN_X, index: number, id: string): { x: number; y: number } => {
+    const pos = (index: number, id: string): { x: number; y: number } => {
       if (nodePositionsRef.current[id]) return nodePositionsRef.current[id];
-      return { x: COLUMN_X[col], y: index * ROW_GAP };
+      return { x: COLUMN_X.group, y: index * ROW_GAP };
     };
 
-    // Creative Rows
     store.creativeRows.forEach((row, i) => {
       const nodeId = `row-${row.id}`;
       nodes.push({
         id: nodeId,
         type: "group",
-        position: pos("group", i, nodeId),
+        position: pos(i, nodeId),
         style: { background: "transparent", border: "none", padding: 0 },
         data: {
           rowId: row.id,
           providerColorMap,
+          providers: sortedByCreation,
+          articles,
+          accounts: visibleAccounts,
+          presets,
           onAddToRow: (rId: string) => {
             setTargetGroupId(null);
             setTargetRowId(rId);
@@ -198,7 +125,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           onNewRow: () => {
             const newRow = store.addRow();
             const currentPos = nodePositionsRef.current[`row-${row.id}`] ?? { x: COLUMN_X.group, y: i * ROW_GAP };
-            store.setNodePosition(`row-${newRow.id}`, { x: currentPos.x, y: currentPos.y + 320 });
+            store.setNodePosition(`row-${newRow.id}`, { x: currentPos.x, y: currentPos.y + 480 });
             setTargetGroupId(null);
             setTargetRowId(newRow.id);
             setSiloOpen(true);
@@ -207,97 +134,9 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
             const newRow = store.duplicateRow(rId);
             if (newRow) {
               const currentPos = nodePositionsRef.current[`row-${rId}`] ?? { x: COLUMN_X.group, y: i * ROW_GAP };
-              store.setNodePosition(`row-${newRow.id}`, { x: currentPos.x, y: currentPos.y + 320 });
+              store.setNodePosition(`row-${newRow.id}`, { x: currentPos.x, y: currentPos.y + 480 });
             }
           },
-        },
-      });
-    });
-
-    // Providers — only when at least one row exists
-    if (store.creativeRows.length > 0) {
-      sortedByCreation.forEach((provider, i) => {
-        const nodeId = `provider-${provider.id}`;
-        nodes.push({
-          id: nodeId,
-          type: "provider",
-          position: pos("provider", i, nodeId),
-          data: {
-            providerId: provider.id,
-            name: provider.name,
-            color: providerColorMap[provider.id] ?? "#94a3b8",
-            onDisconnectTarget: makeDisconnectTarget,
-            onAddArticle: setArticlePickerProviderId,
-          },
-        });
-      });
-    }
-
-    // Router nodes
-    store.routerNodes.forEach((router, i) => {
-      nodes.push({
-        id: router.id,
-        type: "router",
-        position: pos("router", i, router.id),
-        data: {
-          routerId: router.id,
-          color: providerColorMap[router.feedProviderId] ?? "#94a3b8",
-          onDisconnectTarget: makeDisconnectTarget,
-        },
-      });
-    });
-
-    // Articles (only visible ones)
-    visibleArticles.forEach((article, i) => {
-      const nodeId = `article-${article.id}`;
-      const color = providerColorMap[article.feedProviderId] ?? "#94a3b8";
-      nodes.push({
-        id: nodeId,
-        type: "article",
-        position: pos("article", i, nodeId),
-        data: {
-          article,
-          color,
-          onDisconnectTarget: makeDisconnectTarget,
-        },
-      });
-    });
-
-    // Ad accounts (only visible ones)
-    visibleAccounts.forEach((account, i) => {
-      const nodeId = `account-${account.id}`;
-      const cfg = adAccountConfigs.find((c) => c.id === account.id);
-      const color = cfg?.feedProviderIds.length
-        ? (providerColorMap[cfg.feedProviderIds[0]] ?? "#94a3b8")
-        : "#94a3b8";
-      nodes.push({
-        id: nodeId,
-        type: "adaccount",
-        position: pos("adaccount", i, nodeId),
-        data: {
-          accountId: account.id,
-          name: account.name,
-          color,
-          onDisconnectTarget: makeDisconnectTarget,
-        },
-      });
-    });
-
-    // Presets (only visible ones)
-    visiblePresets.forEach((preset, i) => {
-      const nodeId = `preset-${preset.id}`;
-      const provider = preset.feedProviderId ? sortedByCreation.find((p) => p.id === preset.feedProviderId) : null;
-      const color = provider ? (providerColorMap[provider.id] ?? "#94a3b8") : "#94a3b8";
-      nodes.push({
-        id: nodeId,
-        type: "preset",
-        position: pos("preset", i, nodeId),
-        data: {
-          preset,
-          color,
-          articles,
-          disabled: !canSelectPresets,
-          onDisconnectTarget: makeDisconnectTarget,
         },
       });
     });
@@ -305,108 +144,13 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     return nodes;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    store.creativeRows, store.routerNodes,
-    sortedByCreation, providerColorMap, visibleArticles, visibleAccounts, visiblePresets,
-    adAccountConfigs, articles, canSelectPresets, makeDisconnectTarget,
-  ]);
-
-  // ─── Build React Flow edges ───────────────────────────────────────────────
-  const buildEdges = useCallback((): Edge[] => {
-    const edges: Edge[] = [];
-
-    // Row → Provider (or Row → Router)
-    for (const e of store.edges.rowToProvider) {
-      const router = store.routerNodes.find((r) => r.feedProviderId === e.feedProviderId);
-      const target = router ? router.id : `provider-${e.feedProviderId}`;
-      edges.push({
-        id: `rp-${e.rowId}-${e.feedProviderId}`,
-        source: `row-${e.rowId}`,
-        sourceHandle: "out",
-        target,
-        targetHandle: "in",
-        type: "provider",
-        data: { color: providerColorMap[e.feedProviderId] ?? "#94a3b8" },
-      });
-    }
-
-    // Router → Provider
-    for (const r of store.routerNodes) {
-      edges.push({
-        id: `rtp-${r.id}`,
-        source: r.id,
-        sourceHandle: "out",
-        target: `provider-${r.feedProviderId}`,
-        targetHandle: "in",
-        type: "provider",
-        data: { color: providerColorMap[r.feedProviderId] ?? "#94a3b8" },
-      });
-    }
-
-    // Provider → Article (or Router → Article)
-    for (const e of store.edges.providerToArticle) {
-      const router = store.routerNodes.find((r) => r.feedProviderId === e.feedProviderId);
-      const source = router ? router.id : `provider-${e.feedProviderId}`;
-      edges.push({
-        id: `pa-${e.feedProviderId}-${e.articleId}`,
-        source,
-        sourceHandle: "out",
-        target: `article-${e.articleId}`,
-        targetHandle: "in",
-        type: "provider",
-        data: { color: providerColorMap[e.feedProviderId] ?? "#94a3b8" },
-      });
-    }
-
-    // Article → AdAccount (explicit edges)
-    for (const e of store.edges.articleToAdAccount) {
-      const provEdge = store.edges.providerToArticle.find((p) => p.articleId === e.articleId);
-      const color = provEdge ? (providerColorMap[provEdge.feedProviderId] ?? "#94a3b8") : "#94a3b8";
-      edges.push({
-        id: `aa-${e.articleId}-${e.adAccountId}`,
-        source: `article-${e.articleId}`,
-        sourceHandle: "out",
-        target: `account-${e.adAccountId}`,
-        targetHandle: "in",
-        type: "provider",
-        data: { color },
-      });
-    }
-
-    // AdAccount → Preset (derived from articleToAdAccount + articleToPreset)
-    for (const pe of store.edges.articleToPreset) {
-      const provEdge = store.edges.providerToArticle.find((e) => e.articleId === pe.articleId);
-      const color = provEdge ? (providerColorMap[provEdge.feedProviderId] ?? "#94a3b8") : "#94a3b8";
-      const connectedAccounts = store.edges.articleToAdAccount
-        .filter((ae) => ae.articleId === pe.articleId)
-        .map((ae) => ae.adAccountId);
-      for (const accountId of connectedAccounts) {
-        const edgeId = `ap-${accountId}-${pe.presetId}-${pe.articleId}`;
-        if (!edges.some((ed) => ed.id === edgeId)) {
-          edges.push({
-            id: edgeId,
-            source: `account-${accountId}`,
-            sourceHandle: "out",
-            target: `preset-${pe.presetId}`,
-            targetHandle: "in",
-            type: "provider",
-            data: { color },
-          });
-        }
-      }
-    }
-
-    return edges;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    store.edges, store.routerNodes,
-    providerColorMap,
+    store.creativeRows,
+    sortedByCreation, providerColorMap, articles, presets, visibleAccounts,
   ]);
 
   const [nodes, setNodes] = useNodesState(buildNodes());
-  const [edges, setEdges] = useEdgesState(buildEdges());
 
   useEffect(() => { setNodes(buildNodes()); }, [buildNodes, setNodes]);
-  useEffect(() => { setEdges(buildEdges()); }, [buildEdges, setEdges]);
 
   // Sync drag positions back to store
   const onNodesChange = useCallback(
@@ -421,110 +165,12 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     [setNodes, store]
   );
 
-  const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
-    [setEdges]
-  );
-
-  // Handle new connections
-  const onConnect = useCallback(
-    (connection: Connection) => {
-      const { source, target } = connection;
-      if (!source || !target) return;
-
-      const srcType = source.split("-")[0];
-      const tgtType = target.split("-")[0];
-
-      if (srcType === "row" && (tgtType === "provider" || tgtType === "router")) {
-        const rowId = source.replace(/^row-/, "");
-        const providerId = tgtType === "router"
-          ? store.routerNodes.find((r) => r.id === target)?.feedProviderId ?? ""
-          : target.replace(/^provider-/, "");
-        if (providerId) store.connectRowToProvider(rowId, providerId);
-
-      } else if ((srcType === "provider" || srcType === "router") && tgtType === "article") {
-        const providerId = srcType === "router"
-          ? store.routerNodes.find((r) => r.id === source)?.feedProviderId ?? ""
-          : source.replace(/^provider-/, "");
-        const articleId = target.replace(/^article-/, "");
-        if (!providerId) return;
-
-        // Auto-insert router when provider already has an article edge and no router yet
-        const existingArticleEdges = store.edges.providerToArticle.filter(
-          (e) => e.feedProviderId === providerId
-        );
-        const hasRouter = store.routerNodes.some((r) => r.feedProviderId === providerId);
-        if (existingArticleEdges.length >= 1 && !hasRouter) {
-          const router = store.addRouter(providerId);
-          const provPos = nodePositionsRef.current[`provider-${providerId}`] ?? { x: COLUMN_X.provider, y: 0 };
-          store.setNodePosition(router.id, { x: COLUMN_X.router, y: provPos.y });
-        }
-
-        const articleForDefault = articles.find((a) => a.id === articleId);
-        const dh =
-          articleForDefault?.defaultHeadlineIndex !== undefined
-            ? articleForDefault.allowedHeadlines[articleForDefault.defaultHeadlineIndex]
-            : undefined;
-        store.toggleProviderToArticle(providerId, articleId, dh?.text, dh?.rac);
-
-      } else if (srcType === "article" && tgtType === "account") {
-        const articleId = source.replace(/^article-/, "");
-        const accountId = target.replace(/^account-/, "");
-        store.toggleArticleToAdAccount(articleId, accountId);
-
-      } else if (srcType === "account" && tgtType === "preset") {
-        const presetId = target.replace(/^preset-/, "");
-        const preset = presets.find((p) => p.id === presetId);
-        if (preset && canSelectPresets) {
-          const activeArticleIds = new Set(store.edges.providerToArticle.map((e) => e.articleId));
-          const matching = [...activeArticleIds].filter((aId) => {
-            const article = articles.find((a) => a.id === aId);
-            return article && (!preset.feedProviderId || article.feedProviderId === preset.feedProviderId);
-          });
-          matching.forEach((aId) => store.toggleArticleToPreset(aId, presetId));
-        }
-      }
-    },
-    [store, presets, articles, canSelectPresets]
-  );
-
-  // Handle edge deletion (keyboard Delete/Backspace)
-  const onEdgesDelete = useCallback(
-    (deletedEdges: Edge[]) => {
-      for (const edge of deletedEdges) {
-        const { source, target } = edge;
-        const srcType = source.split("-")[0];
-        const tgtType = target.split("-")[0];
-
-        if (srcType === "row" && (tgtType === "provider" || tgtType === "router")) {
-          const rowId = source.replace(/^row-/, "");
-          const providerId = tgtType === "router"
-            ? store.routerNodes.find((r) => r.id === target)?.feedProviderId ?? ""
-            : target.replace(/^provider-/, "");
-          if (providerId) store.disconnectRowFromProvider(rowId, providerId);
-        } else if ((srcType === "provider" || srcType === "router") && tgtType === "article") {
-          const providerId = srcType === "router"
-            ? store.routerNodes.find((r) => r.id === source)?.feedProviderId ?? ""
-            : source.replace(/^provider-/, "");
-          const articleId = target.replace(/^article-/, "");
-          if (providerId) store.toggleProviderToArticle(providerId, articleId);
-        } else if (srcType === "article" && tgtType === "account") {
-          const articleId = source.replace(/^article-/, "");
-          const accountId = target.replace(/^account-/, "");
-          store.toggleArticleToAdAccount(articleId, accountId);
-        }
-      }
-    },
-    [store]
-  );
-
   // Auto-layout
   const handleAutoLayout = useCallback(() => {
     const currentNodes = buildNodes();
-    const currentEdges = buildEdges();
-    const positions = computeAutoLayout(currentNodes, currentEdges);
+    const positions = computeAutoLayout(currentNodes, []);
     store.setNodePositions(positions);
-  }, [buildNodes, buildEdges, store]);
+  }, [buildNodes, store]);
 
   const matrix = store.buildCampaignMatrix();
 
@@ -546,13 +192,9 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       <div className="flex-1 min-h-0">
         <ReactFlow
           nodes={nodes}
-          edges={edges}
+          edges={[]}
           onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onEdgesDelete={onEdgesDelete}
           nodeTypes={NODE_TYPES}
-          edgeTypes={EDGE_TYPES}
           colorMode="dark"
           style={{ background: "#1f2937" }}
           fitView
@@ -579,99 +221,6 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           </button>
         </div>
       )}
-
-      {/* Article picker modal */}
-      {articlePickerProviderId &&
-        (() => {
-          const providerArticles = articles.filter(
-            (a) => a.feedProviderId === articlePickerProviderId
-          );
-          const selectedIds = new Set(
-            store.edges.providerToArticle
-              .filter((e) => e.feedProviderId === articlePickerProviderId)
-              .map((e) => e.articleId)
-          );
-          const providerName =
-            providers.find((p) => p.id === articlePickerProviderId)?.name ?? "";
-          return (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-              onClick={() => setArticlePickerProviderId(null)}
-            >
-              <div
-                className="bg-gray-900 border border-gray-700 rounded-2xl p-4 w-80 max-h-[70vh] flex flex-col shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-gray-200">
-                    Articles — {providerName}
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setArticlePickerProviderId(null)}
-                    className="text-gray-500 hover:text-gray-300 text-lg leading-none"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="overflow-y-auto flex-1 space-y-1">
-                  {providerArticles.length === 0 ? (
-                    <p className="text-xs text-gray-500 text-center py-4">
-                      No articles for this provider
-                    </p>
-                  ) : (
-                    providerArticles.map((article) => {
-                      const isSelected = selectedIds.has(article.id);
-                      const dh =
-                        article.defaultHeadlineIndex !== undefined
-                          ? article.allowedHeadlines[article.defaultHeadlineIndex]
-                          : undefined;
-                      return (
-                        <button
-                          key={article.id}
-                          type="button"
-                          onClick={() =>
-                            store.toggleProviderToArticle(
-                              articlePickerProviderId,
-                              article.id,
-                              dh?.text,
-                              dh?.rac
-                            )
-                          }
-                          className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${
-                            isSelected
-                              ? "bg-blue-600/20 border border-blue-500/40 text-blue-300"
-                              : "bg-gray-800 border border-transparent text-gray-300 hover:bg-gray-700"
-                          }`}
-                        >
-                          <span
-                            className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                              isSelected
-                                ? "bg-blue-600 border-blue-500"
-                                : "border-gray-600"
-                            }`}
-                          >
-                            {isSelected && (
-                              <span className="text-white text-[10px]">✓</span>
-                            )}
-                          </span>
-                          <span className="truncate">{article.slug}</span>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setArticlePickerProviderId(null)}
-                  className="mt-3 px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors w-full"
-                >
-                  Done
-                </button>
-              </div>
-            </div>
-          );
-        })()}
 
       <SiloBrowser
         isOpen={siloOpen}
