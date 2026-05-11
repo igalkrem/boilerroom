@@ -117,18 +117,24 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       .filter((p) => !p.feedProviderId || activeProviderIdsFromArticles.has(p.feedProviderId))
       .sort((a, b) => (providerOrder.get(a.feedProviderId ?? "") ?? 999) - (providerOrder.get(b.feedProviderId ?? "") ?? 999));
   }, [presets, activeProviderIdsFromArticles, sortedByCreation]);
-  const visibleAccounts = useMemo(
-    () => allAccounts.filter((a) => {
-      const cfg = adAccountConfigs.find((c) => c.id === a.id);
-      if (cfg?.hidden) return false;
-      if (cfg && cfg.feedProviderIds.length > 0) {
-        return [...activeProviderIdsFromArticles].some((pid) => cfg.feedProviderIds.includes(pid));
-      }
-      // Show all unhidden accounts once any article is connected
-      return activeProviderIdsFromArticles.size > 0;
-    }),
-    [allAccounts, adAccountConfigs, activeProviderIdsFromArticles]
-  );
+  const visibleAccounts = useMemo(() => {
+    const providerOrder = new Map(sortedByCreation.map((p, i) => [p.id, i]));
+    const minProviderIndex = (accountId: string): number => {
+      const cfg = adAccountConfigs.find((c) => c.id === accountId);
+      if (!cfg || cfg.feedProviderIds.length === 0) return 999;
+      return Math.min(...cfg.feedProviderIds.map((pid) => providerOrder.get(pid) ?? 999));
+    };
+    return allAccounts
+      .filter((a) => {
+        const cfg = adAccountConfigs.find((c) => c.id === a.id);
+        if (cfg?.hidden) return false;
+        if (cfg && cfg.feedProviderIds.length > 0) {
+          return [...activeProviderIdsFromArticles].some((pid) => cfg.feedProviderIds.includes(pid));
+        }
+        return activeProviderIdsFromArticles.size > 0;
+      })
+      .sort((a, b) => minProviderIndex(a.id) - minProviderIndex(b.id));
+  }, [allAccounts, adAccountConfigs, activeProviderIdsFromArticles, sortedByCreation]);
 
   // Presets are enabled once any account is wired to any article
   const canSelectPresets = useMemo(
