@@ -344,6 +344,7 @@ export async function runSubmission(
                 "INTERSTITIAL_SPOTLIGHT",
                 "INSTREAM",
                 "PUBLIC_STORIES_INSTREAM",
+                "FEED",
               ],
             },
           }),
