@@ -66,6 +66,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   const store = useCanvasStore();
   const [siloOpen, setSiloOpen] = useState(false);
   const [targetRowId, setTargetRowId] = useState<string | null>(null);
+  const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
 
   const [providers, setProviders] = useState<FeedProvider[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
@@ -187,15 +188,21 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           rowId: row.id,
           providerColorMap,
           onAddToRow: (rId: string) => {
+            setTargetGroupId(null);
             setTargetRowId(rId);
+            setSiloOpen(true);
+          },
+          onAddToSlot: (gId: string) => {
+            setTargetRowId(null);
+            setTargetGroupId(gId);
             setSiloOpen(true);
           },
           onRemoveRow: (rId: string) => store.removeRow(rId),
           onNewRow: () => {
             const newRow = store.addRow();
-            // Place new row below the current one's last-known position
             const currentPos = nodePositionsRef.current[`row-${row.id}`] ?? { x: COLUMN_X.group, y: i * ROW_GAP };
             store.setNodePosition(`row-${newRow.id}`, { x: currentPos.x, y: currentPos.y + 320 });
+            setTargetGroupId(null);
             setTargetRowId(newRow.id);
             setSiloOpen(true);
           },
@@ -578,7 +585,6 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       <SiloBrowser
         isOpen={siloOpen}
         onClose={() => {
-          // If the row was created on-the-fly (no groups yet), remove it on cancel.
           if (targetRowId) {
             const row = useCanvasStore.getState().creativeRows.find((r) => r.id === targetRowId);
             if (row && row.groupIds.length === 0) {
@@ -587,13 +593,17 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           }
           setSiloOpen(false);
           setTargetRowId(null);
+          setTargetGroupId(null);
         }}
         onSelect={(asset) => {
-          if (targetRowId) {
+          if (targetGroupId) {
+            store.addCreativeToGroup(targetGroupId, asset.id);
+          } else if (targetRowId) {
             store.addGroupToRow(targetRowId, asset.id);
           }
           setSiloOpen(false);
           setTargetRowId(null);
+          setTargetGroupId(null);
         }}
         adAccountId=""
       />

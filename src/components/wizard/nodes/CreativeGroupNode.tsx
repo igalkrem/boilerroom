@@ -10,6 +10,7 @@ interface CreativeRowNodeData {
   rowId: string;
   providerColorMap: Record<string, string>;
   onAddToRow: (rowId: string) => void;
+  onAddToSlot: (groupId: string) => void;
   onRemoveRow: (rowId: string) => void;
   onNewRow: () => void;
   onDuplicateRow: (rowId: string) => void;
@@ -90,10 +91,9 @@ export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
   const row = store.creativeRows.find((r) => r.id === data.rowId);
   if (!row) return null;
 
-  // Resolve groups in row order: groupIds[0] = oldest = rightmost.
-  // To render with index 0 on the RIGHT under normal LTR flex flow,
-  // we reverse for display so groupIds[0] is the LAST DOM child (rightmost).
-  const groupsInDomOrder = [...row.groupIds].reverse();
+  // groupIds[0] = newest (prepended on add) = leftmost.
+  // groupIds[last] = oldest = rightmost, closest to the handle.
+  const groupsInDomOrder = row.groupIds;
 
   const connectedColors = store.edges.rowToProvider
     .filter((e) => e.rowId === data.rowId)
@@ -172,10 +172,11 @@ export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
                   </div>
                 );
               }
+              const creativeCount = group.creativeIds.length;
               return (
                 <div
                   key={groupId}
-                  className="relative rounded-xl overflow-hidden shadow-xl shrink-0"
+                  className="relative rounded-xl overflow-hidden shadow-xl shrink-0 group/slot"
                   style={{ width: CARD_W, aspectRatio: "9/16" }}
                 >
                   <CardFace
@@ -184,6 +185,25 @@ export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
                     onPreview={() => setPreviewId(asset.id)}
                     onRemove={() => store.removeGroupFromRow(data.rowId, groupId)}
                   />
+
+                  {/* Multi-creative count badge */}
+                  {creativeCount > 1 && (
+                    <div className="absolute top-2 left-2 z-20 bg-black/60 backdrop-blur-sm border border-white/15 rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white pointer-events-none">
+                      ×{creativeCount}
+                    </div>
+                  )}
+
+                  {/* Add-to-slot button — bottom center, visible on slot hover */}
+                  {creativeCount < 5 && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); data.onAddToSlot(groupId); }}
+                      title="Add creative to this slot"
+                      className="nodrag absolute bottom-8 left-1/2 -translate-x-1/2 z-20 w-7 h-7 rounded-full bg-black/55 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white/70 hover:text-white hover:bg-blue-600/80 text-sm leading-none opacity-0 group-hover/slot:opacity-100 transition-all"
+                    >
+                      +
+                    </button>
+                  )}
                 </div>
               );
             })}
