@@ -112,6 +112,28 @@ export async function updateAdSquad(
   return item.adsquad;
 }
 
+export async function setAdSquadPlacement(
+  squadId: string,
+  placement: { config: string; platforms?: string[]; snapchat_positions?: string[] }
+): Promise<SnapAdSquad> {
+  const current = await getAdSquad(squadId);
+  const putBody = { ...stripForPut(current as SnapAdSquad), placement_v2: placement };
+  const data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
+    `/campaigns/${current.campaign_id}/adsquads`,
+    { method: "PUT", body: JSON.stringify({ adsquads: [putBody] }) }
+  );
+  const item = data.adsquads?.[0];
+  if (!item) throw new Error("Placement update: empty response");
+  if (item.sub_request_status !== "SUCCESS") {
+    const detail = item.error_type ?? item.error?.error_type;
+    const msg = item.message ?? item.error?.message ?? item.sub_request_error_reason;
+    console.error("[setAdSquadPlacement] ERROR:", { squadId, raw: item });
+    throw new Error([detail, msg].filter(Boolean).join(": ") || "Snapchat rejected placement update");
+  }
+  if (!item.adsquad) throw new Error("Placement update: no adsquad in response");
+  return item.adsquad;
+}
+
 export async function createAdSquads(
   campaignId: string,
   adsquads: SnapAdSquadPayload[]

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdSquads, getAdSquad, getAdSquadsForAccount, updateAdSquad } from "@/lib/snapchat/adsquads";
+import { createAdSquads, getAdSquad, getAdSquadsForAccount, updateAdSquad, setAdSquadPlacement } from "@/lib/snapchat/adsquads";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import type { SnapAdSquadPayload } from "@/types/snapchat";
 import { z } from "zod";
@@ -98,18 +98,23 @@ export async function PATCH(request: NextRequest) {
     daily_budget_micro?: number;
     bid_micro?: number;
     status?: "ACTIVE" | "PAUSED";
+    placement_v2?: { config: string; platforms?: string[]; snapchat_positions?: string[] };
   } | null;
 
   if (!body || typeof body.adAccountId !== "string" || typeof body.squadId !== "string") {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
-  const { adAccountId, squadId, daily_budget_micro, bid_micro, status } = body;
+  const { adAccountId, squadId, daily_budget_micro, bid_micro, status, placement_v2 } = body;
 
   if (!isAdAccountAllowed(session, adAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   try {
+    if (placement_v2) {
+      const updated = await setAdSquadPlacement(squadId, placement_v2);
+      return NextResponse.json({ adsquad: updated });
+    }
     const updated = await updateAdSquad(squadId, { daily_budget_micro, bid_micro, status }, adAccountId);
     return NextResponse.json({ adsquad: updated });
   } catch (err) {

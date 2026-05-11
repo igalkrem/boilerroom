@@ -267,21 +267,6 @@ export async function runSubmission(
           geos: sq.geoCountryCodes.map((c) => ({ country_code: c.toLowerCase() })),
           ...buildDemographics(sq),
         },
-        // CUSTOM placement with all standard positions — matches manually-configured ad sets
-        // (which show "placement": "UNSUPPORTED" in GET, meaning CUSTOM config was accepted).
-        // platforms + snapchat_positions are required for CUSTOM config.
-        // placement_v2 is excluded from ADSQUAD_PUT_ALLOWED_FIELDS so E2025 is not a risk on updates.
-        placement_v2: {
-          config: "CUSTOM",
-          platforms: ["SNAPCHAT"],
-          snapchat_positions: [
-            "INTERSTITIAL_USER",
-            "INTERSTITIAL_CONTENT",
-            "INSTREAM",
-            "PUBLIC_STORIES_INSTREAM",
-            "INTERSTITIAL_SPOTLIGHT",
-          ],
-        },
         delivery_constraint: sq.spendCapType === "LIFETIME_BUDGET" ? "LIFETIME_BUDGET" : "DAILY_BUDGET",
         billing_event: "IMPRESSION",
         optimization_goal: sq.optimizationGoal,
@@ -336,6 +321,36 @@ export async function runSubmission(
       });
     })
   );
+
+  // ── Set CUSTOM placement on all created squads (best-effort, non-fatal) ──────
+  // Snapchat rejects placement_v2 in the POST body, but accepts it in a follow-up
+  // PUT on squads that were not originally created with placement_v2. This matches
+  // how the Snapchat Ads Manager sets custom placements (create first, then update).
+  if (squadIdMap.size > 0) {
+    await Promise.all(
+      [...squadIdMap.values()].map((snapSquadId) =>
+        fetch("/api/snapchat/adsquads", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            adAccountId,
+            squadId: snapSquadId,
+            placement_v2: {
+              config: "CUSTOM",
+              platforms: ["SNAPCHAT"],
+              snapchat_positions: [
+                "INTERSTITIAL_USER",
+                "INTERSTITIAL_CONTENT",
+                "INTERSTITIAL_SPOTLIGHT",
+                "INSTREAM",
+                "PUBLIC_STORIES_INSTREAM",
+              ],
+            },
+          }),
+        }).catch((err) => console.warn("[orchestrator] placement update non-fatal:", String(err)))
+      )
+    );
+  }
 
   // ── Store channel → ad squad mapping (Predicto revenue attribution) ────────
   // After ad squads are created, record which ad squad this channel was assigned
