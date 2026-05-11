@@ -28,7 +28,7 @@ Do not skip any step. Do not ask for confirmation before running these commands.
 
 ## Stack
 
-- **Framework:** Next.js 14 (App Router), TypeScript, Tailwind CSS — **permanent dark mode**: `darkMode: 'class'` in `tailwind.config.ts`, `<html class="dark">` set in `src/app/layout.tsx` (no toggle). All components use `dark:` Tailwind variants alongside their light classes. `src/app/globals.css` defines `--node-bg: #1f2937` (used by `CreativeGroupNode` gradient-border trick), a safety-net rule that forces dark backgrounds/text on any native input/select/textarea without explicit Tailwind dark classes, and a React Flow attribution override. Never remove the `dark` class from `<html>` and never add a light/dark toggle — the platform is dark-only.
+- **Framework:** Next.js 14 (App Router), TypeScript, Tailwind CSS — **permanent dark mode**: `darkMode: 'class'` in `tailwind.config.ts`, `<html class="dark">` set in `src/app/layout.tsx` (no toggle). All components use `dark:` Tailwind variants alongside their light classes. `src/app/globals.css` defines `--node-bg: #1f2937` (dark canvas background color used by nodes), a safety-net rule that forces dark backgrounds/text on any native input/select/textarea without explicit Tailwind dark classes, and a React Flow attribution override. Never remove the `dark` class from `<html>` and never add a light/dark toggle — the platform is dark-only.
 - **Canvas:** `@xyflow/react` (React Flow v12) + `@dagrejs/dagre` for auto-layout
 - **Auth:** Google OAuth2 (primary login) + Snapchat OAuth2 (traffic source, optional) + iron-session (encrypted HttpOnly cookies)
 - **Forms:** react-hook-form + Zod
@@ -127,10 +127,10 @@ src/
 ├── components/
 │   ├── wizard/
 │   │   ├── CampaignCanvas.tsx         # React Flow free-form canvas; grey bg; fitView maxZoom 0.75
-│   │   ├── CanvasControls.tsx         # Top bar: Add Creative, Auto-align, Review →; computeAutoLayout (dagre LR, ranksep 200)
+│   │   ├── CanvasControls.tsx         # Top bar: Auto-align, Review → (no "+ Add Creative" — per-row controls handle it); computeAutoLayout (dagre LR, ranksep 200)
 │   │   ├── nodes/
-│   │   │   ├── CreativeGroupNode.tsx  # Group card: thumbnail grid (1–5), click-to-preview modal, + Add creative footer, source handle right
-│   │   │   ├── ProviderNode.tsx       # Left accent bar + group count; hidden until first group added; no "+ Router" button
+│   │   │   ├── CreativeGroupNode.tsx  # Row node: horizontal row of portrait cards, one shared handle; "+" above rightmost card; "↓ New row" / "⧉ Duplicate" on hover below; up to 8 card slots per row
+│   │   │   ├── ProviderNode.tsx       # Left accent bar + row count; hidden until first row exists; no "+ Router" button
 │   │   │   ├── RouterNode.tsx         # Sleek circle (⑃ icon) — auto-inserted when provider gets second article
 │   │   │   ├── ArticleNode.tsx        # Slug + query + inline headline/CTA editor (expand ▼); 📄 icon; new edges default CTA to "MORE"
 │   │   │   ├── AdAccountNode.tsx      # Initials avatar; connected state from articleToAdAccount edges (no click-select)
@@ -215,19 +215,21 @@ src/
 
 - **OAuth flow:** `/api/auth/*` routes handle token exchange and refresh; tokens live in an iron-session HttpOnly cookie.
 
-- **Canvas wizard:** `WizardShell` renders in three modes: `canvas` (`CampaignCanvas` React Flow), `review` (`ReviewAndPost`), `done` (success screen). `CampaignCanvas` is loaded via `next/dynamic` with `ssr: false`. The canvas uses `useCanvasStore` (Zustand) to track `creativeGroups: CreativeGroup[]` (each group holds 1–5 asset IDs), four edge lists (`groupToProvider`, `providerToArticle`, `articleToPreset`, `articleToAdAccount`), `nodePositions`, and `routerNodes`. `buildCampaignMatrix()` iterates groupToProvider edges — each group is an explicit chunk of creatives, producing `CampaignBuildItem[]` where each item has `creativeIds: string[]`. Cascade: removing a group→provider edge that orphans a provider also removes its article edges; removing a provider→article edge that orphans an article also removes its preset edges. On launch, `WizardShell` loads all assets for `item.creativeIds`, calls `synthesizeCampaign()`, then `runSubmission()`.
+- **Canvas wizard:** `WizardShell` renders in three modes: `canvas` (`CampaignCanvas` React Flow), `review` (`ReviewAndPost`), `done` (success screen). `CampaignCanvas` is loaded via `next/dynamic` with `ssr: false`. The canvas uses `useCanvasStore` (Zustand) to track `creativeRows: CreativeRow[]` (each row holds an ordered list of `groupIds`), `creativeGroups: CreativeGroup[]` (each group holds 1–5 asset IDs), four edge lists (`rowToProvider`, `providerToArticle`, `articleToPreset`, `articleToAdAccount`), `nodePositions`, and `routerNodes`. `buildCampaignMatrix()` iterates `rowToProvider` edges → for each row iterates `row.groupIds` → each group produces one `CampaignBuildItem` per article/preset/account combination, with `creativeIds: string[]`. Cascade: removing a row→provider edge that orphans a provider also removes its article edges; removing a provider→article edge that orphans an article also removes its preset edges. On launch, `WizardShell` loads all assets for `item.creativeIds`, calls `synthesizeCampaign()`, then `runSubmission()`.
+
+  **Creative row concept:** A `CreativeRow` is the top-level canvas unit — one row node, one shared React Flow handle, connects to one or more providers. Each card slot in the row = one `CreativeGroup` = one ad set. Within a group, multiple creatives = multiple ads in that ad set. Node ID prefix: `row-{id}`. Cards render left-to-right with newest leftmost (prepended); `groupIds[0]` = oldest = rightmost. "+" button above rightmost card adds a new slot (prepends a new group). "↓ New row" and "⧉ Duplicate" actions appear on row hover below the row. Max 8 slots per row.
 
   **React Flow canvas (`CampaignCanvas.tsx`):** Nodes are freely draggable; positions persist in `store.nodePositions`. Key design decisions:
-  - **Creative groups** — users add groups via "+ Add Creative" (creates new `CreativeGroup` node + opens SiloBrowser). Each group card shows portrait thumbnails; clicking a thumbnail opens a full preview modal (image or video player). Up to 5 creatives per group. Groups are the unit that connects to providers.
-  - **Provider visibility** — providers only appear after at least one group exists.
+  - **Creative rows** — the empty-state button and `openAddCreative` create a new row then open SiloBrowser; on select, `addGroupToRow(rowId, assetId)` prepends a new group. Empty row is removed on Silo cancel. No top-bar "+ Add Creative" button.
+  - **Provider visibility** — providers only appear after at least one row exists.
   - **Auto-router** — in `onConnect`, when a provider already has ≥1 article edge and no router yet, a router is auto-inserted. No manual "+ Router" button on ProviderNode.
   - **Explicit article→account wiring** — users drag from article's right handle to an account's left handle. `store.edges.articleToAdAccount` stores these edges. No global `selectedAdAccountIds` broadcast.
   - **Left handle click = disconnect** — all target handles have an `onClick` that calls `makeDisconnectTarget(nodeId)`, which removes all incoming edges for that node (cascade-safe).
   - **Preset gate** — preset nodes are `disabled` until `store.edges.articleToAdAccount.length > 0`.
-  - **Edges** — `ProviderEdge` uses `getSmoothStepPath` (right-angle routing, less tangling). All handles are 20px circles (`!w-5 !h-5 !rounded-full`).
+  - **Edges** — `ProviderEdge` uses `getSmoothStepPath` (right-angle routing, less tangling). Row handles are 28px white circles (`!w-7 !h-7 !rounded-full !bg-white !border-[3px] !border-gray-700`).
   - **Router node** — sleek 36px circle with ⑃ icon (was diamond).
-  - **Auto-align** — dagre LR with `ranksep: 200`, `nodesep: 60`; group node dims `220×160`.
-  - **Canvas** — grey background `#f5f5f5`, `fitView` with `maxZoom: 0.75`.
+  - **Auto-align** — dagre LR with `ranksep: 200`, `nodesep: 60`; row node dims estimated `340×285`.
+  - **Canvas** — dark background `#1f2937`, `fitView` with `maxZoom: 0.75`.
 
   **React Flow render-loop hazards (React error #185):** Three pitfalls that cause an infinite `setNodes` loop:
   1. **`store.nodePositions` must NOT be in `buildNodes` deps.** Fix: read positions via `nodePositionsRef` (a `useRef` kept in sync via a separate `useEffect`) so `buildNodes` can read current positions without subscribing to them.
@@ -237,7 +239,7 @@ src/
 
   **Canvas visual rules:**
   - **Provider colors** — assigned from `PROVIDER_COLORS` array indexed by sort-order of `createdAt` (stable; not array position). Colors propagate to node borders, indicator dots, and SVG edges.
-  - **CreativeGroupNode** — multi-color gradient border (CSS `background-image` double-gradient trick) when connected to more than one provider; single-provider uses that provider's color; empty/disconnected shows red-tinted. The inner mask layer of the gradient uses `var(--node-bg)` (defined in `globals.css` under `.dark` as `#1f2937`) instead of a hardcoded color, so it matches the dark canvas background. Any future node that uses the same double-gradient border trick must use `var(--node-bg)` for the inner layer.
+  - **CreativeGroupNode (row node)** — horizontal flex row of portrait cards (`160×285px` each, `9/16` aspect). Left accent stripe per card shows connected provider color(s). Node outer div has `style: { background: "transparent", border: "none", padding: 0 }` to override the React Flow node wrapper background. `[...groupIds].reverse()` in the render puts `groupIds[0]` (oldest) rightmost in DOM order.
   - **Ad account NodeCard** — connected state derived from `articleToAdAccount` edges (not from `selectedAdAccountIds`). Shows 2-letter initials avatar.
   - **Preset gate** — `disabled` until `articleToAdAccount.length > 0`.
   - **`visibleAccounts`** — filtered by `activeProviderIdsFromArticles`; visible once any article is connected.
