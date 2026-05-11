@@ -87,6 +87,7 @@ function CardFace({
 export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
   const store = useCanvasStore();
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
 
   const row = store.creativeRows.find((r) => r.id === data.rowId);
   if (!row) return null;
@@ -186,15 +187,64 @@ export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
                     onRemove={() => store.removeGroupFromRow(data.rowId, groupId)}
                   />
 
-                  {/* Multi-creative count badge */}
+                  {/* Multi-creative count badge — clickable to expand/collapse slot */}
                   {creativeCount > 1 && (
-                    <div className="absolute top-2 left-2 z-20 bg-black/60 backdrop-blur-sm border border-white/15 rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white pointer-events-none">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setExpandedGroupId(expandedGroupId === groupId ? null : groupId); }}
+                      title="Expand slot"
+                      className={`nodrag absolute top-2 left-2 z-20 backdrop-blur-sm border rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white transition-colors ${
+                        expandedGroupId === groupId
+                          ? "bg-blue-600/80 border-blue-400/40"
+                          : "bg-black/60 border-white/15 hover:bg-black/80"
+                      }`}
+                    >
                       ×{creativeCount}
+                    </button>
+                  )}
+
+                  {/* Slot expansion overlay — shows all creatives in this group */}
+                  {expandedGroupId === groupId && (
+                    <div
+                      className="nodrag absolute inset-0 z-25 bg-black/80 rounded-xl flex flex-col items-center justify-center gap-2 p-2"
+                      onClick={(e) => { e.stopPropagation(); setExpandedGroupId(null); }}
+                    >
+                      <p className="text-[9px] text-gray-400 font-medium tracking-wide uppercase">Slot creatives</p>
+                      <div className="flex gap-1.5 flex-wrap justify-center" onClick={(e) => e.stopPropagation()}>
+                        {group.creativeIds.map((cId) => {
+                          const cAsset = getAssetById(cId);
+                          if (!cAsset) return null;
+                          return (
+                            <div key={cId} className="relative rounded-md overflow-hidden shrink-0 group/mini" style={{ width: 44, aspectRatio: "9/16" }}>
+                              {cAsset.thumbnailUrl ? (
+                                <img
+                                  src={cAsset.thumbnailUrl}
+                                  alt={cAsset.name ?? ""}
+                                  className="w-full h-full object-cover cursor-pointer"
+                                  onClick={() => setPreviewId(cId)}
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-gray-700 flex items-center justify-center text-gray-400 text-xs cursor-pointer" onClick={() => setPreviewId(cId)}>
+                                  {cAsset.mediaType === "VIDEO" ? "▶" : "🖼"}
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); store.removeCreativeFromGroup(groupId, cId); }}
+                                className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-red-600/80 text-[8px] opacity-0 group-hover/mini:opacity-100 transition-all"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[9px] text-gray-500">tap outside to close</p>
                     </div>
                   )}
 
                   {/* Add-to-slot button — bottom center, visible on slot hover */}
-                  {creativeCount < 5 && (
+                  {creativeCount < 5 && expandedGroupId !== groupId && (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); data.onAddToSlot(groupId); }}
