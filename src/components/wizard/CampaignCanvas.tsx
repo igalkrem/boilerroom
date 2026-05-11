@@ -68,7 +68,6 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   const [siloOpen, setSiloOpen] = useState(false);
   const [targetRowId, setTargetRowId] = useState<string | null>(null);
   const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
-
   const [providers, setProviders] = useState<FeedProvider[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
   const [presets, setPresets] = useState<CampaignPreset[]>([]);
@@ -100,18 +99,14 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   // ─── Visibility logic ────────────────────────────────────────────────────────
   // All memoized — filter/Set always return new references; must be stable to avoid
   // buildNodes→setNodes→re-render loop (#185).
-  const activeProviderIds = useMemo(
-    () => new Set(store.edges.rowToProvider.map((e) => e.feedProviderId)),
-    [store.edges.rowToProvider]
-  );
   const activeProviderIdsFromArticles = useMemo(
     () => new Set(store.edges.providerToArticle.map((e) => e.feedProviderId)),
     [store.edges.providerToArticle]
   );
 
   const visibleArticles = useMemo(
-    () => articles.filter((a) => activeProviderIds.has(a.feedProviderId)),
-    [articles, activeProviderIds]
+    () => articles.filter((a) => store.edges.providerToArticle.some((e) => e.articleId === a.id)),
+    [articles, store.edges.providerToArticle]
   );
   const visiblePresets = useMemo(
     () => presets.filter((p) => !p.feedProviderId || activeProviderIdsFromArticles.has(p.feedProviderId)),
@@ -231,6 +226,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
             name: provider.name,
             color: providerColorMap[provider.id] ?? "#94a3b8",
             onDisconnectTarget: makeDisconnectTarget,
+            onAddArticle: () => {},
           },
         });
       });
@@ -582,6 +578,99 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           </button>
         </div>
       )}
+
+      {/* Article picker modal */}
+      {articlePickerProviderId &&
+        (() => {
+          const providerArticles = articles.filter(
+            (a) => a.feedProviderId === articlePickerProviderId
+          );
+          const selectedIds = new Set(
+            store.edges.providerToArticle
+              .filter((e) => e.feedProviderId === articlePickerProviderId)
+              .map((e) => e.articleId)
+          );
+          const providerName =
+            providers.find((p) => p.id === articlePickerProviderId)?.name ?? "";
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+              onClick={() => setArticlePickerProviderId(null)}
+            >
+              <div
+                className="bg-gray-900 border border-gray-700 rounded-2xl p-4 w-80 max-h-[70vh] flex flex-col shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-200">
+                    Articles — {providerName}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setArticlePickerProviderId(null)}
+                    className="text-gray-500 hover:text-gray-300 text-lg leading-none"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="overflow-y-auto flex-1 space-y-1">
+                  {providerArticles.length === 0 ? (
+                    <p className="text-xs text-gray-500 text-center py-4">
+                      No articles for this provider
+                    </p>
+                  ) : (
+                    providerArticles.map((article) => {
+                      const isSelected = selectedIds.has(article.id);
+                      const dh =
+                        article.defaultHeadlineIndex !== undefined
+                          ? article.allowedHeadlines[article.defaultHeadlineIndex]
+                          : undefined;
+                      return (
+                        <button
+                          key={article.id}
+                          type="button"
+                          onClick={() =>
+                            store.toggleProviderToArticle(
+                              articlePickerProviderId,
+                              article.id,
+                              dh?.text,
+                              dh?.rac
+                            )
+                          }
+                          className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${
+                            isSelected
+                              ? "bg-blue-600/20 border border-blue-500/40 text-blue-300"
+                              : "bg-gray-800 border border-transparent text-gray-300 hover:bg-gray-700"
+                          }`}
+                        >
+                          <span
+                            className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                              isSelected
+                                ? "bg-blue-600 border-blue-500"
+                                : "border-gray-600"
+                            }`}
+                          >
+                            {isSelected && (
+                              <span className="text-white text-[10px]">✓</span>
+                            )}
+                          </span>
+                          <span className="truncate">{article.slug}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setArticlePickerProviderId(null)}
+                  className="mt-3 px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors w-full"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
       <SiloBrowser
         isOpen={siloOpen}
