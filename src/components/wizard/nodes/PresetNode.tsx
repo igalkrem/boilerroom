@@ -70,7 +70,7 @@ export function PresetNode({ data }: {
             const article = data.articles.find((a) => a.id === pe.articleId);
             return (
               <div key={pe.articleId} className="flex items-center gap-2 justify-between">
-                <span className="text-xs text-gray-500 truncate">{article?.slug ?? pe.articleId}</span>
+                <span className="text-xs text-gray-500 break-words">{article?.slug ?? pe.articleId}</span>
                 <div className="flex items-center gap-1 shrink-0">
                   <button
                     type="button"

@@ -47,9 +47,6 @@ export function AdAccountNode({ data }: {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{data.name}</p>
-          {connected && (
-            <p className="text-xs text-gray-400 truncate">{data.accountId.slice(0, 8)}…</p>
-          )}
         </div>
       </div>
     </div>
