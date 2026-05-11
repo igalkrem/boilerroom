@@ -27,7 +27,7 @@ const presetFormSchema = z
     bidStrategy: z.enum(["AUTO_BID", "LOWEST_COST_WITH_MAX_BID", "TARGET_COST"]),
     bidAmountUsd: z.number().optional(),
     dailyBudgetUsd: z.number().optional(),
-
+    placementConfig: z.enum(["AUTOMATIC", "CONTENT"]),
     targetingDeviceType: z.enum(["WEB", "MOBILE", "ALL"]).optional(),
     targetingOsType: z.enum(["iOS", "ANDROID"]).optional(),
     pixelId: z.string().optional(),
@@ -73,6 +73,10 @@ const BID_STRATEGY_OPTIONS = [
   { value: "TARGET_COST", label: "Target Cost" },
 ];
 
+const PLACEMENT_OPTIONS = [
+  { value: "AUTOMATIC", label: "Automatic" },
+  { value: "CONTENT", label: "Content" },
+];
 
 const DEVICE_OPTIONS = [
   { value: "ALL", label: "All Devices" },
@@ -165,7 +169,7 @@ export function PresetForm({ preset }: PresetFormProps) {
           bidStrategy: sq0.bidStrategy,
           bidAmountUsd: sq0.bidAmountUsd,
           dailyBudgetUsd: sq0.dailyBudgetUsd,
-
+          placementConfig: sq0.placementConfig,
           targetingDeviceType: sq0.targetingDeviceType,
           targetingOsType: sq0.targetingOsType,
           pixelId: sq0.pixelId,
@@ -177,7 +181,7 @@ export function PresetForm({ preset }: PresetFormProps) {
           optimizationGoal: "PIXEL_PURCHASE",
           bidStrategy: "AUTO_BID",
           dailyBudgetUsd: 20,
-
+          placementConfig: "AUTOMATIC",
           targetingDeviceType: "ALL",
           status: "PAUSED",
         },
@@ -214,7 +218,7 @@ export function PresetForm({ preset }: PresetFormProps) {
           status: data.status,
           startDate: undefined,
           endDate: undefined,
-          placementConfig: "AUTOMATIC",
+          placementConfig: data.placementConfig,
           targetingGender: undefined,
           targetingDeviceType: data.targetingDeviceType,
           targetingOsType: data.targetingOsType,
@@ -363,7 +367,7 @@ export function PresetForm({ preset }: PresetFormProps) {
           <Select label="OS" options={OS_OPTIONS} {...register("targetingOsType")} />
         )}
 
-
+        <Select label="Placements" options={PLACEMENT_OPTIONS} {...register("placementConfig")} />
       </div>
 
       <hr className="border-gray-100 dark:border-gray-700" />

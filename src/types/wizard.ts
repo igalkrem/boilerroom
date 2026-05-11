@@ -123,8 +123,13 @@ export interface CreativeGroup {
   creativeIds: string[]; // max 5
 }
 
+export interface CreativeRow {
+  id: string;
+  groupIds: string[]; // ordered: index 0 = rightmost (oldest); new groups are prepended → appear leftmost
+}
+
 export interface CanvasEdges {
-  groupToProvider: Array<{ groupId: string; feedProviderId: string }>;
+  rowToProvider: Array<{ rowId: string; feedProviderId: string }>;
   providerToArticle: Array<{
     feedProviderId: string;
     articleId: string;

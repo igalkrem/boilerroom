@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CreativeGroupNode — Redesign Mockup</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #111827;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: #f9fafb;
+    padding: 40px 60px;
+    min-height: 100vh;
+  }
+
+  h1 { font-size: 18px; font-weight: 600; color: #f9fafb; margin-bottom: 6px; }
+  .subtitle { font-size: 13px; color: #6b7280; margin-bottom: 40px; }
+
+  .section-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #4b5563;
+    margin-bottom: 28px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #1f2937;
+  }
+
+  .state-label {
+    font-size: 11px;
+    color: #6b7280;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+
+  /* ─── Static comparison grid ─── */
+  .columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 60px;
+    max-width: 780px;
+    margin-bottom: 64px;
+  }
+  .column { display: flex; flex-direction: column; gap: 36px; }
+  .col-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .col-header-badge {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+    padding: 3px 10px; border-radius: 20px;
+  }
+  .badge-before { background: rgba(239,68,68,0.12); color: #f87171; border: 1px solid rgba(239,68,68,0.25); }
+  .badge-after  { background: rgba(34,197,94,0.12);  color: #4ade80; border: 1px solid rgba(34,197,94,0.25);  }
+
+  .state-block { display: flex; flex-direction: column; align-items: center; }
+
+  /* ─── BEFORE cards ─── */
+  .before-card {
+    width: 208px; border-radius: 16px; border: 2px solid #374151;
+    background: #1f2937; padding: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3); position: relative;
+  }
+  .before-card.colored { border-color: #7c3aed; background: rgba(124,58,237,0.06); }
+  .before-x {
+    position: absolute; top: 8px; right: 8px;
+    width: 20px; height: 20px; border-radius: 50%; background: #374151;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #9ca3af; cursor: pointer;
+  }
+  .before-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .before-thumb  { width: 64px; height: 88px; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+  .before-name   { font-size: 11px; font-weight: 500; color: #d1d5db; margin-top: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .before-add-btn {
+    margin-top: 8px; width: 100%; border: 1px dashed #60a5fa; border-radius: 8px;
+    padding: 6px; text-align: center; font-size: 11px; color: #60a5fa; cursor: pointer;
+  }
+
+  /* ─── AFTER cards ─── */
+  .after-card-wrap { position: relative; }
+  .after-card {
+    width: 150px; border-radius: 14px; overflow: visible;
+    background: #1f2937; border-left: 3px solid transparent;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5); cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease; position: relative;
+  }
+  .after-card:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,0,0,0.6); }
+  .after-card.colored { border-left-color: #7c3aed; }
+
+  .after-thumb-area {
+    width: 100%; aspect-ratio: 9/16; position: relative;
+    overflow: hidden; border-radius: 12px;
+  }
+  .after-thumb-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .after-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(to bottom, transparent 45%, rgba(0,0,0,0.78) 100%);
+    display: flex; align-items: flex-end; padding: 10px; justify-content: space-between;
+  }
+  .after-name {
+    font-size: 11px; font-weight: 600; color: #fff;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 90px; text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .after-add-btn {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: rgba(255,255,255,0.18); backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; color: #fff; cursor: pointer; flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .after-add-btn:hover { background: rgba(255,255,255,0.3); }
+  .after-x {
+    position: absolute; top: 7px; right: 7px;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: rgba(255,255,255,0.7);
+    cursor: pointer; opacity: 0; transition: opacity 0.15s; z-index: 10;
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .after-card-wrap:hover .after-x { opacity: 1; }
+  .after-handle {
+    position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #fff; border: 3px solid #374151;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4); z-index: 20;
+  }
+  .after-empty-area {
+    width: 100%; aspect-ratio: 9/16; border-radius: 12px;
+    border: 1.5px dashed #374151; background: #161d27;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  }
+  .after-empty-area:hover { border-color: #4b5563; background: #1a2232; }
+  .after-empty-plus {
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 1.5px dashed #4b5563;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; color: #6b7280;
+  }
+  .after-empty-text { font-size: 10px; color: #4b5563; font-weight: 500; }
+
+  /* count badge */
+  .count-badge {
+    position: absolute; top: 8px; left: 8px;
+    background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
+    padding: 2px 7px; font-size: 10px; font-weight: 700; color: #fff; z-index: 5;
+  }
+
+  /* static stacked pseudo-element (non-interactive) */
+  .after-card-wrap.stacked::after {
+    content: ''; position: absolute;
+    top: -5px; left: 6px; right: -6px; bottom: 5px;
+    background: #374151; border-radius: 14px; z-index: -1;
+  }
+  .after-card-wrap.stacked::before {
+    content: ''; position: absolute;
+    top: -10px; left: 12px; right: -12px; bottom: 10px;
+    background: #2d3748; border-radius: 14px; z-index: -2;
+  }
+
+  /* ─── Fake thumbnail gradients ─── */
+  .grad-purple { background: linear-gradient(165deg, #667eea, #764ba2 50%, #a855f7); }
+  .grad-orange { background: linear-gradient(165deg, #fc4a1a, #f7b733 80%); }
+  .grad-teal   { background: linear-gradient(165deg, #0f2027, #203a43 50%, #2c5364); }
+  .grad-rose   { background: linear-gradient(165deg, #f43f5e, #be185d 60%); }
+
+
+  /* ═══════════════════════════════════════════════════════════════
+     FAN DEMO SECTION
+  ═══════════════════════════════════════════════════════════════ */
+
+  .fan-demo-section {
+    margin-top: 16px;
+  }
+
+  .fan-stage {
+    display: flex;
+    align-items: flex-start;
+    gap: 80px;
+    padding: 48px 40px;
+    background: #1a2232;
+    border-radius: 20px;
+    border: 1px solid #1f2937;
+    overflow: visible;
+  }
+
+  .fan-demo-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .fan-demo-col .state-label { margin-bottom: 18px; }
+
+  /* The interactive fan container */
+  .fan-container {
+    position: relative;
+    width: 150px;
+    height: 267px; /* 150 * 16/9 */
+    cursor: pointer;
+  }
+
+  .fan-card {
+    position: absolute;
+    top: 0; left: 0;
+    width: 150px;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+    transition:
+      transform 0.45s cubic-bezier(0.34, 1.3, 0.64, 1),
+      box-shadow 0.3s ease,
+      opacity 0.3s ease;
+  }
+
+  /* Stacked default positions — perfectly overlaid, scale gives depth */
+  .fan-c1 { z-index: 3; transform: translate(0,0) scale(1); }
+  .fan-c2 { z-index: 2; transform: translate(0,0) scale(0.95); box-shadow: 0 3px 12px rgba(0,0,0,0.4); }
+  .fan-c3 { z-index: 1; transform: translate(0,0) scale(0.90); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+
+  /* Fanned positions — spread to the right */
+  .fan-container.fanned .fan-c1 { transform: translate(0, 0) scale(1); }
+  .fan-container.fanned .fan-c2 { transform: translate(170px, 8px) scale(1); z-index: 2; }
+  .fan-container.fanned .fan-c3 { transform: translate(340px, 18px) scale(1); z-index: 1; }
+
+  /* Hovering an individual card when fanned */
+  .fan-container.fanned .fan-card:hover {
+    transform: translate(var(--fan-x), calc(var(--fan-y) - 8px)) scale(1.02) !important;
+    box-shadow: 0 14px 36px rgba(0,0,0,0.7) !important;
+    z-index: 10 !important;
+  }
+  .fan-c1 { --fan-x: 0px;   --fan-y: 0px; }
+  .fan-c2 { --fan-x: 170px; --fan-y: 8px; }
+  .fan-c3 { --fan-x: 340px; --fan-y: 18px; }
+
+  /* Dismiss button on each fanned card */
+  .fan-x {
+    position: absolute; top: 7px; right: 7px;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: rgba(255,255,255,0.7);
+    cursor: pointer; opacity: 0; transition: opacity 0.2s; z-index: 10;
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .fan-container.fanned .fan-card:hover .fan-x { opacity: 1; }
+
+  /* Connection handle on front card */
+  .fan-handle {
+    position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #fff; border: 3px solid #374151;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4); z-index: 30;
+    transition: right 0.45s cubic-bezier(0.34, 1.3, 0.64, 1);
+  }
+
+  /* Hint text below */
+  .fan-hint {
+    margin-top: 16px;
+    font-size: 11px;
+    color: #4b5563;
+    text-align: center;
+    transition: color 0.2s;
+  }
+  .fan-hint.active { color: #6b7280; }
+
+  /* Click pulse on the stacked count badge */
+  @keyframes pulse-badge {
+    0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.25); }
+    70%  { box-shadow: 0 0 0 6px rgba(255,255,255,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+  }
+  .fan-badge-pulse { animation: pulse-badge 1.8s ease infinite; }
+
+</style>
+</head>
+<body>
+
+<h1>CreativeGroupNode — Redesign</h1>
+<p class="subtitle">Hover cards to reveal the × button. Click the stacked card at the bottom to fan out.</p>
+
+<!-- ═══════════════════════════════════════
+     Static state comparison
+════════════════════════════════════════ -->
+<div class="columns">
+
+  <div class="column">
+    <div class="col-header"><span class="col-header-badge badge-before">BEFORE</span></div>
+
+    <div class="state-block">
+      <div class="state-label">Single creative</div>
+      <div class="before-card">
+        <div class="before-x">×</div>
+        <div class="before-thumbs">
+          <div class="before-thumb grad-purple" style="position:relative;"></div>
+        </div>
+        <div class="before-name">sme_v_035</div>
+        <div class="before-add-btn">+ Add creative</div>
+      </div>
+    </div>
+
+    <div class="state-block">
+      <div class="state-label">Connected to provider</div>
+      <div class="before-card colored">
+        <div class="before-x">×</div>
+        <div class="before-thumbs">
+          <div class="before-thumb grad-purple"></div>
+        </div>
+        <div class="before-name">sme_v_035</div>
+        <div class="before-add-btn">+ Add creative</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="column">
+    <div class="col-header"><span class="col-header-badge badge-after">AFTER</span></div>
+
+    <div class="state-block">
+      <div class="state-label">Single creative</div>
+      <div class="after-card-wrap">
+        <div class="after-x">×</div>
+        <div class="after-card">
+          <div class="after-thumb-area">
+            <div class="after-thumb-img grad-purple" style="position:relative;"></div>
+            <div class="after-overlay">
+              <span class="after-name">sme_v_035</span>
+              <div class="after-add-btn">+</div>
+            </div>
+          </div>
+        </div>
+        <div class="after-handle"></div>
+      </div>
+    </div>
+
+    <div class="state-block">
+      <div class="state-label">Connected to provider</div>
+      <div class="after-card-wrap">
+        <div class="after-x">×</div>
+        <div class="after-card colored">
+          <div class="after-thumb-area">
+            <div class="after-thumb-img grad-purple" style="position:relative;"></div>
+            <div class="after-overlay">
+              <span class="after-name">sme_v_035</span>
+              <div class="after-add-btn">+</div>
+            </div>
+          </div>
+        </div>
+        <div class="after-handle"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════
+     Fan interaction demo
+════════════════════════════════════════ -->
+<div class="fan-demo-section">
+  <div class="section-title">Multi-creative — fan interaction</div>
+
+  <div class="fan-stage">
+
+    <!-- BEFORE: current 3-creative layout -->
+    <div class="fan-demo-col">
+      <div class="state-label">Before</div>
+      <div class="before-card">
+        <div class="before-x">×</div>
+        <div class="before-thumbs">
+          <div class="before-thumb grad-purple"></div>
+          <div class="before-thumb grad-orange"></div>
+          <div class="before-thumb grad-teal"></div>
+        </div>
+        <div class="before-name">sme_v_035 +2</div>
+      </div>
+    </div>
+
+    <!-- AFTER: interactive fan -->
+    <div class="fan-demo-col" style="overflow:visible;">
+      <div class="state-label">After — click to fan / collapse</div>
+
+      <!-- Wider overflow wrapper so fanned cards have room -->
+      <div style="position:relative; overflow:visible;">
+        <div class="fan-container" id="fanStack" onclick="toggleFan()">
+
+          <!-- Card 3 (teal) — backmost -->
+          <div class="fan-card fan-c3">
+            <div style="width:100%;aspect-ratio:9/16;position:relative;overflow:hidden;border-radius:14px;">
+              <div class="grad-teal" style="width:100%;height:100%;"></div>
+              <div class="after-overlay">
+                <span class="after-name">sme_v_033</span>
+              </div>
+              <div class="fan-x">×</div>
+            </div>
+          </div>
+
+          <!-- Card 2 (orange) — middle -->
+          <div class="fan-card fan-c2">
+            <div style="width:100%;aspect-ratio:9/16;position:relative;overflow:hidden;border-radius:14px;">
+              <div class="grad-orange" style="width:100%;height:100%;"></div>
+              <div class="after-overlay">
+                <span class="after-name">sme_v_034</span>
+              </div>
+              <div class="fan-x">×</div>
+            </div>
+          </div>
+
+          <!-- Card 1 (purple) — front -->
+          <div class="fan-card fan-c1">
+            <div style="width:100%;aspect-ratio:9/16;position:relative;overflow:hidden;border-radius:14px;border-left:3px solid #7c3aed;">
+              <div class="grad-purple" style="width:100%;height:100%;"></div>
+              <!-- count badge — pulses when stacked -->
+              <div class="count-badge fan-badge-pulse" id="fanBadge">3 ▾</div>
+              <div class="after-overlay">
+                <span class="after-name">sme_v_035</span>
+                <div class="after-add-btn" onclick="event.stopPropagation()">+</div>
+              </div>
+              <div class="fan-x" onclick="event.stopPropagation()">×</div>
+            </div>
+          </div>
+
+          <!-- Connection handle stays on main card -->
+          <div class="fan-handle"></div>
+
+        </div>
+      </div>
+
+      <div class="fan-hint" id="fanHint">click stack to fan out</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let fanned = false;
+
+  function toggleFan() {
+    fanned = !fanned;
+    const container = document.getElementById('fanStack');
+    const badge     = document.getElementById('fanBadge');
+    const hint      = document.getElementById('fanHint');
+
+    container.classList.toggle('fanned', fanned);
+
+    if (fanned) {
+      badge.textContent = '✕';
+      badge.classList.remove('fan-badge-pulse');
+      hint.textContent  = 'click again to restack';
+      hint.classList.add('active');
+    } else {
+      badge.textContent = '3 ▾';
+      badge.classList.add('fan-badge-pulse');
+      hint.textContent  = 'click stack to fan out';
+      hint.classList.remove('active');
+    }
+  }
+</script>
+
+</body>
+</html>

@@ -6,30 +6,28 @@ import { useCanvasStore } from "@/hooks/useCanvasStore";
 import { getAssetById } from "@/lib/silo";
 import type { SiloAsset } from "@/types/silo";
 
-interface CreativeGroupNodeData {
-  groupId: string;
+interface CreativeRowNodeData {
+  rowId: string;
   providerColorMap: Record<string, string>;
-  onAddCreative: (groupId: string) => void;
-  onRemoveGroup: (groupId: string) => void;
+  onAddToRow: (rowId: string) => void;
+  onRemoveRow: (rowId: string) => void;
+  onNewRow: () => void;
+  onDuplicateRow: (rowId: string) => void;
 }
 
 const CARD_W = 160;
-const FAN_STEP = 172; // card width + 12px gap
+const CARD_GAP = 12;
 
 function CardFace({
   asset,
   accentColors,
-  showRemoveButton,
   onPreview,
   onRemove,
-  addButton,
 }: {
   asset: SiloAsset;
   accentColors: string[];
-  showRemoveButton: boolean;
   onPreview: () => void;
   onRemove: () => void;
-  addButton?: React.ReactNode;
 }) {
   const stripeStyle: React.CSSProperties =
     accentColors.length > 1
@@ -67,61 +65,52 @@ function CardFace({
 
       {/* Asset name */}
       <p
-        className="absolute bottom-2 left-3 right-10 z-10 text-white text-[11px] font-semibold truncate pointer-events-none"
+        className="absolute bottom-2 left-3 right-3 z-10 text-white text-[11px] font-semibold truncate pointer-events-none"
         style={{ textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}
       >
         {asset.name ?? asset.originalFileName ?? ""}
       </p>
 
-      {/* Add creative button (slot) */}
-      {addButton}
-
-      {/* Per-creative remove button — appears on hover when shown */}
-      {showRemoveButton && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="nodrag absolute top-2 right-2 z-20 w-6 h-6 rounded-full bg-black/55 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-red-600/80 text-[10px] opacity-0 group-hover/card:opacity-100 transition-all"
-        >
-          ✕
-        </button>
-      )}
+      {/* Per-card remove button — visible on card hover */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onRemove(); }}
+        className="nodrag absolute top-2 right-2 z-20 w-6 h-6 rounded-full bg-black/55 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-red-600/80 text-[10px] opacity-0 group-hover/card:opacity-100 transition-all"
+      >
+        ✕
+      </button>
     </div>
   );
 }
 
-export function CreativeGroupNode({ data }: { data: CreativeGroupNodeData }) {
+export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
   const store = useCanvasStore();
   const [previewId, setPreviewId] = useState<string | null>(null);
-  const [fanned, setFanned] = useState(false);
 
-  const group = store.creativeGroups.find((g) => g.id === data.groupId);
-  if (!group) return null;
+  const row = store.creativeRows.find((r) => r.id === data.rowId);
+  if (!row) return null;
 
-  const assets = group.creativeIds
-    .map((id) => getAssetById(id))
-    .filter((a): a is SiloAsset => a !== undefined);
+  // Resolve groups in row order: groupIds[0] = oldest = rightmost.
+  // To render with index 0 on the RIGHT under normal LTR flex flow,
+  // we reverse for display so groupIds[0] is the LAST DOM child (rightmost).
+  const groupsInDomOrder = [...row.groupIds].reverse();
 
-  const connectedColors = store.edges.groupToProvider
-    .filter((e) => e.groupId === data.groupId)
+  const connectedColors = store.edges.rowToProvider
+    .filter((e) => e.rowId === data.rowId)
     .map((e) => data.providerColorMap[e.feedProviderId] ?? "#94a3b8");
 
-  const multi = assets.length > 1;
   const previewAsset = previewId ? getAssetById(previewId) : null;
+  const isEmpty = row.groupIds.length === 0;
 
-  const addBtn = assets.length < 5 ? (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); data.onAddCreative(data.groupId); }}
-      className="nodrag absolute bottom-2 right-2 z-20 w-7 h-7 rounded-full bg-white/20 backdrop-blur-sm border border-white/25 flex items-center justify-center text-white text-lg leading-none hover:bg-white/30 transition-colors"
-    >
-      +
-    </button>
-  ) : undefined;
+  // The visible row width helps us position the "+" button above the
+  // rightmost card. With CARD_W and CARD_GAP, the rightmost card's right
+  // edge sits at the container's right edge (the handle is anchored there).
+  const rowWidth = isEmpty ? CARD_W : row.groupIds.length * CARD_W + (row.groupIds.length - 1) * CARD_GAP;
 
   return (
     <>
-      <div className="relative group/node" style={{ width: CARD_W }}>
+      <div className="relative group/node" style={{ width: rowWidth }}>
+        {/* Shared row handle — anchored at right edge */}
         <Handle
           type="source"
           position={Position.Right}
@@ -129,21 +118,35 @@ export function CreativeGroupNode({ data }: { data: CreativeGroupNodeData }) {
           className="!w-7 !h-7 !rounded-full !bg-white !border-[3px] !border-gray-700 !shadow-md !z-20"
         />
 
-        {/* Group-level remove button — ghost, appears on hover */}
+        {/* Whole-row remove button — top-right, visible on row hover */}
         <button
           type="button"
-          onClick={() => data.onRemoveGroup(data.groupId)}
+          onClick={() => data.onRemoveRow(data.rowId)}
+          title="Remove row"
           className="nodrag absolute -top-2 -right-2 z-30 w-6 h-6 rounded-full bg-gray-900 border border-gray-600 flex items-center justify-center text-gray-400 hover:text-white hover:bg-red-600 hover:border-red-500 text-[10px] opacity-0 group-hover/node:opacity-100 transition-all"
         >
           ✕
         </button>
 
-        {assets.length === 0 ? (
+        {/* "+" button — above the rightmost card, visible on row hover */}
+        {!isEmpty && row.groupIds.length < 8 && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); data.onAddToRow(data.rowId); }}
+            title="Add creative slot"
+            className="nodrag absolute z-30 w-8 h-8 rounded-full bg-gray-900 border border-gray-600 flex items-center justify-center text-gray-300 hover:text-white hover:bg-blue-600 hover:border-blue-500 text-lg leading-none opacity-0 group-hover/node:opacity-100 transition-all shadow-md"
+            style={{ top: -36, right: (CARD_W - 32) / 2 }}
+          >
+            +
+          </button>
+        )}
+
+        {isEmpty ? (
           /* ── Empty state ── */
           <div
             className="nodrag rounded-xl border-2 border-dashed border-gray-600 bg-gray-900/80 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-gray-500 hover:bg-gray-800/60 transition-colors"
             style={{ width: CARD_W, aspectRatio: "9/16" }}
-            onClick={() => data.onAddCreative(data.groupId)}
+            onClick={() => data.onAddToRow(data.rowId)}
           >
             <div className="w-9 h-9 rounded-full border-2 border-dashed border-gray-600 flex items-center justify-center text-gray-500 text-xl">
               +
@@ -151,64 +154,61 @@ export function CreativeGroupNode({ data }: { data: CreativeGroupNodeData }) {
             <span className="text-xs text-gray-600 font-medium">Add creative</span>
           </div>
         ) : (
-          /* ── Card stack ── */
-          <div className="relative" style={{ width: CARD_W, aspectRatio: "9/16" }}>
-
-            {/* Back cards (index 1, 2, 3…) */}
-            {assets.slice(1).map((asset, i) => {
-              const idx = i + 1;
+          /* ── Row of cards ── */
+          <div className="flex flex-row" style={{ gap: CARD_GAP }}>
+            {groupsInDomOrder.map((groupId) => {
+              const group = store.creativeGroups.find((g) => g.id === groupId);
+              if (!group) return null;
+              const firstAssetId = group.creativeIds[0];
+              const asset = firstAssetId ? getAssetById(firstAssetId) : undefined;
+              if (!asset) {
+                return (
+                  <div
+                    key={groupId}
+                    className="rounded-xl border-2 border-dashed border-gray-700 bg-gray-900/50 flex items-center justify-center text-[10px] text-gray-500"
+                    style={{ width: CARD_W, aspectRatio: "9/16" }}
+                  >
+                    missing asset
+                  </div>
+                );
+              }
               return (
                 <div
-                  key={asset.id}
-                  className="absolute inset-0 rounded-xl overflow-hidden shadow-lg"
-                  style={{
-                    zIndex: assets.length - idx,
-                    transform: fanned
-                      ? `translateX(${idx * FAN_STEP}px) translateY(${idx * 8}px)`
-                      : `translateX(${idx * 7}px) scale(${1 - idx * 0.05})`,
-                    transformOrigin: "top left",
-                    transition: "transform 0.42s cubic-bezier(0.34, 1.3, 0.64, 1)",
-                  }}
+                  key={groupId}
+                  className="relative rounded-xl overflow-hidden shadow-xl shrink-0"
+                  style={{ width: CARD_W, aspectRatio: "9/16" }}
                 >
                   <CardFace
                     asset={asset}
                     accentColors={connectedColors}
-                    showRemoveButton={fanned}
                     onPreview={() => setPreviewId(asset.id)}
-                    onRemove={() => store.removeCreativeFromGroup(data.groupId, asset.id)}
+                    onRemove={() => store.removeGroupFromRow(data.rowId, groupId)}
                   />
                 </div>
               );
             })}
-
-            {/* Front card */}
-            <div
-              className="absolute inset-0 rounded-xl overflow-hidden shadow-xl"
-              style={{ zIndex: assets.length }}
-            >
-              <CardFace
-                asset={assets[0]}
-                accentColors={connectedColors}
-                showRemoveButton={fanned}
-                onPreview={() => setPreviewId(assets[0].id)}
-                onRemove={() => store.removeCreativeFromGroup(data.groupId, assets[0].id)}
-                addButton={addBtn}
-              />
-
-              {/* Count badge / fan toggle */}
-              {multi && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setFanned((f) => !f); }}
-                  className="nodrag absolute top-2 left-2 z-20 bg-black/55 backdrop-blur-sm border border-white/15 rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-black/70 transition-colors select-none"
-                >
-                  {fanned ? "✕" : `${assets.length} ▾`}
-                </button>
-              )}
-            </div>
-
           </div>
         )}
+
+        {/* "New row" / "Duplicate" — below row, visible on row hover */}
+        <div className="absolute left-0 right-0 flex justify-center gap-2 opacity-0 group-hover/node:opacity-100 transition-opacity" style={{ bottom: -36 }}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); data.onNewRow(); }}
+            className="nodrag px-2.5 py-1 text-[11px] font-medium text-gray-300 bg-gray-900/90 hover:bg-gray-800 border border-gray-600 hover:border-gray-500 rounded-md shadow-sm transition-colors"
+          >
+            ↓ New row
+          </button>
+          {!isEmpty && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); data.onDuplicateRow(data.rowId); }}
+              className="nodrag px-2.5 py-1 text-[11px] font-medium text-gray-300 bg-gray-900/90 hover:bg-gray-800 border border-gray-600 hover:border-gray-500 rounded-md shadow-sm transition-colors"
+            >
+              ⧉ Duplicate
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Preview modal */}

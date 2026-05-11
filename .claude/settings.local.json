@@ -68,8 +68,10 @@
       "Bash(python3 -c ' *)",
       "Skill(update-config)",
       "Skill(update-config:*)",
+      "Read(/Users/igalkremer/Desktop/BoilerRoom/.claude/CLAUDE.md)",
       "Edit(/Users/igalkremer/Desktop/BoilerRoom/.claude/CLAUDE.md)",
       "Write(/Users/igalkremer/Desktop/BoilerRoom/.claude/CLAUDE.md)",
+      "Read(.claude/CLAUDE.md)",
       "Edit(.claude/CLAUDE.md)",
       "Write(.claude/CLAUDE.md)",
       "Bash(git commit *)",
@@ -85,7 +87,10 @@
       "Bash(curl -s -w '\\\\nHTTP_STATUS:%{http_code}' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzMDYzMTU1LCJpYXQiOjE3NzcyNzg1MTIsImp0aSI6ImNmMzhiNjM0ZDhiNTRiNjJiNDg5ZmU0N2Y2YmNhMDkxIiwidXNlcl9pZCI6NzI3fQ.U2g2Ss1RGccNGz7lSK-rb_NzHYfAaIxlt2xGUfNkRo0' 'https://partnerhub-api.kingsroad.io/api/v3/report/?start_date=2026-05-01&end_date=2026-05-02&page_size=3')",
       "WebFetch(domain:docs.rivery.io)",
       "WebFetch(domain:github.com)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('iron-session:', p.dependencies?.['iron-session']\\)\")",
+      "Bash(node -e \"const p=require\\('/Users/igalkremer/Desktop/BoilerRoom/node_modules/iron-session/package.json'\\); console.log\\('iron-session actual version:', p.version\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/dashboard)"
     ]
   },
   "enableAllProjectMcpServers": true,
