@@ -13,10 +13,10 @@ export function ProviderNode({ data }: {
 }) {
   const store = useCanvasStore();
 
-  const connectedGroups = store.edges.groupToProvider.filter(
+  const connectedRows = store.edges.rowToProvider.filter(
     (e) => e.feedProviderId === data.providerId
   ).length;
-  const connected = connectedGroups > 0;
+  const connected = connectedRows > 0;
 
   return (
     <div
@@ -53,7 +53,7 @@ export function ProviderNode({ data }: {
         </div>
         {connected && (
           <p className="text-xs text-gray-400 mt-0.5 pl-4">
-            {connectedGroups} group{connectedGroups !== 1 ? "s" : ""}
+            {connectedRows} row{connectedRows !== 1 ? "s" : ""}
           </p>
         )}
       </div>

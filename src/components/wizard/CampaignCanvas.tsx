@@ -65,7 +65,7 @@ interface CampaignCanvasProps {
 export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   const store = useCanvasStore();
   const [siloOpen, setSiloOpen] = useState(false);
-  const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
+  const [targetRowId, setTargetRowId] = useState<string | null>(null);
 
   const [providers, setProviders] = useState<FeedProvider[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
@@ -99,8 +99,8 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   // All memoized — filter/Set always return new references; must be stable to avoid
   // buildNodes→setNodes→re-render loop (#185).
   const activeProviderIds = useMemo(
-    () => new Set(store.edges.groupToProvider.map((e) => e.feedProviderId)),
-    [store.edges.groupToProvider]
+    () => new Set(store.edges.rowToProvider.map((e) => e.feedProviderId)),
+    [store.edges.rowToProvider]
   );
   const activeProviderIdsFromArticles = useMemo(
     () => new Set(store.edges.providerToArticle.map((e) => e.feedProviderId)),
@@ -141,8 +141,8 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
 
       if (type === "provider") {
         const providerId = nodeId.replace(/^provider-/, "");
-        const groups = store.edges.groupToProvider.filter((e) => e.feedProviderId === providerId);
-        groups.forEach((e) => store.toggleGroupToProvider(e.groupId, providerId));
+        const rows = store.edges.rowToProvider.filter((e) => e.feedProviderId === providerId);
+        rows.forEach((e) => store.disconnectRowFromProvider(e.rowId, providerId));
 
       } else if (type === "router") {
         store.removeRouter(nodeId);
@@ -175,28 +175,43 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       return { x: COLUMN_X[col], y: index * ROW_GAP };
     };
 
-    // Creative Groups
-    store.creativeGroups.forEach((group, i) => {
-      const nodeId = `group-${group.id}`;
+    // Creative Rows
+    store.creativeRows.forEach((row, i) => {
+      const nodeId = `row-${row.id}`;
       nodes.push({
         id: nodeId,
         type: "group",
         position: pos("group", i, nodeId),
         style: { background: "transparent", border: "none", padding: 0 },
         data: {
-          groupId: group.id,
+          rowId: row.id,
           providerColorMap,
-          onAddCreative: (gId: string) => {
-            setTargetGroupId(gId);
+          onAddToRow: (rId: string) => {
+            setTargetRowId(rId);
             setSiloOpen(true);
           },
-          onRemoveGroup: (gId: string) => store.removeGroup(gId),
+          onRemoveRow: (rId: string) => store.removeRow(rId),
+          onNewRow: () => {
+            const newRow = store.addRow();
+            // Place new row below the current one's last-known position
+            const currentPos = nodePositionsRef.current[`row-${row.id}`] ?? { x: COLUMN_X.group, y: i * ROW_GAP };
+            store.setNodePosition(`row-${newRow.id}`, { x: currentPos.x, y: currentPos.y + 320 });
+            setTargetRowId(newRow.id);
+            setSiloOpen(true);
+          },
+          onDuplicateRow: (rId: string) => {
+            const newRow = store.duplicateRow(rId);
+            if (newRow) {
+              const currentPos = nodePositionsRef.current[`row-${rId}`] ?? { x: COLUMN_X.group, y: i * ROW_GAP };
+              store.setNodePosition(`row-${newRow.id}`, { x: currentPos.x, y: currentPos.y + 320 });
+            }
+          },
         },
       });
     });
 
-    // Providers — only when at least one group exists
-    if (store.creativeGroups.length > 0) {
+    // Providers — only when at least one row exists
+    if (store.creativeRows.length > 0) {
       sortedByCreation.forEach((provider, i) => {
         const nodeId = `provider-${provider.id}`;
         nodes.push({
@@ -285,7 +300,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     return nodes;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    store.creativeGroups, store.routerNodes,
+    store.creativeRows, store.routerNodes,
     sortedByCreation, providerColorMap, visibleArticles, visibleAccounts, visiblePresets,
     adAccountConfigs, articles, canSelectPresets, makeDisconnectTarget,
   ]);
@@ -294,13 +309,13 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   const buildEdges = useCallback((): Edge[] => {
     const edges: Edge[] = [];
 
-    // Group → Provider (or Group → Router)
-    for (const e of store.edges.groupToProvider) {
+    // Row → Provider (or Row → Router)
+    for (const e of store.edges.rowToProvider) {
       const router = store.routerNodes.find((r) => r.feedProviderId === e.feedProviderId);
       const target = router ? router.id : `provider-${e.feedProviderId}`;
       edges.push({
-        id: `gp-${e.groupId}-${e.feedProviderId}`,
-        source: `group-${e.groupId}`,
+        id: `rp-${e.rowId}-${e.feedProviderId}`,
+        source: `row-${e.rowId}`,
         sourceHandle: "out",
         target,
         targetHandle: "in",
@@ -312,7 +327,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     // Router → Provider
     for (const r of store.routerNodes) {
       edges.push({
-        id: `rp-${r.id}`,
+        id: `rtp-${r.id}`,
         source: r.id,
         sourceHandle: "out",
         target: `provider-${r.feedProviderId}`,
@@ -415,12 +430,12 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       const srcType = source.split("-")[0];
       const tgtType = target.split("-")[0];
 
-      if (srcType === "group" && (tgtType === "provider" || tgtType === "router")) {
-        const groupId = source.replace(/^group-/, "");
+      if (srcType === "row" && (tgtType === "provider" || tgtType === "router")) {
+        const rowId = source.replace(/^row-/, "");
         const providerId = tgtType === "router"
           ? store.routerNodes.find((r) => r.id === target)?.feedProviderId ?? ""
           : target.replace(/^provider-/, "");
-        if (providerId) store.toggleGroupToProvider(groupId, providerId);
+        if (providerId) store.connectRowToProvider(rowId, providerId);
 
       } else if ((srcType === "provider" || srcType === "router") && tgtType === "article") {
         const providerId = srcType === "router"
@@ -476,12 +491,12 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         const srcType = source.split("-")[0];
         const tgtType = target.split("-")[0];
 
-        if (srcType === "group" && (tgtType === "provider" || tgtType === "router")) {
-          const groupId = source.replace(/^group-/, "");
+        if (srcType === "row" && (tgtType === "provider" || tgtType === "router")) {
+          const rowId = source.replace(/^row-/, "");
           const providerId = tgtType === "router"
             ? store.routerNodes.find((r) => r.id === target)?.feedProviderId ?? ""
             : target.replace(/^provider-/, "");
-          if (providerId) store.toggleGroupToProvider(groupId, providerId);
+          if (providerId) store.disconnectRowFromProvider(rowId, providerId);
         } else if ((srcType === "provider" || srcType === "router") && tgtType === "article") {
           const providerId = srcType === "router"
             ? store.routerNodes.find((r) => r.id === source)?.feedProviderId ?? ""
@@ -509,15 +524,14 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   const matrix = store.buildCampaignMatrix();
 
   const openAddCreative = useCallback(() => {
-    const newGroup = store.addGroup();
-    setTargetGroupId(newGroup.id);
+    const newRow = store.addRow();
+    setTargetRowId(newRow.id);
     setSiloOpen(true);
   }, [store]);
 
   return (
     <div className="flex flex-col h-full">
       <CanvasControls
-        onAddCreative={openAddCreative}
         onAutoLayout={handleAutoLayout}
         campaignCount={matrix.length}
         onReview={onReview}
@@ -549,7 +563,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         </ReactFlow>
       </div>
 
-      {store.creativeGroups.length === 0 && (
+      {store.creativeRows.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ top: 52 }}>
           <button
             type="button"
@@ -563,13 +577,23 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
 
       <SiloBrowser
         isOpen={siloOpen}
-        onClose={() => { setSiloOpen(false); setTargetGroupId(null); }}
-        onSelect={(asset) => {
-          if (targetGroupId) {
-            store.addCreativeToGroup(targetGroupId, asset.id);
+        onClose={() => {
+          // If the row was created on-the-fly (no groups yet), remove it on cancel.
+          if (targetRowId) {
+            const row = useCanvasStore.getState().creativeRows.find((r) => r.id === targetRowId);
+            if (row && row.groupIds.length === 0) {
+              useCanvasStore.getState().removeRow(targetRowId);
+            }
           }
           setSiloOpen(false);
-          setTargetGroupId(null);
+          setTargetRowId(null);
+        }}
+        onSelect={(asset) => {
+          if (targetRowId) {
+            store.addGroupToRow(targetRowId, asset.id);
+          }
+          setSiloOpen(false);
+          setTargetRowId(null);
         }}
         adAccountId=""
       />

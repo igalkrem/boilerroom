@@ -5,8 +5,8 @@ import type { Node, Edge } from "@xyflow/react";
 
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 90;
-const GROUP_CARD_W = 160;
-const GROUP_CARD_H = 285; // 160 × 16/9 portrait aspect ratio
+const GROUP_CARD_W = 340; // approx two-card row estimate for dagre
+const GROUP_CARD_H = 285;
 
 export function computeAutoLayout(nodes: Node[], edges: Edge[]): Record<string, { x: number; y: number }> {
   const g = new dagre.graphlib.Graph();
@@ -40,13 +40,12 @@ export function computeAutoLayout(nodes: Node[], edges: Edge[]): Record<string, 
 
 interface CanvasControlsProps {
   onAutoLayout: () => void;
-  onAddCreative: () => void;
   campaignCount: number;
   onReview: () => void;
   isValid: boolean;
 }
 
-export function CanvasControls({ onAutoLayout, onAddCreative, campaignCount, onReview, isValid }: CanvasControlsProps) {
+export function CanvasControls({ onAutoLayout, campaignCount, onReview, isValid }: CanvasControlsProps) {
   return (
     <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
       <div className="flex items-center gap-3">
@@ -59,13 +58,6 @@ export function CanvasControls({ onAutoLayout, onAddCreative, campaignCount, onR
       </div>
 
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onAddCreative}
-          className="px-3 py-1.5 text-xs text-blue-600 hover:text-blue-700 border border-blue-200 hover:border-blue-400 dark:border-blue-700 dark:hover:border-blue-500 rounded-lg font-medium transition-colors"
-        >
-          + Add Creative
-        </button>
         <button
           type="button"
           onClick={onAutoLayout}
