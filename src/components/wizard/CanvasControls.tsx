@@ -24,17 +24,57 @@ export function computeAutoLayout(nodes: Node[], edges: Edge[]): Record<string, 
 
   dagre.layout(g);
 
-  const positions: Record<string, { x: number; y: number }> = {};
+  const nodeType: Record<string, string | undefined> = {};
+  nodes.forEach((n) => { nodeType[n.id] = n.type; });
+
+  const topLeft = (id: string, cx: number, cy: number) => {
+    const isRouter = nodeType[id] === "router";
+    const isGroup = nodeType[id] === "group";
+    const w = isRouter ? 36 : isGroup ? GROUP_CARD_W : NODE_WIDTH;
+    const h = isRouter ? 36 : isGroup ? GROUP_CARD_H : NODE_HEIGHT;
+    return { x: cx - w / 2, y: cy - h / 2 };
+  };
+
+  // Collect mutable center positions from dagre
+  const center: Record<string, { x: number; y: number }> = {};
   nodes.forEach((n) => {
     const pos = g.node(n.id);
-    if (pos) {
-      const isRouter = n.type === "router";
-      const isGroup = n.type === "group";
-      const w = isRouter ? 36 : isGroup ? GROUP_CARD_W : NODE_WIDTH;
-      const h = isRouter ? 36 : isGroup ? GROUP_CARD_H : NODE_HEIGHT;
-      positions[n.id] = { x: pos.x - w / 2, y: pos.y - h / 2 };
-    }
+    if (pos) center[n.id] = { x: pos.x, y: pos.y };
   });
+
+  const positions: Record<string, { x: number; y: number }> = {};
+  for (const id of Object.keys(center)) {
+    positions[id] = topLeft(id, center[id].x, center[id].y);
+  }
+
+  // Post-process: within each x-rank, re-sort nodes so their vertical order
+  // matches the vertical order of their upstream (source) nodes.
+  // Iterates left-to-right and propagates updated y-values so the fix cascades
+  // through providers → routers → articles → accounts → presets.
+  const byX = new Map<number, string[]>();
+  for (const [id, c] of Object.entries(center)) {
+    if (!byX.has(c.x)) byX.set(c.x, []);
+    byX.get(c.x)!.push(id);
+  }
+
+  for (const xc of [...byX.keys()].sort((a, b) => a - b).slice(1)) {
+    const rankNodes = byX.get(xc)!;
+    if (rankNodes.length <= 1) continue;
+
+    const avgUpstreamY = (nodeId: string): number => {
+      const srcs = edges.filter((e) => e.target === nodeId).map((e) => center[e.source]?.y ?? 0);
+      return srcs.length ? srcs.reduce((a, b) => a + b, 0) / srcs.length : center[nodeId].y;
+    };
+
+    const sorted = [...rankNodes].sort((a, b) => avgUpstreamY(a) - avgUpstreamY(b));
+    const yCenters = [...rankNodes].map((id) => center[id].y).sort((a, b) => a - b);
+
+    sorted.forEach((nodeId, i) => {
+      center[nodeId] = { ...center[nodeId], y: yCenters[i] };
+      positions[nodeId] = topLeft(nodeId, center[nodeId].x, yCenters[i]);
+    });
+  }
+
   return positions;
 }
 
