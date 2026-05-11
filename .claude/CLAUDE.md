@@ -130,9 +130,9 @@ src/
 │   │   ├── CanvasControls.tsx         # Top bar: Auto-align, Review → (no "+ Add Creative" — per-row controls handle it); computeAutoLayout (dagre LR, ranksep 200)
 │   │   ├── nodes/
 │   │   │   ├── CreativeGroupNode.tsx  # Row node: horizontal row of portrait cards, one shared handle; "+" above rightmost card; "↓ New row" / "⧉ Duplicate" on hover below; up to 8 card slots per row
-│   │   │   ├── ProviderNode.tsx       # Left accent bar + row count; hidden until first row exists; no "+ Router" button
+│   │   │   ├── ProviderNode.tsx       # Left accent bar + row count + "＋ Pick articles" button (visible when connected); hidden until first row exists; no "+ Router" button
 │   │   │   ├── RouterNode.tsx         # Sleek circle (⑃ icon) — auto-inserted when provider gets second article
-│   │   │   ├── ArticleNode.tsx        # Slug + query + inline headline/CTA editor (expand ▼); 📄 icon; new edges default CTA to "MORE"
+│   │   │   ├── ArticleNode.tsx        # Slug + inline headline/CTA editor (expand ▼); 📄 icon; new edges default CTA to "MORE"; no query subtext
 │   │   │   ├── AdAccountNode.tsx      # Initials avatar; connected state from articleToAdAccount edges (no click-select)
 │   │   │   └── PresetNode.tsx         # Name + config + duplication rows; no Creatives/set control (replaced by groups)
 │   │   ├── edges/
@@ -235,7 +235,7 @@ src/
   1. **`store.nodePositions` must NOT be in `buildNodes` deps.** Fix: read positions via `nodePositionsRef` (a `useRef` kept in sync via a separate `useEffect`) so `buildNodes` can read current positions without subscribing to them.
   2. **Use `change.dragging === false` (strict), not `!change.dragging`.** React Flow fires `onNodesChange` with `{ type: "position", dragging: undefined }` on initialization — `!undefined` is `true`, so every node's init position would be written to the store, triggering a rebuild loop.
   3. **Never inline `[]` as a fallback in hooks that feed into `buildNodes` deps.** `useAdAccounts` returns `data?.accounts ?? EMPTY_ACCOUNTS` where `EMPTY_ACCOUNTS` is a module-level constant. Inline `[]` creates a new reference every render while SWR is loading → `visibleAccounts` recomputes → `buildNodes` rebuilds → `setNodes` → re-render → repeat.
-  All five visibility arrays (`activeProviderIds`, `activeProviderIdsFromArticles`, `visibleArticles`, `visibleAccounts`, `visiblePresets`) are wrapped in `useMemo`. `store.edges` is intentionally absent from `buildNodes` deps — visibility is already captured by the memoized arrays above.
+  Four visibility arrays (`activeProviderIdsFromArticles`, `visibleArticles`, `visibleAccounts`, `visiblePresets`) are wrapped in `useMemo`. `store.edges` is intentionally absent from `buildNodes` deps — visibility is already captured by the memoized arrays above. **`activeProviderIds` was removed** — articles no longer auto-appear for all connected providers; instead `visibleArticles` filters by `store.edges.providerToArticle` (only explicitly picked articles are shown). The "＋ Pick articles" button on ProviderNode opens a checklist modal (`articlePickerProviderId` state) where users select which articles to include; selecting toggles `providerToArticle` edges directly.
 
   **Canvas visual rules:**
   - **Provider colors** — assigned from `PROVIDER_COLORS` array indexed by sort-order of `createdAt` (stable; not array position). Colors propagate to node borders, indicator dots, and SVG edges.
