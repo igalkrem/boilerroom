@@ -105,14 +105,18 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     [store.edges.providerToArticle]
   );
 
-  const visibleArticles = useMemo(
-    () => articles.filter((a) => store.edges.providerToArticle.some((e) => e.articleId === a.id)),
-    [articles, store.edges.providerToArticle]
-  );
-  const visiblePresets = useMemo(
-    () => presets.filter((p) => !p.feedProviderId || activeProviderIdsFromArticles.has(p.feedProviderId)),
-    [presets, activeProviderIdsFromArticles]
-  );
+  const visibleArticles = useMemo(() => {
+    const providerOrder = new Map(sortedByCreation.map((p, i) => [p.id, i]));
+    return articles
+      .filter((a) => store.edges.providerToArticle.some((e) => e.articleId === a.id))
+      .sort((a, b) => (providerOrder.get(a.feedProviderId) ?? 999) - (providerOrder.get(b.feedProviderId) ?? 999));
+  }, [articles, store.edges.providerToArticle, sortedByCreation]);
+  const visiblePresets = useMemo(() => {
+    const providerOrder = new Map(sortedByCreation.map((p, i) => [p.id, i]));
+    return presets
+      .filter((p) => !p.feedProviderId || activeProviderIdsFromArticles.has(p.feedProviderId))
+      .sort((a, b) => (providerOrder.get(a.feedProviderId ?? "") ?? 999) - (providerOrder.get(b.feedProviderId ?? "") ?? 999));
+  }, [presets, activeProviderIdsFromArticles, sortedByCreation]);
   const visibleAccounts = useMemo(
     () => allAccounts.filter((a) => {
       const cfg = adAccountConfigs.find((c) => c.id === a.id);
