@@ -56,6 +56,7 @@ const EDGE_TYPES = {
 
 const COLUMN_X = { group: 0, provider: 300, router: 520, article: 740, adaccount: 1040, preset: 1320 };
 const ROW_GAP = 130;
+const ROW_CARD_STEP = 172; // CARD_W (160) + CARD_GAP (12) — used to shift row left when prepending a card
 
 interface CampaignCanvasProps {
   adAccountId?: string;
@@ -599,7 +600,15 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           if (targetGroupId) {
             store.addCreativeToGroup(targetGroupId, asset.id);
           } else if (targetRowId) {
+            const existingCount = store.creativeRows.find(r => r.id === targetRowId)?.groupIds.length ?? 0;
             store.addGroupToRow(targetRowId, asset.id);
+            if (existingCount > 0) {
+              // New card prepends (leftmost), so shift node left to keep rightmost card anchored
+              const nodeId = `row-${targetRowId}`;
+              const rowIdx = store.creativeRows.findIndex(r => r.id === targetRowId);
+              const curPos = nodePositionsRef.current[nodeId] ?? { x: COLUMN_X.group, y: rowIdx * ROW_GAP };
+              store.setNodePosition(nodeId, { x: curPos.x - ROW_CARD_STEP, y: curPos.y });
+            }
           }
           setSiloOpen(false);
           setTargetRowId(null);
