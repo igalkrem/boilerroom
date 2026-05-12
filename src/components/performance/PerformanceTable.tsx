@@ -41,7 +41,7 @@ type SortKey =
   | "spend_usd" | "revenue_usd" | "roi_pct" | "impressions" | "swipes"
   | "clicks" | "page_views" | "video_views" | "funnel_clicks" | "funnel_impressions"
   | "funnel_requests" | "requests" | "feed_impressions" | "ad_requests" | "matched_ad_requests"
-  | "rpc" | "cpm" | "cpc" | "ctr" | "cpr" | "rpr" | "profit" | "cvr"
+  | "rpc" | "cpm" | "cpc" | "ctr" | "rpr" | "profit" | "cvr"
   | "roi_1d" | "roi_2d" | "roi_3d"
   | "snap_results" | "snap_purchase_value_usd" | "snap_cost_per_result";
 
@@ -122,7 +122,6 @@ export interface AggrRow {
   cpm: number | null;
   cpc: number | null;
   ctr: number | null;
-  cpr: number | null;
   rpr: number | null;
   profit: number;
   cvr: number | null;
@@ -153,8 +152,7 @@ const METRIC_COLS: Record<string, MetricColDef> = {
   cpm:                 { label: "CPM",                 sortKey: "cpm",                 render: (r) => r.cpm !== null ? fmt$(r.cpm) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
   cpc:                 { label: "CPC",                 sortKey: "cpc",                 render: (r) => r.cpc !== null ? fmt$(r.cpc) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
   cvr:                 { label: "CVR",                 sortKey: "cvr",                 render: (r) => fmtPct0(r.cvr),                              tdClass: "text-gray-700 dark:text-gray-300" },
-  cpr:                 { label: "CPR",                 sortKey: "cpr",                 render: (r) => r.cpr !== null ? fmt$(r.cpr) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
-  rpr:                 { label: "RPR",                 sortKey: "rpr",                 render: (r) => r.rpr !== null ? fmt$(r.rpr) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
+  rpr:                 { label: "Revenue per Result",  sortKey: "rpr",                 render: (r) => r.rpr !== null ? fmt$(r.rpr) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
   impressions:         { label: "Impressions",         sortKey: "impressions",         render: (r) => fmtNum(r.impressions),                       tdClass: "text-gray-700 dark:text-gray-300" },
   swipes:              { label: "Clicks",              sortKey: "swipes",              render: (r) => fmtNum(r.swipes),                            tdClass: "text-gray-700 dark:text-gray-300" },
   funnel_clicks:       { label: "Funnel Clicks",       sortKey: "funnel_clicks",       render: (r) => fmtNum(r.funnel_clicks),                     tdClass: "text-gray-700 dark:text-gray-300" },
@@ -329,7 +327,6 @@ export function PerformanceTable({
           cpm: null,
           cpc: null,
           ctr: null,
-          cpr: null,
           rpr: null,
           profit: 0,
           cvr: null,
@@ -358,11 +355,10 @@ export function PerformanceTable({
             revenue_3d: m3?.revenue ?? null,
           };
         })(),
-        rpc: a.funnel_clicks >= 10 ? a.revenue_usd / a.funnel_clicks : null,
+        rpc: a.clicks > 0 ? a.revenue_usd / a.clicks : null,
         cpm: a.impressions > 0 ? (a.spend_usd / a.impressions) * 1000 : null,
         cpc: a.swipes > 0 ? a.spend_usd / a.swipes : null,
         ctr: a.impressions > 0 ? (a.swipes / a.impressions) * 100 : null,
-        cpr: a.funnel_requests > 0 ? a.spend_usd / a.funnel_requests : null,
         rpr: a.funnel_requests > 0 ? a.revenue_usd / a.funnel_requests : null,
         profit: a.revenue_usd - a.spend_usd,
         cvr: a.swipes > 0 ? (a.funnel_clicks / a.swipes) * 100 : null,
@@ -585,7 +581,7 @@ export function PerformanceTable({
     const headers = [
       "Campaign", "Spend ($)", "Revenue ($)", "ROI (%)", "Profit ($)",
       "Impressions", "Clicks", "Funnel Clicks", "CTR (%)", "CPM", "CPC",
-      "CVR (%)", "CPR", "RPR", "RPC", "Page Views", "Ad Clicks",
+      "CVR (%)", "Revenue per Result", "RPC", "Page Views", "Ad Clicks",
       "Requests", "Feed Impressions", "Matched Requests", "Funnel Impressions", "Funnel Requests",
       "Domain", "Budget ($)", "Bid ($)", "Status", "-1D ROI", "-2D ROI", "-3D ROI",
       "Results", "Cost per Result", "Purchase Value ($)",
@@ -602,7 +598,6 @@ export function PerformanceTable({
         r.cpm !== null ? r.cpm.toFixed(2) : "",
         r.cpc !== null ? r.cpc.toFixed(2) : "",
         r.cvr !== null ? r.cvr.toFixed(2) : "",
-        r.cpr !== null ? r.cpr.toFixed(2) : "",
         r.rpr !== null ? r.rpr.toFixed(2) : "",
         r.rpc !== null ? r.rpc.toFixed(2) : "",
         r.page_views, r.clicks, r.requests, r.feed_impressions, r.matched_ad_requests,
