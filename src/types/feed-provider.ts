@@ -8,6 +8,7 @@ export interface NamingSegment {
 export interface UrlParameter {
   key: string;
   value: string; // may contain macros: {{campaign.id}} {{adSet.id}} {{ad.id}} {{organization_id}} {{channel.id}} {{article.name}} {{article.query}} {{creative.headline}}
+  encode?: boolean; // if true, encodeURIComponent is applied to the fully resolved value
 }
 
 export interface FeedProviderDomain {

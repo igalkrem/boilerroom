@@ -47,6 +47,13 @@ export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParame
     });
   }
 
+  function toggleParamEncode(index: number) {
+    const next = urlConfig.parameters.map((p, i) =>
+      i === index ? { ...p, encode: !p.encode } : p
+    );
+    onChange({ ...urlConfig, parameters: next });
+  }
+
   function insertMacro(macro: string) {
     const index = lastActiveIndexRef.current;
     if (index === null) return;
@@ -109,7 +116,7 @@ export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParame
     const base = (urlConfig.baseUrl ?? "").replace(/\/$/, "");
     const params = urlConfig.parameters
       .filter((p) => p.key)
-      .map((p) => `${p.key}=${p.value}`)
+      .map((p) => `${p.key}=${p.encode ? encodeURIComponent(p.value) : p.value}`)
       .join("&");
     return params ? `${base}?${params}` : base;
   })();
@@ -160,6 +167,20 @@ export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParame
                     className="w-full px-2.5 py-1.5 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                   />
                 </div>
+                <label
+                  title="URL-encode this value (encodeURIComponent applied to resolved output)"
+                  className="flex items-center gap-1 mt-1.5 cursor-pointer shrink-0 select-none"
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!param.encode}
+                    onChange={() => toggleParamEncode(i)}
+                    className="w-3.5 h-3.5 accent-violet-500 cursor-pointer"
+                  />
+                  <span className={`text-[10px] font-mono font-medium ${param.encode ? "text-violet-400" : "text-gray-500"}`}>
+                    enc
+                  </span>
+                </label>
                 <button
                   type="button"
                   onClick={() => removeRow(i)}
