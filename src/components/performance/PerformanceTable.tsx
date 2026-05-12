@@ -1061,6 +1061,8 @@ export function PerformanceTable({
           adSquadName={drilldown.name}
           adSquadId={drilldown.id}
           adAccountId={drilldown.accountId}
+          squadDetail={squadDetails.get(drilldown.id)}
+          onSquadPatched={(patch) => onSquadPatched?.(drilldown.id, patch)}
           onClose={() => setDrilldown(null)}
         />
       )}
