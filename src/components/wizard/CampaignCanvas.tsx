@@ -485,14 +485,20 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       } else if (srcType === "article" && tgtType === "account") {
         const articleId = source.replace(/^article-/, "");
         const accountId = target.replace(/^account-/, "");
+        const article = articles.find((a) => a.id === articleId);
+        const cfg = adAccountConfigs.find((c) => c.id === accountId);
+        if (article && cfg && cfg.feedProviderIds.length > 0 && !cfg.feedProviderIds.includes(article.feedProviderId)) return;
         store.toggleArticleToAdAccount(articleId, accountId);
 
       } else if (srcType === "account" && tgtType === "preset") {
+        const accountId = source.replace(/^account-/, "");
         const presetId = target.replace(/^preset-/, "");
         const preset = presets.find((p) => p.id === presetId);
         if (preset && canSelectPresets) {
-          const activeArticleIds = new Set(store.edges.providerToArticle.map((e) => e.articleId));
-          const matching = [...activeArticleIds].filter((aId) => {
+          const accountArticleIds = store.edges.articleToAdAccount
+            .filter((ae) => ae.adAccountId === accountId)
+            .map((ae) => ae.articleId);
+          const matching = accountArticleIds.filter((aId) => {
             const article = articles.find((a) => a.id === aId);
             return article && (!preset.feedProviderId || article.feedProviderId === preset.feedProviderId);
           });
@@ -500,7 +506,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         }
       }
     },
-    [store, presets, articles, canSelectPresets]
+    [store, presets, articles, adAccountConfigs, canSelectPresets]
   );
 
   // Handle edge deletion (keyboard Delete/Backspace)
@@ -531,6 +537,35 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       }
     },
     [store]
+  );
+
+  // Prevent cross-provider connections at the React Flow drag level.
+  const isValidConnection = useCallback(
+    (connection: Connection | Edge): boolean => {
+      const { source, target } = connection;
+      if (!source || !target) return false;
+      const srcType = source.split("-")[0];
+      const tgtType = target.split("-")[0];
+
+      if (srcType === "article" && tgtType === "account") {
+        const article = articles.find((a) => a.id === source.replace(/^article-/, ""));
+        const cfg = adAccountConfigs.find((c) => c.id === target.replace(/^account-/, ""));
+        if (article && cfg && cfg.feedProviderIds.length > 0) {
+          return cfg.feedProviderIds.includes(article.feedProviderId);
+        }
+      }
+
+      if (srcType === "account" && tgtType === "preset") {
+        const preset = presets.find((p) => p.id === target.replace(/^preset-/, ""));
+        const cfg = adAccountConfigs.find((c) => c.id === source.replace(/^account-/, ""));
+        if (preset?.feedProviderId && cfg && cfg.feedProviderIds.length > 0) {
+          return cfg.feedProviderIds.includes(preset.feedProviderId);
+        }
+      }
+
+      return true;
+    },
+    [articles, adAccountConfigs, presets]
   );
 
   // Auto-layout — dagre positions connected nodes; disconnected-but-visible nodes
@@ -644,6 +679,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          isValidConnection={isValidConnection}
           onEdgesDelete={onEdgesDelete}
           nodeTypes={NODE_TYPES}
           edgeTypes={EDGE_TYPES}
