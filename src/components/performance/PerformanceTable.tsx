@@ -40,7 +40,7 @@ interface Props {
 type SortKey =
   | "spend_usd" | "revenue_usd" | "roi_pct" | "impressions" | "swipes"
   | "clicks" | "page_views" | "video_views" | "funnel_clicks" | "funnel_impressions"
-  | "funnel_requests" | "ad_requests" | "matched_ad_requests"
+  | "funnel_requests" | "requests" | "feed_impressions" | "ad_requests" | "matched_ad_requests"
   | "rpc" | "cpm" | "cpc" | "ctr" | "cpr" | "rpr" | "profit" | "cvr"
   | "roi_1d" | "roi_2d" | "roi_3d"
   | "snap_results" | "snap_purchase_value_usd" | "snap_cost_per_result";
@@ -102,6 +102,8 @@ export interface AggrRow {
   video_views: number;
   ad_requests: number;
   matched_ad_requests: number;
+  requests: number;
+  feed_impressions: number;
   funnel_clicks: number;
   funnel_impressions: number;
   funnel_requests: number;
@@ -158,9 +160,10 @@ const METRIC_COLS: Record<string, MetricColDef> = {
   funnel_clicks:       { label: "Funnel Clicks",       sortKey: "funnel_clicks",       render: (r) => fmtNum(r.funnel_clicks),                     tdClass: "text-gray-700 dark:text-gray-300" },
   funnel_impressions:  { label: "Funnel Impressions",  sortKey: "funnel_impressions",  render: (r) => fmtNum(r.funnel_impressions),                tdClass: "text-gray-700 dark:text-gray-300" },
   funnel_requests:     { label: "Funnel Requests",     sortKey: "funnel_requests",     render: (r) => fmtNum(r.funnel_requests),                   tdClass: "text-gray-700 dark:text-gray-300" },
-  ad_requests:         { label: "Ad Requests",         sortKey: "ad_requests",         render: (r) => fmtNum(r.ad_requests),                       tdClass: "text-gray-700 dark:text-gray-300" },
+  requests:            { label: "Requests",            sortKey: "requests",            render: (r) => fmtNum(r.requests),                          tdClass: "text-gray-700 dark:text-gray-300" },
+  feed_impressions:    { label: "Feed Impressions",    sortKey: "feed_impressions",    render: (r) => fmtNum(r.feed_impressions),                   tdClass: "text-gray-700 dark:text-gray-300" },
   matched_ad_requests: { label: "Matched Requests",    sortKey: "matched_ad_requests", render: (r) => fmtNum(r.matched_ad_requests),               tdClass: "text-gray-700 dark:text-gray-300" },
-  clicks:              { label: "VZ Clicks",           sortKey: "clicks",              render: (r) => fmtNum(r.clicks),                            tdClass: "text-gray-700 dark:text-gray-300" },
+  clicks:              { label: "Ad Clicks",           sortKey: "clicks",              render: (r) => fmtNum(r.clicks),                            tdClass: "text-gray-700 dark:text-gray-300" },
   page_views:          { label: "Page Views",          sortKey: "page_views",          render: (r) => fmtNum(r.page_views),                        tdClass: "text-gray-700 dark:text-gray-300" },
   video_views:         { label: "Video Views",         sortKey: "video_views",         render: (r) => fmtNum(r.video_views),                       tdClass: "text-gray-700 dark:text-gray-300" },
   domain_name:              { label: "Domain",            render: (r) => <span className="text-xs text-gray-500">{r.domain_name || "—"}</span> },
@@ -282,6 +285,8 @@ export function PerformanceTable({
         ex.video_views += r.video_views;
         ex.ad_requests += r.ad_requests;
         ex.matched_ad_requests += r.matched_ad_requests;
+        ex.requests += r.requests;
+        ex.feed_impressions += r.feed_impressions;
         ex.funnel_clicks += r.funnel_clicks;
         ex.funnel_impressions += r.funnel_impressions;
         ex.funnel_requests += r.funnel_requests;
@@ -302,6 +307,8 @@ export function PerformanceTable({
           video_views: r.video_views,
           ad_requests: r.ad_requests,
           matched_ad_requests: r.matched_ad_requests,
+          requests: r.requests,
+          feed_impressions: r.feed_impressions,
           funnel_clicks: r.funnel_clicks,
           funnel_impressions: r.funnel_impressions,
           funnel_requests: r.funnel_requests,
@@ -578,8 +585,8 @@ export function PerformanceTable({
     const headers = [
       "Campaign", "Spend ($)", "Revenue ($)", "ROI (%)", "Profit ($)",
       "Impressions", "Clicks", "Funnel Clicks", "CTR (%)", "CPM", "CPC",
-      "CVR (%)", "CPR", "RPR", "RPC", "Page Views", "VZ Clicks",
-      "Ad Requests", "Matched Requests", "Funnel Impressions", "Funnel Requests",
+      "CVR (%)", "CPR", "RPR", "RPC", "Page Views", "Ad Clicks",
+      "Requests", "Feed Impressions", "Matched Requests", "Funnel Impressions", "Funnel Requests",
       "Domain", "Budget ($)", "Bid ($)", "Status", "-1D ROI", "-2D ROI", "-3D ROI",
       "Results", "Cost per Result", "Purchase Value ($)",
     ];
@@ -598,7 +605,7 @@ export function PerformanceTable({
         r.cpr !== null ? r.cpr.toFixed(2) : "",
         r.rpr !== null ? r.rpr.toFixed(2) : "",
         r.rpc !== null ? r.rpc.toFixed(2) : "",
-        r.page_views, r.clicks, r.ad_requests, r.matched_ad_requests,
+        r.page_views, r.clicks, r.requests, r.feed_impressions, r.matched_ad_requests,
         r.funnel_impressions, r.funnel_requests,
         `"${r.domain_name || ""}"`,
         detail ? microToDollar(detail.daily_budget_micro).toFixed(2) : "",

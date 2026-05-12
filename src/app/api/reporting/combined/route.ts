@@ -19,6 +19,8 @@ export interface CombinedRow {
   page_views: number;
   ad_requests: number;
   matched_ad_requests: number;
+  requests: number;
+  feed_impressions: number;
   funnel_clicks: number;
   funnel_impressions: number;
   funnel_requests: number;
@@ -72,11 +74,14 @@ export async function GET(request: NextRequest) {
         COALESCE(k.domain_name, '')               AS domain_name,
         s.conversion_purchases::bigint            AS conversion_purchases,
         s.conversion_purchase_value::bigint       AS conversion_purchase_value,
+        COALESCE(k.individual_ad_impressions, 0)::bigint AS individual_ad_impressions,
         COALESCE(p.revenue_usd, 0)               AS predicto_revenue_usd,
         COALESCE(p.clicks, 0)::bigint            AS predicto_clicks,
         COALESCE(p.funnel_clicks, 0)::bigint     AS predicto_funnel_clicks,
         COALESCE(p.funnel_impressions, 0)::bigint AS predicto_funnel_impressions,
-        COALESCE(p.funnel_requests, 0)::bigint   AS predicto_funnel_requests
+        COALESCE(p.funnel_requests, 0)::bigint   AS predicto_funnel_requests,
+        COALESCE(p.requests, 0)::bigint          AS predicto_requests,
+        COALESCE(p.impressions, 0)::bigint       AS predicto_impressions
       FROM snapchat_ad_squad_stats s
       LEFT JOIN (
         SELECT
@@ -85,12 +90,13 @@ export async function GET(request: NextRequest) {
           SUM(clicks)::bigint                AS clicks,
           SUM(earnings_eur)                  AS earnings_eur,
           SUM(page_views)::bigint            AS page_views,
-          SUM(ad_requests)::bigint           AS ad_requests,
-          SUM(matched_ad_requests)::bigint   AS matched_ad_requests,
-          SUM(funnel_clicks)::bigint         AS funnel_clicks,
-          SUM(funnel_impressions)::bigint    AS funnel_impressions,
-          SUM(funnel_requests)::bigint       AS funnel_requests,
-          MIN(NULLIF(domain_name, ''))        AS domain_name
+          SUM(ad_requests)::bigint                AS ad_requests,
+          SUM(matched_ad_requests)::bigint        AS matched_ad_requests,
+          SUM(individual_ad_impressions)::bigint  AS individual_ad_impressions,
+          SUM(funnel_clicks)::bigint              AS funnel_clicks,
+          SUM(funnel_impressions)::bigint         AS funnel_impressions,
+          SUM(funnel_requests)::bigint            AS funnel_requests,
+          MIN(NULLIF(domain_name, ''))            AS domain_name
         FROM kingsroad_report
         GROUP BY custom_channel_name, record_date
       ) k
@@ -108,11 +114,13 @@ export async function GET(request: NextRequest) {
         SELECT
           custom_channel_id,
           record_date,
-          SUM(revenue_usd)        AS revenue_usd,
-          SUM(clicks)::bigint     AS clicks,
+          SUM(revenue_usd)               AS revenue_usd,
+          SUM(clicks)::bigint            AS clicks,
           SUM(funnel_clicks)::bigint     AS funnel_clicks,
           SUM(funnel_impressions)::bigint AS funnel_impressions,
-          SUM(funnel_requests)::bigint   AS funnel_requests
+          SUM(funnel_requests)::bigint   AS funnel_requests,
+          SUM(requests)::bigint          AS requests,
+          SUM(impressions)::bigint       AS impressions
         FROM predicto_report
         WHERE record_date BETWEEN ${startDate} AND ${endDate}
         GROUP BY custom_channel_id, record_date
@@ -149,6 +157,8 @@ export async function GET(request: NextRequest) {
       page_views: Number(r.page_views),
       ad_requests: Number(r.ad_requests),
       matched_ad_requests: Number(r.matched_ad_requests),
+      requests: Number(r.ad_requests) + Number(r.predicto_requests),
+      feed_impressions: Number(r.individual_ad_impressions) + Number(r.predicto_impressions),
       funnel_clicks: Number(r.funnel_clicks) + Number(r.predicto_funnel_clicks),
       funnel_impressions: Number(r.funnel_impressions) + Number(r.predicto_funnel_impressions),
       funnel_requests: Number(r.funnel_requests) + Number(r.predicto_funnel_requests),
