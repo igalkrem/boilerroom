@@ -13,6 +13,7 @@ export interface PredictoRow {
   funnel_impressions: number;
   funnel_requests: number;
   requests: number;
+  impressions: number;
 }
 
 interface ApiRow {
@@ -24,6 +25,7 @@ interface ApiRow {
   funnel_impressions?: number | string;
   funnel_requests?: number | string;
   requests?: number | string;
+  impressions?: number | string;
 }
 
 interface ApiResponse {
@@ -41,7 +43,7 @@ export async function fetchPredictoReport(startDate: string, endDate: string): P
   const params = new URLSearchParams({
     start_date: startDate,
     end_date: endDate,
-    metrics: "revenue,clicks,funnel_clicks,funnel_impressions,funnel_requests,requests",
+    metrics: "revenue,clicks,funnel_clicks,funnel_impressions,funnel_requests,requests,impressions",
     dimensions: "date,custom_channel_id",
   });
 
@@ -69,5 +71,6 @@ export async function fetchPredictoReport(startDate: string, endDate: string): P
     funnel_impressions: Number(r.funnel_impressions ?? 0),
     funnel_requests: Number(r.funnel_requests ?? 0),
     requests: Number(r.requests ?? 0),
+    impressions: Number(r.impressions ?? 0),
   }));
 }

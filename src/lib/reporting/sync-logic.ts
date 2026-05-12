@@ -166,12 +166,12 @@ export async function syncAccount(
           await sql`
             INSERT INTO predicto_report
               (record_date, custom_channel_id,
-               revenue_usd, clicks, funnel_clicks, funnel_impressions, funnel_requests, requests,
+               revenue_usd, clicks, funnel_clicks, funnel_impressions, funnel_requests, requests, impressions,
                fetched_at)
             VALUES
               (${r.date}, ${r.custom_channel_id},
                ${r.revenue_usd}, ${r.clicks}, ${r.funnel_clicks}, ${r.funnel_impressions},
-               ${r.funnel_requests}, ${r.requests}, NOW())
+               ${r.funnel_requests}, ${r.requests}, ${r.impressions}, NOW())
             ON CONFLICT (record_date, custom_channel_id)
             DO UPDATE SET
               revenue_usd        = EXCLUDED.revenue_usd,
@@ -180,6 +180,7 @@ export async function syncAccount(
               funnel_impressions = EXCLUDED.funnel_impressions,
               funnel_requests    = EXCLUDED.funnel_requests,
               requests           = EXCLUDED.requests,
+              impressions        = EXCLUDED.impressions,
               fetched_at         = NOW()
           `;
         }
