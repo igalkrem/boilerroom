@@ -423,15 +423,8 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
 
   // Sync drag positions back to store
   const onNodesChange = useCallback(
-    (changes: NodeChange[]) => {
-      setNodes((nds) => applyNodeChanges(changes, nds));
-      for (const change of changes) {
-        if (change.type === "position" && change.position && change.dragging === false) {
-          store.setNodePosition(change.id, change.position);
-        }
-      }
-    },
-    [setNodes, store]
+    (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
+    [setNodes]
   );
 
   const onEdgesChange = useCallback(
@@ -576,6 +569,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           edgeTypes={EDGE_TYPES}
           colorMode="dark"
           style={{ background: "#1f2937" }}
+          nodesDraggable={false}
           fitView
           fitViewOptions={{ padding: 1.5, maxZoom: 0.75 }}
           deleteKeyCode={["Backspace", "Delete"]}
