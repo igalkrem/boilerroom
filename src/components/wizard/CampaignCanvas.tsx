@@ -544,11 +544,14 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     if (connectedNodes.length === 0) return;
     const positions = computeAutoLayout(connectedNodes, currentEdges);
 
-    // Override dagre x with the fixed column x — we only use dagre's y values.
-    // Skip "group" (row) nodes — their x is dynamically managed by card-prepend shifts
-    // and must not be clobbered here.
+    // Override dagre x: use COLUMN_X for all non-row nodes; for row nodes restore
+    // the stored x so card-prepend shifts are never clobbered by dagre.
     for (const n of connectedNodes) {
-      if (positions[n.id] && n.type && n.type !== "group") {
+      if (!positions[n.id] || !n.type) continue;
+      if (n.type === "group") {
+        const storedX = nodePositionsRef.current[n.id]?.x;
+        if (storedX !== undefined) positions[n.id].x = storedX;
+      } else {
         const colX = COLUMN_X[n.type as keyof typeof COLUMN_X];
         if (colX !== undefined) positions[n.id].x = colX;
       }
