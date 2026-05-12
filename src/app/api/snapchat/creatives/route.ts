@@ -35,6 +35,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const creative = await getCreative(creativeId);
+    if (creative.ad_account_id && creative.ad_account_id !== adAccountId) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
     return NextResponse.json({ creative });
   } catch (err) {
     console.error("Get creative error:", err);

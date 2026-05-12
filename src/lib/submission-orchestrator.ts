@@ -39,14 +39,12 @@ const INTERACTION_TYPE_MAP: Record<string, CreativeType> = {
   SWIPE_TO_OPEN: "SNAP_AD",
   WEB_VIEW: "WEB_VIEW",
   DEEP_LINK: "DEEP_LINK",
-  APP_INSTALL: "APP_INSTALL",
 };
 
 const AD_TYPE_MAP: Record<string, "SNAP_AD" | "REMOTE_WEBPAGE"> = {
   WEB_VIEW: "REMOTE_WEBPAGE",
   SNAP_AD: "SNAP_AD",
   DEEP_LINK: "SNAP_AD",
-  APP_INSTALL: "SNAP_AD",
 };
 
 function buildDemographics(sq: AdSquadFormData): Pick<SnapAdSquadPayload["targeting"], "demographics" | "devices"> {
@@ -171,14 +169,13 @@ export async function runSubmission(
       console.warn("[orchestrator] channel assignment threw:", String(err));
     }
 
-    // Resolve {{channel.id}} macro in names
-    if (channelId) {
-      const cid = channelId;
-      const injectChannel = (s: string) => s.replace(/\{\{channel\.id\}\}/gi, cid);
-      campaigns = campaigns.map((c)  => ({ ...c,  name: injectChannel(c.name) }));
-      adSquads  = adSquads.map((sq)  => ({ ...sq, name: injectChannel(sq.name) }));
-      creatives = creatives.map((cr) => ({ ...cr, name: injectChannel(cr.name) }));
-    }
+    // Always resolve {{channel.id}} — strip the macro when no channel was assigned so
+    // Snapchat never sees a literal {{...}} in a name (causes E1001).
+    const cid = channelId ?? "";
+    const injectChannel = (s: string) => s.replace(/\{\{channel\.id\}\}/gi, cid);
+    campaigns = campaigns.map((c)  => ({ ...c,  name: injectChannel(c.name) }));
+    adSquads  = adSquads.map((sq)  => ({ ...sq, name: injectChannel(sq.name) }));
+    creatives = creatives.map((cr) => ({ ...cr, name: injectChannel(cr.name) }));
   }
 
   // ── Step 1: Create Campaigns ──────────────────────────────────────────────

@@ -117,7 +117,6 @@ export interface SnapAdSquad extends SnapAdSquadPayload {
 
 export type CreativeType =
   | "SNAP_AD"
-  | "APP_INSTALL"
   | "WEB_VIEW"
   | "DEEP_LINK";
 
@@ -150,6 +149,7 @@ export interface SnapAdPayload {
 
 export interface SnapAd extends SnapAdPayload {
   id: string;
+  ad_account_id?: string;
 }
 
 // ─── Media ───────────────────────────────────────────────────────────────────

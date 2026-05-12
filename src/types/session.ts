@@ -17,4 +17,8 @@ export interface SessionData {
 
   // Cached after /api/snapchat/ad-accounts for ownership checks
   allowedAdAccountIds?: string[];
+
+  // Server-pinned upload paths keyed by Snapchat upload_id.
+  // Prevents clients from supplying attacker-controlled addPath/finalizePath.
+  pendingUploads?: Record<string, { addPath: string; finalizePath: string }>;
 }

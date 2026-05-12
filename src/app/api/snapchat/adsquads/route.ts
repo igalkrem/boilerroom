@@ -37,6 +37,9 @@ export async function GET(request: NextRequest) {
   try {
     if (adSquadId) {
       const adsquad = await getAdSquad(adSquadId);
+      if (adsquad.ad_account_id && adsquad.ad_account_id !== adAccountId) {
+        return NextResponse.json({ error: "forbidden" }, { status: 403 });
+      }
       return NextResponse.json({ adsquad });
     }
     const adsquads = await getAdSquadsForAccount(adAccountId);
@@ -112,7 +115,7 @@ export async function PATCH(request: NextRequest) {
 
   try {
     if (placement_v2) {
-      const updated = await setAdSquadPlacement(squadId, placement_v2);
+      const updated = await setAdSquadPlacement(squadId, placement_v2, adAccountId);
       return NextResponse.json({ adsquad: updated });
     }
     const updated = await updateAdSquad(squadId, { daily_budget_micro, bid_micro, status }, adAccountId);

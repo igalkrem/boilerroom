@@ -35,6 +35,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const campaign = await getCampaign(campaignId);
+    if (campaign.ad_account_id && campaign.ad_account_id !== adAccountId) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
     return NextResponse.json({ campaign });
   } catch (err) {
     console.error("Get campaign error:", err);

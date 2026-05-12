@@ -58,6 +58,9 @@ export async function PATCH(
     // Fetch current creative first — Snapchat PUT replaces the full object,
     // so omitting fields like type/top_snap_media_id would reset them to defaults.
     const existing = await getCreative(creativeId);
+    if (existing.ad_account_id && existing.ad_account_id !== body.adAccountId) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
     const data = await snapFetch<{ creatives: Array<{ creative?: { id: string }; sub_request_status?: string }> }>(
       `/adaccounts/${body.adAccountId}/creatives`,
       {
