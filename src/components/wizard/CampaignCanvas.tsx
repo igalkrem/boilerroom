@@ -536,6 +536,14 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     if (connectedNodes.length === 0) return;
     const positions = computeAutoLayout(connectedNodes, currentEdges);
 
+    // Override dagre x with the fixed column x — we only use dagre's y values.
+    for (const n of connectedNodes) {
+      if (positions[n.id] && n.type) {
+        const colX = COLUMN_X[n.type as keyof typeof COLUMN_X];
+        if (colX !== undefined) positions[n.id].x = colX;
+      }
+    }
+
     // Providers: anchor on a connected provider's y, fill disconnected slots with ROW_GAP spacing.
     const providerNodes = currentNodes.filter((n) => n.type === "provider");
     if (providerNodes.some((n) => !positions[n.id])) {
