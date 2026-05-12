@@ -13,19 +13,23 @@ interface SiloBrowserProps {
   onClose: () => void;
   onSelect: (asset: SiloAsset) => void;
   adAccountId: string;
+  multiSelect?: boolean;
+  onMultiSelect?: (assets: SiloAsset[]) => void;
 }
 
-export function SiloBrowser({ isOpen, onClose, onSelect, adAccountId }: SiloBrowserProps) {
+export function SiloBrowser({ isOpen, onClose, onSelect, adAccountId, multiSelect, onMultiSelect }: SiloBrowserProps) {
   const [assets, setAssets] = useState<SiloAsset[]>([]);
   const [tags, setTags] = useState<SiloTag[]>([]);
   const [search, setSearch] = useState("");
   const [filterTag, setFilterTag] = useState("");
   const [filterType, setFilterType] = useState<"" | "IMAGE" | "VIDEO">("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!isOpen) return;
     setAssets(loadAssets().filter((a) => a.status !== "archived"));
     setTags(loadTags());
+    setSelectedIds(new Set());
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -48,6 +52,20 @@ export function SiloBrowser({ isOpen, onClose, onSelect, adAccountId }: SiloBrow
     return new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime();
   });
 
+  const toggleSelect = (asset: SiloAsset) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(asset.id)) next.delete(asset.id);
+      else next.add(asset.id);
+      return next;
+    });
+  };
+
+  const handleConfirmMulti = () => {
+    const selectedAssets = assets.filter((a) => selectedIds.has(a.id));
+    onMultiSelect?.(selectedAssets);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col">
@@ -56,7 +74,11 @@ export function SiloBrowser({ isOpen, onClose, onSelect, adAccountId }: SiloBrow
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div>
             <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Select from Silo</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Assets with ✓ are already cached for this ad account — no upload needed</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {multiSelect
+                ? "Click assets to select — then confirm below"
+                : "Assets with ✓ are already cached for this ad account — no upload needed"}
+            </p>
           </div>
           <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl" onClick={onClose}>✕</button>
         </div>
@@ -105,19 +127,38 @@ export function SiloBrowser({ isOpen, onClose, onSelect, adAccountId }: SiloBrow
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {sorted.map((asset) => (
-                <AssetCard
-                  key={asset.id}
-                  asset={asset}
-                  tagName={asset.tagId ? tagMap[asset.tagId] : undefined}
-                  selectMode
-                  selectedAdAccountId={adAccountId}
-                  onPreview={() => {}}
-                  onSelect={onSelect}
-                />
+                <div key={asset.id} className="relative">
+                  <AssetCard
+                    asset={asset}
+                    tagName={asset.tagId ? tagMap[asset.tagId] : undefined}
+                    selectMode
+                    selectedAdAccountId={adAccountId}
+                    onPreview={() => {}}
+                    onSelect={multiSelect ? () => toggleSelect(asset) : onSelect}
+                  />
+                  {multiSelect && selectedIds.has(asset.id) && (
+                    <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center pointer-events-none z-10">
+                      <span className="text-white text-[11px] font-bold">✓</span>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           )}
         </div>
+
+        {/* Multi-select confirm */}
+        {multiSelect && selectedIds.size > 0 && (
+          <div className="px-6 pt-3 pb-3 border-t border-gray-100 dark:border-gray-700">
+            <button
+              type="button"
+              onClick={handleConfirmMulti}
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors"
+            >
+              Add {selectedIds.size} creative{selectedIds.size !== 1 ? "s" : ""}
+            </button>
+          </div>
+        )}
 
         <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
           <p className="text-xs text-gray-400">{sorted.length} asset{sorted.length !== 1 ? "s" : ""}</p>

@@ -14,6 +14,7 @@ interface CreativeRowNodeData {
   onRemoveRow: (rowId: string) => void;
   onNewRow: () => void;
   onDuplicateRow: (rowId: string) => void;
+  onPickProviders: (rowId: string) => void;
 }
 
 const CARD_W = 160;
@@ -260,7 +261,7 @@ export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
           </div>
         )}
 
-        {/* "New row" / "Duplicate" — below row, visible on row hover */}
+        {/* "New row" / "Duplicate" / "Provider" — below row, visible on row hover */}
         <div className="absolute left-0 right-0 flex justify-center gap-2 opacity-0 group-hover/node:opacity-100 transition-opacity" style={{ bottom: -36 }}>
           <button
             type="button"
@@ -278,6 +279,13 @@ export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
               ⧉ Duplicate
             </button>
           )}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); data.onPickProviders(data.rowId); }}
+            className="nodrag px-2.5 py-1 text-[11px] font-medium text-gray-300 bg-gray-900/90 hover:bg-gray-800 border border-gray-600 hover:border-gray-500 rounded-md shadow-sm transition-colors"
+          >
+            ＋ Provider
+          </button>
         </div>
       </div>
 

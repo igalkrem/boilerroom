@@ -69,6 +69,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   const [targetRowId, setTargetRowId] = useState<string | null>(null);
   const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
   const [articlePickerProviderId, setArticlePickerProviderId] = useState<string | null>(null);
+  const [providerPickerRowId, setProviderPickerRowId] = useState<string | null>(null);
   const [providers, setProviders] = useState<FeedProvider[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
   const [presets, setPresets] = useState<CampaignPreset[]>([]);
@@ -124,6 +125,11 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       .filter((p) => !p.feedProviderId || activeProviderIdsFromArticles.has(p.feedProviderId))
       .sort((a, b) => (providerOrder.get(a.feedProviderId ?? "") ?? 999) - (providerOrder.get(b.feedProviderId ?? "") ?? 999));
   }, [presets, activeProviderIdsFromArticles, sortedByCreation, canSelectPresets]);
+  const connectedProviderIds = useMemo(
+    () => new Set(store.edges.rowToProvider.map((e) => e.feedProviderId)),
+    [store.edges.rowToProvider]
+  );
+
   const visibleAccounts = useMemo(() => {
     const providerOrder = new Map(sortedByCreation.map((p, i) => [p.id, i]));
     const minProviderIndex = (accountId: string): number => {
@@ -224,13 +230,15 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
               store.setNodePosition(`row-${newRow.id}`, { x: currentPos.x, y: currentPos.y + 320 });
             }
           },
+          onPickProviders: setProviderPickerRowId,
         },
       });
     });
 
-    // Providers — only when at least one row exists
+    // Providers — only ones explicitly connected via rowToProvider edges
     if (store.creativeRows.length > 0) {
       sortedByCreation.forEach((provider, i) => {
+        if (!connectedProviderIds.has(provider.id)) return;
         const nodeId = `provider-${provider.id}`;
         nodes.push({
           id: nodeId,
@@ -320,7 +328,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     store.creativeRows, store.routerNodes,
-    sortedByCreation, providerColorMap, visibleArticles, visibleAccounts, visiblePresets,
+    sortedByCreation, providerColorMap, connectedProviderIds, visibleArticles, visibleAccounts, visiblePresets,
     adAccountConfigs, articles, canSelectPresets, makeDisconnectTarget,
   ]);
 
@@ -734,6 +742,82 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           );
         })()}
 
+      {/* Provider picker modal */}
+      {providerPickerRowId &&
+        (() => {
+          const rowId = providerPickerRowId;
+          const connectedToRow = new Set(
+            store.edges.rowToProvider
+              .filter((e) => e.rowId === rowId)
+              .map((e) => e.feedProviderId)
+          );
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+              onClick={() => setProviderPickerRowId(null)}
+            >
+              <div
+                className="bg-gray-900 border border-gray-700 rounded-2xl p-4 w-80 max-h-[70vh] flex flex-col shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-200">Connect Feed Providers</h3>
+                  <button
+                    type="button"
+                    onClick={() => setProviderPickerRowId(null)}
+                    className="text-gray-500 hover:text-gray-300 text-lg leading-none"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="overflow-y-auto flex-1 space-y-1">
+                  {sortedByCreation.length === 0 ? (
+                    <p className="text-xs text-gray-500 text-center py-4">No feed providers configured</p>
+                  ) : (
+                    sortedByCreation.map((provider) => {
+                      const isConnected = connectedToRow.has(provider.id);
+                      const color = providerColorMap[provider.id] ?? "#94a3b8";
+                      return (
+                        <button
+                          key={provider.id}
+                          type="button"
+                          onClick={() =>
+                            isConnected
+                              ? store.disconnectRowFromProvider(rowId, provider.id)
+                              : store.connectRowToProvider(rowId, provider.id)
+                          }
+                          className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${
+                            isConnected
+                              ? "bg-blue-600/20 border border-blue-500/40 text-blue-300"
+                              : "bg-gray-800 border border-transparent text-gray-300 hover:bg-gray-700"
+                          }`}
+                        >
+                          <span
+                            className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                              isConnected ? "bg-blue-600 border-blue-500" : "border-gray-600"
+                            }`}
+                          >
+                            {isConnected && <span className="text-white text-[10px]">✓</span>}
+                          </span>
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                          <span className="truncate">{provider.name}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setProviderPickerRowId(null)}
+                  className="mt-3 px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors w-full"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
       <SiloBrowser
         isOpen={siloOpen}
         onClose={() => {
@@ -764,6 +848,23 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           setSiloOpen(false);
           setTargetRowId(null);
           setTargetGroupId(null);
+        }}
+        multiSelect={!!targetRowId}
+        onMultiSelect={(assets) => {
+          if (!targetRowId) return;
+          const s = useCanvasStore.getState();
+          const nodeId = `row-${targetRowId}`;
+          const rowIdx = s.creativeRows.findIndex((r) => r.id === targetRowId);
+          const curPos = nodePositionsRef.current[nodeId] ?? { x: COLUMN_X.group, y: rowIdx * ROW_GAP };
+          const existingCount = s.creativeRows.find((r) => r.id === targetRowId)?.groupIds.length ?? 0;
+          // Each prepend after the first shifts x left; if existingCount=0 first card doesn't shift
+          const shifts = existingCount === 0 ? assets.length - 1 : assets.length;
+          assets.forEach((asset) => useCanvasStore.getState().addGroupToRow(targetRowId, asset.id));
+          if (shifts > 0) {
+            useCanvasStore.getState().setNodePosition(nodeId, { x: curPos.x - shifts * ROW_CARD_STEP, y: curPos.y });
+          }
+          setSiloOpen(false);
+          setTargetRowId(null);
         }}
         adAccountId=""
       />
