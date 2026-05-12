@@ -108,6 +108,7 @@ export interface AggrRow {
   funnel_impressions: number;
   funnel_requests: number;
   domain_name: string;
+  feed_provider_id: string;
   roi_pct: number | null;
   roi_1d: number | null;
   roi_2d: number | null;
@@ -232,7 +233,7 @@ export function PerformanceTable({
   const [filterProviderIds, setFilterProviderIds] = useState<Set<string>>(new Set());
   const [metricFilters, setMetricFilters] = useState<Array<{ id: string; metric: string; op: string; value: string }>>([]);
   const [articles, setArticles] = useState<Array<{ id: string; slug: string }>>([]);
-  const [providers, setProviders] = useState<Array<{ id: string; name: string; domains: Array<{ baseDomain: string }> }>>([]);
+  const [providers, setProviders] = useState<Array<{ id: string; name: string }>>([]);
   const [articleDropOpen, setArticleDropOpen] = useState(false);
   const [providerDropOpen, setProviderDropOpen] = useState(false);
   const articleDropRef = useRef<HTMLDivElement>(null);
@@ -254,7 +255,7 @@ export function PerformanceTable({
       const a = localStorage.getItem("boilerroom_articles_v1");
       if (a) setArticles(JSON.parse(a) as Array<{ id: string; slug: string }>);
       const p = localStorage.getItem("boilerroom_feed_providers_v1");
-      if (p) setProviders(JSON.parse(p) as Array<{ id: string; name: string; domains: Array<{ baseDomain: string }> }>);
+      if (p) setProviders(JSON.parse(p) as Array<{ id: string; name: string }>);
     } catch {}
   }, []);
 
@@ -351,6 +352,7 @@ export function PerformanceTable({
         ex.snap_results += r.snap_results;
         ex.snap_purchase_value_usd += r.snap_purchase_value_usd;
         if (!ex.domain_name && r.domain_name) ex.domain_name = r.domain_name;
+        if (!ex.feed_provider_id && r.feed_provider_id) ex.feed_provider_id = r.feed_provider_id;
       } else {
         map.set(r.ad_squad_id, {
           ad_squad_id: r.ad_squad_id,
@@ -371,6 +373,7 @@ export function PerformanceTable({
           funnel_impressions: r.funnel_impressions,
           funnel_requests: r.funnel_requests,
           domain_name: r.domain_name,
+          feed_provider_id: r.feed_provider_id,
           snap_results: r.snap_results,
           snap_purchase_value_usd: r.snap_purchase_value_usd,
           roi_pct: null,
@@ -447,16 +450,9 @@ export function PerformanceTable({
         if (slugs.length === 0 || !slugs.some(s => norm(r.ad_squad_name).includes(s))) return false;
       }
 
-      // Provider filter — OR logic; try provider name in ad_squad_name first (works for both
-      // KingsRoad and Predicto), fall back to domain_name ⊇ baseDomain for KingsRoad rows
+      // Provider filter — exact match on feed_provider_id from the DB
       if (filterProviderIds.size > 0) {
-        const sel = providers.filter(p => filterProviderIds.has(p.id));
-        const nameLower = r.ad_squad_name.toLowerCase();
-        const ok = sel.some(p => {
-          if (p.name && nameLower.includes(p.name.toLowerCase())) return true;
-          return p.domains?.some(d => d.baseDomain && r.domain_name && r.domain_name.includes(d.baseDomain)) ?? false;
-        });
-        if (!ok) return false;
+        if (!r.feed_provider_id || !filterProviderIds.has(r.feed_provider_id)) return false;
       }
 
       // Metric filters — AND logic; incomplete rows are skipped
@@ -754,7 +750,7 @@ export function PerformanceTable({
         <p className="text-xs text-red-500 mb-2">{inlineError}</p>
       )}
 
-      <div className="rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
 
         {/* Toolbar */}
         <div className="flex items-center gap-2 px-3 py-2.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
@@ -1074,7 +1070,7 @@ export function PerformanceTable({
         )}
 
         {/* Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
