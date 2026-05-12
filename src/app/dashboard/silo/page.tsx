@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { AssetCard } from "@/components/silo/AssetCard";
@@ -90,6 +90,25 @@ export default function SiloPage() {
       return true;
     })
     .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+
+  const grouped = useMemo(() => {
+    if (filterTag) return null;
+    const map = new Map<string, SiloAsset[]>();
+    for (const asset of filtered) {
+      const key = asset.tagId ?? "__untagged__";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(asset);
+    }
+    return [...map.entries()]
+      .sort(([, a], [, b]) =>
+        new Date(b[0].uploadDate).getTime() - new Date(a[0].uploadDate).getTime()
+      )
+      .map(([key, assets]) => ({
+        key,
+        label: key === "__untagged__" ? "Untagged" : (tagMap[key] ?? key),
+        assets,
+      }));
+  }, [filtered, filterTag, tagMap]);
 
   const allFilteredSelected = filtered.length > 0 && filtered.every((a) => selectedIds.has(a.id));
 
@@ -201,21 +220,49 @@ export default function SiloPage() {
       ) : (
         <>
           <p className="text-xs text-gray-400">{filtered.length} asset{filtered.length !== 1 ? "s" : ""}</p>
-          <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(180px,240px))]">
-            {filtered.map((asset) => (
-              <AssetCard
-                key={asset.id}
-                asset={asset}
-                tagName={asset.tagId ? tagMap[asset.tagId] : undefined}
-                onPreview={setPreviewAsset}
-                onDelete={handleDelete}
-                onUploadToSnapchat={(a) => setSnapUploadAssets([a])}
-                bulkMode={bulkMode}
-                selected={selectedIds.has(asset.id)}
-                onToggleSelect={toggleSelect}
-              />
-            ))}
-          </div>
+          {grouped ? (
+            <div className="flex flex-col gap-10">
+              {grouped.map(({ key, label, assets: groupAssets }) => (
+                <section key={key}>
+                  <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3 px-1">
+                    {label}
+                    <span className="ml-2 text-gray-600 font-normal normal-case tracking-normal">{groupAssets.length}</span>
+                  </h2>
+                  <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(180px,240px))]">
+                    {groupAssets.map((asset) => (
+                      <AssetCard
+                        key={asset.id}
+                        asset={asset}
+                        tagName={asset.tagId ? tagMap[asset.tagId] : undefined}
+                        onPreview={setPreviewAsset}
+                        onDelete={handleDelete}
+                        onUploadToSnapchat={(a) => setSnapUploadAssets([a])}
+                        bulkMode={bulkMode}
+                        selected={selectedIds.has(asset.id)}
+                        onToggleSelect={toggleSelect}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(180px,240px))]">
+              {filtered.map((asset) => (
+                <AssetCard
+                  key={asset.id}
+                  asset={asset}
+                  tagName={asset.tagId ? tagMap[asset.tagId] : undefined}
+                  onPreview={setPreviewAsset}
+                  onDelete={handleDelete}
+                  onUploadToSnapchat={(a) => setSnapUploadAssets([a])}
+                  bulkMode={bulkMode}
+                  selected={selectedIds.has(asset.id)}
+                  onToggleSelect={toggleSelect}
+                />
+              ))}
+            </div>
+          )}
         </>
       )}
 
