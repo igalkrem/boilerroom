@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import type { SquadDetail } from "./PerformanceTable";
 import { Spinner } from "@/components/ui";
@@ -38,6 +38,7 @@ const DD_LS_KEY = "br_drilldown_cols";
 const DD_LS_ORDER_KEY = "br_drilldown_cols_order";
 const DD_ALL_KEYS = DRILLDOWN_COLUMNS.map((c) => c.key);
 const DD_DEFAULT_VISIBLE = new Set<string>(DD_ALL_KEYS);
+const DD_LABEL_MAP = Object.fromEntries(DRILLDOWN_COLUMNS.map((c) => [c.key, c.label]));
 
 function loadDrilldownCols(): Set<string> {
   if (typeof window === "undefined") return new Set(DD_DEFAULT_VISIBLE);
@@ -103,6 +104,8 @@ function derive(r: { spend_usd: number; revenue_usd: number; impressions: number
   };
 }
 
+type DerivedRow = ReturnType<typeof derive>;
+
 export function DrilldownModal({
   adSquadName, adSquadId, adAccountId,
   squadDetail, onSquadPatched, onClose,
@@ -113,7 +116,6 @@ export function DrilldownModal({
   const [visibleCols, setVisibleCols] = useState<Set<string>>(() => loadDrilldownCols());
   const [colOrder, setColOrder]       = useState<string[]>(() => loadDrilldownOrder());
 
-  // inline edit state
   const [budgetDraft, setBudgetDraft]   = useState("");
   const [bidDraft, setBidDraft]         = useState("");
   const [editingBudget, setEditingBudget] = useState(false);
@@ -121,7 +123,6 @@ export function DrilldownModal({
   const [saving, setSaving]             = useState<"budget" | "bid" | "status" | null>(null);
   const [patchError, setPatchError]     = useState<string | null>(null);
 
-  // local copy of detail so changes are reflected without prop threading
   const [localDetail, setLocalDetail]   = useState<SquadDetail | undefined>(squadDetail);
   useEffect(() => { setLocalDetail(squadDetail); }, [squadDetail]);
 
@@ -229,6 +230,41 @@ export function DrilldownModal({
   });
   const tRoi = totals.spend > 0 ? (totals.revenue / totals.spend) * 100 : null;
 
+  // column render specs — defined here to close over totals/tDerived/tRoi
+  const S = "px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap";   // standard cell
+  const B = "px-3 py-2 font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap"; // bold total cell
+  type ColDef = { cell: (r: CombinedRow, d: DerivedRow) => React.ReactNode; foot: React.ReactNode };
+  const COL_DEFS: Record<string, ColDef> = {
+    spend:               { cell: (r)    => <td className="px-3 py-2 text-gray-900 dark:text-gray-100 whitespace-nowrap">{fmt$(r.spend_usd)}</td>,                                                              foot: <td className={B}>{fmt$(totals.spend)}</td> },
+    revenue:             { cell: (r)    => <td className="px-3 py-2 text-gray-900 dark:text-gray-100 whitespace-nowrap">{fmt$(r.revenue_usd)}</td>,                                                            foot: <td className={B}>{fmt$(totals.revenue)}</td> },
+    profit:              { cell: (r, d) => <td className={`px-3 py-2 whitespace-nowrap font-medium ${d.profit >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>{d.profit >= 0 ? "+" : ""}{fmt$(d.profit)}</td>, foot: <td className={`px-3 py-2 font-semibold whitespace-nowrap ${tDerived.profit >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>{tDerived.profit >= 0 ? "+" : ""}{fmt$(tDerived.profit)}</td> },
+    roi:                 { cell: (r)    => <td className="px-3 py-2 whitespace-nowrap"><RoiPill pct={r.roi_pct} /></td>,                                                                                       foot: <td className="px-3 py-2"><RoiPill pct={tRoi} /></td> },
+    rpr:                 { cell: (r, d) => <td className={S}>{d.rpr !== null ? fmt$(d.rpr) : "—"}</td>,                                                                                                       foot: <td className={B}>{tDerived.rpr !== null ? fmt$(tDerived.rpr) : "—"}</td> },
+    cpr:                 { cell: (r, d) => <td className={S}>{d.cpr !== null ? fmt$(d.cpr) : "—"}</td>,                                                                                                       foot: <td className={B}>{tDerived.cpr !== null ? fmt$(tDerived.cpr) : "—"}</td> },
+    rpc:                 { cell: (r, d) => <td className={S}>{d.rpc !== null ? fmt$(d.rpc) : "—"}</td>,                                                                                                       foot: <td className={B}>{tDerived.rpc !== null ? fmt$(tDerived.rpc) : "—"}</td> },
+    cpm:                 { cell: (r, d) => <td className={S}>{d.cpm !== null ? fmt$(d.cpm) : "—"}</td>,                                                                                                       foot: <td className={B}>{tDerived.cpm !== null ? fmt$(tDerived.cpm) : "—"}</td> },
+    cpc:                 { cell: (r, d) => <td className={S}>{d.cpc !== null ? fmt$(d.cpc) : "—"}</td>,                                                                                                       foot: <td className={B}>{tDerived.cpc !== null ? fmt$(tDerived.cpc) : "—"}</td> },
+    cvr:                 { cell: (r, d) => <td className={S}>{fmtPct(d.cvr)}</td>,                                                                                                                            foot: <td className={B}>{fmtPct(tDerived.cvr)}</td> },
+    ctr:                 { cell: (r, d) => <td className={S}>{fmtPct(d.ctr)}</td>,                                                                                                                            foot: <td className={B}>{fmtPct(tDerived.ctr)}</td> },
+    fill_rate:           { cell: (r, d) => <td className={S}>{fmtPct(d.fill_rate)}</td>,                                                                                                                      foot: <td className={B}>{fmtPct(tDerived.fill_rate)}</td> },
+    impressions:         { cell: (r)    => <td className={S}>{fmtNum(r.impressions)}</td>,                                                                                                                     foot: <td className={B}>{fmtNum(totals.impressions)}</td> },
+    swipes:              { cell: (r)    => <td className={S}>{fmtNum(r.swipes)}</td>,                                                                                                                          foot: <td className={B}>{fmtNum(totals.swipes)}</td> },
+    clicks:              { cell: (r)    => <td className={S}>{fmtNum(r.clicks)}</td>,                                                                                                                          foot: <td className={B}>{fmtNum(totals.clicks)}</td> },
+    funnel_clicks:       { cell: (r)    => <td className={S}>{fmtNum(r.funnel_clicks)}</td>,                                                                                                                   foot: <td className={B}>{fmtNum(totals.funnel_clicks)}</td> },
+    funnel_impressions:  { cell: (r)    => <td className={S}>{fmtNum(r.funnel_impressions)}</td>,                                                                                                              foot: <td className={B}>{fmtNum(totals.funnel_impressions)}</td> },
+    funnel_requests:     { cell: (r)    => <td className={S}>{fmtNum(r.funnel_requests)}</td>,                                                                                                                 foot: <td className={B}>{fmtNum(totals.funnel_requests)}</td> },
+    feed_impressions:    { cell: (r)    => <td className={S}>{fmtNum(r.feed_impressions)}</td>,                                                                                                                foot: <td className={B}>{fmtNum(totals.feed_impressions)}</td> },
+    snap_results:        { cell: (r)    => <td className={S}>{fmtNum(r.snap_results)}</td>,                                                                                                                    foot: <td className={B}>{fmtNum(totals.snap_results)}</td> },
+    snap_purchase_value: { cell: (r)    => <td className={S}>{fmt$(r.snap_purchase_value_usd)}</td>,                                                                                                           foot: <td className={B}>{fmt$(totals.snap_purchase_value)}</td> },
+    requests:            { cell: (r)    => <td className={S}>{fmtNum(r.requests)}</td>,                                                                                                                        foot: <td className={B}>{fmtNum(totals.requests)}</td> },
+    matched_ad_requests: { cell: (r)    => <td className={S}>{fmtNum(r.matched_ad_requests)}</td>,                                                                                                             foot: <td className={B}>{fmtNum(totals.matched_ad_requests)}</td> },
+    video_views:         { cell: (r)    => <td className={S}>{fmtNum(r.video_views)}</td>,                                                                                                                     foot: <td className={B}>{fmtNum(totals.video_views)}</td> },
+    page_views:          { cell: (r)    => <td className={S}>{fmtNum(r.page_views)}</td>,                                                                                                                      foot: <td className={B}>{fmtNum(totals.page_views)}</td> },
+    domain_name:         { cell: (r)    => <td className={S}>{r.domain_name || "—"}</td>,                                                                                                                      foot: <td className={B}>—</td> },
+  };
+
+  const visibleKeys = colOrder.filter((k) => visibleCols.has(k));
+
   const isActive = localDetail?.status === "ACTIVE";
 
   return (
@@ -258,7 +294,6 @@ export function DrilldownModal({
         {/* controls bar */}
         {localDetail && (
           <div className="flex flex-wrap items-center gap-4 px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-            {/* status toggle */}
             <button
               onClick={() => void toggleStatus()}
               disabled={saving === "status"}
@@ -271,7 +306,6 @@ export function DrilldownModal({
               {saving === "status" ? "…" : isActive ? "● Active" : "○ Paused"}
             </button>
 
-            {/* budget */}
             <div className="flex items-center gap-1">
               <span className="text-xs text-gray-500 dark:text-gray-400">Budget:</span>
               {editingBudget ? (
@@ -284,11 +318,7 @@ export function DrilldownModal({
                     autoFocus
                     className="w-20 px-1.5 py-0.5 text-xs rounded border border-blue-400 dark:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   />
-                  <button
-                    onClick={() => void saveBudget()}
-                    disabled={saving === "budget"}
-                    className="px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
-                  >
+                  <button onClick={() => void saveBudget()} disabled={saving === "budget"} className="px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
                     {saving === "budget" ? "…" : "Save"}
                   </button>
                   <button onClick={() => setEditingBudget(false)} className="px-1.5 py-0.5 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">✕</button>
@@ -303,7 +333,6 @@ export function DrilldownModal({
               )}
             </div>
 
-            {/* bid */}
             <div className="flex items-center gap-1">
               <span className="text-xs text-gray-500 dark:text-gray-400">Bid:</span>
               {editingBid ? (
@@ -316,11 +345,7 @@ export function DrilldownModal({
                     autoFocus
                     className="w-20 px-1.5 py-0.5 text-xs rounded border border-blue-400 dark:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   />
-                  <button
-                    onClick={() => void saveBid()}
-                    disabled={saving === "bid"}
-                    className="px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
-                  >
+                  <button onClick={() => void saveBid()} disabled={saving === "bid"} className="px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
                     {saving === "bid" ? "…" : "Save"}
                   </button>
                   <button onClick={() => setEditingBid(false)} className="px-1.5 py-0.5 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">✕</button>
@@ -352,114 +377,43 @@ export function DrilldownModal({
           {!loading && !error && rows.length === 0 && (
             <p className="text-center text-sm text-gray-400 py-12">No data available for this campaign.</p>
           )}
-          {!loading && !error && rows.length > 0 && (() => {
-            const col = (key: string) => visibleCols.has(key);
-            const th = "px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap";
-            const td = "px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap";
-            const tds = "px-3 py-2 font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap";
-            return (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
-                  <tr>
-                    <th className={th}>Date</th>
-                    {col("spend")               && <th className={th}>Spend</th>}
-                    {col("revenue")             && <th className={th}>Revenue</th>}
-                    {col("profit")              && <th className={th}>Profit</th>}
-                    {col("roi")                 && <th className={th}>ROI</th>}
-                    {col("rpr")                 && <th className={th}>Rev/Result</th>}
-                    {col("cpr")                 && <th className={th}>Cost/Result</th>}
-                    {col("rpc")                 && <th className={th}>RPC</th>}
-                    {col("cpm")                 && <th className={th}>CPM</th>}
-                    {col("cpc")                 && <th className={th}>CPC</th>}
-                    {col("cvr")                 && <th className={th}>CVR</th>}
-                    {col("ctr")                 && <th className={th}>CTR</th>}
-                    {col("fill_rate")           && <th className={th}>Fill Rate</th>}
-                    {col("impressions")         && <th className={th}>Impressions</th>}
-                    {col("swipes")              && <th className={th}>Clicks</th>}
-                    {col("clicks")              && <th className={th}>Ad Clicks</th>}
-                    {col("funnel_clicks")       && <th className={th}>Funnel Clicks</th>}
-                    {col("funnel_impressions")  && <th className={th}>Funnel Impr.</th>}
-                    {col("funnel_requests")     && <th className={th}>Funnel Requests</th>}
-                    {col("feed_impressions")    && <th className={th}>Feed Impr.</th>}
-                    {col("snap_results")        && <th className={th}>Results</th>}
-                    {col("snap_purchase_value") && <th className={th}>Purchase Value</th>}
-                    {col("requests")            && <th className={th}>Requests</th>}
-                    {col("matched_ad_requests") && <th className={th}>Matched Requests</th>}
-                    {col("video_views")         && <th className={th}>Video Views</th>}
-                    {col("page_views")          && <th className={th}>Page Views</th>}
-                    {col("domain_name")         && <th className={th}>Domain</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {rows.map((r, i) => {
-                    const d = derive(r);
-                    return (
-                      <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{r.stat_date}</td>
-                        {col("spend")               && <td className="px-3 py-2 text-gray-900 dark:text-gray-100 whitespace-nowrap">{fmt$(r.spend_usd)}</td>}
-                        {col("revenue")             && <td className="px-3 py-2 text-gray-900 dark:text-gray-100 whitespace-nowrap">{fmt$(r.revenue_usd)}</td>}
-                        {col("profit")              && <td className={`px-3 py-2 whitespace-nowrap font-medium ${d.profit >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>{d.profit >= 0 ? "+" : ""}{fmt$(d.profit)}</td>}
-                        {col("roi")                 && <td className="px-3 py-2 whitespace-nowrap"><RoiPill pct={r.roi_pct} /></td>}
-                        {col("rpr")                 && <td className={td}>{d.rpr !== null ? fmt$(d.rpr) : "—"}</td>}
-                        {col("cpr")                 && <td className={td}>{d.cpr !== null ? fmt$(d.cpr) : "—"}</td>}
-                        {col("rpc")                 && <td className={td}>{d.rpc !== null ? fmt$(d.rpc) : "—"}</td>}
-                        {col("cpm")                 && <td className={td}>{d.cpm !== null ? fmt$(d.cpm) : "—"}</td>}
-                        {col("cpc")                 && <td className={td}>{d.cpc !== null ? fmt$(d.cpc) : "—"}</td>}
-                        {col("cvr")                 && <td className={td}>{fmtPct(d.cvr)}</td>}
-                        {col("ctr")                 && <td className={td}>{fmtPct(d.ctr)}</td>}
-                        {col("fill_rate")           && <td className={td}>{fmtPct(d.fill_rate)}</td>}
-                        {col("impressions")         && <td className={td}>{fmtNum(r.impressions)}</td>}
-                        {col("swipes")              && <td className={td}>{fmtNum(r.swipes)}</td>}
-                        {col("clicks")              && <td className={td}>{fmtNum(r.clicks)}</td>}
-                        {col("funnel_clicks")       && <td className={td}>{fmtNum(r.funnel_clicks)}</td>}
-                        {col("funnel_impressions")  && <td className={td}>{fmtNum(r.funnel_impressions)}</td>}
-                        {col("funnel_requests")     && <td className={td}>{fmtNum(r.funnel_requests)}</td>}
-                        {col("feed_impressions")    && <td className={td}>{fmtNum(r.feed_impressions)}</td>}
-                        {col("snap_results")        && <td className={td}>{fmtNum(r.snap_results)}</td>}
-                        {col("snap_purchase_value") && <td className={td}>{fmt$(r.snap_purchase_value_usd)}</td>}
-                        {col("requests")            && <td className={td}>{fmtNum(r.requests)}</td>}
-                        {col("matched_ad_requests") && <td className={td}>{fmtNum(r.matched_ad_requests)}</td>}
-                        {col("video_views")         && <td className={td}>{fmtNum(r.video_views)}</td>}
-                        {col("page_views")          && <td className={td}>{fmtNum(r.page_views)}</td>}
-                        {col("domain_name")         && <td className={td}>{r.domain_name || "—"}</td>}
-                      </tr>
-                    );
+          {!loading && !error && rows.length > 0 && (
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">Date</th>
+                  {visibleKeys.map((k) => (
+                    <th key={k} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                      {DD_LABEL_MAP[k]}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {rows.map((r, i) => {
+                  const d = derive(r);
+                  return (
+                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{r.stat_date}</td>
+                      {visibleKeys.map((k) => {
+                        const def = COL_DEFS[k];
+                        return def ? <Fragment key={k}>{def.cell(r, d)}</Fragment> : null;
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700">
+                <tr>
+                  <td className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400">TOTAL</td>
+                  {visibleKeys.map((k) => {
+                    const def = COL_DEFS[k];
+                    return def ? <Fragment key={k}>{def.foot}</Fragment> : null;
                   })}
-                </tbody>
-                <tfoot className="bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700">
-                  <tr>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400">TOTAL</td>
-                    {col("spend")               && <td className={tds}>{fmt$(totals.spend)}</td>}
-                    {col("revenue")             && <td className={tds}>{fmt$(totals.revenue)}</td>}
-                    {col("profit")              && <td className={`px-3 py-2 font-semibold whitespace-nowrap ${tDerived.profit >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>{tDerived.profit >= 0 ? "+" : ""}{fmt$(tDerived.profit)}</td>}
-                    {col("roi")                 && <td className="px-3 py-2"><RoiPill pct={tRoi} /></td>}
-                    {col("rpr")                 && <td className={tds}>{tDerived.rpr !== null ? fmt$(tDerived.rpr) : "—"}</td>}
-                    {col("cpr")                 && <td className={tds}>{tDerived.cpr !== null ? fmt$(tDerived.cpr) : "—"}</td>}
-                    {col("rpc")                 && <td className={tds}>{tDerived.rpc !== null ? fmt$(tDerived.rpc) : "—"}</td>}
-                    {col("cpm")                 && <td className={tds}>{tDerived.cpm !== null ? fmt$(tDerived.cpm) : "—"}</td>}
-                    {col("cpc")                 && <td className={tds}>{tDerived.cpc !== null ? fmt$(tDerived.cpc) : "—"}</td>}
-                    {col("cvr")                 && <td className={tds}>{fmtPct(tDerived.cvr)}</td>}
-                    {col("ctr")                 && <td className={tds}>{fmtPct(tDerived.ctr)}</td>}
-                    {col("fill_rate")           && <td className={tds}>{fmtPct(tDerived.fill_rate)}</td>}
-                    {col("impressions")         && <td className={tds}>{fmtNum(totals.impressions)}</td>}
-                    {col("swipes")              && <td className={tds}>{fmtNum(totals.swipes)}</td>}
-                    {col("clicks")              && <td className={tds}>{fmtNum(totals.clicks)}</td>}
-                    {col("funnel_clicks")       && <td className={tds}>{fmtNum(totals.funnel_clicks)}</td>}
-                    {col("funnel_impressions")  && <td className={tds}>{fmtNum(totals.funnel_impressions)}</td>}
-                    {col("funnel_requests")     && <td className={tds}>{fmtNum(totals.funnel_requests)}</td>}
-                    {col("feed_impressions")    && <td className={tds}>{fmtNum(totals.feed_impressions)}</td>}
-                    {col("snap_results")        && <td className={tds}>{fmtNum(totals.snap_results)}</td>}
-                    {col("snap_purchase_value") && <td className={tds}>{fmt$(totals.snap_purchase_value)}</td>}
-                    {col("requests")            && <td className={tds}>{fmtNum(totals.requests)}</td>}
-                    {col("matched_ad_requests") && <td className={tds}>{fmtNum(totals.matched_ad_requests)}</td>}
-                    {col("video_views")         && <td className={tds}>{fmtNum(totals.video_views)}</td>}
-                    {col("page_views")          && <td className={tds}>{fmtNum(totals.page_views)}</td>}
-                    {col("domain_name")         && <td className={tds}>—</td>}
-                  </tr>
-                </tfoot>
-              </table>
-            );
-          })()}
+                </tr>
+              </tfoot>
+            </table>
+          )}
         </div>
       </div>
     </div>
