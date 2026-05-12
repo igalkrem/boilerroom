@@ -25,10 +25,9 @@ export async function POST(request: NextRequest) {
   const chunk = formData.get("chunk") as File | null;
   const partNumber = formData.get("partNumber") as string | null;
   const uploadId = formData.get("uploadId") as string | null;
-  const addPath = formData.get("addPath") as string | null;
   const adAccountId = formData.get("adAccountId") as string | null;
 
-  if (!chunk || !partNumber || !uploadId || !addPath || !adAccountId) {
+  if (!chunk || !partNumber || !uploadId || !adAccountId) {
     return NextResponse.json({ error: "missing_params" }, { status: 400 });
   }
 
@@ -36,18 +35,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  // Validate path to prevent SSRF: must contain /v1/ (allows regional prefixes like /us/v1/...),
-  // no traversal or protocol injection.
-  if (
-    !addPath.includes("/v1/") ||
-    addPath.includes("..") ||
-    addPath.includes("://") ||
-    addPath.includes("@")
-  ) {
-    return NextResponse.json({ error: "invalid_path" }, { status: 400 });
+  // Use the server-pinned addPath stored at upload-init time — ignore the client-supplied value.
+  const pinnedAddPath = session.pendingUploads?.[uploadId]?.addPath;
+  if (!pinnedAddPath) {
+    return NextResponse.json({ error: "unknown_upload_id" }, { status: 400 });
   }
 
-  const addUrl = `https://adsapi.snapchat.com${addPath}`;
+  const addUrl = `https://adsapi.snapchat.com${pinnedAddPath}`;
 
   const uploadForm = new FormData();
   uploadForm.append("file", chunk);

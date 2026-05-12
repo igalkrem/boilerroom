@@ -34,7 +34,13 @@ export function decryptToken(stored: string): string {
 // Constant-time comparison to prevent timing attacks on the cron secret.
 export function verifyCronSecret(header: string | null): boolean {
   const secret = process.env.CRON_SECRET;
-  if (!secret || !header) return false;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("[cron] CRON_SECRET not set — cron endpoint is effectively disabled");
+    }
+    return false;
+  }
+  if (!header) return false;
   const expected = `Bearer ${secret}`;
   try {
     return timingSafeEqual(Buffer.from(header), Buffer.from(expected));

@@ -89,14 +89,24 @@ export default function PerformancePage() {
     setSyncing(true);
     setError(null);
 
+    const histStart = dateMinus(start, 3);
+    const histEnd = dateMinus(start, 1);
+
     await Promise.allSettled(
-      accts.map((a) =>
+      accts.flatMap((a) => [
         fetch("/api/reporting/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ adAccountId: a.id, startDate: start, endDate: end, timezone: a.timezone, force }),
-        })
-      )
+        }),
+        // Sync the 3 days before the range for -1D/-2D/-3D ROI columns.
+        // force=false so finalized historical dates are not re-fetched unnecessarily.
+        fetch("/api/reporting/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ adAccountId: a.id, startDate: histStart, endDate: histEnd, timezone: a.timezone, force: false }),
+        }),
+      ])
     );
 
     setSyncing(false);
@@ -211,10 +221,8 @@ export default function PerformancePage() {
   function handleDateChange(start: string, end: string) {
     setStartDate(start);
     setEndDate(end);
-    // Load from DB first; if empty, the auto-seed in loadFromDb's .then handles it.
-    void loadFromDb(activeAccounts, start, end).then((count) => {
-      if (count === 0) void syncAndReload(activeAccounts, start, end, true);
-    });
+    // Always force-sync on date change so fresh data is fetched even when DB has stale rows.
+    void syncAndReload(activeAccounts, start, end, true);
   }
 
   function handleManualRefresh() {

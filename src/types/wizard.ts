@@ -134,7 +134,7 @@ export interface CanvasEdges {
     feedProviderId: string;
     articleId: string;
     headline: string;
-    headlineRac: string;
+    headlineRac?: string;
     callToAction: string;
   }>;
   articleToPreset: Array<{

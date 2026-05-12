@@ -16,15 +16,21 @@ function orphanArticle(
   return stillConnected ? articleToPreset : articleToPreset.filter((e) => e.articleId !== articleId);
 }
 
-// Remove all providerToArticle edges for a provider, then cascade to articleToPreset.
+// Remove all providerToArticle edges for a provider, then cascade to articleToPreset
+// and articleToAdAccount for any article that now has zero provider connections.
 function cascadeProviderRemoval(feedProviderId: string, edges: CanvasEdges): CanvasEdges {
   const removedEdges = edges.providerToArticle.filter((e) => e.feedProviderId === feedProviderId);
   const newP2A = edges.providerToArticle.filter((e) => e.feedProviderId !== feedProviderId);
   let newA2P = edges.articleToPreset;
+  let newA2Acc = edges.articleToAdAccount;
   for (const { articleId } of removedEdges) {
-    newA2P = orphanArticle(articleId, newP2A, newA2P);
+    const stillConnected = newP2A.some((e) => e.articleId === articleId);
+    if (!stillConnected) {
+      newA2P = newA2P.filter((e) => e.articleId !== articleId);
+      newA2Acc = newA2Acc.filter((e) => e.articleId !== articleId);
+    }
   }
-  return { ...edges, providerToArticle: newP2A, articleToPreset: newA2P };
+  return { ...edges, providerToArticle: newP2A, articleToPreset: newA2P, articleToAdAccount: newA2Acc };
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -167,12 +173,17 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       get().removeRow(rowId);
       return;
     }
-    set((s) => ({
-      creativeRows: s.creativeRows.map((r) =>
-        r.id === rowId ? { ...r, groupIds: remainingGroupIds } : r
-      ),
-      creativeGroups: s.creativeGroups.filter((g) => g.id !== groupId),
-    }));
+    set((s) => {
+      const currentRow = s.creativeRows.find((r) => r.id === rowId);
+      if (!currentRow) return {};
+      const remaining = currentRow.groupIds.filter((id) => id !== groupId);
+      return {
+        creativeRows: s.creativeRows.map((r) =>
+          r.id === rowId ? { ...r, groupIds: remaining } : r
+        ),
+        creativeGroups: s.creativeGroups.filter((g) => g.id !== groupId),
+      };
+    });
   },
 
   addCreativeToGroup: (groupId, assetId) =>

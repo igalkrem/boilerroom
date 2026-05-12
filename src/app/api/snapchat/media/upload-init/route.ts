@@ -62,8 +62,7 @@ export async function POST(request: NextRequest) {
 
   const data = JSON.parse(text) as { upload_id?: string; add_path?: string; finalize_path?: string };
 
-  // Snapchat may return full URLs or relative paths — normalize to relative /v1/... paths
-  // so the SSRF validation in upload-chunk and upload-finalize always passes.
+  // Snapchat may return full URLs or relative paths — normalize to relative /v1/... paths.
   // Paths may be relative to the server root (/v1/media/...) OR relative to the /v1 base
   // (/media/...) — both are normalized to start with /v1/.
   function toRelativePath(p: string | undefined): string | undefined {
@@ -75,17 +74,28 @@ export async function POST(request: NextRequest) {
     } catch {
       path = p; // already a relative path
     }
-    // Only prepend /v1/ if the path doesn't already contain it.
-    // Regional paths like /us/v1/... must be preserved as-is.
     if (!path.includes("/v1/")) {
       path = path.startsWith("/") ? `/v1${path}` : `/v1/${path}`;
     }
     return path;
   }
 
+  const normalizedAddPath = toRelativePath(data.add_path);
+  const normalizedFinalizePath = toRelativePath(data.finalize_path);
+
+  // Pin paths server-side so upload-chunk and upload-finalize ignore the client's copy.
+  if (data.upload_id && normalizedAddPath && normalizedFinalizePath) {
+    session.pendingUploads = session.pendingUploads ?? {};
+    session.pendingUploads[data.upload_id] = {
+      addPath: normalizedAddPath,
+      finalizePath: normalizedFinalizePath,
+    };
+    await session.save();
+  }
+
   return NextResponse.json({
     ...data,
-    add_path: toRelativePath(data.add_path),
-    finalize_path: toRelativePath(data.finalize_path),
+    add_path: normalizedAddPath,
+    finalize_path: normalizedFinalizePath,
   });
 }

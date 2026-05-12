@@ -29,11 +29,13 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
   const [launching, setLaunching] = useState(false);
   const [launchProgress, setLaunchProgress] = useState(0);
   const [allResults, setAllResults] = useState<SubmissionResults[]>([]);
+  const [launchError, setLaunchError] = useState<string | null>(null);
 
   async function handleLaunch(items: CampaignBuildItem[], nameTemplate: string) {
     setLaunching(true);
     setLaunchProgress(0);
     setAllResults([]);
+    setLaunchError(null);
 
     const providers = loadFeedProviders();
     const articles = loadArticles();
@@ -132,6 +134,7 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
       setLaunchProgress(items.length);
     } catch (err) {
       console.error("[wizard] handleLaunch threw:", err);
+      setLaunchError(err instanceof Error ? err.message : String(err));
     } finally {
       setAllResults(collectedResults);
       setLaunching(false);
@@ -183,15 +186,20 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
       <div className="flex-1 min-h-0">
         {mode === "done" ? (
           <div className="flex flex-col items-center justify-center h-full gap-4">
-            <div className="text-4xl">{totalFailed === 0 ? "🎉" : "⚠️"}</div>
+            <div className="text-4xl">{launchError || totalFailed > 0 ? "⚠️" : "🎉"}</div>
             <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
               {totalSucceeded} campaign{totalSucceeded !== 1 ? "s" : ""} launched
               {totalFailed > 0 && `, ${totalFailed} failed`}
             </h2>
+            {launchError && (
+              <p className="text-sm text-red-500 dark:text-red-400 max-w-md text-center bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg">
+                {launchError}
+              </p>
+            )}
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => { setMode("canvas"); canvasStore.reset(); setAllResults([]); }}
+                onClick={() => { setMode("canvas"); canvasStore.reset(); setAllResults([]); setLaunchError(null); }}
                 className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 New Build

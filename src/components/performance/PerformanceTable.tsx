@@ -419,11 +419,11 @@ export function PerformanceTable({
             revenue_3d: m3?.revenue ?? null,
           };
         })(),
-        rpc: a.clicks > 0 ? a.revenue_usd / a.clicks : null,
+        rpc: a.funnel_clicks >= 10 && a.clicks > 0 ? a.revenue_usd / a.clicks : null,
         cpm: a.impressions > 0 ? (a.spend_usd / a.impressions) * 1000 : null,
         cpc: a.swipes > 0 ? a.spend_usd / a.swipes : null,
         ctr: a.impressions > 0 ? (a.swipes / a.impressions) * 100 : null,
-        rpr: a.snap_results > 0 ? a.revenue_usd / a.snap_results : null,
+        rpr: a.funnel_clicks >= 10 && a.snap_results > 0 ? a.revenue_usd / a.snap_results : null,
         fill_rate: a.swipes > 0 ? (a.funnel_impressions / a.swipes) * 100 : null,
         profit: a.revenue_usd - a.spend_usd,
         cvr: a.swipes > 0 ? (a.funnel_clicks / a.swipes) * 100 : null,
@@ -471,7 +471,7 @@ export function PerformanceTable({
       return true;
     });
   }, [aggregated, filterQuery, squadDetails, hiddenSquadIds, showHidden,
-      filterArticleIds, filterProviderIds, metricFilters, articles, providers]);
+      filterArticleIds, filterProviderIds, metricFilters, articles]);
 
   useEffect(() => {
     onFilteredRowsChange?.(filtered);

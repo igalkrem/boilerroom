@@ -132,5 +132,7 @@ function buildUrlTemplate(provider: FeedProvider, article: Article, headline: st
       return `${p.key}=${resolved}`;
     })
     .join("&");
-  return params ? `${base}?${params}` : base;
+  if (!params) return base;
+  if (!base) return ""; // don't produce "?key=value" with no host — callers treat "" as missing URL
+  return `${base}?${params}`;
 }

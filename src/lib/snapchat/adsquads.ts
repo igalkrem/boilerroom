@@ -114,9 +114,13 @@ export async function updateAdSquad(
 
 export async function setAdSquadPlacement(
   squadId: string,
-  placement: { config: string; platforms?: string[]; snapchat_positions?: string[] }
+  placement: { config: string; platforms?: string[]; snapchat_positions?: string[] },
+  expectedAdAccountId: string
 ): Promise<SnapAdSquad> {
   const current = await getAdSquad(squadId);
+  if (current.ad_account_id && current.ad_account_id !== expectedAdAccountId) {
+    throw new Error("forbidden: ad squad does not belong to the specified ad account");
+  }
   const putBody = { ...stripForPut(current as SnapAdSquad), placement_v2: placement };
   const data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
     `/campaigns/${current.campaign_id}/adsquads`,
@@ -138,7 +142,9 @@ export async function createAdSquads(
   campaignId: string,
   adsquads: SnapAdSquadPayload[]
 ): Promise<Array<SnapAdSquad & { error?: string }>> {
-  console.log("[createAdSquads] payload:", JSON.stringify({ adsquads }));
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[createAdSquads] payload:", JSON.stringify({ adsquads }));
+  }
   const data = await snapFetch<SnapBatchResponse<SnapAdSquad>>(
     `/campaigns/${campaignId}/adsquads`,
     {

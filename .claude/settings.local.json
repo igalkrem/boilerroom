@@ -135,5 +135,7 @@
         ]
       }
     ]
-  }
+  },
+  "prefersReducedMotion": false,
+  "outputStyle": "Explanatory"
 }

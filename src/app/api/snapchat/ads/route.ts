@@ -36,6 +36,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const ad = await getAd(adId);
+    if (ad.ad_account_id && ad.ad_account_id !== adAccountId) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
     return NextResponse.json({ ad });
   } catch (err) {
     console.error("Get ad error:", err);
@@ -70,7 +73,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    console.log("[createAds] payload:", JSON.stringify({ ads }));
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[createAds] payload:", JSON.stringify({ ads }));
+    }
     const results = await createAds(adSquadId, ads);
     return NextResponse.json({ results });
   } catch (err) {

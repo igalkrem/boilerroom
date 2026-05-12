@@ -4,8 +4,8 @@ import type { SessionData } from "@/types/session";
 
 export async function getSession(): Promise<IronSession<SessionData>> {
   const secret = process.env.SESSION_SECRET;
-  if (!secret || secret.length < 32) {
-    throw new Error("SESSION_SECRET env var must be set to at least 32 characters");
+  if (!secret || secret.length < 64) {
+    throw new Error("SESSION_SECRET must be a 64-character hex string. Generate with: openssl rand -hex 32");
   }
   const cookieName = process.env.SESSION_COOKIE_NAME;
   if (!cookieName && process.env.NODE_ENV === "production") {

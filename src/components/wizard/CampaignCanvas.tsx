@@ -449,30 +449,31 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
 
       const srcType = source.split("-")[0];
       const tgtType = target.split("-")[0];
+      const s = useCanvasStore.getState();
 
       if (srcType === "row" && (tgtType === "provider" || tgtType === "router")) {
         const rowId = source.replace(/^row-/, "");
         const providerId = tgtType === "router"
-          ? store.routerNodes.find((r) => r.id === target)?.feedProviderId ?? ""
+          ? s.routerNodes.find((r) => r.id === target)?.feedProviderId ?? ""
           : target.replace(/^provider-/, "");
-        if (providerId) store.connectRowToProvider(rowId, providerId);
+        if (providerId) s.connectRowToProvider(rowId, providerId);
 
       } else if ((srcType === "provider" || srcType === "router") && tgtType === "article") {
         const providerId = srcType === "router"
-          ? store.routerNodes.find((r) => r.id === source)?.feedProviderId ?? ""
+          ? s.routerNodes.find((r) => r.id === source)?.feedProviderId ?? ""
           : source.replace(/^provider-/, "");
         const articleId = target.replace(/^article-/, "");
         if (!providerId) return;
 
         // Auto-insert router when provider already has an article edge and no router yet
-        const existingArticleEdges = store.edges.providerToArticle.filter(
+        const existingArticleEdges = s.edges.providerToArticle.filter(
           (e) => e.feedProviderId === providerId
         );
-        const hasRouter = store.routerNodes.some((r) => r.feedProviderId === providerId);
+        const hasRouter = s.routerNodes.some((r) => r.feedProviderId === providerId);
         if (existingArticleEdges.length >= 1 && !hasRouter) {
-          const router = store.addRouter(providerId);
+          const router = s.addRouter(providerId);
           const provPos = nodePositionsRef.current[`provider-${providerId}`] ?? { x: COLUMN_X.provider, y: 0 };
-          store.setNodePosition(router.id, { x: COLUMN_X.router, y: provPos.y });
+          s.setNodePosition(router.id, { x: COLUMN_X.router, y: provPos.y });
         }
 
         const articleForDefault = articles.find((a) => a.id === articleId);
@@ -480,7 +481,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           articleForDefault?.defaultHeadlineIndex !== undefined
             ? articleForDefault.allowedHeadlines[articleForDefault.defaultHeadlineIndex]
             : undefined;
-        store.toggleProviderToArticle(providerId, articleId, dh?.text, dh?.rac);
+        s.toggleProviderToArticle(providerId, articleId, dh?.text, dh?.rac);
 
       } else if (srcType === "article" && tgtType === "account") {
         const articleId = source.replace(/^article-/, "");
@@ -488,30 +489,31 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         const article = articles.find((a) => a.id === articleId);
         const cfg = adAccountConfigs.find((c) => c.id === accountId);
         if (article && cfg && cfg.feedProviderIds.length > 0 && !cfg.feedProviderIds.includes(article.feedProviderId)) return;
-        store.toggleArticleToAdAccount(articleId, accountId);
+        s.toggleArticleToAdAccount(articleId, accountId);
 
       } else if (srcType === "account" && tgtType === "preset") {
         const accountId = source.replace(/^account-/, "");
         const presetId = target.replace(/^preset-/, "");
         const preset = presets.find((p) => p.id === presetId);
         if (preset && canSelectPresets) {
-          const accountArticleIds = store.edges.articleToAdAccount
+          const accountArticleIds = s.edges.articleToAdAccount
             .filter((ae) => ae.adAccountId === accountId)
             .map((ae) => ae.articleId);
           const matching = accountArticleIds.filter((aId) => {
             const article = articles.find((a) => a.id === aId);
             return article && (!preset.feedProviderId || article.feedProviderId === preset.feedProviderId);
           });
-          matching.forEach((aId) => store.toggleArticleToPreset(aId, presetId));
+          matching.forEach((aId) => s.toggleArticleToPreset(aId, presetId));
         }
       }
     },
-    [store, presets, articles, adAccountConfigs, canSelectPresets]
+    [presets, articles, adAccountConfigs, canSelectPresets]
   );
 
   // Handle edge deletion (keyboard Delete/Backspace)
   const onEdgesDelete = useCallback(
     (deletedEdges: Edge[]) => {
+      const s = useCanvasStore.getState();
       for (const edge of deletedEdges) {
         const { source, target } = edge;
         const srcType = source.split("-")[0];
@@ -520,23 +522,23 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         if (srcType === "row" && (tgtType === "provider" || tgtType === "router")) {
           const rowId = source.replace(/^row-/, "");
           const providerId = tgtType === "router"
-            ? store.routerNodes.find((r) => r.id === target)?.feedProviderId ?? ""
+            ? s.routerNodes.find((r) => r.id === target)?.feedProviderId ?? ""
             : target.replace(/^provider-/, "");
-          if (providerId) store.disconnectRowFromProvider(rowId, providerId);
+          if (providerId) s.disconnectRowFromProvider(rowId, providerId);
         } else if ((srcType === "provider" || srcType === "router") && tgtType === "article") {
           const providerId = srcType === "router"
-            ? store.routerNodes.find((r) => r.id === source)?.feedProviderId ?? ""
+            ? s.routerNodes.find((r) => r.id === source)?.feedProviderId ?? ""
             : source.replace(/^provider-/, "");
           const articleId = target.replace(/^article-/, "");
-          if (providerId) store.toggleProviderToArticle(providerId, articleId);
+          if (providerId) s.toggleProviderToArticle(providerId, articleId);
         } else if (srcType === "article" && tgtType === "account") {
           const articleId = source.replace(/^article-/, "");
           const accountId = target.replace(/^account-/, "");
-          store.toggleArticleToAdAccount(articleId, accountId);
+          s.toggleArticleToAdAccount(articleId, accountId);
         }
       }
     },
-    [store]
+    []
   );
 
   // Prevent cross-provider connections at the React Flow drag level.

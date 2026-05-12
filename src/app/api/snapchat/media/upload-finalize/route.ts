@@ -9,12 +9,8 @@ export const maxDuration = 60;
 const bodySchema = z.object({
   adAccountId: z.string().min(1),
   uploadId: z.string().min(1),
-  finalizePath: z
-    .string()
-    .min(1)
-    .refine((p) => p.includes("/v1/") && !p.includes("..") && !p.includes("://") && !p.includes("@"), {
-      message: "invalid_path",
-    }),
+  // finalizePath is accepted but ignored — the server uses the path stored at upload-init time.
+  finalizePath: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -38,13 +34,22 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
   }
-  const { adAccountId, uploadId, finalizePath } = parsed.data;
+  const { adAccountId, uploadId } = parsed.data;
 
   if (!isAdAccountAllowed(session, adAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const finalizeUrl = `https://adsapi.snapchat.com${finalizePath}`;
+  // Use the server-pinned finalizePath stored at upload-init time — ignore the client-supplied value.
+  const pinnedFinalizePath = session.pendingUploads?.[uploadId]?.finalizePath;
+  if (!pinnedFinalizePath) {
+    return NextResponse.json({ error: "unknown_upload_id" }, { status: 400 });
+  }
+  // Clean up after use so the session doesn't grow unboundedly.
+  delete session.pendingUploads![uploadId];
+  await session.save();
+
+  const finalizeUrl = `https://adsapi.snapchat.com${pinnedFinalizePath}`;
 
   const form = new FormData();
   form.append("upload_id", uploadId);
