@@ -111,12 +111,19 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       .filter((a) => store.edges.providerToArticle.some((e) => e.articleId === a.id))
       .sort((a, b) => (providerOrder.get(a.feedProviderId) ?? 999) - (providerOrder.get(b.feedProviderId) ?? 999));
   }, [articles, store.edges.providerToArticle, sortedByCreation]);
+  // Presets are enabled once any account is wired to any article
+  const canSelectPresets = useMemo(
+    () => store.edges.articleToAdAccount.length > 0,
+    [store.edges.articleToAdAccount]
+  );
+
   const visiblePresets = useMemo(() => {
+    if (!canSelectPresets) return [];
     const providerOrder = new Map(sortedByCreation.map((p, i) => [p.id, i]));
     return presets
       .filter((p) => !p.feedProviderId || activeProviderIdsFromArticles.has(p.feedProviderId))
       .sort((a, b) => (providerOrder.get(a.feedProviderId ?? "") ?? 999) - (providerOrder.get(b.feedProviderId ?? "") ?? 999));
-  }, [presets, activeProviderIdsFromArticles, sortedByCreation]);
+  }, [presets, activeProviderIdsFromArticles, sortedByCreation, canSelectPresets]);
   const visibleAccounts = useMemo(() => {
     const providerOrder = new Map(sortedByCreation.map((p, i) => [p.id, i]));
     const minProviderIndex = (accountId: string): number => {
@@ -135,12 +142,6 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       })
       .sort((a, b) => minProviderIndex(a.id) - minProviderIndex(b.id));
   }, [allAccounts, adAccountConfigs, activeProviderIdsFromArticles, sortedByCreation]);
-
-  // Presets are enabled once any account is wired to any article
-  const canSelectPresets = useMemo(
-    () => store.edges.articleToAdAccount.length > 0,
-    [store.edges.articleToAdAccount]
-  );
 
   // ─── Disconnect callbacks (one per node type) ────────────────────────────────
   // Uses getState() so it reads current store without closing over the store object,
@@ -524,7 +525,8 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     [store]
   );
 
-  // Auto-layout — skips nodes with no edges; runs automatically on structure changes
+  // Auto-layout — dagre positions connected nodes; disconnected-but-visible nodes
+  // are placed in their correct columns so they don't float at y=0.
   const handleAutoLayout = useCallback(() => {
     const currentNodes = buildNodes();
     const currentEdges = buildEdges();
@@ -533,6 +535,42 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     const connectedNodes = currentNodes.filter((n) => connectedIds.has(n.id));
     if (connectedNodes.length === 0) return;
     const positions = computeAutoLayout(connectedNodes, currentEdges);
+
+    // Providers: anchor on a connected provider's y, fill disconnected slots with ROW_GAP spacing.
+    const providerNodes = currentNodes.filter((n) => n.type === "provider");
+    if (providerNodes.some((n) => !positions[n.id])) {
+      const anchorIdx = providerNodes.findIndex((n) => positions[n.id]);
+      const anchorY = anchorIdx >= 0 ? positions[providerNodes[anchorIdx].id]!.y : 0;
+      providerNodes.forEach((n, i) => {
+        if (!positions[n.id]) {
+          positions[n.id] = { x: COLUMN_X.provider, y: anchorY + (i - anchorIdx) * ROW_GAP };
+        }
+      });
+    }
+
+    // Accounts/presets: center on the y-range of laid-out articles.
+    const articleYs = currentNodes
+      .filter((n) => n.type === "article" && positions[n.id])
+      .map((n) => positions[n.id]!.y);
+    const articleMidY = articleYs.length
+      ? (Math.min(...articleYs) + Math.max(...articleYs)) / 2
+      : 0;
+    const typeCounters: Record<string, number> = {};
+    const typeCounts: Record<string, number> = {};
+    for (const n of currentNodes) {
+      if (positions[n.id] || n.type === "provider" || !n.type) continue;
+      typeCounts[n.type] = (typeCounts[n.type] ?? 0) + 1;
+    }
+    for (const n of currentNodes) {
+      if (positions[n.id] || n.type === "provider" || !n.type) continue;
+      const colX = COLUMN_X[n.type as keyof typeof COLUMN_X];
+      if (colX === undefined) continue;
+      const idx = typeCounters[n.type] ?? 0;
+      typeCounters[n.type] = idx + 1;
+      const count = typeCounts[n.type];
+      positions[n.id] = { x: colX, y: articleMidY + (idx - (count - 1) / 2) * ROW_GAP };
+    }
+
     useCanvasStore.getState().setNodePositions(positions);
     nodePositionsRef.current = { ...nodePositionsRef.current, ...positions };
     setNodes((prev) => prev.map((n) => positions[n.id] ? { ...n, position: positions[n.id] } : n));
