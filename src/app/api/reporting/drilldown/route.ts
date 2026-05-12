@@ -52,7 +52,8 @@ export async function GET(request: NextRequest) {
         COALESCE(p.funnel_impressions, 0)::bigint AS predicto_funnel_impressions,
         COALESCE(p.funnel_requests, 0)::bigint   AS predicto_funnel_requests,
         COALESCE(p.requests, 0)::bigint          AS predicto_requests,
-        COALESCE(p.impressions, 0)::bigint       AS predicto_impressions
+        COALESCE(p.impressions, 0)::bigint       AS predicto_impressions,
+        COALESCE(fpc.feed_provider_id, '')       AS feed_provider_id
       FROM snapchat_ad_squad_stats s
       LEFT JOIN (
         SELECT
@@ -74,9 +75,9 @@ export async function GET(request: NextRequest) {
         ON  s.ad_squad_id  = k.custom_channel_name
         AND s.stat_date    = k.record_date
       LEFT JOIN LATERAL (
-        SELECT channel_id FROM feed_provider_channels WHERE ad_squad_snap_id = s.ad_squad_id
+        SELECT channel_id, feed_provider_id FROM feed_provider_channels WHERE ad_squad_snap_id = s.ad_squad_id
         UNION ALL
-        SELECT channel_id FROM feed_provider_channels
+        SELECT channel_id, feed_provider_id FROM feed_provider_channels
         WHERE channel_id != ''
           AND s.ad_squad_name ILIKE '%' || channel_id || '%'
         LIMIT 1
@@ -130,6 +131,7 @@ export async function GET(request: NextRequest) {
       funnel_impressions: Number(r.funnel_impressions) + Number(r.predicto_funnel_impressions),
       funnel_requests: Number(r.funnel_requests) + Number(r.predicto_funnel_requests),
       domain_name: r.domain_name as string,
+      feed_provider_id: r.feed_provider_id as string,
       snap_results: Number(r.conversion_purchases),
       snap_purchase_value_usd: Number(r.conversion_purchase_value) / 1_000_000,
     };
