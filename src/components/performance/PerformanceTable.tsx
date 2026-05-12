@@ -41,7 +41,7 @@ type SortKey =
   | "spend_usd" | "revenue_usd" | "roi_pct" | "impressions" | "swipes"
   | "clicks" | "page_views" | "video_views" | "funnel_clicks" | "funnel_impressions"
   | "funnel_requests" | "requests" | "feed_impressions" | "ad_requests" | "matched_ad_requests"
-  | "rpc" | "cpm" | "cpc" | "ctr" | "rpr" | "profit" | "cvr"
+  | "rpc" | "cpm" | "cpc" | "ctr" | "rpr" | "fill_rate" | "profit" | "cvr"
   | "roi_1d" | "roi_2d" | "roi_3d"
   | "snap_results" | "snap_purchase_value_usd" | "snap_cost_per_result";
 
@@ -123,6 +123,7 @@ export interface AggrRow {
   cpc: number | null;
   ctr: number | null;
   rpr: number | null;
+  fill_rate: number | null;
   profit: number;
   cvr: number | null;
   snap_results: number;
@@ -153,6 +154,7 @@ const METRIC_COLS: Record<string, MetricColDef> = {
   cpc:                 { label: "CPC",                 sortKey: "cpc",                 render: (r) => r.cpc !== null ? fmt$(r.cpc) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
   cvr:                 { label: "CVR",                 sortKey: "cvr",                 render: (r) => fmtPct0(r.cvr),                              tdClass: "text-gray-700 dark:text-gray-300" },
   rpr:                 { label: "Revenue per Result",  sortKey: "rpr",                 render: (r) => r.rpr !== null ? fmt$(r.rpr) : "—",          tdClass: "text-gray-700 dark:text-gray-300" },
+  fill_rate:           { label: "Fill Rate",           sortKey: "fill_rate",           render: (r) => fmtPct(r.fill_rate),                         tdClass: "text-gray-700 dark:text-gray-300" },
   impressions:         { label: "Impressions",         sortKey: "impressions",         render: (r) => fmtNum(r.impressions),                       tdClass: "text-gray-700 dark:text-gray-300" },
   swipes:              { label: "Clicks",              sortKey: "swipes",              render: (r) => fmtNum(r.swipes),                            tdClass: "text-gray-700 dark:text-gray-300" },
   funnel_clicks:       { label: "Funnel Clicks",       sortKey: "funnel_clicks",       render: (r) => fmtNum(r.funnel_clicks),                     tdClass: "text-gray-700 dark:text-gray-300" },
@@ -328,6 +330,7 @@ export function PerformanceTable({
           cpc: null,
           ctr: null,
           rpr: null,
+          fill_rate: null,
           profit: 0,
           cvr: null,
           snap_cost_per_result: null,
@@ -360,6 +363,7 @@ export function PerformanceTable({
         cpc: a.swipes > 0 ? a.spend_usd / a.swipes : null,
         ctr: a.impressions > 0 ? (a.swipes / a.impressions) * 100 : null,
         rpr: a.funnel_requests > 0 ? a.revenue_usd / a.funnel_requests : null,
+        fill_rate: a.funnel_impressions > 0 ? (a.swipes / a.funnel_impressions) * 100 : null,
         profit: a.revenue_usd - a.spend_usd,
         cvr: a.swipes > 0 ? (a.funnel_clicks / a.swipes) * 100 : null,
         snap_cost_per_result: a.snap_results > 0 ? a.spend_usd / a.snap_results : null,
@@ -581,7 +585,7 @@ export function PerformanceTable({
     const headers = [
       "Campaign", "Spend ($)", "Revenue ($)", "ROI (%)", "Profit ($)",
       "Impressions", "Clicks", "Funnel Clicks", "CTR (%)", "CPM", "CPC",
-      "CVR (%)", "Revenue per Result", "RPC", "Page Views", "Ad Clicks",
+      "CVR (%)", "Revenue per Result", "Fill Rate (%)", "RPC", "Page Views", "Ad Clicks",
       "Requests", "Feed Impressions", "Matched Requests", "Funnel Impressions", "Funnel Requests",
       "Domain", "Budget ($)", "Bid ($)", "Status", "-1D ROI", "-2D ROI", "-3D ROI",
       "Results", "Cost per Result", "Purchase Value ($)",
@@ -599,6 +603,7 @@ export function PerformanceTable({
         r.cpc !== null ? r.cpc.toFixed(2) : "",
         r.cvr !== null ? r.cvr.toFixed(2) : "",
         r.rpr !== null ? r.rpr.toFixed(2) : "",
+        r.fill_rate !== null ? r.fill_rate.toFixed(2) : "",
         r.rpc !== null ? r.rpc.toFixed(2) : "",
         r.page_views, r.clicks, r.requests, r.feed_impressions, r.matched_ad_requests,
         r.funnel_impressions, r.funnel_requests,
