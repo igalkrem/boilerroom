@@ -440,16 +440,22 @@ export function PerformanceTable({
       if (!showHidden && hiddenSquadIds.has(r.ad_squad_id)) return false;
       if (filterQuery.trim() && !r.ad_squad_name.toLowerCase().includes(filterQuery.toLowerCase())) return false;
 
-      // Article filter — OR logic across selected articles
+      // Article filter — OR logic; normalize spaces/underscores/hyphens before comparing
       if (filterArticleIds.size > 0) {
-        const slugs = articles.filter(a => filterArticleIds.has(a.id)).map(a => a.slug.toLowerCase());
-        if (!slugs.some(s => r.ad_squad_name.toLowerCase().includes(s))) return false;
+        const norm = (s: string) => s.toLowerCase().replace(/[-_]/g, " ");
+        const slugs = articles.filter(a => filterArticleIds.has(a.id)).map(a => norm(a.slug));
+        if (slugs.length === 0 || !slugs.some(s => norm(r.ad_squad_name).includes(s))) return false;
       }
 
-      // Provider filter — OR logic, match via domain_name
+      // Provider filter — OR logic; try provider name in ad_squad_name first (works for both
+      // KingsRoad and Predicto), fall back to domain_name ⊇ baseDomain for KingsRoad rows
       if (filterProviderIds.size > 0) {
         const sel = providers.filter(p => filterProviderIds.has(p.id));
-        const ok = sel.some(p => p.domains?.some(d => d.baseDomain && r.domain_name?.includes(d.baseDomain)));
+        const nameLower = r.ad_squad_name.toLowerCase();
+        const ok = sel.some(p => {
+          if (p.name && nameLower.includes(p.name.toLowerCase())) return true;
+          return p.domains?.some(d => d.baseDomain && r.domain_name && r.domain_name.includes(d.baseDomain)) ?? false;
+        });
         if (!ok) return false;
       }
 
