@@ -172,6 +172,24 @@ const METRIC_COLS: Record<string, MetricColDef> = {
   snap_purchase_value_usd:  { label: "Purchase Value",    sortKey: "snap_purchase_value_usd",  render: (r) => fmt$(r.snap_purchase_value_usd),                                                       tdClass: "text-gray-700 dark:text-gray-300" },
 };
 
+const FILTERABLE_METRICS = [
+  { key: "spend_usd",     label: "Spend ($)" },
+  { key: "revenue_usd",   label: "Revenue ($)" },
+  { key: "profit",        label: "Profit ($)" },
+  { key: "roi_pct",       label: "ROI (%)" },
+  { key: "rpc",           label: "RPC" },
+  { key: "cpm",           label: "CPM" },
+  { key: "cpc",           label: "CPC" },
+  { key: "ctr",           label: "CTR (%)" },
+  { key: "cvr",           label: "CVR (%)" },
+  { key: "rpr",           label: "Rev/Result" },
+  { key: "impressions",   label: "Impressions" },
+  { key: "swipes",        label: "Clicks" },
+  { key: "funnel_clicks", label: "Funnel Clicks" },
+  { key: "clicks",        label: "Ad Clicks" },
+  { key: "snap_results",  label: "Results" },
+];
+
 function SortArrow({ active, desc }: { active: boolean; desc: boolean }) {
   if (!active) return (
     <svg className="w-3 h-3 text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -208,6 +226,18 @@ export function PerformanceTable({
   });
   const [showHidden, setShowHidden] = useState(false);
 
+  // Filters
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterArticleIds, setFilterArticleIds] = useState<Set<string>>(new Set());
+  const [filterProviderIds, setFilterProviderIds] = useState<Set<string>>(new Set());
+  const [metricFilters, setMetricFilters] = useState<Array<{ id: string; metric: string; op: string; value: string }>>([]);
+  const [articles, setArticles] = useState<Array<{ id: string; slug: string }>>([]);
+  const [providers, setProviders] = useState<Array<{ id: string; name: string; domains: Array<{ baseDomain: string }> }>>([]);
+  const [articleDropOpen, setArticleDropOpen] = useState(false);
+  const [providerDropOpen, setProviderDropOpen] = useState(false);
+  const articleDropRef = useRef<HTMLDivElement>(null);
+  const providerDropRef = useRef<HTMLDivElement>(null);
+
   function toggleHideSquad(squadId: string) {
     setHiddenSquadIds((prev) => {
       const next = new Set(prev);
@@ -217,6 +247,34 @@ export function PerformanceTable({
       return next;
     });
   }
+
+  // Load article + provider data from localStorage (for filters)
+  useEffect(() => {
+    try {
+      const a = localStorage.getItem("boilerroom_articles_v1");
+      if (a) setArticles(JSON.parse(a) as Array<{ id: string; slug: string }>);
+      const p = localStorage.getItem("boilerroom_feed_providers_v1");
+      if (p) setProviders(JSON.parse(p) as Array<{ id: string; name: string; domains: Array<{ baseDomain: string }> }>);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!articleDropOpen) return;
+    function h(e: MouseEvent) {
+      if (articleDropRef.current && !articleDropRef.current.contains(e.target as Node)) setArticleDropOpen(false);
+    }
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [articleDropOpen]);
+
+  useEffect(() => {
+    if (!providerDropOpen) return;
+    function h(e: MouseEvent) {
+      if (providerDropRef.current && !providerDropRef.current.contains(e.target as Node)) setProviderDropOpen(false);
+    }
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [providerDropOpen]);
 
   // Name column resizing
   const [nameColWidth, setNameColWidth] = useState(() => {
@@ -380,10 +438,38 @@ export function PerformanceTable({
       const status = squadDetails.get(r.ad_squad_id)?.status;
       if (status === "PAUSED" && r.impressions === 0) return false;
       if (!showHidden && hiddenSquadIds.has(r.ad_squad_id)) return false;
-      if (!filterQuery.trim()) return true;
-      return r.ad_squad_name.toLowerCase().includes(filterQuery.toLowerCase());
+      if (filterQuery.trim() && !r.ad_squad_name.toLowerCase().includes(filterQuery.toLowerCase())) return false;
+
+      // Article filter — OR logic across selected articles
+      if (filterArticleIds.size > 0) {
+        const slugs = articles.filter(a => filterArticleIds.has(a.id)).map(a => a.slug.toLowerCase());
+        if (!slugs.some(s => r.ad_squad_name.toLowerCase().includes(s))) return false;
+      }
+
+      // Provider filter — OR logic, match via domain_name
+      if (filterProviderIds.size > 0) {
+        const sel = providers.filter(p => filterProviderIds.has(p.id));
+        const ok = sel.some(p => p.domains?.some(d => d.baseDomain && r.domain_name?.includes(d.baseDomain)));
+        if (!ok) return false;
+      }
+
+      // Metric filters — AND logic; incomplete rows are skipped
+      for (const mf of metricFilters) {
+        if (!mf.metric || !mf.value.trim()) continue;
+        const threshold = parseFloat(mf.value);
+        if (isNaN(threshold)) continue;
+        const rv = r[mf.metric as keyof AggrRow] as number | null | undefined;
+        if (rv == null) return false;
+        if (mf.op === ">"  && !(rv >  threshold)) return false;
+        if (mf.op === ">=" && !(rv >= threshold)) return false;
+        if (mf.op === "<"  && !(rv <  threshold)) return false;
+        if (mf.op === "<=" && !(rv <= threshold)) return false;
+      }
+
+      return true;
     });
-  }, [aggregated, filterQuery, squadDetails, hiddenSquadIds, showHidden]);
+  }, [aggregated, filterQuery, squadDetails, hiddenSquadIds, showHidden,
+      filterArticleIds, filterProviderIds, metricFilters, articles, providers]);
 
   useEffect(() => {
     onFilteredRowsChange?.(filtered);
@@ -631,6 +717,17 @@ export function PerformanceTable({
     URL.revokeObjectURL(url);
   }
 
+  const activeFilterCount =
+    filterArticleIds.size +
+    filterProviderIds.size +
+    metricFilters.filter(mf => mf.metric && mf.value.trim()).length;
+
+  function clearAllFilters() {
+    setFilterArticleIds(new Set());
+    setFilterProviderIds(new Set());
+    setMetricFilters([]);
+  }
+
   if (aggregated.length === 0) {
     return (
       <p className="text-sm text-gray-500 mt-8 text-center">
@@ -711,6 +808,21 @@ export function PerformanceTable({
               />
             </div>
 
+            {/* Filters toggle */}
+            <button
+              onClick={() => setShowFilters(v => !v)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md border transition-colors whitespace-nowrap ${
+                showFilters || activeFilterCount > 0
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+              </svg>
+              Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
+            </button>
+
             {/* Show hidden toggle */}
             {hiddenSquadIds.size > 0 && (
               <button
@@ -752,6 +864,148 @@ export function PerformanceTable({
             </button>
           </div>
         </div>
+
+        {/* Filter panel */}
+        {showFilters && (
+          <div className="bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
+            <div className="flex flex-wrap items-start gap-4">
+
+              {/* Article multi-select */}
+              <div className="relative" ref={articleDropRef}>
+                <button
+                  onClick={() => setArticleDropOpen(v => !v)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+                >
+                  {filterArticleIds.size > 0 ? `Article · ${filterArticleIds.size}` : "Article"}
+                  <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {articleDropOpen && (
+                  <div className="absolute top-full left-0 mt-1 z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 w-56 max-h-60 overflow-y-auto">
+                    {articles.length === 0 ? (
+                      <p className="px-3 py-2 text-xs text-gray-400">No articles found</p>
+                    ) : (
+                      articles.map(a => (
+                        <label key={a.id} className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={filterArticleIds.has(a.id)}
+                            onChange={() => setFilterArticleIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(a.id)) next.delete(a.id); else next.add(a.id);
+                              return next;
+                            })}
+                            onClick={e => e.stopPropagation()}
+                            className="w-3.5 h-3.5 rounded border-gray-300 text-cyan-500 focus:ring-cyan-500 flex-shrink-0"
+                          />
+                          <span className="truncate">{a.slug}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Provider multi-select */}
+              <div className="relative" ref={providerDropRef}>
+                <button
+                  onClick={() => setProviderDropOpen(v => !v)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+                >
+                  {filterProviderIds.size > 0 ? `Provider · ${filterProviderIds.size}` : "Feed Provider"}
+                  <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {providerDropOpen && (
+                  <div className="absolute top-full left-0 mt-1 z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 w-56 max-h-60 overflow-y-auto">
+                    {providers.length === 0 ? (
+                      <p className="px-3 py-2 text-xs text-gray-400">No providers found</p>
+                    ) : (
+                      providers.map(p => (
+                        <label key={p.id} className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={filterProviderIds.has(p.id)}
+                            onChange={() => setFilterProviderIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(p.id)) next.delete(p.id); else next.add(p.id);
+                              return next;
+                            })}
+                            onClick={e => e.stopPropagation()}
+                            className="w-3.5 h-3.5 rounded border-gray-300 text-cyan-500 focus:ring-cyan-500 flex-shrink-0"
+                          />
+                          <span className="truncate">{p.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Metric filter rows */}
+              <div className="flex flex-col gap-1.5">
+                {metricFilters.map((mf, i) => (
+                  <div key={mf.id} className="flex items-center gap-1.5">
+                    <select
+                      value={mf.metric}
+                      onChange={e => setMetricFilters(prev => prev.map((f, fi) => fi === i ? { ...f, metric: e.target.value } : f))}
+                      className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">— metric —</option>
+                      {FILTERABLE_METRICS.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+                    </select>
+                    <select
+                      value={mf.op}
+                      onChange={e => setMetricFilters(prev => prev.map((f, fi) => fi === i ? { ...f, op: e.target.value } : f))}
+                      className="border border-gray-300 dark:border-gray-600 rounded px-1.5 py-1 text-xs bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500 w-12"
+                    >
+                      <option value=">">&gt;</option>
+                      <option value=">=">&ge;</option>
+                      <option value="<">&lt;</option>
+                      <option value="<=">&le;</option>
+                    </select>
+                    <input
+                      type="number"
+                      value={mf.value}
+                      onChange={e => setMetricFilters(prev => prev.map((f, fi) => fi === i ? { ...f, value: e.target.value } : f))}
+                      placeholder="value"
+                      className="w-20 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button
+                      onClick={() => setMetricFilters(prev => prev.filter((_, fi) => fi !== i))}
+                      className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => setMetricFilters(prev => [...prev, { id: Math.random().toString(36).slice(2), metric: "", op: ">", value: "" }])}
+                  className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mt-0.5"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add metric filter
+                </button>
+              </div>
+
+              {/* Clear all */}
+              {activeFilterCount > 0 && (
+                <button
+                  onClick={clearAllFilters}
+                  className="ml-auto self-start text-xs text-gray-400 hover:text-red-500 underline transition-colors"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Bulk edit panel */}
         {showBulkEdit && hasSelection && (
