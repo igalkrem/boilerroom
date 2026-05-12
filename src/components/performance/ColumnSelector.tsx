@@ -79,13 +79,22 @@ interface Props {
   order: string[];
   onChange: (cols: Set<string>) => void;
   onOrderChange: (order: string[]) => void;
+  columns?: { key: string; label: string }[];
+  storageKey?: string;
+  orderStorageKey?: string;
 }
 
-export function ColumnSelector({ visible, order, onChange, onOrderChange }: Props) {
+export function ColumnSelector({ visible, order, onChange, onOrderChange, columns, storageKey, orderStorageKey }: Props) {
   const [open, setOpen] = useState(false);
   const [dragOver, setDragOver] = useState<number | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const dragIdx = useRef<number | null>(null);
+
+  const effectiveLabelMap = columns
+    ? Object.fromEntries(columns.map((c) => [c.key, c.label]))
+    : LABEL_MAP;
+  const effectiveStoreKey = storageKey ?? LS_KEY;
+  const effectiveOrderKey = orderStorageKey ?? LS_ORDER_KEY;
 
   useEffect(() => {
     if (!open) return;
@@ -101,7 +110,7 @@ export function ColumnSelector({ visible, order, onChange, onOrderChange }: Prop
     if (next.has(key)) next.delete(key);
     else next.add(key);
     onChange(next);
-    localStorage.setItem(LS_KEY, JSON.stringify([...next]));
+    localStorage.setItem(effectiveStoreKey, JSON.stringify([...next]));
   }
 
   function handleDragOver(e: React.DragEvent, idx: number) {
@@ -116,7 +125,7 @@ export function ColumnSelector({ visible, order, onChange, onOrderChange }: Prop
     const [moved] = next.splice(dragIdx.current, 1);
     next.splice(idx, 0, moved);
     onOrderChange(next);
-    localStorage.setItem(LS_ORDER_KEY, JSON.stringify(next));
+    localStorage.setItem(effectiveOrderKey, JSON.stringify(next));
     dragIdx.current = null;
   }
 
@@ -141,7 +150,7 @@ export function ColumnSelector({ visible, order, onChange, onOrderChange }: Prop
             Drag to reorder · check to show
           </p>
           {order.map((key, i) => {
-            const label = LABEL_MAP[key];
+            const label = effectiveLabelMap[key];
             if (!label) return null;
             return (
               <div

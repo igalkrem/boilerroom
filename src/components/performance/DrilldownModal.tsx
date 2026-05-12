@@ -4,6 +4,52 @@ import { useState, useEffect } from "react";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import type { SquadDetail } from "./PerformanceTable";
 import { Spinner } from "@/components/ui";
+import { ColumnSelector } from "./ColumnSelector";
+
+const DRILLDOWN_COLUMNS = [
+  { key: "spend",         label: "Spend" },
+  { key: "revenue",       label: "Revenue" },
+  { key: "profit",        label: "Profit" },
+  { key: "roi",           label: "ROI" },
+  { key: "rpr",           label: "Rev/Result" },
+  { key: "cpr",           label: "Cost/Result" },
+  { key: "rpc",           label: "RPC" },
+  { key: "cpm",           label: "CPM" },
+  { key: "cvr",           label: "CVR" },
+  { key: "ctr",           label: "CTR" },
+  { key: "impressions",   label: "Impressions" },
+  { key: "swipes",        label: "Clicks" },
+  { key: "funnel_clicks", label: "Funnel Clicks" },
+];
+const DD_LS_KEY = "br_drilldown_cols";
+const DD_LS_ORDER_KEY = "br_drilldown_cols_order";
+const DD_ALL_KEYS = DRILLDOWN_COLUMNS.map((c) => c.key);
+const DD_DEFAULT_VISIBLE = new Set<string>(DD_ALL_KEYS);
+
+function loadDrilldownCols(): Set<string> {
+  if (typeof window === "undefined") return new Set(DD_DEFAULT_VISIBLE);
+  try {
+    const raw = localStorage.getItem(DD_LS_KEY);
+    if (!raw) return new Set(DD_DEFAULT_VISIBLE);
+    const arr = JSON.parse(raw) as unknown;
+    if (!Array.isArray(arr)) return new Set(DD_DEFAULT_VISIBLE);
+    return new Set(arr as string[]);
+  } catch { return new Set(DD_DEFAULT_VISIBLE); }
+}
+
+function loadDrilldownOrder(): string[] {
+  if (typeof window === "undefined") return DD_ALL_KEYS;
+  try {
+    const raw = localStorage.getItem(DD_LS_ORDER_KEY);
+    if (!raw) return DD_ALL_KEYS;
+    const arr = JSON.parse(raw) as unknown;
+    if (!Array.isArray(arr)) return DD_ALL_KEYS;
+    const known = new Set(DD_ALL_KEYS);
+    const saved = (arr as string[]).filter((k) => known.has(k));
+    const missing = DD_ALL_KEYS.filter((k) => !saved.includes(k));
+    return [...saved, ...missing];
+  } catch { return DD_ALL_KEYS; }
+}
 
 interface Props {
   adSquadName: string;
@@ -49,6 +95,8 @@ export function DrilldownModal({
   const [rows, setRows]       = useState<CombinedRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(false);
+  const [visibleCols, setVisibleCols] = useState<Set<string>>(() => loadDrilldownCols());
+  const [colOrder, setColOrder]       = useState<string[]>(() => loadDrilldownOrder());
 
   // inline edit state
   const [budgetDraft, setBudgetDraft]   = useState("");
@@ -168,7 +216,18 @@ export function DrilldownModal({
             <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 leading-tight">{adSquadName}</h2>
             <p className="text-xs text-gray-500 mt-0.5">All available dates</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none ml-4 flex-shrink-0">×</button>
+          <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+            <ColumnSelector
+              visible={visibleCols}
+              order={colOrder}
+              onChange={setVisibleCols}
+              onOrderChange={setColOrder}
+              columns={DRILLDOWN_COLUMNS}
+              storageKey={DD_LS_KEY}
+              orderStorageKey={DD_LS_ORDER_KEY}
+            />
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none">×</button>
+          </div>
         </div>
 
         {/* controls bar */}
@@ -268,64 +327,73 @@ export function DrilldownModal({
           {!loading && !error && rows.length === 0 && (
             <p className="text-center text-sm text-gray-400 py-12">No data available for this campaign.</p>
           )}
-          {!loading && !error && rows.length > 0 && (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
-                <tr>
-                  {["Date","Spend","Revenue","Profit","ROI","Rev/Result","Cost/Result","RPC","CPM","CVR","CTR","Impressions","Clicks","Funnel Clicks"].map((h) => (
-                    <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {rows.map((r, i) => {
-                  const d = derive(r);
-                  return (
-                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{r.stat_date}</td>
-                      <td className="px-3 py-2 text-gray-900 dark:text-gray-100 whitespace-nowrap">{fmt$(r.spend_usd)}</td>
-                      <td className="px-3 py-2 text-gray-900 dark:text-gray-100 whitespace-nowrap">{fmt$(r.revenue_usd)}</td>
-                      <td className={`px-3 py-2 whitespace-nowrap font-medium ${d.profit >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
-                        {d.profit >= 0 ? "+" : ""}{fmt$(d.profit)}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap"><RoiPill pct={r.roi_pct} /></td>
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{d.rpr !== null ? fmt$(d.rpr) : "—"}</td>
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{d.cpr !== null ? fmt$(d.cpr) : "—"}</td>
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{d.rpc !== null ? fmt$(d.rpc) : "—"}</td>
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{d.cpm !== null ? fmt$(d.cpm) : "—"}</td>
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{fmtPct(d.cvr)}</td>
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{fmtPct(d.ctr)}</td>
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{fmtNum(r.impressions)}</td>
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{fmtNum(r.swipes)}</td>
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{fmtNum(r.funnel_clicks)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot className="bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700">
-                <tr>
-                  <td className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400">TOTAL</td>
-                  <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmt$(totals.spend)}</td>
-                  <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmt$(totals.revenue)}</td>
-                  <td className={`px-3 py-2 font-semibold whitespace-nowrap ${tDerived.profit >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
-                    {tDerived.profit >= 0 ? "+" : ""}{fmt$(tDerived.profit)}
-                  </td>
-                  <td className="px-3 py-2"><RoiPill pct={tDerived.roi} /></td>
-                  <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{tDerived.rpr !== null ? fmt$(tDerived.rpr) : "—"}</td>
-                  <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{tDerived.cpr !== null ? fmt$(tDerived.cpr) : "—"}</td>
-                  <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{tDerived.rpc !== null ? fmt$(tDerived.rpc) : "—"}</td>
-                  <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{tDerived.cpm !== null ? fmt$(tDerived.cpm) : "—"}</td>
-                  <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmtPct(tDerived.cvr)}</td>
-                  <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmtPct(tDerived.ctr)}</td>
-                  <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmtNum(totals.impressions)}</td>
-                  <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmtNum(totals.swipes)}</td>
-                  <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmtNum(totals.funnel_clicks)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          )}
+          {!loading && !error && rows.length > 0 && (() => {
+            const col = (key: string) => visibleCols.has(key);
+            const th = "px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap";
+            return (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
+                  <tr>
+                    <th className={th}>Date</th>
+                    {col("spend")         && <th className={th}>Spend</th>}
+                    {col("revenue")       && <th className={th}>Revenue</th>}
+                    {col("profit")        && <th className={th}>Profit</th>}
+                    {col("roi")           && <th className={th}>ROI</th>}
+                    {col("rpr")           && <th className={th}>Rev/Result</th>}
+                    {col("cpr")           && <th className={th}>Cost/Result</th>}
+                    {col("rpc")           && <th className={th}>RPC</th>}
+                    {col("cpm")           && <th className={th}>CPM</th>}
+                    {col("cvr")           && <th className={th}>CVR</th>}
+                    {col("ctr")           && <th className={th}>CTR</th>}
+                    {col("impressions")   && <th className={th}>Impressions</th>}
+                    {col("swipes")        && <th className={th}>Clicks</th>}
+                    {col("funnel_clicks") && <th className={th}>Funnel Clicks</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {rows.map((r, i) => {
+                    const d = derive(r);
+                    return (
+                      <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{r.stat_date}</td>
+                        {col("spend")         && <td className="px-3 py-2 text-gray-900 dark:text-gray-100 whitespace-nowrap">{fmt$(r.spend_usd)}</td>}
+                        {col("revenue")       && <td className="px-3 py-2 text-gray-900 dark:text-gray-100 whitespace-nowrap">{fmt$(r.revenue_usd)}</td>}
+                        {col("profit")        && <td className={`px-3 py-2 whitespace-nowrap font-medium ${d.profit >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>{d.profit >= 0 ? "+" : ""}{fmt$(d.profit)}</td>}
+                        {col("roi")           && <td className="px-3 py-2 whitespace-nowrap"><RoiPill pct={r.roi_pct} /></td>}
+                        {col("rpr")           && <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{d.rpr !== null ? fmt$(d.rpr) : "—"}</td>}
+                        {col("cpr")           && <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{d.cpr !== null ? fmt$(d.cpr) : "—"}</td>}
+                        {col("rpc")           && <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{d.rpc !== null ? fmt$(d.rpc) : "—"}</td>}
+                        {col("cpm")           && <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{d.cpm !== null ? fmt$(d.cpm) : "—"}</td>}
+                        {col("cvr")           && <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{fmtPct(d.cvr)}</td>}
+                        {col("ctr")           && <td className="px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">{fmtPct(d.ctr)}</td>}
+                        {col("impressions")   && <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{fmtNum(r.impressions)}</td>}
+                        {col("swipes")        && <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{fmtNum(r.swipes)}</td>}
+                        {col("funnel_clicks") && <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{fmtNum(r.funnel_clicks)}</td>}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot className="bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700">
+                  <tr>
+                    <td className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400">TOTAL</td>
+                    {col("spend")         && <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmt$(totals.spend)}</td>}
+                    {col("revenue")       && <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmt$(totals.revenue)}</td>}
+                    {col("profit")        && <td className={`px-3 py-2 font-semibold whitespace-nowrap ${tDerived.profit >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>{tDerived.profit >= 0 ? "+" : ""}{fmt$(tDerived.profit)}</td>}
+                    {col("roi")           && <td className="px-3 py-2"><RoiPill pct={tDerived.roi} /></td>}
+                    {col("rpr")           && <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{tDerived.rpr !== null ? fmt$(tDerived.rpr) : "—"}</td>}
+                    {col("cpr")           && <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{tDerived.cpr !== null ? fmt$(tDerived.cpr) : "—"}</td>}
+                    {col("rpc")           && <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{tDerived.rpc !== null ? fmt$(tDerived.rpc) : "—"}</td>}
+                    {col("cpm")           && <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{tDerived.cpm !== null ? fmt$(tDerived.cpm) : "—"}</td>}
+                    {col("cvr")           && <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmtPct(tDerived.cvr)}</td>}
+                    {col("ctr")           && <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmtPct(tDerived.ctr)}</td>}
+                    {col("impressions")   && <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmtNum(totals.impressions)}</td>}
+                    {col("swipes")        && <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmtNum(totals.swipes)}</td>}
+                    {col("funnel_clicks") && <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{fmtNum(totals.funnel_clicks)}</td>}
+                  </tr>
+                </tfoot>
+              </table>
+            );
+          })()}
         </div>
       </div>
     </div>
