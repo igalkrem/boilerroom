@@ -542,7 +542,28 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     currentEdges.forEach((e) => { connectedIds.add(e.source); connectedIds.add(e.target); });
     const connectedNodes = currentNodes.filter((n) => connectedIds.has(n.id));
     if (connectedNodes.length === 0) return;
-    const positions = computeAutoLayout(connectedNodes, currentEdges);
+
+    // Build stable tiebreaker priorities so nodes from provider[0] always sort above provider[1].
+    // Without this, routers and sibling providers land in the same dagre rank with identical
+    // avgUpstreamY, making the sort non-deterministic and flipping the whole right-side cascade.
+    const s = useCanvasStore.getState();
+    const nodePriority: Record<string, number> = {};
+    sortedByCreation.forEach((provider, i) => {
+      nodePriority[`provider-${provider.id}`] = i;
+      const router = s.routerNodes.find((r) => r.feedProviderId === provider.id);
+      if (router) nodePriority[router.id] = i;
+      s.edges.providerToArticle
+        .filter((e) => e.feedProviderId === provider.id)
+        .forEach((e) => { nodePriority[`article-${e.articleId}`] = Math.min(nodePriority[`article-${e.articleId}`] ?? 999, i); });
+      s.edges.articleToAdAccount
+        .filter((ae) => s.edges.providerToArticle.some((pe) => pe.articleId === ae.articleId && pe.feedProviderId === provider.id))
+        .forEach((ae) => { nodePriority[`account-${ae.adAccountId}`] = Math.min(nodePriority[`account-${ae.adAccountId}`] ?? 999, i); });
+      s.edges.articleToPreset
+        .filter((ape) => s.edges.providerToArticle.some((pe) => pe.articleId === ape.articleId && pe.feedProviderId === provider.id))
+        .forEach((ape) => { nodePriority[`preset-${ape.presetId}`] = Math.min(nodePriority[`preset-${ape.presetId}`] ?? 999, i); });
+    });
+
+    const positions = computeAutoLayout(connectedNodes, currentEdges, nodePriority);
 
     // Override dagre x: use COLUMN_X for all non-row nodes; for row nodes restore
     // the stored x so card-prepend shifts are never clobbered by dagre.

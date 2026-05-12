@@ -8,7 +8,7 @@ const NODE_HEIGHT = 90;
 const GROUP_CARD_W = 340; // approx two-card row estimate for dagre
 const GROUP_CARD_H = 285;
 
-export function computeAutoLayout(nodes: Node[], edges: Edge[]): Record<string, { x: number; y: number }> {
+export function computeAutoLayout(nodes: Node[], edges: Edge[], nodePriority?: Record<string, number>): Record<string, { x: number; y: number }> {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: "LR", ranksep: 200, nodesep: 60, marginx: 60, marginy: 60 });
@@ -66,7 +66,11 @@ export function computeAutoLayout(nodes: Node[], edges: Edge[]): Record<string, 
       return srcs.length ? srcs.reduce((a, b) => a + b, 0) / srcs.length : center[nodeId].y;
     };
 
-    const sorted = [...rankNodes].sort((a, b) => avgUpstreamY(a) - avgUpstreamY(b));
+    const sorted = [...rankNodes].sort((a, b) => {
+      const dy = avgUpstreamY(a) - avgUpstreamY(b);
+      if (dy !== 0) return dy;
+      return (nodePriority?.[a] ?? 999) - (nodePriority?.[b] ?? 999);
+    });
     const yCenters = [...rankNodes].map((id) => center[id].y).sort((a, b) => a - b);
 
     sorted.forEach((nodeId, i) => {
