@@ -548,18 +548,47 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       const tgtType = target.split("-")[0];
 
       if (srcType === "article" && tgtType === "account") {
-        const article = articles.find((a) => a.id === source.replace(/^article-/, ""));
-        const cfg = adAccountConfigs.find((c) => c.id === target.replace(/^account-/, ""));
-        if (article && cfg && cfg.feedProviderIds.length > 0) {
+        const articleId = source.replace(/^article-/, "");
+        const accountId = target.replace(/^account-/, "");
+        const article = articles.find((a) => a.id === articleId);
+        if (!article) return false;
+        // Static config check
+        const cfg = adAccountConfigs.find((c) => c.id === accountId);
+        if (cfg && cfg.feedProviderIds.length > 0) {
           return cfg.feedProviderIds.includes(article.feedProviderId);
+        }
+        // Dynamic fallback: if this account already has articles from a different provider, block
+        const gs = useCanvasStore.getState();
+        const existingArticleIds = gs.edges.articleToAdAccount
+          .filter((ae) => ae.adAccountId === accountId)
+          .map((ae) => ae.articleId);
+        if (existingArticleIds.length > 0) {
+          const connectedProviders = new Set(
+            existingArticleIds.map((id) => articles.find((a) => a.id === id)?.feedProviderId).filter(Boolean)
+          );
+          return connectedProviders.has(article.feedProviderId);
         }
       }
 
       if (srcType === "account" && tgtType === "preset") {
+        const accountId = source.replace(/^account-/, "");
         const preset = presets.find((p) => p.id === target.replace(/^preset-/, ""));
-        const cfg = adAccountConfigs.find((c) => c.id === source.replace(/^account-/, ""));
-        if (preset?.feedProviderId && cfg && cfg.feedProviderIds.length > 0) {
+        if (!preset?.feedProviderId) return true;
+        // Static config check
+        const cfg = adAccountConfigs.find((c) => c.id === accountId);
+        if (cfg && cfg.feedProviderIds.length > 0) {
           return cfg.feedProviderIds.includes(preset.feedProviderId);
+        }
+        // Dynamic fallback: check the account's already-connected articles' provider
+        const gs = useCanvasStore.getState();
+        const existingArticleIds = gs.edges.articleToAdAccount
+          .filter((ae) => ae.adAccountId === accountId)
+          .map((ae) => ae.articleId);
+        if (existingArticleIds.length > 0) {
+          const connectedProviders = new Set(
+            existingArticleIds.map((id) => articles.find((a) => a.id === id)?.feedProviderId).filter(Boolean)
+          );
+          return connectedProviders.has(preset.feedProviderId);
         }
       }
 
@@ -646,6 +675,24 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       typeCounters[n.type] = idx + 1;
       const count = typeCounts[n.type];
       positions[n.id] = { x: colX, y: articleMidY + (idx - (count - 1) / 2) * ROW_GAP };
+    }
+
+    // Collision resolution: within each node-type column, sort by y and enforce
+    // minimum ROW_GAP between node tops so dagre-positioned and fallback-positioned
+    // nodes never visually overlap.
+    const byTypeIds: Record<string, string[]> = {};
+    for (const n of currentNodes) {
+      if (!positions[n.id] || !n.type) continue;
+      if (!byTypeIds[n.type]) byTypeIds[n.type] = [];
+      byTypeIds[n.type].push(n.id);
+    }
+    for (const nodeIds of Object.values(byTypeIds)) {
+      if (nodeIds.length <= 1) continue;
+      nodeIds.sort((a, b) => positions[a].y - positions[b].y);
+      for (let i = 1; i < nodeIds.length; i++) {
+        const minY = positions[nodeIds[i - 1]].y + ROW_GAP;
+        if (positions[nodeIds[i]].y < minY) positions[nodeIds[i]].y = minY;
+      }
     }
 
     useCanvasStore.getState().setNodePositions(positions);
