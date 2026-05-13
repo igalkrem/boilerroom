@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Option 2 — Column Builder</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f172a; color: #f1f5f9; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Top bar ── */
+  .topbar { height: 52px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; flex-shrink: 0; }
+  .topbar-logo { font-size: 15px; font-weight: 700; color: #facc15; letter-spacing: -0.3px; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .btn { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; }
+  .btn-ghost { background: transparent; color: #94a3b8; border: 1px solid #334155; }
+  .btn-ghost:hover { background: #334155; color: #f1f5f9; }
+  .btn-primary { background: #facc15; color: #0f172a; }
+  .btn-primary:hover { background: #eab308; }
+  .btn-outline { background: transparent; color: #f1f5f9; border: 1px solid #475569; }
+  .btn-sm { padding: 4px 10px; font-size: 11px; border-radius: 6px; }
+
+  /* ── Subtitle bar ── */
+  .subtitle-bar { height: 36px; background: #1e293b; border-bottom: 1px solid #1e293b; display: flex; align-items: center; padding: 0 20px; gap: 16px; }
+  .stat-chip { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; }
+  .stat-chip strong { color: #94a3b8; }
+  .stat-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+  /* ── Main layout: 5 columns ── */
+  .builder { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── Column ── */
+  .col { display: flex; flex-direction: column; border-right: 1px solid #1e293b; min-width: 0; overflow: hidden; }
+  .col-creatives { width: 240px; background: #0f172a; }
+  .col-providers { width: 200px; background: #0d1520; }
+  .col-articles  { width: 240px; background: #0b1320; }
+  .col-accounts  { width: 200px; background: #0a1020; }
+  .col-presets   { flex: 1; background: #090f1d; }
+
+  .col-header {
+    padding: 12px 16px; background: #1e293b; border-bottom: 1px solid #334155;
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+  .col-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
+  .col-count { background: #334155; border-radius: 999px; padding: 1px 7px; font-size: 10px; color: #94a3b8; }
+  .col-add-btn { width: 22px; height: 22px; border-radius: 6px; background: #334155; border: none; color: #94a3b8; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; }
+  .col-add-btn:hover { background: #475569; color: #f1f5f9; }
+
+  .col-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .col-body::-webkit-scrollbar { width: 4px; }
+  .col-body::-webkit-scrollbar-track { background: transparent; }
+  .col-body::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+
+  /* ── Cards ── */
+  .card { background: #1e293b; border: 1.5px solid #334155; border-radius: 12px; overflow: hidden; cursor: pointer; transition: all 0.15s; position: relative; }
+  .card:hover { border-color: #475569; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+  .card.selected { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.25); }
+  .card.connected-blue { border-left: 3px solid #3b82f6; }
+  .card.connected-pink { border-left: 3px solid #ec4899; }
+  .card.connected-teal { border-left: 3px solid #14b8a6; }
+  .card.connected-amber { border-left: 3px solid #f59e0b; }
+
+  .card-body { padding: 10px 12px; }
+  .card-title { font-size: 12px; font-weight: 600; color: #f1f5f9; line-height: 1.3; }
+  .card-meta { font-size: 10px; color: #64748b; margin-top: 3px; }
+  .card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .tag { background: #0f172a; border: 1px solid #334155; border-radius: 4px; padding: 1px 6px; font-size: 9px; color: #64748b; }
+  .tag.blue { background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.3); color: #93c5fd; }
+  .tag.pink { background: rgba(236,72,153,0.1); border-color: rgba(236,72,153,0.3); color: #f9a8d4; }
+  .tag.teal { background: rgba(20,184,166,0.1); border-color: rgba(20,184,166,0.3); color: #5eead4; }
+  .tag.amber { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); color: #fcd34d; }
+
+  /* Creative card special */
+  .creative-thumb { height: 100px; background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .creative-thumb-vid { background: linear-gradient(135deg, #1e1e3f 0%, #0f0f1f 100%); }
+  .thumb-icon { font-size: 28px; opacity: 0.6; }
+  .thumb-count-badge { position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,0.7); color: #f1f5f9; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 999px; }
+  .thumb-type-badge { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.6); color: #94a3b8; font-size: 9px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* Connection line hint */
+  .conn-line { height: 2px; background: linear-gradient(to right, transparent, #3b82f6 40%, transparent); margin: 0 16px; opacity: 0.4; }
+  .conn-arrow { text-align: center; font-size: 10px; color: #334155; margin: 2px 0; }
+
+  /* Provider card */
+  .provider-accent-stripe { height: 3px; }
+  .provider-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .prov-row { display: flex; align-items: center; gap: 8px; }
+  .prov-articles { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+  .prov-article-chip { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 3px 8px; font-size: 10px; color: #64748b; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  .prov-article-chip:hover { border-color: #475569; color: #94a3b8; }
+  .prov-article-chip.active { border-color: #3b82f6; color: #93c5fd; background: rgba(59,130,246,0.08); }
+
+  /* Summary section at bottom of presets col */
+  .launch-panel { margin-top: auto; border-top: 1px solid #334155; padding: 16px; background: #111827; }
+  .launch-stat { display: flex; justify-content: space-between; font-size: 11px; color: #64748b; margin-bottom: 6px; }
+  .launch-stat strong { color: #94a3b8; }
+  .launch-btn-full { width: 100%; background: #facc15; color: #0f172a; border: none; border-radius: 10px; padding: 10px; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 8px; }
+  .launch-btn-full:hover { background: #eab308; }
+
+  /* Account avatar */
+  .account-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; }
+
+  /* Preset items */
+  .preset-pair { display: flex; gap: 4px; font-size: 10px; }
+  .preset-k { color: #64748b; min-width: 44px; }
+  .preset-v { color: #94a3b8; }
+
+  /* Snap badge */
+  .badge-snap { background: #1a1a00; color: #facc15; border: 1px solid #334155; border-radius: 999px; padding: 1px 7px; font-size: 9px; font-weight: 700; }
+
+  /* Empty card */
+  .empty-card { border: 2px dashed #334155; border-radius: 12px; padding: 20px; text-align: center; color: #475569; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+  .empty-card:hover { border-color: #64748b; color: #64748b; }
+
+  /* ── Option label ── */
+  .option-badge { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 12px 20px; font-size: 12px; color: #64748b; text-align: center; z-index: 100; max-width: 400px; }
+  .option-badge strong { display: block; color: #facc15; font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+
+  /* ── Connected highlight ── */
+  .highlighted { background: rgba(59,130,246,0.04); }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span class="topbar-logo">⚡ BoilerRoom</span>
+    <span style="color:#334155;font-size:18px;">|</span>
+    <span style="font-size:13px;color:#64748b;">Campaign Builder</span>
+  </div>
+  <div class="topbar-right">
+    <button class="btn btn-ghost">↺ Clear canvas</button>
+    <button class="btn btn-outline">Review →</button>
+    <button class="btn btn-primary">⚡ Launch 6 campaigns</button>
+  </div>
+</div>
+
+<!-- Subtitle bar -->
+<div class="subtitle-bar">
+  <div class="stat-chip"><span class="stat-dot" style="background:#10b981;"></span>2 creative rows</div>
+  <div class="stat-chip">·</div>
+  <div class="stat-chip"><span class="stat-dot" style="background:#3b82f6;"></span>2 providers</div>
+  <div class="stat-chip">·</div>
+  <div class="stat-chip"><span class="stat-dot" style="background:#f59e0b;"></span>3 articles</div>
+  <div class="stat-chip">·</div>
+  <div class="stat-chip"><strong>6</strong>&nbsp;campaigns ready</div>
+</div>
+
+<!-- Builder columns -->
+<div class="builder">
+
+  <!-- COL 1: Creatives -->
+  <div class="col col-creatives">
+    <div class="col-header">
+      <span class="col-title">Creatives</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="col-count">2 rows</span>
+        <button class="col-add-btn">＋</button>
+      </div>
+    </div>
+    <div class="col-body">
+
+      <!-- Row 1 -->
+      <div class="card connected-blue">
+        <div class="creative-thumb">
+          <span class="thumb-type-badge">IMAGE</span>
+          <span class="thumb-icon">🖼</span>
+          <span class="thumb-count-badge">2 assets</span>
+        </div>
+        <div class="card-body">
+          <div class="card-title">Summer Finance Row</div>
+          <div class="card-meta">hero_summer_v1 + story_v2</div>
+          <div class="card-tags">
+            <span class="tag blue">Advertise Now</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 2 -->
+      <div class="card connected-pink">
+        <div class="creative-thumb creative-thumb-vid">
+          <span class="thumb-type-badge">VIDEO</span>
+          <span class="thumb-icon">▶</span>
+          <span class="thumb-count-badge">1 asset</span>
+        </div>
+        <div class="card-body">
+          <div class="card-title">Lifestyle Pink Row</div>
+          <div class="card-meta">lifestyle_pink.mp4</div>
+          <div class="card-tags">
+            <span class="tag pink">Predicto Media</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty -->
+      <div class="empty-card">
+        <div style="font-size:22px;margin-bottom:4px;">＋</div>
+        Add creative row
+      </div>
+
+    </div>
+  </div>
+
+  <!-- COL 2: Providers -->
+  <div class="col col-providers">
+    <div class="col-header">
+      <span class="col-title">Providers</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="col-count">2</span>
+      </div>
+    </div>
+    <div class="col-body">
+
+      <!-- Provider 1 (blue) -->
+      <div class="card">
+        <div class="provider-accent-stripe" style="background:#3b82f6;"></div>
+        <div class="card-body">
+          <div class="prov-row">
+            <div class="provider-icon" style="background:#1e3a5f;color:#60a5fa;">AN</div>
+            <div>
+              <div class="card-title">Advertise Now</div>
+              <div class="card-meta">2 articles connected</div>
+            </div>
+          </div>
+          <div style="font-size:10px;color:#64748b;margin-top:10px;margin-bottom:4px;">Connected articles</div>
+          <div class="prov-articles">
+            <div class="prov-article-chip active">📄 credit-cards</div>
+            <div class="prov-article-chip active">📄 savings-accts</div>
+            <div class="prov-article-chip">📄 loans-guide</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Provider 2 (pink) -->
+      <div class="card">
+        <div class="provider-accent-stripe" style="background:#ec4899;"></div>
+        <div class="card-body">
+          <div class="prov-row">
+            <div class="provider-icon" style="background:#3f1a2e;color:#f472b6;">PM</div>
+            <div>
+              <div class="card-title">Predicto Media</div>
+              <div class="card-meta">1 article connected</div>
+            </div>
+          </div>
+          <div style="font-size:10px;color:#64748b;margin-top:10px;margin-bottom:4px;">Connected articles</div>
+          <div class="prov-articles">
+            <div class="prov-article-chip active">📄 fashion-trends</div>
+            <div class="prov-article-chip">📄 beauty-tips</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- COL 3: Articles -->
+  <div class="col col-articles">
+    <div class="col-header">
+      <span class="col-title">Articles</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="col-count">3 active</span>
+      </div>
+    </div>
+    <div class="col-body">
+
+      <!-- Article 1 (blue) -->
+      <div class="card highlighted" style="border-left:3px solid #3b82f6;">
+        <div class="card-body">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+            <div class="card-title" style="word-break:break-word;">best-credit-cards-2024</div>
+            <span class="tag blue">AN</span>
+          </div>
+          <div class="card-meta">en_US · financesite.com</div>
+          <div style="margin-top:8px;display:flex;flex-direction:column;gap:3px;">
+            <div style="font-size:10px;color:#64748b;">Headline</div>
+            <div style="font-size:11px;color:#93c5fd;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:6px;padding:4px 8px;">Compare Top Credit Cards Now</div>
+            <div style="font-size:10px;color:#334155;padding:2px 8px;">+ 4 more</div>
+          </div>
+          <div style="margin-top:6px;display:flex;gap:4px;align-items:center;">
+            <div style="font-size:10px;color:#64748b;">CTA:</div>
+            <div class="tag">MORE ▾</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Article 2 (blue) -->
+      <div class="card highlighted" style="border-left:3px solid #3b82f6;">
+        <div class="card-body">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+            <div class="card-title" style="word-break:break-word;">top-savings-accounts</div>
+            <span class="tag blue">AN</span>
+          </div>
+          <div class="card-meta">en_US · financesite.com</div>
+          <div style="margin-top:8px;">
+            <div style="font-size:11px;color:#93c5fd;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:6px;padding:4px 8px;">High-Yield Savings — Compare</div>
+            <div style="font-size:10px;color:#334155;padding:2px 8px;">+ 2 more</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Article 3 (pink) -->
+      <div class="card" style="border-left:3px solid #ec4899;">
+        <div class="card-body">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+            <div class="card-title" style="word-break:break-word;">summer-fashion-trends</div>
+            <span class="tag pink">PM</span>
+          </div>
+          <div class="card-meta">en_US · fashionsite.com</div>
+          <div style="margin-top:8px;">
+            <div style="font-size:11px;color:#f9a8d4;background:rgba(236,72,153,0.08);border:1px solid rgba(236,72,153,0.2);border-radius:6px;padding:4px 8px;">Shop the Summer Looks</div>
+            <div style="font-size:10px;color:#334155;padding:2px 8px;">+ 1 more</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- COL 4: Ad Accounts -->
+  <div class="col col-accounts">
+    <div class="col-header">
+      <span class="col-title">Ad Accounts</span>
+      <span class="col-count">2</span>
+    </div>
+    <div class="col-body">
+
+      <!-- Account 1 -->
+      <div class="card" style="border-left:3px solid #3b82f6;">
+        <div class="card-body">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div class="account-avatar" style="background:#1e3a5f;color:#60a5fa;">AC</div>
+            <div>
+              <div class="card-title">Acme Corp</div>
+              <div class="card-meta">2 articles</div>
+            </div>
+          </div>
+          <div style="background:#0f172a;border:1px solid #334155;border-radius:6px;padding:6px 8px;font-size:10px;color:#475569;">
+            Presets: US Finance Q2 ·&nbsp;EU Expand
+          </div>
+        </div>
+      </div>
+
+      <!-- Account 2 -->
+      <div class="card" style="border-left:3px solid #ec4899;">
+        <div class="card-body">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div class="account-avatar" style="background:#3f1a2e;color:#f472b6;">PM</div>
+            <div>
+              <div class="card-title">Pink Media</div>
+              <div class="card-meta">1 article</div>
+            </div>
+          </div>
+          <div style="background:#0f172a;border:1px solid #334155;border-radius:6px;padding:6px 8px;font-size:10px;color:#475569;">
+            Presets: EU Lifestyle
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- COL 5: Presets -->
+  <div class="col col-presets" style="display:flex;flex-direction:column;">
+    <div class="col-header">
+      <span class="col-title">Ad Set Presets</span>
+      <span class="col-count">3 selected</span>
+    </div>
+    <div class="col-body">
+
+      <!-- Preset 1 -->
+      <div class="card selected" style="border-left:3px solid #3b82f6;">
+        <div class="card-body">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="badge-snap">SNAP</span>
+              <div class="card-title">US Finance Q2</div>
+            </div>
+            <div style="font-size:10px;color:#10b981;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);padding:2px 6px;border-radius:4px;">4 campaigns</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <div class="preset-pair"><span class="preset-k">Geo</span><span class="preset-v">US</span></div>
+            <div class="preset-pair"><span class="preset-k">Budget</span><span class="preset-v">$50/d</span></div>
+            <div class="preset-pair"><span class="preset-k">Bid</span><span class="preset-v">$1.20</span></div>
+            <div class="preset-pair"><span class="preset-k">Goal</span><span class="preset-v">Purchase</span></div>
+            <div class="preset-pair"><span class="preset-k">Pixel</span><span class="preset-v">Finance PX</span></div>
+            <div class="preset-pair"><span class="preset-k">Device</span><span class="preset-v">Mobile</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Preset 2 -->
+      <div class="card" style="border-left:3px solid #3b82f6;">
+        <div class="card-body">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="badge-snap">SNAP</span>
+              <div class="card-title">EU Expand</div>
+            </div>
+            <div style="font-size:10px;color:#10b981;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);padding:2px 6px;border-radius:4px;">2 campaigns</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <div class="preset-pair"><span class="preset-k">Geo</span><span class="preset-v">DE, FR</span></div>
+            <div class="preset-pair"><span class="preset-k">Budget</span><span class="preset-v">$30/d</span></div>
+            <div class="preset-pair"><span class="preset-k">Bid</span><span class="preset-v">$0.90</span></div>
+            <div class="preset-pair"><span class="preset-k">Goal</span><span class="preset-v">Page View</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Preset 3 -->
+      <div class="card selected" style="border-left:3px solid #ec4899;">
+        <div class="card-body">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="badge-snap">SNAP</span>
+              <div class="card-title">EU Lifestyle</div>
+            </div>
+            <div style="font-size:10px;color:#10b981;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);padding:2px 6px;border-radius:4px;">1 campaign</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <div class="preset-pair"><span class="preset-k">Geo</span><span class="preset-v">DE, FR, IT</span></div>
+            <div class="preset-pair"><span class="preset-k">Budget</span><span class="preset-v">$25/d</span></div>
+            <div class="preset-pair"><span class="preset-k">Bid</span><span class="preset-v">$0.75</span></div>
+            <div class="preset-pair"><span class="preset-k">Goal</span><span class="preset-v">Signup</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Launch panel at bottom of presets -->
+    <div class="launch-panel">
+      <div class="launch-stat"><span>Total campaigns</span><strong>6</strong></div>
+      <div class="launch-stat"><span>Total daily budget</span><strong>$255</strong></div>
+      <div class="launch-stat"><span>Ad accounts</span><strong>2</strong></div>
+      <button class="launch-btn-full">⚡ Launch 6 campaigns</button>
+    </div>
+
+  </div>
+
+</div><!-- /builder -->
+
+<!-- Option badge -->
+<div class="option-badge">
+  <strong>Option 2 — Column Builder (Notion / Linear style)</strong>
+  No free-form canvas. Each stage is a scrollable column. Relationships are shown as color tags and border accents rather than drawn edges. Structured, scannable, and fast to configure.
+</div>
+
+</body>
+</html>

@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Option 3 — Step Wizard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f172a; color: #f1f5f9; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Top bar ── */
+  .topbar { height: 52px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; flex-shrink: 0; }
+  .topbar-logo { font-size: 15px; font-weight: 700; color: #facc15; letter-spacing: -0.3px; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .btn { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; }
+  .btn-ghost { background: transparent; color: #94a3b8; border: 1px solid #334155; }
+  .btn-ghost:hover { background: #334155; color: #f1f5f9; }
+  .btn-primary { background: #facc15; color: #0f172a; }
+  .btn-primary:hover { background: #eab308; }
+  .btn-outline { background: transparent; color: #f1f5f9; border: 1px solid #475569; }
+
+  /* ── Step progress bar ── */
+  .progress-bar { background: #1e293b; border-bottom: 1px solid #334155; padding: 0 24px; display: flex; align-items: center; height: 60px; flex-shrink: 0; }
+  .steps { display: flex; align-items: center; gap: 0; flex: 1; }
+  .step { display: flex; align-items: center; gap: 10px; padding: 0 20px; cursor: pointer; position: relative; }
+  .step:first-child { padding-left: 0; }
+  .step-circle {
+    width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; flex-shrink: 0; transition: all 0.2s;
+  }
+  .step-circle.done { background: #10b981; color: #fff; }
+  .step-circle.active { background: #facc15; color: #0f172a; box-shadow: 0 0 0 4px rgba(250,204,21,0.2); }
+  .step-circle.pending { background: #1e293b; border: 2px solid #334155; color: #64748b; }
+  .step-label { font-size: 12px; font-weight: 600; }
+  .step.active .step-label { color: #f1f5f9; }
+  .step.done .step-label { color: #10b981; }
+  .step.pending .step-label { color: #64748b; }
+  .step-connector { flex: 1; height: 2px; background: #334155; margin: 0 4px; max-width: 48px; }
+  .step-connector.done { background: #10b981; }
+
+  /* ── Body: sidebar + main ── */
+  .body { display: flex; flex: 1; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar { width: 260px; background: #0f172a; border-right: 1px solid #1e293b; display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+  .sidebar-header { padding: 16px; border-bottom: 1px solid #1e293b; }
+  .sidebar-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #475569; margin-bottom: 10px; }
+
+  /* Config summary in sidebar */
+  .config-group { margin-bottom: 16px; }
+  .config-group-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; margin-bottom: 6px; padding: 0 16px; }
+  .config-item { display: flex; align-items: center; gap: 8px; padding: 6px 16px; cursor: pointer; transition: background 0.1s; }
+  .config-item:hover { background: #1e293b; }
+  .config-item-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .config-item-name { font-size: 12px; color: #94a3b8; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .config-item-count { font-size: 10px; background: #1e293b; color: #64748b; padding: 1px 6px; border-radius: 999px; }
+  .config-item-check { font-size: 12px; color: #10b981; }
+
+  /* Step 3 active panel in sidebar */
+  .sidebar-active { background: #111827; border-top: 1px solid #1e293b; padding: 16px; }
+  .sidebar-active-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; margin-bottom: 12px; }
+  .preset-selector-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #1e293b;
+    border: 1.5px solid #334155; border-radius: 8px; cursor: pointer; margin-bottom: 6px; transition: all 0.15s;
+  }
+  .preset-selector-item:hover { border-color: #475569; }
+  .preset-selector-item.selected { border-color: #3b82f6; background: rgba(59,130,246,0.08); }
+  .preset-check { width: 16px; height: 16px; border-radius: 4px; border: 2px solid #475569; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+  .preset-check.checked { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+  .preset-selector-name { font-size: 12px; font-weight: 500; color: #f1f5f9; }
+  .preset-selector-meta { font-size: 10px; color: #64748b; }
+
+  /* Main area */
+  .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; background: #0f172a; }
+  .main::-webkit-scrollbar { width: 4px; }
+  .main::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+
+  /* Step header */
+  .step-header { padding: 24px 32px 16px; border-bottom: 1px solid #1e293b; }
+  .step-number { font-size: 11px; font-weight: 600; color: #facc15; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+  .step-title { font-size: 20px; font-weight: 700; color: #f1f5f9; margin-bottom: 4px; }
+  .step-desc { font-size: 13px; color: #64748b; }
+
+  /* Step content */
+  .step-content { padding: 24px 32px; flex: 1; }
+
+  /* Matrix table */
+  .matrix-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .matrix-title { font-size: 14px; font-weight: 600; color: #f1f5f9; }
+  .matrix-subtitle { font-size: 12px; color: #64748b; margin-top: 2px; }
+
+  .matrix-table { width: 100%; border-collapse: collapse; border-radius: 12px; overflow: hidden; border: 1px solid #334155; }
+  .matrix-table thead { background: #1e293b; }
+  .matrix-table th { padding: 10px 14px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; }
+  .matrix-table td { padding: 10px 14px; border-top: 1px solid #1e293b; font-size: 12px; color: #94a3b8; }
+  .matrix-table tr:hover td { background: #1e293b; }
+  .matrix-table tbody tr:first-child td { border-top: none; }
+
+  .cell-creative { display: flex; align-items: center; gap: 8px; }
+  .cell-thumb { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .cell-name { font-size: 12px; color: #f1f5f9; font-weight: 500; }
+  .cell-meta { font-size: 10px; color: #64748b; }
+  .cell-badge { display: inline-flex; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; }
+  .cb-blue { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
+  .cb-pink { background: rgba(236,72,153,0.15); color: #f9a8d4; border: 1px solid rgba(236,72,153,0.3); }
+  .cb-green { background: rgba(16,185,129,0.15); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.3); }
+  .cb-amber { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); }
+
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+
+  /* Summary card */
+  .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .summary-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px; }
+  .summary-card-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; margin-bottom: 6px; }
+  .summary-card-value { font-size: 22px; font-weight: 700; color: #f1f5f9; }
+  .summary-card-sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+  /* Bottom nav */
+  .bottom-nav { border-top: 1px solid #1e293b; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; background: #0f172a; flex-shrink: 0; }
+  .bottom-left { display: flex; align-items: center; gap: 8px; }
+  .bottom-right { display: flex; align-items: center; gap: 8px; }
+  .campaign-name-input { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 6px 12px; font-size: 12px; color: #94a3b8; width: 260px; }
+  .campaign-name-input:focus { outline: none; border-color: #475569; color: #f1f5f9; }
+
+  /* ── Option badge ── */
+  .option-badge { position: fixed; top: 70px; right: 20px; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 12px 16px; font-size: 12px; color: #64748b; z-index: 100; max-width: 280px; line-height: 1.5; }
+  .option-badge strong { display: block; color: #facc15; font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+
+  /* Snap badge */
+  .badge-snap { background: #1a1a00; color: #facc15; border: 1px solid #334155; border-radius: 999px; padding: 1px 7px; font-size: 9px; font-weight: 700; }
+
+  .ready-badge { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); color: #10b981; border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span class="topbar-logo">⚡ BoilerRoom</span>
+    <span style="color:#334155;font-size:18px;">|</span>
+    <span style="font-size:13px;color:#64748b;">Campaign Builder</span>
+  </div>
+  <div class="topbar-right">
+    <button class="btn btn-ghost">↺ Reset</button>
+    <button class="btn btn-ghost">💾 Save draft</button>
+  </div>
+</div>
+
+<!-- Step progress -->
+<div class="progress-bar">
+  <div class="steps">
+
+    <div class="step done">
+      <div class="step-circle done">✓</div>
+      <span class="step-label">Creatives</span>
+    </div>
+    <div class="step-connector done"></div>
+
+    <div class="step done">
+      <div class="step-circle done">✓</div>
+      <span class="step-label">Providers</span>
+    </div>
+    <div class="step-connector done"></div>
+
+    <div class="step active">
+      <div class="step-circle active">3</div>
+      <span class="step-label">Ad Sets</span>
+    </div>
+    <div class="step-connector"></div>
+
+    <div class="step pending">
+      <div class="step-circle pending">4</div>
+      <span class="step-label">Review</span>
+    </div>
+    <div class="step-connector"></div>
+
+    <div class="step pending">
+      <div class="step-circle pending">5</div>
+      <span class="step-label">Launch</span>
+    </div>
+
+  </div>
+
+  <!-- Progress text -->
+  <div style="margin-left:auto;font-size:12px;color:#64748b;white-space:nowrap;">
+    Step 3 of 5
+  </div>
+</div>
+
+<!-- Body -->
+<div class="body">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+
+    <!-- Build summary in sidebar -->
+    <div style="padding:16px 0;flex:1;overflow-y:auto;">
+
+      <div class="config-group-label">Creatives (done)</div>
+      <div class="config-group">
+        <div class="config-item">
+          <span class="config-item-dot" style="background:#3b82f6;"></span>
+          <span class="config-item-name">Summer Finance Row</span>
+          <span class="config-item-check">✓</span>
+        </div>
+        <div class="config-item">
+          <span class="config-item-dot" style="background:#ec4899;"></span>
+          <span class="config-item-name">Lifestyle Pink Row</span>
+          <span class="config-item-check">✓</span>
+        </div>
+      </div>
+
+      <div class="config-group-label">Providers + Articles (done)</div>
+      <div class="config-group">
+        <div class="config-item">
+          <span class="config-item-dot" style="background:#3b82f6;"></span>
+          <span class="config-item-name">Advertise Now</span>
+          <span class="config-item-count">2 articles</span>
+        </div>
+        <div class="config-item">
+          <span class="config-item-dot" style="background:#ec4899;"></span>
+          <span class="config-item-name">Predicto Media</span>
+          <span class="config-item-count">1 article</span>
+        </div>
+      </div>
+
+      <div class="config-group-label" style="color:#facc15;">Ad Sets (current step)</div>
+      <div style="padding:0 16px;">
+        <div style="font-size:11px;color:#64748b;margin-bottom:10px;">Select which presets to apply to each account:</div>
+
+        <div style="font-size:10px;font-weight:600;color:#475569;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">Acme Corp (blue)</div>
+        <div class="preset-selector-item selected">
+          <div class="preset-check checked">✓</div>
+          <div>
+            <div class="preset-selector-name">US Finance Q2</div>
+            <div class="preset-selector-meta">$50/d · Purchase</div>
+          </div>
+        </div>
+        <div class="preset-selector-item selected">
+          <div class="preset-check checked">✓</div>
+          <div>
+            <div class="preset-selector-name">EU Expand</div>
+            <div class="preset-selector-meta">$30/d · Page View</div>
+          </div>
+        </div>
+        <div class="preset-selector-item">
+          <div class="preset-check"></div>
+          <div>
+            <div class="preset-selector-name">APAC Mobile</div>
+            <div class="preset-selector-meta">$20/d · Signup</div>
+          </div>
+        </div>
+
+        <div style="font-size:10px;font-weight:600;color:#475569;margin:12px 0 6px;text-transform:uppercase;letter-spacing:0.05em;">Pink Media (pink)</div>
+        <div class="preset-selector-item selected">
+          <div class="preset-check checked" style="background:#ec4899;border-color:#ec4899;">✓</div>
+          <div>
+            <div class="preset-selector-name">EU Lifestyle</div>
+            <div class="preset-selector-meta">$25/d · Signup</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Main area -->
+  <div class="main">
+    <div class="step-header">
+      <div class="step-number">Step 3 of 5 — Ad Sets</div>
+      <div class="step-title">Configure ad set presets</div>
+      <div class="step-desc">Assign ad account presets to each creative/provider/article combination. The matrix below shows every campaign that will be created.</div>
+    </div>
+
+    <div class="step-content">
+
+      <!-- Summary cards -->
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="summary-card-label">Campaigns</div>
+          <div class="summary-card-value">6</div>
+          <div class="summary-card-sub">ready to launch</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-label">Ad accounts</div>
+          <div class="summary-card-value">2</div>
+          <div class="summary-card-sub">Acme + Pink Media</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-label">Daily budget</div>
+          <div class="summary-card-value">$255</div>
+          <div class="summary-card-sub">combined</div>
+        </div>
+        <div class="summary-card" style="border-color:#10b981;background:rgba(16,185,129,0.05);">
+          <div class="summary-card-label" style="color:#10b981;">Status</div>
+          <div class="summary-card-value" style="color:#10b981;font-size:16px;margin-top:4px;">Ready ✓</div>
+          <div class="summary-card-sub">all required fields set</div>
+        </div>
+      </div>
+
+      <!-- Campaign matrix -->
+      <div class="matrix-header">
+        <div>
+          <div class="matrix-title">Campaign launch matrix</div>
+          <div class="matrix-subtitle">One row = one Snapchat campaign. Review before proceeding.</div>
+        </div>
+        <div class="ready-badge">6 ready</div>
+      </div>
+
+      <table class="matrix-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Creative</th>
+            <th>Provider</th>
+            <th>Article</th>
+            <th>Ad Account</th>
+            <th>Preset</th>
+            <th>Budget</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="color:#64748b;">1</td>
+            <td>
+              <div class="cell-creative">
+                <div class="cell-thumb" style="background:#1e3a5f;">🖼</div>
+                <div><div class="cell-name">hero_summer_v1</div><div class="cell-meta">IMAGE</div></div>
+              </div>
+            </td>
+            <td><span class="cell-badge cb-blue">Advertise Now</span></td>
+            <td><div class="cell-name">best-credit-cards</div><div class="cell-meta">en_US</div></td>
+            <td><div class="cell-name">Acme Corp</div></td>
+            <td><div class="cell-name">US Finance Q2</div><div class="cell-meta">Purchase</div></td>
+            <td>$50/d</td>
+            <td><span class="status-dot" style="background:#10b981;"></span><span style="color:#10b981;font-size:11px;">Ready</span></td>
+          </tr>
+          <tr>
+            <td style="color:#64748b;">2</td>
+            <td>
+              <div class="cell-creative">
+                <div class="cell-thumb" style="background:#1e1e3f;">▶</div>
+                <div><div class="cell-name">story_v2</div><div class="cell-meta">VIDEO</div></div>
+              </div>
+            </td>
+            <td><span class="cell-badge cb-blue">Advertise Now</span></td>
+            <td><div class="cell-name">best-credit-cards</div><div class="cell-meta">en_US</div></td>
+            <td><div class="cell-name">Acme Corp</div></td>
+            <td><div class="cell-name">US Finance Q2</div><div class="cell-meta">Purchase</div></td>
+            <td>$50/d</td>
+            <td><span class="status-dot" style="background:#10b981;"></span><span style="color:#10b981;font-size:11px;">Ready</span></td>
+          </tr>
+          <tr>
+            <td style="color:#64748b;">3</td>
+            <td>
+              <div class="cell-creative">
+                <div class="cell-thumb" style="background:#1e3a5f;">🖼</div>
+                <div><div class="cell-name">hero_summer_v1</div><div class="cell-meta">IMAGE</div></div>
+              </div>
+            </td>
+            <td><span class="cell-badge cb-blue">Advertise Now</span></td>
+            <td><div class="cell-name">top-savings-accounts</div><div class="cell-meta">en_US</div></td>
+            <td><div class="cell-name">Acme Corp</div></td>
+            <td><div class="cell-name">EU Expand</div><div class="cell-meta">Page View</div></td>
+            <td>$30/d</td>
+            <td><span class="status-dot" style="background:#10b981;"></span><span style="color:#10b981;font-size:11px;">Ready</span></td>
+          </tr>
+          <tr>
+            <td style="color:#64748b;">4</td>
+            <td>
+              <div class="cell-creative">
+                <div class="cell-thumb" style="background:#1e1e3f;">▶</div>
+                <div><div class="cell-name">story_v2</div><div class="cell-meta">VIDEO</div></div>
+              </div>
+            </td>
+            <td><span class="cell-badge cb-blue">Advertise Now</span></td>
+            <td><div class="cell-name">top-savings-accounts</div><div class="cell-meta">en_US</div></td>
+            <td><div class="cell-name">Acme Corp</div></td>
+            <td><div class="cell-name">EU Expand</div><div class="cell-meta">Page View</div></td>
+            <td>$30/d</td>
+            <td><span class="status-dot" style="background:#10b981;"></span><span style="color:#10b981;font-size:11px;">Ready</span></td>
+          </tr>
+          <tr>
+            <td style="color:#64748b;">5</td>
+            <td>
+              <div class="cell-creative">
+                <div class="cell-thumb" style="background:#3f1a2e;">🖼</div>
+                <div><div class="cell-name">lifestyle_pink</div><div class="cell-meta">IMAGE</div></div>
+              </div>
+            </td>
+            <td><span class="cell-badge cb-pink">Predicto Media</span></td>
+            <td><div class="cell-name">summer-fashion-trends</div><div class="cell-meta">en_US</div></td>
+            <td><div class="cell-name">Pink Media</div></td>
+            <td><div class="cell-name">EU Lifestyle</div><div class="cell-meta">Signup</div></td>
+            <td>$25/d</td>
+            <td><span class="status-dot" style="background:#10b981;"></span><span style="color:#10b981;font-size:11px;">Ready</span></td>
+          </tr>
+          <tr>
+            <td style="color:#64748b;">6</td>
+            <td>
+              <div class="cell-creative">
+                <div class="cell-thumb" style="background:#1e3a5f;">🖼</div>
+                <div><div class="cell-name">hero_summer_v1</div><div class="cell-meta">IMAGE</div></div>
+              </div>
+            </td>
+            <td><span class="cell-badge cb-blue">Advertise Now</span></td>
+            <td><div class="cell-name">best-credit-cards</div><div class="cell-meta">en_US</div></td>
+            <td><div class="cell-name">Acme Corp</div></td>
+            <td><div class="cell-name">US Finance Q2</div><div class="cell-meta">Purchase · dupe</div></td>
+            <td>$50/d</td>
+            <td><span class="status-dot" style="background:#f59e0b;"></span><span style="color:#f59e0b;font-size:11px;">Review name</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+    </div>
+
+    <!-- Bottom navigation -->
+    <div class="bottom-nav">
+      <div class="bottom-left">
+        <button class="btn btn-ghost">← Back</button>
+        <span style="font-size:12px;color:#64748b;">Step 3 of 5</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <label style="font-size:12px;color:#64748b;white-space:nowrap;">Campaign name template:</label>
+        <input class="campaign-name-input" value="{{date_ddmm}} | {{article.name}} | {{preset.tag}} | {{unique_id_4}}" />
+      </div>
+      <div class="bottom-right">
+        <button class="btn btn-outline">Skip to Review</button>
+        <button class="btn btn-primary">Next: Review →</button>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+
+</div><!-- /body -->
+
+<!-- Option badge -->
+<div class="option-badge">
+  <strong>Option 3 — Step Wizard (guided)</strong>
+  5 discrete steps: Creatives → Providers → Ad Sets → Review → Launch. Left sidebar tracks progress and config. Main area focuses on the current step only. Campaign matrix is always visible as a table.
+</div>
+
+</body>
+</html>

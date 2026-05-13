@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BoilerRoom — Builder Mockups</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f172a; color: #f1f5f9; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; }
+  .logo { font-size: 22px; font-weight: 700; color: #facc15; margin-bottom: 8px; }
+  .heading { font-size: 28px; font-weight: 700; color: #f1f5f9; margin-bottom: 6px; text-align: center; }
+  .sub { font-size: 14px; color: #64748b; margin-bottom: 48px; text-align: center; }
+
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 960px; width: 100%; }
+  .card { background: #1e293b; border: 1.5px solid #334155; border-radius: 16px; overflow: hidden; cursor: pointer; text-decoration: none; color: inherit; transition: all 0.2s; display: flex; flex-direction: column; }
+  .card:hover { border-color: #475569; box-shadow: 0 12px 32px rgba(0,0,0,0.5); transform: translateY(-2px); }
+
+  .card-preview { height: 200px; position: relative; overflow: hidden; }
+  .preview-1 { background: linear-gradient(135deg, #1f2937 0%, #111827 100%); }
+  .preview-2 { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); }
+  .preview-3 { background: linear-gradient(135deg, #0f172a 0%, #0d1520 100%); }
+
+  /* Mini canvas preview for option 1 */
+  .mini-canvas { width: 100%; height: 100%; background-image: radial-gradient(#374151 1px, transparent 1px); background-size: 18px 18px; position: relative; }
+  .mini-node { position: absolute; background: #1f2937; border: 1.5px solid #374151; border-radius: 8px; }
+  .mini-creative { width: 60px; height: 90px; left: 16px; top: 50px; background: linear-gradient(160deg, #1e3a5f, #0f172a); border-color: #3b82f6; }
+  .mini-creative-2 { width: 60px; height: 90px; left: 16px; top: 90px; background: linear-gradient(160deg, #3f1a2e, #0f172a); border-color: #ec4899; display: none; }
+  .mini-provider { width: 50px; height: 32px; left: 100px; top: 70px; border-color: #3b82f6; }
+  .mini-provider-2 { width: 50px; height: 32px; left: 100px; top: 110px; border-color: #ec4899; }
+  .mini-article { width: 58px; height: 36px; left: 172px; top: 56px; border-color: #3b82f6; }
+  .mini-article-2 { width: 58px; height: 36px; left: 172px; top: 100px; border-color: #3b82f6; }
+  .mini-account { width: 48px; height: 28px; left: 250px; top: 70px; border-color: #3b82f6; }
+  .mini-preset { width: 48px; height: 28px; left: 316px; top: 70px; border-color: #6b7280; }
+  .mini-edge { position: absolute; background: none; }
+  .mini-svg { position: absolute; inset: 0; pointer-events: none; }
+
+  /* Mini column preview for option 2 */
+  .mini-cols { display: flex; height: 100%; }
+  .mini-col { flex: 1; border-right: 1px solid #334155; display: flex; flex-direction: column; }
+  .mini-col:last-child { border-right: none; }
+  .mini-col-header { height: 20px; background: #334155; display: flex; align-items: center; padding: 0 6px; }
+  .mini-col-dot { width: 5px; height: 5px; border-radius: 50%; margin-right: 4px; }
+  .mini-col-title { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; }
+  .mini-col-body { padding: 4px; display: flex; flex-direction: column; gap: 3px; }
+  .mini-card { height: 30px; background: #1e293b; border: 1px solid #334155; border-radius: 4px; border-left: 3px solid; }
+
+  /* Mini step preview for option 3 */
+  .mini-step-bar { height: 24px; background: #1e293b; display: flex; align-items: center; padding: 0 8px; gap: 4px; }
+  .mini-step-item { display: flex; align-items: center; gap: 3px; }
+  .mini-step-circle { width: 12px; height: 12px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 5px; font-weight: 700; }
+  .mini-step-label { font-size: 6px; color: #64748b; }
+  .mini-step-line { width: 12px; height: 1px; background: #334155; }
+  .mini-step-body { display: flex; flex: 1; overflow: hidden; }
+  .mini-sidebar { width: 60px; background: #0f172a; border-right: 1px solid #1e293b; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
+  .mini-sidebar-item { height: 8px; background: #1e293b; border-radius: 2px; border-left: 2px solid; }
+  .mini-main { flex: 1; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
+  .mini-summary { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 2px; }
+  .mini-summary-card { height: 22px; background: #1e293b; border: 1px solid #334155; border-radius: 2px; }
+  .mini-table-row { height: 8px; background: #1e293b; border-radius: 2px; }
+
+  .card-body { padding: 20px; flex: 1; }
+  .card-number { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; margin-bottom: 8px; }
+  .card-title { font-size: 16px; font-weight: 700; color: #f1f5f9; margin-bottom: 6px; }
+  .card-desc { font-size: 12px; color: #94a3b8; line-height: 1.5; margin-bottom: 14px; }
+  .card-traits { display: flex; flex-direction: column; gap: 5px; }
+  .trait { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; color: #64748b; }
+  .trait-icon { color: #475569; flex-shrink: 0; margin-top: 0px; }
+
+  .card-footer { padding: 12px 20px; border-top: 1px solid #1e293b; display: flex; align-items: center; justify-content: space-between; }
+  .open-btn { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #facc15; }
+  .open-btn:after { content: "→"; }
+
+  .badge { display: inline-flex; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; }
+  .badge-familiar { background: rgba(16,185,129,0.1); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.25); }
+  .badge-new { background: rgba(250,204,21,0.1); color: #fde68a; border: 1px solid rgba(250,204,21,0.25); }
+  .badge-guided { background: rgba(139,92,246,0.1); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.25); }
+
+  .footer-note { margin-top: 40px; font-size: 12px; color: #334155; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="logo">⚡ BoilerRoom</div>
+<div class="heading">Builder Design Options</div>
+<div class="sub">Three distinct directions for the campaign builder. Click any card to preview full-screen.</div>
+
+<div class="cards">
+
+  <!-- Option 1 -->
+  <a href="option-1-canvas-refined.html" class="card" target="_blank">
+    <div class="card-preview preview-1">
+      <div class="mini-canvas">
+        <svg class="mini-svg" viewBox="0 0 380 200" preserveAspectRatio="none">
+          <path d="M 76 95 C 90 95 94 82 100 82" stroke="#3b82f6" stroke-width="1.5" fill="none" stroke-dasharray="4 2" opacity="0.8"/>
+          <path d="M 76 95 C 90 95 94 118 100 118" stroke="#ec4899" stroke-width="1.5" fill="none" stroke-dasharray="4 2" opacity="0.8"/>
+          <path d="M 150 82 C 162 82 166 74 172 74" stroke="#3b82f6" stroke-width="1.5" fill="none" opacity="0.8"/>
+          <path d="M 150 82 C 162 82 166 100 172 100" stroke="#3b82f6" stroke-width="1.5" fill="none" opacity="0.5"/>
+          <path d="M 150 118 C 162 118 166 130 172 130" stroke="#ec4899" stroke-width="1.5" fill="none" opacity="0.8"/>
+          <path d="M 230 74 C 244 74 248 84 254 84" stroke="#3b82f6" stroke-width="1.5" fill="none" opacity="0.8"/>
+          <path d="M 230 100 C 244 100 248 84 254 84" stroke="#3b82f6" stroke-width="1.5" fill="none" opacity="0.5"/>
+          <path d="M 230 130 C 244 130 248 100 254 100" stroke="#ec4899" stroke-width="1.5" fill="none" opacity="0.8"/>
+          <path d="M 302 84 C 314 84 318 90 324 90" stroke="#6b7280" stroke-width="1" fill="none" stroke-dasharray="3 2" opacity="0.5"/>
+          <path d="M 302 100 C 314 100 318 105 324 105" stroke="#6b7280" stroke-width="1" fill="none" stroke-dasharray="3 2" opacity="0.5"/>
+        </svg>
+        <!-- Creative -->
+        <div class="mini-node" style="left:16px;top:50px;width:60px;height:90px;background:linear-gradient(160deg,#1e3a5f,#0f172a);border-color:#3b82f6;border-radius:6px;"></div>
+        <div class="mini-node" style="left:16px;top:110px;width:60px;height:50px;background:linear-gradient(160deg,#3f1a2e,#0f172a);border-color:#ec4899;border-radius:6px;"></div>
+        <!-- Providers -->
+        <div class="mini-node" style="left:100px;top:66px;width:50px;height:26px;border-color:#3b82f6;border-radius:5px;"></div>
+        <div class="mini-node" style="left:100px;top:106px;width:50px;height:26px;border-color:#ec4899;border-radius:5px;"></div>
+        <!-- Articles -->
+        <div class="mini-node" style="left:172px;top:58px;width:58px;height:28px;border-color:#3b82f6;border-radius:5px;"></div>
+        <div class="mini-node" style="left:172px;top:92px;width:58px;height:28px;border-color:#3b82f6;border-radius:5px;"></div>
+        <div class="mini-node" style="left:172px;top:118px;width:58px;height:28px;border-color:#ec4899;border-radius:5px;"></div>
+        <!-- Accounts -->
+        <div class="mini-node" style="left:252px;top:68px;width:46px;height:26px;border-color:#3b82f6;border-radius:5px;"></div>
+        <div class="mini-node" style="left:252px;top:100px;width:46px;height:26px;border-color:#ec4899;border-radius:5px;"></div>
+        <!-- Presets -->
+        <div class="mini-node" style="left:320px;top:74px;width:44px;height:24px;border-color:#6b7280;border-radius:5px;"></div>
+        <div class="mini-node" style="left:320px;top:104px;width:44px;height:24px;border-color:#6b7280;border-radius:5px;"></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-number">Option 1</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div class="card-title" style="margin-bottom:0;">Refined Canvas</div>
+        <span class="badge badge-familiar">Familiar</span>
+      </div>
+      <div class="card-desc">The current React Flow canvas, polished. Cleaner node cards, sharper edges, better visual hierarchy — same spatial mental model you already know.</div>
+      <div class="card-traits">
+        <div class="trait"><span class="trait-icon">✦</span>Free-form spatial layout — drag to arrange</div>
+        <div class="trait"><span class="trait-icon">✦</span>Visual edge connections between every stage</div>
+        <div class="trait"><span class="trait-icon">✦</span>Lowest migration cost — evolutionary change</div>
+      </div>
+    </div>
+    <div class="card-footer">
+      <span class="badge badge-familiar">Evolutionary</span>
+      <span class="open-btn">Open mockup</span>
+    </div>
+  </a>
+
+  <!-- Option 2 -->
+  <a href="option-2-column-builder.html" class="card" target="_blank">
+    <div class="card-preview preview-2">
+      <div class="mini-cols">
+        <div class="mini-col" style="flex:1.1;">
+          <div class="mini-col-header"><span class="mini-col-dot" style="background:#10b981;"></span><span class="mini-col-title">Creatives</span></div>
+          <div class="mini-col-body">
+            <div class="mini-card" style="border-left-color:#3b82f6;height:44px;background:linear-gradient(135deg,#1e3a5f,#0f172a);"></div>
+            <div class="mini-card" style="border-left-color:#ec4899;height:30px;background:linear-gradient(135deg,#3f1a2e,#0f172a);"></div>
+          </div>
+        </div>
+        <div class="mini-col">
+          <div class="mini-col-header"><span class="mini-col-dot" style="background:#3b82f6;"></span><span class="mini-col-title">Providers</span></div>
+          <div class="mini-col-body">
+            <div class="mini-card" style="border-left-color:#3b82f6;height:40px;"></div>
+            <div class="mini-card" style="border-left-color:#ec4899;height:30px;"></div>
+          </div>
+        </div>
+        <div class="mini-col" style="flex:1.2;">
+          <div class="mini-col-header"><span class="mini-col-dot" style="background:#f59e0b;"></span><span class="mini-col-title">Articles</span></div>
+          <div class="mini-col-body">
+            <div class="mini-card" style="border-left-color:#3b82f6;height:32px;"></div>
+            <div class="mini-card" style="border-left-color:#3b82f6;height:28px;"></div>
+            <div class="mini-card" style="border-left-color:#ec4899;height:28px;"></div>
+          </div>
+        </div>
+        <div class="mini-col">
+          <div class="mini-col-header"><span class="mini-col-dot" style="background:#94a3b8;"></span><span class="mini-col-title">Accounts</span></div>
+          <div class="mini-col-body">
+            <div class="mini-card" style="border-left-color:#3b82f6;height:36px;"></div>
+            <div class="mini-card" style="border-left-color:#ec4899;height:30px;"></div>
+          </div>
+        </div>
+        <div class="mini-col" style="flex:1.2;">
+          <div class="mini-col-header"><span class="mini-col-dot" style="background:#a78bfa;"></span><span class="mini-col-title">Ad Sets</span></div>
+          <div class="mini-col-body">
+            <div class="mini-card" style="border-left-color:#3b82f6;height:32px;"></div>
+            <div class="mini-card" style="border-left-color:#3b82f6;height:28px;"></div>
+            <div class="mini-card" style="border-left-color:#ec4899;height:28px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-number">Option 2</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div class="card-title" style="margin-bottom:0;">Column Builder</div>
+        <span class="badge badge-new">No canvas</span>
+      </div>
+      <div class="card-desc">A five-column structured layout (Notion / Linear style). No freeform canvas — each stage is a scrollable column. Relationships shown via color tags and border accents.</div>
+      <div class="card-traits">
+        <div class="trait"><span class="trait-icon">✦</span>All stages visible simultaneously, side by side</div>
+        <div class="trait"><span class="trait-icon">✦</span>Launch summary + budget totals always visible</div>
+        <div class="trait"><span class="trait-icon">✦</span>More scannable for large campaign builds</div>
+      </div>
+    </div>
+    <div class="card-footer">
+      <span class="badge badge-new">New paradigm</span>
+      <span class="open-btn">Open mockup</span>
+    </div>
+  </a>
+
+  <!-- Option 3 -->
+  <a href="option-3-step-wizard.html" class="card" target="_blank">
+    <div class="card-preview preview-3">
+      <div style="display:flex;flex-direction:column;height:100%;">
+        <!-- Step bar -->
+        <div class="mini-step-bar">
+          <div class="mini-step-item">
+            <div class="mini-step-circle" style="background:#10b981;color:#fff;">✓</div>
+            <span class="mini-step-label">Creatives</span>
+          </div>
+          <div class="mini-step-line" style="background:#10b981;"></div>
+          <div class="mini-step-item">
+            <div class="mini-step-circle" style="background:#10b981;color:#fff;">✓</div>
+            <span class="mini-step-label">Providers</span>
+          </div>
+          <div class="mini-step-line" style="background:#facc15;"></div>
+          <div class="mini-step-item">
+            <div class="mini-step-circle" style="background:#facc15;color:#000;">3</div>
+            <span class="mini-step-label" style="color:#facc15;">Ad Sets</span>
+          </div>
+          <div class="mini-step-line"></div>
+          <div class="mini-step-item">
+            <div class="mini-step-circle" style="background:#1e293b;border:1px solid #334155;color:#64748b;">4</div>
+            <span class="mini-step-label">Review</span>
+          </div>
+          <div class="mini-step-line"></div>
+          <div class="mini-step-item">
+            <div class="mini-step-circle" style="background:#1e293b;border:1px solid #334155;color:#64748b;">5</div>
+            <span class="mini-step-label">Launch</span>
+          </div>
+        </div>
+        <!-- Body -->
+        <div class="mini-step-body" style="flex:1;">
+          <div class="mini-sidebar">
+            <div class="mini-sidebar-item" style="border-left-color:#3b82f6;"></div>
+            <div class="mini-sidebar-item" style="border-left-color:#ec4899;"></div>
+            <div class="mini-sidebar-item" style="border-left-color:#64748b;height:4px;"></div>
+            <div style="height:6px;background:#facc15;border-radius:2px;opacity:0.2;"></div>
+            <div class="mini-sidebar-item" style="border-left-color:#3b82f6;height:5px;"></div>
+            <div class="mini-sidebar-item" style="border-left-color:#3b82f6;height:5px;"></div>
+            <div class="mini-sidebar-item" style="border-left-color:#ec4899;height:5px;"></div>
+          </div>
+          <div class="mini-main">
+            <div class="mini-summary">
+              <div class="mini-summary-card"></div>
+              <div class="mini-summary-card"></div>
+              <div class="mini-summary-card"></div>
+              <div class="mini-summary-card" style="border-color:#10b981;background:rgba(16,185,129,0.08);"></div>
+            </div>
+            <div style="height:4px;background:#1e293b;border-radius:2px;margin-top:2px;"></div>
+            <div class="mini-table-row"></div>
+            <div class="mini-table-row"></div>
+            <div class="mini-table-row"></div>
+            <div class="mini-table-row"></div>
+            <div class="mini-table-row"></div>
+          </div>
+        </div>
+        <!-- Bottom nav strip -->
+        <div style="height:18px;background:#0f172a;border-top:1px solid #1e293b;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;gap:4px;">
+          <div style="width:28px;height:8px;background:#1e293b;border:1px solid #334155;border-radius:2px;"></div>
+          <div style="width:36px;height:8px;background:#facc15;border-radius:2px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-number">Option 3</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div class="card-title" style="margin-bottom:0;">Step Wizard</div>
+        <span class="badge badge-guided">Guided</span>
+      </div>
+      <div class="card-desc">Five sequential steps: Creatives → Providers → Ad Sets → Review → Launch. Left sidebar tracks config at every step. Campaign matrix table is always visible as you work.</div>
+      <div class="card-traits">
+        <div class="trait"><span class="trait-icon">✦</span>Clear progress indicator — nothing hidden</div>
+        <div class="trait"><span class="trait-icon">✦</span>Campaign matrix table replaces the canvas</div>
+        <div class="trait"><span class="trait-icon">✦</span>Most approachable for new users</div>
+      </div>
+    </div>
+    <div class="card-footer">
+      <span class="badge badge-guided">Most guided</span>
+      <span class="open-btn">Open mockup</span>
+    </div>
+  </a>
+
+</div>
+
+<div class="footer-note">All mockups are static HTML — no server required. Open in any browser.</div>
+
+</body>
+</html>

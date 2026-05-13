@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Row Buttons — Design Options</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #111827;
+    background-image: radial-gradient(#1f2937 1px, transparent 1px);
+    background-size: 26px 26px;
+    color: #f9fafb;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 24px 80px;
+    gap: 72px;
+  }
+
+  /* ── Page header ── */
+  .page-header { text-align: center; }
+  .page-logo { font-size: 13px; font-weight: 700; color: #facc15; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; }
+  .page-title { font-size: 22px; font-weight: 700; color: #f9fafb; margin-bottom: 6px; }
+  .page-sub { font-size: 13px; color: #6b7280; }
+
+  /* ── Section ── */
+  .section { display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 900px; }
+  .section-label {
+    align-self: flex-start;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .option-pill {
+    background: #1f2937; border: 1px solid #374151; border-radius: 999px;
+    padding: 4px 14px; font-size: 12px; font-weight: 700; color: #9ca3af;
+    letter-spacing: 0.04em;
+  }
+  .option-name { font-size: 16px; font-weight: 700; color: #f9fafb; }
+  .option-desc { font-size: 12px; color: #6b7280; margin-top: 2px; max-width: 520px; line-height: 1.5; }
+
+  /* ── Cards row ── */
+  .cards-row {
+    display: flex;
+    gap: 12px;
+    position: relative;
+  }
+
+  /* Portrait card */
+  .card {
+    width: 168px;
+    height: 300px;
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+    flex-shrink: 0;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .card-img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  /* Simulated card content */
+  .card-bg-1 { background: linear-gradient(170deg, #1a1a2e 0%, #0d0d1a 50%, #0a0a14 100%); }
+  .card-bg-2 { background: linear-gradient(170deg, #0e2040 0%, #07152b 60%, #040e1e 100%); }
+  .card-bg-3 { background: linear-gradient(170deg, #1a1208 0%, #0f0c06 60%, #090704 100%); }
+  .card-content {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: flex-start; justify-content: flex-end; padding: 12px;
+  }
+  .card-gradient { position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.85) 100%); }
+  .card-accent { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; z-index: 2; }
+  .card-name {
+    font-size: 11px; font-weight: 700; color: #fff; position: relative; z-index: 2;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.9); white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; max-width: 144px;
+  }
+  .card-x {
+    position: absolute; top: 8px; right: 8px; z-index: 10;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
+    border: 1px solid rgba(255,255,255,0.12);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: rgba(255,255,255,0.7); cursor: pointer;
+  }
+  .card-plus-top {
+    position: absolute; top: 8px; left: 8px; z-index: 10;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
+    border: 1px solid rgba(255,255,255,0.18);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; line-height: 1; color: rgba(255,255,255,0.8); cursor: pointer;
+  }
+
+  /* Canvas handle */
+  .row-handle {
+    position: absolute; right: -14px; top: 50%; transform: translateY(-50%);
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #fff; border: 3px solid #4b5563;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    z-index: 20;
+  }
+
+  /* ── Row wrapper ── */
+  .row-wrapper { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
+
+  /* Row node outer frame (used in option C) */
+  .row-node-frame {
+    background: transparent;
+    border: none;
+    border-radius: 14px;
+    overflow: visible;
+    position: relative;
+  }
+
+  /* ─────────────────────────────────────────────────
+     OPTION A: Attached footer strip inside the node
+  ───────────────────────────────────────────────── */
+  .option-a-node {
+    background: #1f2937;
+    border: 1.5px solid #374151;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .option-a-cards { display: flex; gap: 0; }
+  .option-a-cards .card { border-radius: 0; }
+  .option-a-footer {
+    display: flex; align-items: center; gap: 0;
+    background: #1a2332; border-top: 1px solid #2d3f55;
+    height: 40px;
+  }
+  .footer-btn {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+    height: 100%; cursor: pointer; font-size: 12px; font-weight: 600;
+    color: #9ca3af; transition: all 0.15s;
+    border-right: 1px solid #2d3f55;
+  }
+  .footer-btn:last-child { border-right: none; }
+  .footer-btn:hover { background: #243040; color: #f9fafb; }
+  .footer-btn.provider:hover { color: #60a5fa; background: rgba(59,130,246,0.08); }
+  .footer-btn .icon { font-size: 13px; }
+
+  /* ─────────────────────────────────────────────────
+     OPTION B: Bold floating bar below the row (solid, always visible)
+  ───────────────────────────────────────────────── */
+  .option-b-bar {
+    margin-top: 10px;
+    display: flex; align-items: center; gap: 6px;
+    background: #1f2937;
+    border: 1px solid #374151;
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .bar-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: 8px;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    border: 1px solid #374151; transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .bar-btn-default {
+    background: #374151; color: #d1d5db;
+    border-color: #4b5563;
+  }
+  .bar-btn-default:hover { background: #4b5563; color: #f9fafb; }
+  .bar-btn-provider {
+    background: rgba(59,130,246,0.15); color: #93c5fd;
+    border-color: rgba(59,130,246,0.4);
+  }
+  .bar-btn-provider:hover { background: rgba(59,130,246,0.25); color: #bfdbfe; }
+  .bar-divider { width: 1px; height: 24px; background: #374151; }
+
+  /* ─────────────────────────────────────────────────
+     OPTION C: Side-dock (vertical, right of the row)
+  ───────────────────────────────────────────────── */
+  .option-c-wrapper {
+    display: flex; align-items: flex-start; gap: 10px;
+  }
+  .side-dock {
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 8px 0;
+    margin-left: 4px;
+    align-self: stretch;
+    justify-content: center;
+  }
+  .dock-btn {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-radius: 10px;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    white-space: nowrap; transition: all 0.15s;
+    border: 1.5px solid #374151;
+    background: #1f2937; color: #9ca3af;
+    min-width: 130px;
+  }
+  .dock-btn:hover { background: #374151; color: #f9fafb; border-color: #4b5563; }
+  .dock-btn.provider-btn {
+    background: rgba(59,130,246,0.1); color: #60a5fa;
+    border-color: rgba(59,130,246,0.35);
+  }
+  .dock-btn.provider-btn:hover { background: rgba(59,130,246,0.2); color: #93c5fd; }
+  .dock-icon { font-size: 14px; width: 20px; text-align: center; flex-shrink: 0; }
+
+  /* ── Current (before) ── */
+  .current-bar {
+    margin-top: 10px;
+    display: flex; justify-content: center; gap: 6px; width: 100%;
+  }
+  .current-btn {
+    padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 500;
+    color: #9ca3af; background: rgba(17,24,39,0.9);
+    border: 1px solid #4b5563; cursor: pointer;
+  }
+
+  /* ── Fake card visuals ── */
+  .phone-icon { font-size: 48px; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-60%); opacity: 0.25; }
+  .top-label {
+    position: absolute; top: 18px; left: 0; right: 0; text-align: center;
+    font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.7);
+    padding: 0 12px; line-height: 1.3; z-index: 2;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  }
+
+  /* ── Divider ── */
+  .divider { width: 1px; height: 48px; background: #1f2937; }
+  .h-divider { width: 100%; height: 1px; background: #1f2937; max-width: 860px; }
+
+  /* ── Recommendation label ── */
+  .rec-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(250,204,21,0.1); border: 1px solid rgba(250,204,21,0.3);
+    color: #fde68a; border-radius: 999px; padding: 3px 12px; font-size: 11px; font-weight: 600;
+  }
+
+  /* ── Before label ── */
+  .before-note {
+    font-size: 11px; color: #6b7280; background: #1f2937; border: 1px solid #374151;
+    border-radius: 999px; padding: 3px 12px; letter-spacing: 0.04em;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="page-header">
+  <div class="page-logo">⚡ BoilerRoom</div>
+  <div class="page-title">Row Action Buttons — Redesign Options</div>
+  <div class="page-sub">Three treatments for making ↓ New row · ⧉ Duplicate · + Provider always visible and prominent.</div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     BEFORE
+════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-label">
+    <span class="before-note">CURRENT (hover only, easy to miss)</span>
+  </div>
+
+  <div class="row-wrapper">
+    <div class="cards-row">
+      <!-- Card 1 -->
+      <div class="card card-bg-1">
+        <div class="card-accent" style="background:#3b82f6;"></div>
+        <div class="top-label">Want your phone to<br>last longer?</div>
+        <div class="phone-icon">📱</div>
+        <div class="card-gradient"></div>
+        <div class="card-content"><div class="card-name">energy_saving_v_001</div></div>
+        <div class="card-x">✕</div>
+      </div>
+      <!-- Card 2 -->
+      <div class="card card-bg-2">
+        <div class="card-accent" style="background:#3b82f6;"></div>
+        <div class="phone-icon" style="top:40%;">📲</div>
+        <div class="card-gradient"></div>
+        <div class="card-content"><div class="card-name">energy_saving_v_002</div></div>
+        <div class="card-x">✕</div>
+      </div>
+      <!-- Card 3 -->
+      <div class="card card-bg-3">
+        <div class="card-accent" style="background:#3b82f6;"></div>
+        <div class="top-label" style="color:rgba(255,255,255,0.6);">LOVE EATING<br>DELICIOUS FOOD?</div>
+        <div class="phone-icon" style="font-size:40px;">🍔</div>
+        <div class="card-gradient"></div>
+        <div class="card-content"><div class="card-name">food_tester_mba_v_006</div></div>
+        <div class="card-x">✕</div>
+        <div class="card-plus-top">+</div>
+      </div>
+      <div class="row-handle"></div>
+    </div>
+
+    <!-- Current buttons (hover only, faint) -->
+    <div class="current-bar">
+      <button class="current-btn">↓ New row</button>
+      <button class="current-btn">⧉ Duplicate</button>
+      <button class="current-btn">＋ Provider</button>
+    </div>
+  </div>
+</div>
+
+<div class="h-divider"></div>
+
+<!-- ══════════════════════════════════════════
+     OPTION A — Footer strip inside the node
+════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-label">
+    <span class="option-pill">A</span>
+    <div>
+      <div class="option-name">Footer strip — built into the card node</div>
+      <div class="option-desc">Buttons live inside the node as a permanent dark footer bar. Separated from the cards by a subtle border. Clean, integrated, takes no extra canvas space.</div>
+    </div>
+  </div>
+
+  <div class="row-wrapper">
+    <div class="option-a-node">
+      <!-- Cards (no gap between them inside the node) -->
+      <div class="option-a-cards">
+        <div class="card card-bg-1" style="border-radius:0;">
+          <div class="card-accent" style="background:#3b82f6;"></div>
+          <div class="top-label">Want your phone to<br>last longer?</div>
+          <div class="phone-icon">📱</div>
+          <div class="card-gradient"></div>
+          <div class="card-content"><div class="card-name">energy_saving_v_001</div></div>
+          <div class="card-x">✕</div>
+        </div>
+        <div class="card card-bg-2" style="border-radius:0;">
+          <div class="card-accent" style="background:#3b82f6;"></div>
+          <div class="phone-icon" style="top:40%;">📲</div>
+          <div class="card-gradient"></div>
+          <div class="card-content"><div class="card-name">energy_saving_v_002</div></div>
+          <div class="card-x">✕</div>
+        </div>
+        <div class="card card-bg-3" style="border-radius:0;">
+          <div class="card-accent" style="background:#3b82f6;"></div>
+          <div class="top-label" style="color:rgba(255,255,255,0.6);">LOVE EATING<br>DELICIOUS FOOD?</div>
+          <div class="phone-icon" style="font-size:40px;">🍔</div>
+          <div class="card-gradient"></div>
+          <div class="card-content"><div class="card-name">food_tester_mba_v_006</div></div>
+          <div class="card-x">✕</div>
+          <div class="card-plus-top">+</div>
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="option-a-footer">
+        <div class="footer-btn">
+          <span class="icon">↓</span> New row
+        </div>
+        <div class="footer-btn">
+          <span class="icon">⧉</span> Duplicate
+        </div>
+        <div class="footer-btn provider">
+          <span class="icon">＋</span> Provider
+        </div>
+      </div>
+    </div>
+    <!-- handle outside -->
+    <div class="row-handle" style="position:absolute;right:-14px;top:calc(50% - 20px);transform:translateY(-50%);"></div>
+  </div>
+</div>
+
+<div class="h-divider"></div>
+
+<!-- ══════════════════════════════════════════
+     OPTION B — Solid pill toolbar below the row
+════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-label">
+    <span class="option-pill">B</span>
+    <div>
+      <div class="option-name">Floating pill toolbar — solid, always below</div>
+      <div class="option-desc">A solid, pill-shaped toolbar floats 10px below the cards. Larger buttons with real fill color. Provider button gets a distinct blue tint so it stands out as a connection action.</div>
+    </div>
+    <span class="rec-badge">★ Recommended</span>
+  </div>
+
+  <div class="row-wrapper">
+    <div class="cards-row">
+      <div class="card card-bg-1">
+        <div class="card-accent" style="background:#3b82f6;"></div>
+        <div class="top-label">Want your phone to<br>last longer?</div>
+        <div class="phone-icon">📱</div>
+        <div class="card-gradient"></div>
+        <div class="card-content"><div class="card-name">energy_saving_v_001</div></div>
+        <div class="card-x">✕</div>
+      </div>
+      <div class="card card-bg-2">
+        <div class="card-accent" style="background:#3b82f6;"></div>
+        <div class="phone-icon" style="top:40%;">📲</div>
+        <div class="card-gradient"></div>
+        <div class="card-content"><div class="card-name">energy_saving_v_002</div></div>
+        <div class="card-x">✕</div>
+      </div>
+      <div class="card card-bg-3">
+        <div class="card-accent" style="background:#3b82f6;"></div>
+        <div class="top-label" style="color:rgba(255,255,255,0.6);">LOVE EATING<br>DELICIOUS FOOD?</div>
+        <div class="phone-icon" style="font-size:40px;">🍔</div>
+        <div class="card-gradient"></div>
+        <div class="card-content"><div class="card-name">food_tester_mba_v_006</div></div>
+        <div class="card-x">✕</div>
+        <div class="card-plus-top">+</div>
+      </div>
+      <div class="row-handle"></div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="option-b-bar">
+      <button class="bar-btn bar-btn-default">
+        <span>↓</span> New row
+      </button>
+      <div class="bar-divider"></div>
+      <button class="bar-btn bar-btn-default">
+        <span>⧉</span> Duplicate
+      </button>
+      <div class="bar-divider"></div>
+      <button class="bar-btn bar-btn-provider">
+        <span>＋</span> Provider
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="h-divider"></div>
+
+<!-- ══════════════════════════════════════════
+     OPTION C — Side dock (right of the cards)
+════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-label">
+    <span class="option-pill">C</span>
+    <div>
+      <div class="option-name">Side dock — vertical stack to the right</div>
+      <div class="option-desc">Action buttons sit in a vertical column to the right of the cards, next to the handle. Always visible. Keeps the row height consistent regardless of how many cards are in the row.</div>
+    </div>
+  </div>
+
+  <div class="row-wrapper">
+    <div class="option-c-wrapper">
+      <!-- Cards -->
+      <div class="cards-row" style="position:relative;">
+        <div class="card card-bg-1">
+          <div class="card-accent" style="background:#3b82f6;"></div>
+          <div class="top-label">Want your phone to<br>last longer?</div>
+          <div class="phone-icon">📱</div>
+          <div class="card-gradient"></div>
+          <div class="card-content"><div class="card-name">energy_saving_v_001</div></div>
+          <div class="card-x">✕</div>
+        </div>
+        <div class="card card-bg-2">
+          <div class="card-accent" style="background:#3b82f6;"></div>
+          <div class="phone-icon" style="top:40%;">📲</div>
+          <div class="card-gradient"></div>
+          <div class="card-content"><div class="card-name">energy_saving_v_002</div></div>
+          <div class="card-x">✕</div>
+        </div>
+        <div class="card card-bg-3">
+          <div class="card-accent" style="background:#3b82f6;"></div>
+          <div class="top-label" style="color:rgba(255,255,255,0.6);">LOVE EATING<br>DELICIOUS FOOD?</div>
+          <div class="phone-icon" style="font-size:40px;">🍔</div>
+          <div class="card-gradient"></div>
+          <div class="card-content"><div class="card-name">food_tester_mba_v_006</div></div>
+          <div class="card-x">✕</div>
+          <div class="card-plus-top">+</div>
+        </div>
+      </div>
+
+      <!-- Side dock -->
+      <div class="side-dock" style="margin-left:24px;">
+        <button class="dock-btn">
+          <span class="dock-icon">↓</span> New row
+        </button>
+        <button class="dock-btn">
+          <span class="dock-icon">⧉</span> Duplicate
+        </button>
+        <button class="dock-btn provider-btn">
+          <span class="dock-icon">＋</span> Provider
+        </button>
+      </div>
+
+      <!-- Handle (sits between cards and dock) -->
+      <div class="row-handle" style="position:static;transform:none;align-self:center;margin-left:-6px;margin-right:4px;flex-shrink:0;"></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
