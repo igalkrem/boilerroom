@@ -4,6 +4,8 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
+import type { FeedProvider } from "@/types/feed-provider";
+import { resolveProviderKey } from "@/lib/reporting/provider-key";
 import { DrilldownModal } from "./DrilldownModal";
 import { ColumnSelector } from "./ColumnSelector";
 
@@ -109,6 +111,7 @@ export interface AggrRow {
   funnel_requests: number;
   domain_name: string;
   feed_provider_id: string;
+  ad_account_id: string;
   roi_pct: number | null;
   roi_1d: number | null;
   roi_2d: number | null;
@@ -233,7 +236,7 @@ export function PerformanceTable({
   const [filterProviderIds, setFilterProviderIds] = useState<Set<string>>(new Set());
   const [metricFilters, setMetricFilters] = useState<Array<{ id: string; metric: string; op: string; value: string }>>([]);
   const [articles, setArticles] = useState<Array<{ id: string; slug: string }>>([]);
-  const [providers, setProviders] = useState<Array<{ id: string; name: string }>>([]);
+  const [providers, setProviders] = useState<FeedProvider[]>([]);
   const [articleDropOpen, setArticleDropOpen] = useState(false);
   const [providerDropOpen, setProviderDropOpen] = useState(false);
   const articleDropRef = useRef<HTMLDivElement>(null);
@@ -255,7 +258,7 @@ export function PerformanceTable({
       const a = localStorage.getItem("boilerroom_articles_v1");
       if (a) setArticles(JSON.parse(a) as Array<{ id: string; slug: string }>);
       const p = localStorage.getItem("boilerroom_feed_providers_v1");
-      if (p) setProviders(JSON.parse(p) as Array<{ id: string; name: string }>);
+      if (p) setProviders(JSON.parse(p) as FeedProvider[]);
     } catch {}
   }, []);
 
@@ -374,6 +377,7 @@ export function PerformanceTable({
           funnel_requests: r.funnel_requests,
           domain_name: r.domain_name,
           feed_provider_id: r.feed_provider_id,
+          ad_account_id: r.ad_account_id,
           snap_results: r.snap_results,
           snap_purchase_value_usd: r.snap_purchase_value_usd,
           roi_pct: null,
@@ -450,9 +454,9 @@ export function PerformanceTable({
         if (slugs.length === 0 || !slugs.some(s => norm(r.ad_squad_name).includes(s))) return false;
       }
 
-      // Provider filter — exact match on feed_provider_id from the DB
+      // Provider filter — three-tier resolution matches summary tables
       if (filterProviderIds.size > 0) {
-        if (!r.feed_provider_id || !filterProviderIds.has(r.feed_provider_id)) return false;
+        if (!filterProviderIds.has(resolveProviderKey(r, providers))) return false;
       }
 
       // Metric filters — AND logic; incomplete rows are skipped
@@ -471,7 +475,7 @@ export function PerformanceTable({
       return true;
     });
   }, [aggregated, filterQuery, squadDetails, hiddenSquadIds, showHidden,
-      filterArticleIds, filterProviderIds, metricFilters, articles]);
+      filterArticleIds, filterProviderIds, metricFilters, articles, providers]);
 
   useEffect(() => {
     onFilteredRowsChange?.(filtered);

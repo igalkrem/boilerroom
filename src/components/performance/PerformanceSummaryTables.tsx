@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import type { Article } from "@/types/article";
 import type { FeedProvider } from "@/types/feed-provider";
+import { resolveProviderKey } from "@/lib/reporting/provider-key";
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -47,28 +48,6 @@ function histStats(
   if (filtered.length === 0) return null;
   const { spend, revenue } = sumRows(filtered);
   return spend > 0 || revenue > 0 ? { spend, revenue } : null;
-}
-
-// Shared three-tier provider resolution (module-level so both useMemos share it)
-function resolveProviderKey(r: CombinedRow, providers: FeedProvider[]): string {
-  if (r.feed_provider_id) return r.feed_provider_id;
-  if (r.domain_name) {
-    const dn = r.domain_name.toLowerCase();
-    const match = providers.find(p =>
-      p.domains?.some(d => {
-        const base = d.baseDomain?.toLowerCase();
-        return base && (dn === base || dn.endsWith("." + base));
-      })
-    );
-    if (match) return match.id;
-  }
-  if (r.ad_account_id) {
-    const match = providers.find(p =>
-      p.snapConfig?.allowedAdAccountIds?.includes(r.ad_account_id)
-    );
-    if (match) return match.id;
-  }
-  return "__unknown__";
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
