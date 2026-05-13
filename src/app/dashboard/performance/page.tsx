@@ -36,6 +36,7 @@ export default function PerformancePage() {
 
   const [rows, setRows] = useState<CombinedRow[]>([]);
   const [historicalRows, setHistoricalRows] = useState<CombinedRow[]>([]);
+  const [last30Rows, setLast30Rows] = useState<CombinedRow[] | undefined>(undefined);
   const [eurToUsd, setEurToUsd] = useState(1.08);
   const [squadDetails, setSquadDetails] = useState<Map<string, SquadDetail>>(new Map());
   const [squadDetailsError, setSquadDetailsError] = useState<string | null>(null);
@@ -81,6 +82,20 @@ export default function PerformancePage() {
     setLastLoaded(new Date());
     setLoading(false);
     return allRows.length;
+  }, []);
+
+  // ── Last-30-days fetch for By Date summary table (ignores date picker) ──────
+  const loadLast30Days = useCallback(async (accts: SnapAdAccount[]) => {
+    if (accts.length === 0) return;
+    const end = todayStr();
+    const start = dateMinus(end, 29);
+    const results = await Promise.allSettled(
+      accts.map((a) =>
+        fetch(`/api/reporting/combined?adAccountId=${a.id}&startDate=${start}&endDate=${end}`)
+          .then((r) => r.json() as Promise<{ rows: CombinedRow[] }>)
+      )
+    );
+    setLast30Rows(results.flatMap((r) => r.status === "fulfilled" ? (r.value.rows ?? []) : []));
   }, []);
 
   // ── Sync then reload (slow — hits Snapchat + KingsRoad APIs) ──────────────
@@ -197,6 +212,7 @@ export default function PerformancePage() {
           void syncAndReload(activeAccounts, startDate, endDate, true);
         }
       });
+      void loadLast30Days(activeAccounts);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAccounts]);
@@ -228,6 +244,7 @@ export default function PerformancePage() {
 
   function handleManualRefresh() {
     void syncAndReload(activeAccounts, startDate, endDate, true);
+    void loadLast30Days(activeAccounts);
   }
 
   return (
@@ -276,6 +293,7 @@ export default function PerformancePage() {
             rows={rows}
             historicalRows={historicalRows}
             startDate={startDate}
+            last30Rows={last30Rows}
           />
           <PerformanceTable
           rows={rows}

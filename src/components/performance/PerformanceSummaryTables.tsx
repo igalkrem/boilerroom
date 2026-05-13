@@ -63,6 +63,7 @@ interface Props {
   rows: CombinedRow[];
   historicalRows: CombinedRow[];
   startDate: string;
+  last30Rows?: CombinedRow[];
 }
 
 // ── ROI pill ───────────────────────────────────────────────────────────────
@@ -101,6 +102,7 @@ function RoiTable({
             <tr className="text-gray-400 border-b border-gray-700 bg-gray-800 sticky top-0 z-10">
               <th className="text-left px-3 py-1.5 font-medium">{labelHeader}</th>
               <th className="text-right px-2 py-1.5 font-medium">Cost</th>
+              <th className="text-right px-2 py-1.5 font-medium">Revenue</th>
               <th className="text-right px-2 py-1.5 font-medium">Profit</th>
               <th className="text-center px-2 py-1.5 font-medium whitespace-nowrap">Today ROI</th>
               <th className="text-center px-2 py-1.5 font-medium whitespace-nowrap">1D ago</th>
@@ -112,6 +114,7 @@ function RoiTable({
               <tr key={r.key} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
                 <td className="px-3 py-1.5 text-gray-200 max-w-[140px] truncate" title={r.label}>{r.label}</td>
                 <td className="px-2 py-1.5 text-right text-gray-300">{fmtMoney(r.spend)}</td>
+                <td className="px-2 py-1.5 text-right text-gray-300">{fmtMoney(r.revenue)}</td>
                 <td className={`px-2 py-1.5 text-right ${r.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(r.profit)}</td>
                 <td className="px-2 py-1.5 text-center"><RoiPill pct={r.roi} /></td>
                 <td className="px-2 py-1.5 text-center"><RoiPill pct={r.roi_1d} /></td>
@@ -123,6 +126,7 @@ function RoiTable({
             <tr className="border-t-2 border-gray-600 bg-gray-700/50">
               <td className="px-3 py-1.5 font-semibold text-gray-100">Total</td>
               <td className="px-2 py-1.5 text-right font-semibold text-gray-100">{fmtMoney(totalRow.spend)}</td>
+              <td className="px-2 py-1.5 text-right font-semibold text-gray-100">{fmtMoney(totalRow.revenue)}</td>
               <td className={`px-2 py-1.5 text-right font-semibold ${totalRow.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(totalRow.profit)}</td>
               <td className="px-2 py-1.5 text-center"><RoiPill pct={totalRow.roi} /></td>
               <td className="px-2 py-1.5 text-center"><RoiPill pct={totalRow.roi_1d} /></td>
@@ -190,7 +194,7 @@ function DateTable({
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export function PerformanceSummaryTables({ rows, historicalRows, startDate }: Props) {
+export function PerformanceSummaryTables({ rows, historicalRows, startDate, last30Rows }: Props) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [providers, setProviders] = useState<FeedProvider[]>([]);
 
@@ -252,7 +256,7 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate }: Pr
     for (const [key, groupRows] of buckets) {
       const { spend, revenue } = sumRows(groupRows);
       const provider = providers.find(p => p.id === key);
-      const label = provider?.name ?? (key === "__unknown__" ? "Unknown" : key);
+      const label = provider?.name ?? (key === "__unknown__" ? "Visymo (KingsRoad)" : key);
       const pred = (r: CombinedRow) => (r.feed_provider_id || "__unknown__") === key;
       result.push({
         key,
@@ -268,10 +272,11 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate }: Pr
     return result.sort((a, b) => b.spend - a.spend);
   }, [rows, historicalRows, providers, d1, d2]);
 
-  // ── Date grouping ─────────────────────────────────────────────────────────
+  // ── Date grouping (uses last30Rows when available, falls back to rows) ──────
   const dateSummary = useMemo<SummaryRow[]>(() => {
+    const source = last30Rows ?? rows;
     const buckets = new Map<string, CombinedRow[]>();
-    for (const row of rows) {
+    for (const row of source) {
       if (!buckets.has(row.stat_date)) buckets.set(row.stat_date, []);
       buckets.get(row.stat_date)!.push(row);
     }
@@ -290,7 +295,7 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate }: Pr
       });
     }
     return result.sort((a, b) => b.key.localeCompare(a.key));
-  }, [rows]);
+  }, [last30Rows, rows]);
 
   // ── Historical totals (shared between article and feed total rows) ─────────
   const { totalHistRoi1, totalHistRoi2 } = useMemo(() => {
