@@ -8,6 +8,7 @@ import { PerformanceTable } from "@/components/performance/PerformanceTable";
 import { DateRangePicker } from "@/components/performance/DateRangePicker";
 import { loadSavedColumns, loadSavedOrder } from "@/components/performance/ColumnSelector";
 import { KpiSummaryBar } from "@/components/performance/KpiSummaryBar";
+import { PerformanceSummaryTables } from "@/components/performance/PerformanceSummaryTables";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import type { SquadDetail, AggrRow } from "@/components/performance/PerformanceTable";
 import type { SnapAdAccount } from "@/types/snapchat";
@@ -270,7 +271,13 @@ export default function PerformancePage() {
       <KpiSummaryBar rows={kpiRows} isLoading={loading && rows.length === 0} />
 
       {rows.length > 0 && (
-        <PerformanceTable
+        <>
+          <PerformanceSummaryTables
+            rows={rows}
+            historicalRows={historicalRows}
+            startDate={startDate}
+          />
+          <PerformanceTable
           rows={rows}
           eurToUsd={eurToUsd}
           visibleColumns={visibleColumns}
@@ -284,6 +291,7 @@ export default function PerformancePage() {
           onSquadPatched={updateSquadDetail}
           onFilteredRowsChange={setKpiRows}
         />
+        </>
       )}
 
       {!loading && !syncing && rows.length === 0 && lastLoaded && (
