@@ -246,7 +246,7 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
 
   // ── Feed provider grouping ────────────────────────────────────────────────
   const feedSummary = useMemo<SummaryRow[]>(() => {
-    // Resolve provider key: prefer feed_provider_id, fall back to domain_name match
+    // Resolve provider key: feed_provider_id → domain_name → ad_account_id → unknown
     function providerKey(r: CombinedRow): string {
       if (r.feed_provider_id) return r.feed_provider_id;
       if (r.domain_name) {
@@ -256,6 +256,12 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
             const base = d.baseDomain?.toLowerCase();
             return base && (dn === base || dn.endsWith("." + base));
           })
+        );
+        if (match) return match.id;
+      }
+      if (r.ad_account_id) {
+        const match = providers.find(p =>
+          p.snapConfig?.allowedAdAccountIds?.includes(r.ad_account_id)
         );
         if (match) return match.id;
       }
