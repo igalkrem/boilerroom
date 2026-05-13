@@ -254,7 +254,7 @@ src/
   1. **uploadMedia** — creatives upload with concurrency capped at 2 (Snapchat returns E3002 on 3+ simultaneous uploads to the same ad account)
   2. **Channel assignment** — if `provider.channelConfig.type === "provider-supplied"`, calls `POST /api/feed-providers/channels/assign`; `{{channel.id}}` in all campaign/squad/creative names and in each creative's URL is always replaced (with the assigned channel ID, or empty string if none) — prevents literal `{{channel.id}}` from reaching Snapchat (E1001)
   3. **campaigns** — create campaigns in Snapchat
-  4. **adSquads** — create ad squads in Snapchat; after all squads are created, fires a best-effort follow-up PATCH per squad to set `placement_v2: { config: "CUSTOM", platforms: ["SNAPCHAT"], snapchat_positions: [...] }` (see placement notes below). Non-fatal — squad always exists even if placement update fails.
+  4. **adSquads** — create ad squads in Snapchat; squads are created without `placement_v2` and Snapchat assigns its default "CONTENT" placement. The previous best-effort placement PATCH was removed because setting `placement_v2: { config: "CUSTOM" }` locks the squad — Snapchat returns E2025 on any subsequent PUT (budget/bid/status changes), making campaigns uneditable via the API.
   5. **creatives** — create creatives; **ads** — create ads
   Each stage's results are tracked individually. `pacing_type` is hardcoded to `"STANDARD"`. The orchestrator accepts an optional `provider?: FeedProvider` parameter (6th arg) for channel assignment.
 
@@ -378,9 +378,9 @@ src/
 - Ad squad geo targeting: `targeting.geos` (NOT `geo_locations`) — `{ country_code: string }` with **lowercase** codes. Old presets with `geoCountryCode` (singular) are migrated on load.
 - Ad squad device targeting: `devices[].device_type` is `"MOBILE"` or `"WEB"`. Optional `os_type` (`"iOS"` or `"ANDROID"`) when MOBILE.
 - Ad squad demographic targeting: `min_age` and `max_age` are **strings** (e.g. `"18"`, `"35+"`), not numbers. Sending numbers causes E1001.
-- **`placement_v2` — two-step approach:** Snapchat rejects `placement_v2` in the POST body (causes squad creation to fail entirely). The orchestrator instead creates squads without `placement_v2`, then fires a best-effort PATCH for each created squad via `setAdSquadPlacement()` (GET current squad + PUT with placement appended). `config` values: `"AUTOMATIC"` (omit field entirely — sending it even with AUTOMATIC locks the squad and causes E2025 on future budget/bid updates), `"CUSTOM"` (explicit position list — the value we use), `"CONTENT"` (undocumented, not in public spec; the Snapchat UI label "Edit placement → Content"; appears to be what Snapchat assigns by default when a squad is created without `placement_v2`). `placement_v2` is excluded from `ADSQUAD_PUT_ALLOWED_FIELDS` so it is never echoed back in budget/bid/status PUT updates (which would cause E2025 on squads that have placement set).
+- **`placement_v2` — do not set after squad creation:** Snapchat rejects `placement_v2` in the POST body (causes squad creation to fail entirely). The orchestrator creates squads without `placement_v2` and leaves them in Snapchat's default `"CONTENT"` placement. Do NOT add a follow-up PATCH to set `placement_v2` — once any `placement_v2` value (including `"CUSTOM"` or `"AUTOMATIC"`) is set on a squad, Snapchat returns E2025 ("Update is not supported for this entity") on all future PUTs, permanently locking the squad against budget/bid/status changes via the API. `placement_v2` is excluded from `ADSQUAD_PUT_ALLOWED_FIELDS` so it is never echoed back in PUT updates.
 
-  **`snapchat_positions` UI mapping** (confirmed from live API docs):
+  **`snapchat_positions` reference** (for informational purposes — not sent by the orchestrator):
 
   | API value | Snapchat UI label |
   |---|---|
@@ -390,11 +390,9 @@ src/
   | `INSTREAM` | Within content — Publisher Stories |
   | `PUBLIC_STORIES_INSTREAM` | Within content — Creator Stories |
   | `FEED` | Discover feed |
-  | `CHAT_FEED` | Chat feed (Snapchat UI shows "Sponsored Snaps" but this is the required API value) |
+  | `CHAT_FEED` | Chat feed (Snapchat UI shows "Sponsored Snaps") |
   | `CAMERA` | Camera |
   | `POST_CAPTURE_CAROUSEL` | Post-capture carousel |
-
-  **`CHAT_FEED` is required** when using `config: "CUSTOM"` with conversion optimization goals (`PIXEL_PURCHASE`, `PIXEL_SIGNUP`, `PIXEL_ADD_TO_CART`, `PIXEL_PAGE_VIEW`, `LANDING_PAGE_VIEW`) on `REMOTE_WEBPAGE` (WEB_VIEW) ad type — enforced by Snapchat since November 2025. Omitting it causes the placement PUT to be silently rejected, leaving the squad at the "CONTENT" default. `CHAT_FEED` must be bundled with at least one of `INTERSTITIAL_CONTENT`, `INTERSTITIAL_USER`, or `FEED`. The orchestrator includes all 7 positions: `INTERSTITIAL_USER`, `INTERSTITIAL_CONTENT`, `INTERSTITIAL_SPOTLIGHT`, `INSTREAM`, `PUBLIC_STORIES_INSTREAM`, `FEED`, `CHAT_FEED`.
 - Fields intentionally omitted from payloads: `frequency_cap_max_impressions`, `frequency_cap_time_period`, `shareable`. Hardcoded: `pacing_type` (`"STANDARD"`). `profile_properties: { profile_id: string }` is required on creatives (E2652 if absent, E2006 if null) — orchestrator auto-fetches via `GET /api/snapchat/profiles`; returns early with errors if unresolvable.
 - Batch API response order is not guaranteed — orchestrator matches by `name` with positional-index fallback (`find(r => r.name === x) ?? results[i]`). Both layers required.
 - **PUT `/adsquads/{id}` silently no-ops on read-only fields:** Snapchat returns HTTP 200 with `sub_request_status: "ERROR"` (and the unchanged adsquad echoed back) when the body contains server-computed fields like `created_at`, `updated_at`, `delivery_status`, `effective_status`, `forced_view_eligibility`, `auto_bid`, `ranking_score`. `updateAdSquad` strips to a whitelist (`ADSQUAD_PUT_ALLOWED_FIELDS` = id, campaign_id, name, type, status, targeting, delivery_constraint, billing_event, optimization_goal, bid_strategy, bid_micro, daily_budget_micro, lifetime_budget_micro, conversion_window, pacing_type, start_time, end_time, pixel_id) before PUT, and inspects `sub_request_status` on the response — throws with `error_type: message` (or `sub_request_error_reason`) when not SUCCESS. Without both checks, the PATCH route returns 200 to the client while Snapchat never applied anything. **`placement_v2` is intentionally excluded** — sending it back causes E2025 ("Update is not supported for this entity") on squads created with placement_v2. **`bid_micro: null` or `bid_micro: 0`** is excluded — auto-bid squads return 0 from the API and sending it back triggers E2771 ("Bid is required on ad squad").

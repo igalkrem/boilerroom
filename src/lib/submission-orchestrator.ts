@@ -319,37 +319,6 @@ export async function runSubmission(
     })
   );
 
-  // ── Set CUSTOM placement on all created squads (best-effort, non-fatal) ──────
-  // Snapchat rejects placement_v2 in the POST body, but accepts it in a follow-up
-  // PUT on squads that were not originally created with placement_v2. This matches
-  // how the Snapchat Ads Manager sets custom placements (create first, then update).
-  if (squadIdMap.size > 0) {
-    await Promise.all(
-      [...squadIdMap.values()].map((snapSquadId) =>
-        fetch("/api/snapchat/adsquads", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            adAccountId,
-            squadId: snapSquadId,
-            placement_v2: {
-              config: "CUSTOM",
-              platforms: ["SNAPCHAT"],
-              snapchat_positions: [
-                "INTERSTITIAL_USER",
-                "INTERSTITIAL_CONTENT",
-                "INTERSTITIAL_SPOTLIGHT",
-                "INSTREAM",
-                "PUBLIC_STORIES_INSTREAM",
-                "FEED",
-                "CHAT_FEED",
-              ],
-            },
-          }),
-        }).catch((err) => console.warn("[orchestrator] placement update non-fatal:", String(err)))
-      )
-    );
-  }
 
   // ── Store channel → ad squad mapping (Predicto revenue attribution) ────────
   // After ad squads are created, record which ad squad this channel was assigned
