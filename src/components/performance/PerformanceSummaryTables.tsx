@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import type { Article } from "@/types/article";
 import type { FeedProvider } from "@/types/feed-provider";
@@ -37,13 +38,15 @@ function sumRows(rows: CombinedRow[]): { spend: number; revenue: number } {
   return { spend, revenue };
 }
 
-function histRoi(
+function histStats(
   histRows: CombinedRow[],
   date: string,
   pred: (r: CombinedRow) => boolean
-): number | null {
-  const { spend, revenue } = sumRows(histRows.filter(r => r.stat_date === date && pred(r)));
-  return roiPct(spend, revenue);
+): { spend: number; revenue: number } | null {
+  const filtered = histRows.filter(r => r.stat_date === date && pred(r));
+  if (filtered.length === 0) return null;
+  const { spend, revenue } = sumRows(filtered);
+  return spend > 0 || revenue > 0 ? { spend, revenue } : null;
 }
 
 // Shared three-tier provider resolution (module-level so both useMemos share it)
@@ -80,6 +83,10 @@ interface SummaryRow {
   roi: number | null;
   roi_1d: number | null;
   roi_2d: number | null;
+  spend_1d?: number;
+  revenue_1d?: number;
+  spend_2d?: number;
+  revenue_2d?: number;
 }
 
 interface Props {
@@ -89,15 +96,37 @@ interface Props {
   last30Rows?: CombinedRow[];
 }
 
-// ── ROI pill ───────────────────────────────────────────────────────────────
+// ── ROI pill with hover tooltip ────────────────────────────────────────────
 
-function RoiPill({ pct }: { pct: number | null }) {
+function RoiPill({ pct, meta }: { pct: number | null; meta?: { spend: number; revenue: number } }) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   if (pct === null) return <span className="text-gray-500 text-xs">—</span>;
   const bg = pct >= 120 ? "bg-green-500" : pct > 105 ? "bg-orange-400" : "bg-red-500";
+  const profit = meta ? meta.revenue - meta.spend : null;
   return (
-    <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded font-semibold text-gray-900 text-xs ${bg}`}>
-      {Math.round(pct)}%
-    </span>
+    <>
+      <span
+        className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded font-semibold text-gray-900 text-xs ${bg} ${meta ? "cursor-default" : ""}`}
+        onMouseEnter={meta ? (e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          setPos({ x: r.left + r.width / 2, y: r.top });
+        } : undefined}
+        onMouseLeave={meta ? () => setPos(null) : undefined}
+      >
+        {Math.round(pct)}%
+      </span>
+      {pos && meta && createPortal(
+        <div
+          style={{ position: "fixed", left: pos.x, top: pos.y - 8, transform: "translate(-50%, -100%)", zIndex: 9999 }}
+          className="bg-gray-900 border border-gray-700 rounded-md px-2.5 py-1.5 text-xs text-gray-300 shadow-xl pointer-events-none whitespace-nowrap"
+        >
+          <div>Spend: <span className="text-white font-medium">{fmtMoney(meta.spend)}</span></div>
+          <div>Revenue: <span className="text-white font-medium">{fmtMoney(meta.revenue)}</span></div>
+          <div>Profit: <span className={`font-medium ${profit! >= 0 ? "text-green-400" : "text-red-400"}`}>{profit! >= 0 ? "+" : ""}{fmtMoney(profit!)}</span></div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 
@@ -145,9 +174,15 @@ function RoiTable({
                 <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.spend)}</td>
                 <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.revenue)}</td>
                 <td className={`px-2 py-1.5 text-right whitespace-nowrap ${r.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(r.profit)}</td>
-                <td className="px-2 py-1.5 text-center"><RoiPill pct={r.roi} /></td>
-                <td className="px-2 py-1.5 text-center"><RoiPill pct={r.roi_1d} /></td>
-                <td className="px-2 py-1.5 text-center"><RoiPill pct={r.roi_2d} /></td>
+                <td className="px-2 py-1.5 text-center">
+                  <RoiPill pct={r.roi} meta={{ spend: r.spend, revenue: r.revenue }} />
+                </td>
+                <td className="px-2 py-1.5 text-center">
+                  <RoiPill pct={r.roi_1d} meta={r.spend_1d !== undefined ? { spend: r.spend_1d, revenue: r.revenue_1d! } : undefined} />
+                </td>
+                <td className="px-2 py-1.5 text-center">
+                  <RoiPill pct={r.roi_2d} meta={r.spend_2d !== undefined ? { spend: r.spend_2d, revenue: r.revenue_2d! } : undefined} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -158,9 +193,15 @@ function RoiTable({
               <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.spend)}</td>
               <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.revenue)}</td>
               <td className={`px-2 py-1.5 text-right font-semibold whitespace-nowrap ${totalRow.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(totalRow.profit)}</td>
-              <td className="px-2 py-1.5 text-center"><RoiPill pct={totalRow.roi} /></td>
-              <td className="px-2 py-1.5 text-center"><RoiPill pct={totalRow.roi_1d} /></td>
-              <td className="px-2 py-1.5 text-center"><RoiPill pct={totalRow.roi_2d} /></td>
+              <td className="px-2 py-1.5 text-center">
+                <RoiPill pct={totalRow.roi} meta={{ spend: totalRow.spend, revenue: totalRow.revenue }} />
+              </td>
+              <td className="px-2 py-1.5 text-center">
+                <RoiPill pct={totalRow.roi_1d} meta={totalRow.spend_1d !== undefined ? { spend: totalRow.spend_1d, revenue: totalRow.revenue_1d! } : undefined} />
+              </td>
+              <td className="px-2 py-1.5 text-center">
+                <RoiPill pct={totalRow.roi_2d} meta={totalRow.spend_2d !== undefined ? { spend: totalRow.spend_2d, revenue: totalRow.revenue_2d! } : undefined} />
+              </td>
             </tr>
           </tfoot>
         </table>
@@ -203,7 +244,9 @@ function DateTable({
                 <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.spend)}</td>
                 <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.revenue)}</td>
                 <td className={`px-2 py-1.5 text-right whitespace-nowrap ${r.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(r.profit)}</td>
-                <td className="px-2 py-1.5 text-center"><RoiPill pct={r.roi} /></td>
+                <td className="px-2 py-1.5 text-center">
+                  <RoiPill pct={r.roi} meta={{ spend: r.spend, revenue: r.revenue }} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -213,7 +256,9 @@ function DateTable({
               <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.spend)}</td>
               <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.revenue)}</td>
               <td className={`px-2 py-1.5 text-right font-semibold whitespace-nowrap ${totalRow.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(totalRow.profit)}</td>
-              <td className="px-2 py-1.5 text-center"><RoiPill pct={totalRow.roi} /></td>
+              <td className="px-2 py-1.5 text-center">
+                <RoiPill pct={totalRow.roi} meta={{ spend: totalRow.spend, revenue: totalRow.revenue }} />
+              </td>
             </tr>
           </tfoot>
         </table>
@@ -269,6 +314,8 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
           : !articles.some(a => normName.includes(norm(a.slug)));
         return articleMatches && resolveProviderKey(r, providers) === pKey;
       };
+      const h1 = histStats(historicalRows, d1, pred);
+      const h2 = histStats(historicalRows, d2, pred);
       result.push({
         key,
         label,
@@ -277,8 +324,12 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
         revenue,
         profit: revenue - spend,
         roi: roiPct(spend, revenue),
-        roi_1d: histRoi(historicalRows, d1, pred),
-        roi_2d: histRoi(historicalRows, d2, pred),
+        roi_1d: h1 ? roiPct(h1.spend, h1.revenue) : null,
+        roi_2d: h2 ? roiPct(h2.spend, h2.revenue) : null,
+        spend_1d: h1?.spend,
+        revenue_1d: h1?.revenue,
+        spend_2d: h2?.spend,
+        revenue_2d: h2?.revenue,
       });
     }
     return result.sort((a, b) => b.spend - a.spend);
@@ -298,6 +349,8 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
       const provider = providers.find(p => p.id === key);
       const label = provider?.name ?? (key === "__unknown__" ? "Unknown" : key);
       const pred = (r: CombinedRow) => resolveProviderKey(r, providers) === key;
+      const h1 = histStats(historicalRows, d1, pred);
+      const h2 = histStats(historicalRows, d2, pred);
       result.push({
         key,
         label,
@@ -305,8 +358,12 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
         revenue,
         profit: revenue - spend,
         roi: roiPct(spend, revenue),
-        roi_1d: histRoi(historicalRows, d1, pred),
-        roi_2d: histRoi(historicalRows, d2, pred),
+        roi_1d: h1 ? roiPct(h1.spend, h1.revenue) : null,
+        roi_2d: h2 ? roiPct(h2.spend, h2.revenue) : null,
+        spend_1d: h1?.spend,
+        revenue_1d: h1?.revenue,
+        spend_2d: h2?.spend,
+        revenue_2d: h2?.revenue,
       });
     }
     return result.sort((a, b) => b.spend - a.spend);
@@ -337,25 +394,32 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
     return result.sort((a, b) => b.key.localeCompare(a.key));
   }, [last30Rows, rows]);
 
-  // ── Historical totals (shared between article and feed total rows) ─────────
-  const { totalHistRoi1, totalHistRoi2 } = useMemo(() => {
-    const { spend: s1, revenue: r1 } = sumRows(historicalRows.filter(r => r.stat_date === d1));
-    const { spend: s2, revenue: r2 } = sumRows(historicalRows.filter(r => r.stat_date === d2));
-    return { totalHistRoi1: roiPct(s1, r1), totalHistRoi2: roiPct(s2, r2) };
+  // ── Historical totals for footer rows ────────────────────────────────────
+  const histTotals = useMemo(() => {
+    const h1 = histStats(historicalRows, d1, () => true);
+    const h2 = histStats(historicalRows, d2, () => true);
+    return {
+      roi1: h1 ? roiPct(h1.spend, h1.revenue) : null,
+      roi2: h2 ? roiPct(h2.spend, h2.revenue) : null,
+      spend_1d: h1?.spend,
+      revenue_1d: h1?.revenue,
+      spend_2d: h2?.spend,
+      revenue_2d: h2?.revenue,
+    };
   }, [historicalRows, d1, d2]);
 
   // ── Total footer rows ─────────────────────────────────────────────────────
   const articleTotal = useMemo<SummaryRow>(() => {
     const spend = articleSummary.reduce((s, r) => s + r.spend, 0);
     const revenue = articleSummary.reduce((s, r) => s + r.revenue, 0);
-    return { key: "__total__", label: "Total", spend, revenue, profit: revenue - spend, roi: roiPct(spend, revenue), roi_1d: totalHistRoi1, roi_2d: totalHistRoi2 };
-  }, [articleSummary, totalHistRoi1, totalHistRoi2]);
+    return { key: "__total__", label: "Total", spend, revenue, profit: revenue - spend, roi: roiPct(spend, revenue), roi_1d: histTotals.roi1, roi_2d: histTotals.roi2, spend_1d: histTotals.spend_1d, revenue_1d: histTotals.revenue_1d, spend_2d: histTotals.spend_2d, revenue_2d: histTotals.revenue_2d };
+  }, [articleSummary, histTotals]);
 
   const feedTotal = useMemo<SummaryRow>(() => {
     const spend = feedSummary.reduce((s, r) => s + r.spend, 0);
     const revenue = feedSummary.reduce((s, r) => s + r.revenue, 0);
-    return { key: "__total__", label: "Total", spend, revenue, profit: revenue - spend, roi: roiPct(spend, revenue), roi_1d: totalHistRoi1, roi_2d: totalHistRoi2 };
-  }, [feedSummary, totalHistRoi1, totalHistRoi2]);
+    return { key: "__total__", label: "Total", spend, revenue, profit: revenue - spend, roi: roiPct(spend, revenue), roi_1d: histTotals.roi1, roi_2d: histTotals.roi2, spend_1d: histTotals.spend_1d, revenue_1d: histTotals.revenue_1d, spend_2d: histTotals.spend_2d, revenue_2d: histTotals.revenue_2d };
+  }, [feedSummary, histTotals]);
 
   const dateTotal = useMemo<SummaryRow>(() => {
     const spend = dateSummary.reduce((s, r) => s + r.spend, 0);
