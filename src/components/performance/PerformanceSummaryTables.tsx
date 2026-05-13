@@ -246,9 +246,25 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
 
   // ── Feed provider grouping ────────────────────────────────────────────────
   const feedSummary = useMemo<SummaryRow[]>(() => {
+    // Resolve provider key: prefer feed_provider_id, fall back to domain_name match
+    function providerKey(r: CombinedRow): string {
+      if (r.feed_provider_id) return r.feed_provider_id;
+      if (r.domain_name) {
+        const dn = r.domain_name.toLowerCase();
+        const match = providers.find(p =>
+          p.domains?.some(d => {
+            const base = d.baseDomain?.toLowerCase();
+            return base && (dn === base || dn.endsWith("." + base));
+          })
+        );
+        if (match) return match.id;
+      }
+      return "__unknown__";
+    }
+
     const buckets = new Map<string, CombinedRow[]>();
     for (const row of rows) {
-      const key = row.feed_provider_id || "__unknown__";
+      const key = providerKey(row);
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key)!.push(row);
     }
@@ -256,8 +272,8 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
     for (const [key, groupRows] of buckets) {
       const { spend, revenue } = sumRows(groupRows);
       const provider = providers.find(p => p.id === key);
-      const label = provider?.name ?? (key === "__unknown__" ? "Visymo (KingsRoad)" : key);
-      const pred = (r: CombinedRow) => (r.feed_provider_id || "__unknown__") === key;
+      const label = provider?.name ?? (key === "__unknown__" ? "Unknown" : key);
+      const pred = (r: CombinedRow) => providerKey(r) === key;
       result.push({
         key,
         label,
