@@ -65,6 +65,21 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
           continue;
         }
 
+        // Block submission for VIDEO assets uploaded before the H.264 transcoding pipeline —
+        // they lack optimizedUrl and the raw original will be rejected by Snapchat (E2601).
+        const legacyVideos = assets.filter((a) => a.mediaType === "VIDEO" && !a.optimizedUrl);
+        if (legacyVideos.length > 0) {
+          const names = legacyVideos.map((a) => a.originalFileName).join(", ");
+          collectedResults.push({
+            uploadMedia: [],
+            campaigns: [{ clientId: item.creativeIds[0] ?? `item-${i}`, snapId: "", name: `item-${i + 1}`, error: `Video(s) need re-upload for Snap compatibility: ${names} — go to the Silo, delete and re-upload to get H.264 transcoding.` }],
+            adSquads: [],
+            creatives: [],
+            ads: [],
+          });
+          continue;
+        }
+
         const ctx = {
           presetName: preset.name,
           articleSlug: article.slug,
