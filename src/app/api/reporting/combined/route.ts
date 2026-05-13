@@ -5,6 +5,7 @@ import { getEurToUsd } from "@/lib/fx-rate";
 
 export interface CombinedRow {
   ad_squad_id: string;
+  ad_account_id: string;
   ad_squad_name: string;
   stat_date: string;
   country_code: string;
@@ -61,6 +62,7 @@ export async function GET(request: NextRequest) {
     sql`
       SELECT
         s.ad_squad_id,
+        s.ad_account_id,
         COALESCE(NULLIF(s.ad_squad_name, ''), s.ad_squad_id) AS ad_squad_name,
         s.stat_date::text                         AS stat_date,
         s.country_code,
@@ -157,6 +159,7 @@ export async function GET(request: NextRequest) {
     const roiPct = spendUsd > 0 ? (revenueUsd / spendUsd) * 100 : null;
     return {
       ad_squad_id: r.ad_squad_id as string,
+      ad_account_id: r.ad_account_id as string,
       ad_squad_name: r.ad_squad_name as string,
       stat_date: r.stat_date as string,
       country_code: r.country_code as string,
