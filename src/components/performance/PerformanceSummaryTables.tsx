@@ -46,11 +46,34 @@ function histRoi(
   return roiPct(spend, revenue);
 }
 
+// Shared three-tier provider resolution (module-level so both useMemos share it)
+function resolveProviderKey(r: CombinedRow, providers: FeedProvider[]): string {
+  if (r.feed_provider_id) return r.feed_provider_id;
+  if (r.domain_name) {
+    const dn = r.domain_name.toLowerCase();
+    const match = providers.find(p =>
+      p.domains?.some(d => {
+        const base = d.baseDomain?.toLowerCase();
+        return base && (dn === base || dn.endsWith("." + base));
+      })
+    );
+    if (match) return match.id;
+  }
+  if (r.ad_account_id) {
+    const match = providers.find(p =>
+      p.snapConfig?.allowedAdAccountIds?.includes(r.ad_account_id)
+    );
+    if (match) return match.id;
+  }
+  return "__unknown__";
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface SummaryRow {
   key: string;
   label: string;
+  feedLabel?: string;
   spend: number;
   revenue: number;
   profit: number;
@@ -85,22 +108,25 @@ function RoiTable({
   labelHeader,
   rows,
   totalRow,
+  showFeed = false,
 }: {
   title: string;
   labelHeader: string;
   rows: SummaryRow[];
   totalRow: SummaryRow;
+  showFeed?: boolean;
 }) {
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden flex flex-col">
       <div className="px-3 py-2 border-b border-gray-700 flex-shrink-0">
         <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{title}</span>
       </div>
-      <div className="overflow-auto">
+      <div className="overflow-auto max-h-48">
         <table className="w-full text-xs">
           <thead>
             <tr className="text-gray-400 border-b border-gray-700 bg-gray-800 sticky top-0 z-10">
               <th className="text-left px-3 py-1.5 font-medium">{labelHeader}</th>
+              {showFeed && <th className="text-left px-2 py-1.5 font-medium">Feed</th>}
               <th className="text-right px-2 py-1.5 font-medium">Cost</th>
               <th className="text-right px-2 py-1.5 font-medium">Revenue</th>
               <th className="text-right px-2 py-1.5 font-medium">Profit</th>
@@ -112,10 +138,13 @@ function RoiTable({
           <tbody>
             {rows.map((r) => (
               <tr key={r.key} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
-                <td className="px-3 py-1.5 text-gray-200 max-w-[140px] truncate" title={r.label}>{r.label}</td>
-                <td className="px-2 py-1.5 text-right text-gray-300">{fmtMoney(r.spend)}</td>
-                <td className="px-2 py-1.5 text-right text-gray-300">{fmtMoney(r.revenue)}</td>
-                <td className={`px-2 py-1.5 text-right ${r.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(r.profit)}</td>
+                <td className="px-3 py-1.5 text-gray-200" title={r.label}>{r.label}</td>
+                {showFeed && (
+                  <td className="px-2 py-1.5 text-gray-400 max-w-[80px] truncate" title={r.feedLabel}>{r.feedLabel ?? "—"}</td>
+                )}
+                <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.spend)}</td>
+                <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.revenue)}</td>
+                <td className={`px-2 py-1.5 text-right whitespace-nowrap ${r.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(r.profit)}</td>
                 <td className="px-2 py-1.5 text-center"><RoiPill pct={r.roi} /></td>
                 <td className="px-2 py-1.5 text-center"><RoiPill pct={r.roi_1d} /></td>
                 <td className="px-2 py-1.5 text-center"><RoiPill pct={r.roi_2d} /></td>
@@ -125,9 +154,10 @@ function RoiTable({
           <tfoot>
             <tr className="border-t-2 border-gray-600 bg-gray-700/50">
               <td className="px-3 py-1.5 font-semibold text-gray-100">Total</td>
-              <td className="px-2 py-1.5 text-right font-semibold text-gray-100">{fmtMoney(totalRow.spend)}</td>
-              <td className="px-2 py-1.5 text-right font-semibold text-gray-100">{fmtMoney(totalRow.revenue)}</td>
-              <td className={`px-2 py-1.5 text-right font-semibold ${totalRow.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(totalRow.profit)}</td>
+              {showFeed && <td className="px-2 py-1.5" />}
+              <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.spend)}</td>
+              <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.revenue)}</td>
+              <td className={`px-2 py-1.5 text-right font-semibold whitespace-nowrap ${totalRow.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(totalRow.profit)}</td>
               <td className="px-2 py-1.5 text-center"><RoiPill pct={totalRow.roi} /></td>
               <td className="px-2 py-1.5 text-center"><RoiPill pct={totalRow.roi_1d} /></td>
               <td className="px-2 py-1.5 text-center"><RoiPill pct={totalRow.roi_2d} /></td>
@@ -155,7 +185,7 @@ function DateTable({
       <div className="px-3 py-2 border-b border-gray-700 flex-shrink-0">
         <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{title}</span>
       </div>
-      <div className="overflow-auto">
+      <div className="overflow-auto max-h-48">
         <table className="w-full text-xs">
           <thead>
             <tr className="text-gray-400 border-b border-gray-700 bg-gray-800 sticky top-0 z-10">
@@ -170,9 +200,9 @@ function DateTable({
             {rows.map((r) => (
               <tr key={r.key} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
                 <td className="px-3 py-1.5 text-gray-200">{r.label}</td>
-                <td className="px-2 py-1.5 text-right text-gray-300">{fmtMoney(r.spend)}</td>
-                <td className="px-2 py-1.5 text-right text-gray-300">{fmtMoney(r.revenue)}</td>
-                <td className={`px-2 py-1.5 text-right ${r.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(r.profit)}</td>
+                <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.spend)}</td>
+                <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.revenue)}</td>
+                <td className={`px-2 py-1.5 text-right whitespace-nowrap ${r.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(r.profit)}</td>
                 <td className="px-2 py-1.5 text-center"><RoiPill pct={r.roi} /></td>
               </tr>
             ))}
@@ -180,9 +210,9 @@ function DateTable({
           <tfoot>
             <tr className="border-t-2 border-gray-600 bg-gray-700/50">
               <td className="px-3 py-1.5 font-semibold text-gray-100">Total</td>
-              <td className="px-2 py-1.5 text-right font-semibold text-gray-100">{fmtMoney(totalRow.spend)}</td>
-              <td className="px-2 py-1.5 text-right font-semibold text-gray-100">{fmtMoney(totalRow.revenue)}</td>
-              <td className={`px-2 py-1.5 text-right font-semibold ${totalRow.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(totalRow.profit)}</td>
+              <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.spend)}</td>
+              <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.revenue)}</td>
+              <td className={`px-2 py-1.5 text-right font-semibold whitespace-nowrap ${totalRow.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(totalRow.profit)}</td>
               <td className="px-2 py-1.5 text-center"><RoiPill pct={totalRow.roi} /></td>
             </tr>
           </tfoot>
@@ -212,27 +242,37 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
   const d1 = dateMinus(startDate, 1);
   const d2 = dateMinus(startDate, 2);
 
-  // ── Article grouping ──────────────────────────────────────────────────────
+  // ── Article × Feed provider grouping ─────────────────────────────────────
   const articleSummary = useMemo<SummaryRow[]>(() => {
     const buckets = new Map<string, CombinedRow[]>();
     for (const row of rows) {
       const normName = norm(row.ad_squad_name);
-      const match = articles.find(a => normName.includes(norm(a.slug)));
-      const key = match ? match.id : "__other__";
+      const articleMatch = articles.find(a => normName.includes(norm(a.slug)));
+      const articleKey = articleMatch ? articleMatch.id : "__other__";
+      const pKey = resolveProviderKey(row, providers);
+      const key = `${articleKey}|||${pKey}`;
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key)!.push(row);
     }
     const result: SummaryRow[] = [];
     for (const [key, groupRows] of buckets) {
+      const [articleKey, pKey] = key.split("|||");
       const { spend, revenue } = sumRows(groupRows);
-      const article = articles.find(a => a.id === key);
+      const article = articles.find(a => a.id === articleKey);
       const label = article ? article.slug : "Other";
-      const pred = article
-        ? (r: CombinedRow) => norm(r.ad_squad_name).includes(norm(article.slug))
-        : (r: CombinedRow) => !articles.some(a => norm(r.ad_squad_name).includes(norm(a.slug)));
+      const provider = providers.find(p => p.id === pKey);
+      const feedLabel = provider?.name ?? (pKey === "__unknown__" ? "Unknown" : pKey);
+      const pred = (r: CombinedRow) => {
+        const normName = norm(r.ad_squad_name);
+        const articleMatches = article
+          ? normName.includes(norm(article.slug))
+          : !articles.some(a => normName.includes(norm(a.slug)));
+        return articleMatches && resolveProviderKey(r, providers) === pKey;
+      };
       result.push({
         key,
         label,
+        feedLabel,
         spend,
         revenue,
         profit: revenue - spend,
@@ -242,35 +282,13 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
       });
     }
     return result.sort((a, b) => b.spend - a.spend);
-  }, [rows, historicalRows, articles, d1, d2]);
+  }, [rows, historicalRows, articles, providers, d1, d2]);
 
   // ── Feed provider grouping ────────────────────────────────────────────────
   const feedSummary = useMemo<SummaryRow[]>(() => {
-    // Resolve provider key: feed_provider_id → domain_name → ad_account_id → unknown
-    function providerKey(r: CombinedRow): string {
-      if (r.feed_provider_id) return r.feed_provider_id;
-      if (r.domain_name) {
-        const dn = r.domain_name.toLowerCase();
-        const match = providers.find(p =>
-          p.domains?.some(d => {
-            const base = d.baseDomain?.toLowerCase();
-            return base && (dn === base || dn.endsWith("." + base));
-          })
-        );
-        if (match) return match.id;
-      }
-      if (r.ad_account_id) {
-        const match = providers.find(p =>
-          p.snapConfig?.allowedAdAccountIds?.includes(r.ad_account_id)
-        );
-        if (match) return match.id;
-      }
-      return "__unknown__";
-    }
-
     const buckets = new Map<string, CombinedRow[]>();
     for (const row of rows) {
-      const key = providerKey(row);
+      const key = resolveProviderKey(row, providers);
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key)!.push(row);
     }
@@ -279,7 +297,7 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
       const { spend, revenue } = sumRows(groupRows);
       const provider = providers.find(p => p.id === key);
       const label = provider?.name ?? (key === "__unknown__" ? "Unknown" : key);
-      const pred = (r: CombinedRow) => providerKey(r) === key;
+      const pred = (r: CombinedRow) => resolveProviderKey(r, providers) === key;
       result.push({
         key,
         label,
@@ -346,8 +364,8 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
   }, [dateSummary]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4 mb-6">
-      <RoiTable title="By Article" labelHeader="Article" rows={articleSummary} totalRow={articleTotal} />
+    <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-4 mt-4 mb-6">
+      <RoiTable title="By Article" labelHeader="Article" rows={articleSummary} totalRow={articleTotal} showFeed />
       <RoiTable title="By Feed" labelHeader="Feed" rows={feedSummary} totalRow={feedTotal} />
       <DateTable title="By Date" rows={dateSummary} totalRow={dateTotal} />
     </div>
