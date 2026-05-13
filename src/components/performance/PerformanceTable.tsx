@@ -9,6 +9,8 @@ import { resolveProviderKey } from "@/lib/reporting/provider-key";
 import { DrilldownModal } from "./DrilldownModal";
 import { ColumnSelector } from "./ColumnSelector";
 
+const PROVIDER_COLORS = ["#3b82f6", "#f97316", "#8b5cf6", "#10b981", "#ec4899", "#f59e0b"] as const;
+
 function SnapchatLogo({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
@@ -261,6 +263,15 @@ export function PerformanceTable({
       if (p) setProviders(JSON.parse(p) as FeedProvider[]);
     } catch {}
   }, []);
+
+  const providerColorMap = useMemo(() => {
+    const sorted = [...providers].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+    const map: Record<string, string> = {};
+    sorted.forEach((p, i) => { map[p.id] = PROVIDER_COLORS[i % PROVIDER_COLORS.length]; });
+    return map;
+  }, [providers]);
 
   useEffect(() => {
     if (!articleDropOpen) return;
@@ -1140,9 +1151,12 @@ export function PerformanceTable({
                 const isActive = detail ? detail.status === "ACTIVE" : false;
                 const isHidden = hiddenSquadIds.has(r.ad_squad_id);
 
+                const stripeColor = providerColorMap[resolveProviderKey(r, providers)] ?? "transparent";
+
                 return (
                   <tr
                     key={r.ad_squad_id}
+                    style={{ boxShadow: `inset 3px 0 0 ${stripeColor}` }}
                     className={`transition-colors ${
                       isHidden ? "opacity-40" : ""
                     } ${
