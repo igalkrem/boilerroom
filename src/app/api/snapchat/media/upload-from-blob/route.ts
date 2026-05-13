@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import { getValidAccessToken } from "@/lib/snapchat/client";
+import { refreshAccessToken } from "@/lib/snapchat/auth";
 import { rateLimitedFetch } from "@/lib/rate-limiter";
 import { z } from "zod";
 
@@ -80,8 +81,39 @@ export async function POST(request: NextRequest) {
   );
 
   if (!snapRes.ok) {
-    const errText = await snapRes.text();
-    console.error("[upload-from-blob] Snapchat upload failed:", snapRes.status, errText);
+    let finalRes = snapRes;
+
+    // Snapchat returns 403 E3002 when an access token expires mid-sequence, not
+    // just for genuine role-permission failures. Refresh once and retry before
+    // giving up — mirrors the same pattern in snapFetch() for 401s.
+    if (snapRes.status === 401 || snapRes.status === 403) {
+      try {
+        const tokens = await refreshAccessToken(session.snapRefreshToken!);
+        session.snapAccessToken = tokens.access_token;
+        if (tokens.refresh_token) session.snapRefreshToken = tokens.refresh_token;
+        session.snapExpiresAt = Date.now() + tokens.expires_in * 1000;
+        await session.save();
+
+        const retryForm = new FormData();
+        retryForm.append("file", new Blob([arrayBuffer], { type: contentType }), fileName ?? "media");
+
+        const retryRes = await rateLimitedFetch(() =>
+          fetch(`https://adsapi.snapchat.com/v1/media/${mediaId}/upload`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${tokens.access_token}` },
+            body: retryForm,
+          })
+        );
+
+        if (retryRes.ok) return NextResponse.json({ mediaId, status: "READY" });
+        finalRes = retryRes;
+      } catch (refreshErr) {
+        console.error("[upload-from-blob] Token refresh failed:", refreshErr);
+      }
+    }
+
+    const errText = await finalRes.text();
+    console.error("[upload-from-blob] Snapchat upload failed:", finalRes.status, errText);
     let userMessage: string | undefined;
     try {
       const errJson = JSON.parse(errText);
