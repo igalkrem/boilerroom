@@ -736,7 +736,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           style={{ background: "#1f2937" }}
           nodesDraggable={false}
           fitView
-          fitViewOptions={{ padding: 1.5, maxZoom: 0.75 }}
+          fitViewOptions={{ padding: 0.3, maxZoom: 1.0 }}
           deleteKeyCode={["Backspace", "Delete"]}
           minZoom={0.2}
           maxZoom={2}
