@@ -21,9 +21,16 @@ export function ProviderNode({ data }: {
 
   return (
     <div
-      style={connected ? { backgroundColor: `${data.color}12` } : undefined}
+      style={
+        connected
+          ? {
+              background: `linear-gradient(135deg, ${data.color}22 0%, #111827 70%)`,
+              boxShadow: `0 4px 24px ${data.color}20, inset 0 0 0 1px ${data.color}20`,
+            }
+          : undefined
+      }
       className={`relative rounded-2xl border shadow-sm w-44 overflow-hidden ${
-        connected ? "border-gray-100 dark:border-gray-800" : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+        connected ? "" : "border-gray-200 bg-white dark:border-gray-700 dark:bg-[#111827]"
       }`}
     >
       {/* Left color accent bar */}

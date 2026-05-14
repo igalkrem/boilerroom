@@ -1,9 +1,8 @@
 "use client";
 
-import { BaseEdge, EdgeProps, getSmoothStepPath } from "@xyflow/react";
+import { EdgeProps, getSmoothStepPath } from "@xyflow/react";
 
 export function ProviderEdge({
-  id,
   sourceX,
   sourceY,
   targetX,
@@ -16,20 +15,32 @@ export function ProviderEdge({
   const [edgePath] = getSmoothStepPath({
     sourceX, sourceY, sourcePosition,
     targetX, targetY, targetPosition,
-    borderRadius: 14,
+    borderRadius: 16,
   });
   const color = data?.color ?? "#94a3b8";
 
   return (
-    <BaseEdge
-      id={id}
-      path={edgePath}
-      style={{
-        stroke: color,
-        strokeWidth: selected ? 2.5 : 2,
-        strokeDasharray: "6 3",
-        opacity: selected ? 1 : 0.65,
-      }}
-    />
+    <>
+      {/* Glow halo — wide blurred stroke behind the crisp line */}
+      <path
+        d={edgePath}
+        stroke={color}
+        strokeWidth={selected ? 12 : 8}
+        fill="none"
+        opacity={0.18}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* Main crisp stroke */}
+      <path
+        d={edgePath}
+        stroke={color}
+        strokeWidth={selected ? 3 : 2.5}
+        fill="none"
+        opacity={selected ? 1 : 0.85}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
   );
 }

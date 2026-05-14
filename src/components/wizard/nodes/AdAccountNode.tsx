@@ -16,25 +16,43 @@ export function AdAccountNode({ data }: {
     .map((w) => w[0]?.toUpperCase() ?? "")
     .join("");
 
+  const handleStyle = connected
+    ? {
+        border: `2px solid ${data.color}`,
+        boxShadow: `inset 0 0 5px ${data.color}50, 0 0 8px ${data.color}45`,
+      }
+    : { border: "2px solid #374151" };
+
   return (
     <div
-      style={connected ? { borderColor: data.color, backgroundColor: `${data.color}12`, borderWidth: 2 } : undefined}
+      style={
+        connected
+          ? {
+              background: `linear-gradient(135deg, ${data.color}18 0%, #111827 65%)`,
+              borderColor: data.color,
+              borderWidth: 2,
+              boxShadow: `0 4px 24px ${data.color}25`,
+            }
+          : undefined
+      }
       className={`relative rounded-2xl border-2 p-3 w-44 shadow-sm transition-all select-none ${
-        connected ? "" : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+        connected ? "" : "border-gray-200 bg-white dark:border-gray-700 dark:bg-[#111827]"
       }`}
     >
       <Handle
         type="target"
         position={Position.Left}
         id="in"
-        className="!w-7 !h-7 !rounded-full !bg-gray-400 !border-2 !border-white cursor-pointer"
+        className="!w-3.5 !h-3.5 !rounded-full !bg-gray-900 cursor-pointer"
+        style={handleStyle}
         onClick={() => data.onDisconnectTarget(`account-${data.accountId}`)}
       />
       <Handle
         type="source"
         position={Position.Right}
         id="out"
-        className="!w-7 !h-7 !rounded-full !bg-gray-400 !border-2 !border-white"
+        className="!w-3.5 !h-3.5 !rounded-full !bg-gray-900 cursor-pointer"
+        style={handleStyle}
       />
 
       <div className="flex items-center gap-2">

@@ -18,18 +18,30 @@ export function PresetNode({ data }: {
   const presetEdges = store.edges.articleToPreset.filter((e) => e.presetId === data.preset.id);
   const connected = presetEdges.length > 0;
 
+  const handleStyle = connected
+    ? {
+        border: `2px solid ${data.color}`,
+        boxShadow: `inset 0 0 5px ${data.color}50, 0 0 8px ${data.color}45`,
+      }
+    : { border: "2px solid #374151" };
+
   return (
     <div
       style={
         connected
-          ? { borderColor: data.color, backgroundColor: `${data.color}12`, borderWidth: 2 }
+          ? {
+              background: `linear-gradient(135deg, ${data.color}18 0%, #111827 65%)`,
+              borderColor: data.color,
+              borderWidth: 2,
+              boxShadow: `0 4px 24px ${data.color}25`,
+            }
           : undefined
       }
       className={`relative rounded-2xl border-2 p-3 w-60 shadow-sm select-none transition-all ${
         data.disabled
           ? "opacity-40 cursor-not-allowed"
           : "cursor-pointer hover:shadow-md"
-      } ${connected ? "" : "border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-500"}`}
+      } ${connected ? "" : "border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-[#111827] dark:hover:border-gray-500"}`}
       onClick={() => {
         if (data.disabled) return;
         const activeArticleIds = new Set(store.edges.providerToArticle.map((e) => e.articleId));
@@ -44,7 +56,8 @@ export function PresetNode({ data }: {
         type="target"
         position={Position.Left}
         id="in"
-        className="!w-7 !h-7 !rounded-full !bg-gray-400 !border-2 !border-white cursor-pointer"
+        className="!w-3.5 !h-3.5 !rounded-full !bg-gray-900 cursor-pointer"
+        style={handleStyle}
         onClick={(e) => {
           e.stopPropagation();
           data.onDisconnectTarget(`preset-${data.preset.id}`);

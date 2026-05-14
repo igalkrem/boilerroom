@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Canvas Design Options — BoilerRoom</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{background:#080d18;color:#e2e8f0;font-family:-apple-system,'Inter',BlinkMacSystemFont,sans-serif;min-height:100vh;overflow-x:hidden}
+
+/* ── Header ── */
+.hdr{padding:24px 32px 0;border-bottom:1px solid #111c2a;margin-bottom:0}
+.hdr h1{font-size:18px;font-weight:700;color:#f1f5f9;letter-spacing:-.02em}
+.hdr p{font-size:13px;color:#475569;margin-top:4px;padding-bottom:18px}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:6px;padding:16px 32px;background:#080d18;border-bottom:1px solid #111c2a;position:sticky;top:0;z-index:100}
+.tab{padding:9px 24px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;color:#475569;border:1px solid transparent;transition:all .15s;user-select:none;display:flex;align-items:center;gap:8px}
+.tab.active{background:#1a2436;color:#e2e8f0;border-color:#2a3a52}
+.tab:hover:not(.active){color:#94a3b8;background:rgba(255,255,255,.04)}
+.tag{font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.03em}
+.tag-a{background:#1e3a5f;color:#7dd3fc}
+.tag-b{background:#1e2d1a;color:#86efac}
+.tag-c{background:#2d1e3a;color:#c4b5fd}
+
+/* ── Option panels ── */
+.opt{display:none;padding:28px 32px 40px}
+.opt.active{display:block}
+.opt-desc{font-size:13px;color:#64748b;margin-bottom:20px;line-height:1.6}
+.opt-desc strong{color:#94a3b8}
+
+/* ── Canvas viewport ── */
+.canvas-wrap{overflow-x:auto;overflow-y:hidden;border-radius:14px;border:1px solid rgba(255,255,255,.07);box-shadow:0 24px 80px rgba(0,0,10,.7)}
+.canvas{position:relative;width:1760px;height:700px;flex-shrink:0}
+.canvas::before{content:'';position:absolute;inset:0;background-image:radial-gradient(circle,var(--dot,#1e2d3d) 1px,transparent 1px);background-size:20px 20px;pointer-events:none;z-index:0}
+.edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+.nd{position:absolute;z-index:2}
+
+
+/* ═══════════════════════════════════════════════════════════
+   OPTION A — "Crystal"   Glassmorphic polish
+   Glass-tinted cards · glowing provider accents · gradient edges · pill handles
+   ═══════════════════════════════════════════════════════════ */
+.a .canvas{background:#0d1117;--dot:#171f2e}
+
+/* cards + row node */
+.a .row-nd{left:32px;top:180px}
+.a .cards{display:flex;gap:12px;position:relative}
+.a .card{width:160px;border-radius:14px;overflow:hidden;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);box-shadow:0 8px 32px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05);position:relative}
+.a .card-thumb{height:212px;background:linear-gradient(160deg,#162030 0%,#0c1520 100%);display:flex;align-items:center;justify-content:center;font-size:40px;opacity:.18;position:relative;overflow:hidden}
+.a .card-stripe{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:14px 0 0 14px}
+.a .card-name{padding:7px 10px;font-size:10.5px;font-weight:500;color:#64748b;background:rgba(0,0,0,.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.01em}
+.a .card-add{margin-top:6px;width:160px;padding:7px 0;display:flex;align-items:center;justify-content:center;gap:5px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.09);border-radius:8px;font-size:11px;color:#475569;cursor:pointer}
+.a .x2-badge{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.15);border-radius:20px;font-size:10px;font-weight:600;color:#94a3b8;padding:2px 7px;backdrop-filter:blur(4px)}
+/* side dock */
+.a .dock{position:absolute;left:536px;top:0;width:142px;height:285px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;backdrop-filter:blur(10px);padding:8px;display:flex;flex-direction:column;justify-content:space-between}
+.a .dg{display:flex;flex-direction:column;gap:4px}
+.a .db{display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:8px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid transparent}
+.a .db-blue{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.22);color:#93c5fd}
+.a .db-gray{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.07);color:#64748b}
+.a .db-red{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.2);color:#fca5a5}
+.a .dsep{height:1px;background:rgba(255,255,255,.06);margin:2px 4px}
+/* row handle */
+.a .rh{position:absolute;left:694px;top:132px;width:24px;height:24px;border-radius:50%;background:#3b82f6;border:3px solid rgba(255,255,255,.92);box-shadow:0 0 0 4px rgba(59,130,246,.2),0 2px 8px rgba(0,0,0,.4);z-index:3}
+
+/* provider nodes */
+.a .pv{position:absolute;width:176px;border-radius:13px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);box-shadow:0 6px 20px rgba(0,0,0,.4);overflow:hidden}
+.a .pv-pred{left:794px;top:198px}
+.a .pv-viz{left:794px;top:392px}
+.a .pv-bar{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:13px 0 0 13px}
+.a .pv-body{padding:12px 12px 11px 17px}
+.a .pv-row{display:flex;align-items:center;gap:7px}
+.a .pv-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.a .pv-name{font-size:12.5px;font-weight:500;color:#e2e8f0;letter-spacing:-.01em}
+.a .pv-meta{font-size:11px;color:#475569;padding-left:14px;margin-top:2px}
+.a .pv-act{font-size:11px;color:#60a5fa;padding-left:14px;margin-top:5px;cursor:pointer}
+/* shared handle styles for smaller nodes */
+.a .hl{position:absolute;width:20px;height:20px;border-radius:50%;background:#6b7280;border:2.5px solid rgba(255,255,255,.85);box-shadow:0 2px 6px rgba(0,0,0,.4)}
+.a .hl-l{left:-10px;top:50%;transform:translateY(-50%)}
+.a .hl-r{right:-10px;top:50%;transform:translateY(-50%)}
+
+/* article nodes */
+.a .av{position:absolute;width:240px;border-radius:13px;padding:11px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.03);box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.a .av-blue{background:rgba(59,130,246,.07);border-color:rgba(59,130,246,.22);box-shadow:0 4px 14px rgba(0,0,0,.35),0 0 20px rgba(59,130,246,.08)}
+.a .av-orange{background:rgba(249,115,22,.07);border-color:rgba(249,115,22,.22);box-shadow:0 4px 14px rgba(0,0,0,.35),0 0 20px rgba(249,115,22,.08)}
+.a .av1{left:1044px;top:118px}
+.a .av2{left:1044px;top:260px}
+.a .av3{left:1044px;top:390px}
+.a .ah{display:flex;align-items:flex-start;gap:8px}
+.a .adot{width:7px;height:7px;border-radius:50%;margin-top:3px;flex-shrink:0}
+.a .aslug{font-size:12px;font-weight:500;color:#e2e8f0;flex:1;letter-spacing:-.01em;line-height:1.3}
+.a .aicons{display:flex;align-items:center;gap:4px;flex-shrink:0;margin-top:1px}
+.a .aicn{font-size:11px;color:#334155}
+.a .axpnd{font-size:11px;color:#475569;cursor:pointer}
+.a .aexp{margin-top:8px;background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.18);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:7px}
+.a .aexp-label{font-size:10px;color:#475569;margin-bottom:2px}
+.a .aexp-sel{width:100%;padding:5px 8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:7px;font-size:11px;color:#94a3b8}
+
+/* account node */
+.a .acct{position:absolute;left:1364px;top:218px;width:176px;border-radius:13px;padding:11px;background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.22);box-shadow:0 0 20px rgba(59,130,246,.08)}
+.a .acct-row{display:flex;align-items:center;gap:8px}
+.a .acct-av{width:28px;height:28px;border-radius:50%;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.a .acct-name{font-size:12px;font-weight:500;color:#e2e8f0}
+.a .acct-sub{font-size:10.5px;color:#475569;margin-top:2px;padding-left:36px}
+
+/* preset node */
+.a .pst{position:absolute;left:1608px;top:178px;width:240px;border-radius:13px;padding:11px;background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.22);box-shadow:0 0 20px rgba(59,130,246,.08)}
+.a .pst-hd{display:flex;align-items:flex-start;gap:8px}
+.a .pst-dot{width:7px;height:7px;border-radius:50%;background:#3b82f6;margin-top:3px;flex-shrink:0}
+.a .pst-name{font-size:12px;font-weight:500;color:#e2e8f0}
+.a .pst-meta{font-size:10.5px;color:#475569;margin-top:3px;padding-left:15px}
+.a .pst-rows{margin-top:8px;padding-left:15px;display:flex;flex-direction:column;gap:3px}
+.a .pst-ri{display:flex;align-items:center;justify-content:space-between;font-size:11px}
+.a .pst-rl{color:#64748b;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:8px}
+.a .pst-rc{display:flex;align-items:center;gap:3px;flex-shrink:0}
+.a .pst-rn{color:#e2e8f0;font-weight:500;min-width:12px;text-align:center}
+.a .pst-rb{width:16px;height:16px;border-radius:4px;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:10px;color:#64748b}
+
+
+/* ═══════════════════════════════════════════════════════════
+   OPTION B — "Precision"   Technical dark
+   Sharp corners · monospace meta · top-bar color bands · orthogonal edges · dense info
+   ═══════════════════════════════════════════════════════════ */
+.b .canvas{background:#111827;--dot:#1f2937}
+.b .row-nd{left:32px;top:172px}
+.b .cards{display:flex;gap:10px;position:relative}
+.b .card{width:160px;border-radius:6px;background:#1a2438;border:1px solid #2a3a52;overflow:hidden;position:relative}
+.b .card-thumb{height:212px;background:linear-gradient(180deg,#1c2d44 0%,#141e30 100%);display:flex;align-items:center;justify-content:center;font-size:32px;color:#263548;position:relative}
+.b .card-top-bar{position:absolute;top:0;left:0;right:0;height:3px}
+.b .card-name{padding:6px 8px;font-size:10px;font-weight:500;color:#64748b;background:#111827;font-family:'SF Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.b .card-add{margin-top:4px;width:160px;padding:6px 0;display:flex;align-items:center;justify-content:center;gap:4px;background:#1a2438;border:1px dashed #2a3a52;border-radius:4px;font-size:10px;color:#374151;cursor:pointer;font-family:monospace}
+.b .x2-badge{position:absolute;top:6px;right:6px;background:#1e293b;border:1px solid #334155;border-radius:3px;font-size:9px;font-weight:700;color:#64748b;padding:2px 5px;font-family:monospace}
+.b .dock{position:absolute;left:510px;top:0;width:142px;height:285px;background:#1a2438;border:1px solid #2a3a52;border-radius:6px;padding:6px;display:flex;flex-direction:column;justify-content:space-between}
+.b .dg{display:flex;flex-direction:column;gap:3px}
+.b .db{display:flex;align-items:center;gap:6px;padding:6px 9px;border-radius:4px;font-size:10.5px;font-weight:500;cursor:pointer;border:1px solid transparent}
+.b .db-blue{background:#162032;border-color:#1e3a5c;color:#60a5fa}
+.b .db-gray{background:#151f2e;border-color:#1e2a3a;color:#4b5563}
+.b .db-red{background:#1f1214;border-color:#3b1a1a;color:#f87171}
+.b .dsep{height:1px;background:#1e2a3a;margin:2px 3px}
+.b .rh{position:absolute;left:688px;top:132px;width:14px;height:14px;border-radius:3px;background:#3b82f6;border:2px solid rgba(255,255,255,.8);z-index:3;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.b .pv{position:absolute;width:176px;border-radius:6px;background:#1a2438;border:1px solid #2a3a52;overflow:hidden}
+.b .pv-pred{left:794px;top:202px}
+.b .pv-viz{left:794px;top:392px}
+.b .pv-bar{height:3px;width:100%}
+.b .pv-body{padding:10px 11px 10px 11px}
+.b .pv-row{display:flex;align-items:center;gap:6px}
+.b .pv-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.b .pv-name{font-size:12px;font-weight:600;color:#e2e8f0;letter-spacing:-.01em}
+.b .pv-meta{font-size:10px;color:#374151;margin-top:2px;font-family:monospace}
+.b .pv-act{font-size:10px;color:#3b82f6;margin-top:5px;cursor:pointer}
+.b .hl{position:absolute;width:14px;height:14px;border-radius:3px;background:#6b7280;border:1.5px solid rgba(255,255,255,.8);box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.b .hl-l{left:-7px;top:50%;transform:translateY(-50%)}
+.b .hl-r{right:-7px;top:50%;transform:translateY(-50%)}
+.b .av{position:absolute;width:240px;border-radius:6px;padding:10px;background:#1a2438;border:1px solid #2a3a52}
+.b .av-blue{background:#162032;border-color:#1e3a5c}
+.b .av-orange{background:#1e1a12;border-color:#3a2810}
+.b .av1{left:1044px;top:120px}
+.b .av2{left:1044px;top:262px}
+.b .av3{left:1044px;top:394px}
+.b .ah{display:flex;align-items:flex-start;gap:6px}
+.b .adot{width:6px;height:6px;border-radius:50%;margin-top:3px;flex-shrink:0}
+.b .aslug{font-size:11.5px;font-weight:500;color:#e2e8f0;flex:1;line-height:1.3;letter-spacing:-.01em}
+.b .aicons{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.b .axpnd{font-size:10px;color:#374151;cursor:pointer;font-family:monospace}
+.b .aexp{margin-top:7px;background:#111827;border:1px solid #1e3a5c;border-radius:5px;padding:7px;display:flex;flex-direction:column;gap:6px}
+.b .aexp-label{font-size:9px;color:#374151;margin-bottom:1px;font-family:monospace;letter-spacing:.05em;text-transform:uppercase}
+.b .aexp-sel{width:100%;padding:4px 7px;background:#1a2438;border:1px solid #2a3a52;border-radius:4px;font-size:10.5px;color:#94a3b8;font-family:monospace}
+.b .acct{position:absolute;left:1364px;top:222px;width:176px;border-radius:6px;padding:10px;background:#162032;border:1px solid #1e3a5c}
+.b .acct-row{display:flex;align-items:center;gap:7px}
+.b .acct-av{width:24px;height:24px;border-radius:4px;background:#1d4ed8;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0;font-family:monospace}
+.b .acct-name{font-size:11.5px;font-weight:600;color:#e2e8f0;letter-spacing:-.01em}
+.b .acct-sub{font-size:9.5px;color:#374151;margin-top:2px;font-family:monospace}
+.b .pst{position:absolute;left:1608px;top:180px;width:240px;border-radius:6px;padding:10px;background:#162032;border:1px solid #1e3a5c}
+.b .pst-hd{display:flex;align-items:flex-start;gap:7px}
+.b .pst-dot{width:6px;height:6px;border-radius:50%;background:#3b82f6;margin-top:3px;flex-shrink:0}
+.b .pst-name{font-size:11.5px;font-weight:600;color:#e2e8f0;letter-spacing:-.01em}
+.b .pst-meta{font-size:9.5px;color:#374151;margin-top:3px;padding-left:13px;font-family:monospace}
+.b .pst-rows{margin-top:7px;padding-left:13px;display:flex;flex-direction:column;gap:3px}
+.b .pst-ri{display:flex;align-items:center;justify-content:space-between;font-size:10.5px}
+.b .pst-rl{color:#4b5563;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:8px;font-family:monospace}
+.b .pst-rc{display:flex;align-items:center;gap:3px;flex-shrink:0}
+.b .pst-rn{color:#e2e8f0;font-weight:600;min-width:12px;text-align:center}
+.b .pst-rb{width:15px;height:15px;border-radius:3px;background:#1a2438;display:flex;align-items:center;justify-content:center;font-size:9px;color:#4b5563;border:1px solid #2a3a52}
+
+
+/* ═══════════════════════════════════════════════════════════
+   OPTION C — "Vivid"   Bold color + depth + glow
+   Gradient edges · glowing handles · provider color zones · gradient accents
+   ═══════════════════════════════════════════════════════════ */
+.c .canvas{background:#0a0f1e;--dot:#141c30}
+.c .row-nd{left:32px;top:170px}
+.c .cards{display:flex;gap:12px;position:relative}
+.c .card{width:160px;border-radius:16px;overflow:hidden;background:linear-gradient(160deg,#192338 0%,#0f1825 100%);border:1px solid rgba(255,255,255,.09);box-shadow:0 12px 40px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.07);position:relative}
+.c .card-thumb{height:212px;background:linear-gradient(160deg,#1a2d46 0%,#0d1a2b 100%);display:flex;align-items:center;justify-content:center;font-size:40px;color:#1c3452;position:relative}
+.c .card-stripe{position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:16px 0 0 16px}
+.c .card-name{padding:8px 10px;font-size:10.5px;font-weight:500;color:#64748b;background:rgba(0,0,0,.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c .card-add{margin-top:7px;width:160px;padding:8px 0;display:flex;align-items:center;justify-content:center;gap:5px;background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.1);border-radius:10px;font-size:11px;color:#334155;cursor:pointer}
+.c .x2-badge{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.18);border-radius:20px;font-size:10px;font-weight:700;color:#94a3b8;padding:2px 7px}
+.c .dock{position:absolute;left:536px;top:0;width:142px;height:285px;background:linear-gradient(160deg,rgba(30,50,80,.6),rgba(15,25,45,.6));border:1px solid rgba(255,255,255,.09);border-radius:14px;backdrop-filter:blur(12px);padding:8px;display:flex;flex-direction:column;justify-content:space-between}
+.c .dg{display:flex;flex-direction:column;gap:4px}
+.c .db{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:9px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid transparent}
+.c .db-blue{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.3);color:#93c5fd;box-shadow:0 0 12px rgba(59,130,246,.1)}
+.c .db-gray{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.09);color:#64748b}
+.c .db-red{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.25);color:#fca5a5}
+.c .dsep{height:1px;background:rgba(255,255,255,.07);margin:2px 4px}
+.c .rh{position:absolute;left:692px;top:128px;width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#6366f1);border:3px solid rgba(255,255,255,.95);box-shadow:0 0 0 5px rgba(59,130,246,.25),0 0 20px rgba(59,130,246,.4),0 2px 8px rgba(0,0,0,.5);z-index:3}
+/* provider color zones */
+.c .zone-blue{position:absolute;left:780px;top:140px;width:940px;height:155px;background:radial-gradient(ellipse at 0% 50%,rgba(59,130,246,.07),transparent 70%);border-radius:0;pointer-events:none;z-index:1}
+.c .zone-orange{position:absolute;left:780px;top:360px;width:700px;height:250px;background:radial-gradient(ellipse at 0% 50%,rgba(249,115,22,.07),transparent 70%);border-radius:0;pointer-events:none;z-index:1}
+.c .pv{position:absolute;width:176px;border-radius:16px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.c .pv-pred{left:794px;top:194px}
+.c .pv-viz{left:794px;top:390px}
+.c .pv-body{padding:13px 13px 12px 17px;background:linear-gradient(135deg,rgba(25,40,65,.9),rgba(12,20,38,.9));border:1px solid rgba(255,255,255,.1)}
+.c .pv-bar{position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:16px 0 0 16px}
+.c .pv-glow{position:absolute;left:0;top:0;bottom:0;width:40px;opacity:.25;border-radius:16px 0 0 16px}
+.c .pv-row{display:flex;align-items:center;gap:7px}
+.c .pv-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px currentColor}
+.c .pv-name{font-size:13px;font-weight:600;color:#f1f5f9;letter-spacing:-.02em}
+.c .pv-meta{font-size:11px;color:#475569;padding-left:15px;margin-top:2px}
+.c .pv-act{font-size:11px;color:#60a5fa;padding-left:15px;margin-top:5px;cursor:pointer}
+.c .hl{position:absolute;width:22px;height:22px;border-radius:50%;background:transparent;border:2.5px solid;box-shadow:0 0 10px currentColor}
+.c .hl::after{content:'';position:absolute;inset:4px;border-radius:50%;background:rgba(255,255,255,.9)}
+.c .hl-l{left:-11px;top:50%;transform:translateY(-50%);border-color:#6b7280;color:#6b7280}
+.c .hl-r{right:-11px;top:50%;transform:translateY(-50%);border-color:#6b7280;color:#6b7280}
+.c .hl-blue{border-color:rgba(59,130,246,.8)!important;color:rgba(59,130,246,.8)!important;box-shadow:0 0 12px rgba(59,130,246,.5)!important}
+.c .hl-orange{border-color:rgba(249,115,22,.8)!important;color:rgba(249,115,22,.8)!important;box-shadow:0 0 12px rgba(249,115,22,.5)!important}
+.c .av{position:absolute;width:240px;border-radius:14px;padding:12px;border:1px solid rgba(255,255,255,.08);box-shadow:0 8px 28px rgba(0,0,0,.45);background:linear-gradient(135deg,rgba(20,32,50,.9),rgba(12,20,38,.9))}
+.c .av-blue{border-color:rgba(59,130,246,.3);box-shadow:0 8px 28px rgba(0,0,0,.45),0 0 24px rgba(59,130,246,.1)}
+.c .av-orange{border-color:rgba(249,115,22,.3);box-shadow:0 8px 28px rgba(0,0,0,.45),0 0 24px rgba(249,115,22,.1)}
+.c .av1{left:1044px;top:116px}
+.c .av2{left:1044px;top:258px}
+.c .av3{left:1044px;top:386px}
+.c .ah{display:flex;align-items:flex-start;gap:8px}
+.c .adot{width:8px;height:8px;border-radius:50%;margin-top:3px;flex-shrink:0;box-shadow:0 0 5px currentColor}
+.c .aslug{font-size:12px;font-weight:500;color:#f1f5f9;flex:1;letter-spacing:-.01em;line-height:1.3}
+.c .aicons{display:flex;align-items:center;gap:4px;flex-shrink:0;margin-top:1px}
+.c .axpnd{font-size:11px;color:#374151;cursor:pointer}
+.c .aexp{margin-top:9px;background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2);border-radius:11px;padding:9px;display:flex;flex-direction:column;gap:7px}
+.c .aexp-label{font-size:10px;color:#475569;margin-bottom:2px;text-transform:uppercase;letter-spacing:.06em}
+.c .aexp-sel{width:100%;padding:6px 8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;font-size:11px;color:#94a3b8}
+.c .acct{position:absolute;left:1362px;top:212px;width:176px;border-radius:14px;padding:12px;border:1px solid rgba(59,130,246,.3);background:linear-gradient(135deg,rgba(29,60,100,.6),rgba(15,30,55,.6));box-shadow:0 8px 28px rgba(0,0,0,.45),0 0 28px rgba(59,130,246,.12)}
+.c .acct-row{display:flex;align-items:center;gap:9px}
+.c .acct-av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 0 12px rgba(59,130,246,.4)}
+.c .acct-name{font-size:12px;font-weight:600;color:#f1f5f9}
+.c .acct-sub{font-size:10.5px;color:#475569;margin-top:3px;padding-left:39px}
+.c .pst{position:absolute;left:1605px;top:170px;width:240px;border-radius:14px;padding:12px;border:1px solid rgba(59,130,246,.3);background:linear-gradient(135deg,rgba(29,60,100,.6),rgba(15,30,55,.6));box-shadow:0 8px 28px rgba(0,0,0,.45),0 0 28px rgba(59,130,246,.12)}
+.c .pst-hd{display:flex;align-items:flex-start;gap:8px}
+.c .pst-dot{width:8px;height:8px;border-radius:50%;background:#3b82f6;margin-top:3px;flex-shrink:0;box-shadow:0 0 6px #3b82f6}
+.c .pst-name{font-size:12px;font-weight:600;color:#f1f5f9;letter-spacing:-.01em}
+.c .pst-meta{font-size:10.5px;color:#475569;margin-top:3px;padding-left:16px}
+.c .pst-rows{margin-top:8px;padding-left:16px;display:flex;flex-direction:column;gap:3px}
+.c .pst-ri{display:flex;align-items:center;justify-content:space-between;font-size:11px}
+.c .pst-rl{color:#475569;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:8px}
+.c .pst-rc{display:flex;align-items:center;gap:3px;flex-shrink:0}
+.c .pst-rn{color:#f1f5f9;font-weight:600;min-width:12px;text-align:center}
+.c .pst-rb{width:17px;height:17px;border-radius:5px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:10px;color:#475569;border:1px solid rgba(255,255,255,.1)}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1>Canvas Design Options</h1>
+  <p>Three evolutionary refinements of the current React Flow builder — same layout, different visual language.</p>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="show('a',this)"><span class="tag tag-a">A</span> Crystal Glass &nbsp;<span style="color:#334155;font-size:12px">Glassmorphic · glow · gradient strokes</span></div>
+  <div class="tab" onclick="show('b',this)"><span class="tag tag-b">B</span> Precision Dark &nbsp;<span style="color:#334155;font-size:12px">Sharp · dense · monospace detail · orthogonal edges</span></div>
+  <div class="tab" onclick="show('c',this)"><span class="tag tag-c">C</span> Vivid Flow &nbsp;<span style="color:#334155;font-size:12px">Bold color zones · thick glow edges · large handles</span></div>
+  <div class="tab" onclick="show('d',this)"><span class="tag" style="background:#7c3aed;color:#fff">D</span> Handle Options &nbsp;<span style="color:#334155;font-size:12px">Three handle design alternatives</span></div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     OPTION A — Crystal Glass
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="opt active" id="opt-a">
+<div class="opt-desc">
+  <strong>Crystal Glass</strong> — Keeps the dark foundation but adds frosted-glass surfaces, soft glow accents behind provider-colored elements, and gradient edge strokes that fade from provider color to transparent. Handles become small colored rings. Typography tightens. Conservative but noticeably more refined.
+</div>
+<div class="canvas-wrap"><div class="canvas a">
+
+<svg class="edges" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="a-edge-blue-1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.4"/>
+    </linearGradient>
+    <linearGradient id="a-edge-orange-1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f97316" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0.4"/>
+    </linearGradient>
+    <linearGradient id="a-edge-blue-v" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.2"/>
+    </linearGradient>
+  </defs>
+  <!-- Row → Predicto (dashed blue) -->
+  <path d="M 728,314 C 760,314 760,242 794,242" stroke="url(#a-edge-blue-1)" stroke-width="1.5" fill="none" stroke-dasharray="5,4" opacity=".8"/>
+  <!-- Row → Vizymo (dashed orange) -->
+  <path d="M 728,314 C 760,314 760,438 794,438" stroke="url(#a-edge-orange-1)" stroke-width="1.5" fill="none" stroke-dasharray="5,4" opacity=".8"/>
+  <!-- Predicto → Article 1 -->
+  <path d="M 970,242 C 1006,242 1006,163 1044,163" stroke="#3b82f6" stroke-width="1.5" fill="none" opacity=".6"/>
+  <!-- Predicto → Article 2 -->
+  <path d="M 970,242 C 1006,242 1006,305 1044,305" stroke="#3b82f6" stroke-width="1.5" fill="none" opacity=".6"/>
+  <!-- Vizymo → Article 3 -->
+  <path d="M 970,438 C 1006,438 1006,502 1044,502" stroke="#f97316" stroke-width="1.5" fill="none" opacity=".6"/>
+  <!-- Article 1 → Account -->
+  <path d="M 1284,163 C 1322,163 1322,258 1360,258" stroke="#3b82f6" stroke-width="1.5" fill="none" opacity=".5"/>
+  <!-- Article 2 → Account -->
+  <path d="M 1284,305 C 1322,305 1322,258 1360,258" stroke="#3b82f6" stroke-width="1.5" fill="none" opacity=".5"/>
+  <!-- Article 3 → Account -->
+  <path d="M 1284,502 C 1322,502 1322,258 1360,258" stroke="#f97316" stroke-width="1.5" fill="none" opacity=".4"/>
+  <!-- Account → Preset -->
+  <path d="M 1554,258 C 1580,258 1580,238 1606,238" stroke="#3b82f6" stroke-width="1.5" fill="none" opacity=".5"/>
+</svg>
+
+<!-- Row node -->
+<div class="nd row-nd a">
+  <div class="cards">
+    <div>
+      <div class="card">
+        <div class="card-stripe" style="--stripe-color:#3b82f6;background:#3b82f6"></div>
+        <div class="card-thumb">🎬</div>
+        <div class="card-name">energy_saving_v_002</div>
+      </div>
+      <div class="card-add">＋ Add creative</div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-stripe" style="background:#3b82f6"></div>
+        <div class="card-thumb">📱</div>
+        <div class="card-name">energy_saving_v_001</div>
+      </div>
+      <div class="card-add">＋ Add creative</div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-stripe" style="background:linear-gradient(to bottom,#3b82f6,#f97316)"></div>
+        <div class="card-thumb">🍔<div class="x2-badge">×2</div></div>
+        <div class="card-name">food_tester_mba_v_006</div>
+      </div>
+      <div class="card-add">＋ Add creative</div>
+    </div>
+  </div>
+  <div class="dock a">
+    <div class="dg">
+      <div class="db db-blue">⊞ <span>Add slot</span></div>
+      <div class="db db-blue">🔗 <span>Provider</span></div>
+    </div>
+    <div class="dsep"></div>
+    <div class="dg">
+      <div class="db db-gray">↓ <span>New row</span></div>
+      <div class="db db-gray">⧉ <span>Duplicate</span></div>
+    </div>
+    <div class="dsep"></div>
+    <div class="db db-red">✕ <span>Remove row</span></div>
+  </div>
+  <div class="rh a"></div>
+</div>
+
+<!-- Predicto -->
+<div class="nd pv pv-pred a">
+  <div class="pv-bar" style="background:#3b82f6"></div>
+  <div class="hl hl-l a"></div>
+  <div class="hl hl-r a"></div>
+  <div class="pv-body a">
+    <div class="pv-row a"><div class="pv-dot a" style="background:#3b82f6"></div><span class="pv-name a">Predicto</span></div>
+    <div class="pv-meta a">1 row</div>
+    <div class="pv-act a">+ Pick articles</div>
+  </div>
+</div>
+
+<!-- Vizymo -->
+<div class="nd pv pv-viz a">
+  <div class="pv-bar" style="background:#f97316"></div>
+  <div class="hl hl-l a"></div>
+  <div class="hl hl-r a"></div>
+  <div class="pv-body a">
+    <div class="pv-row a"><div class="pv-dot a" style="background:#f97316"></div><span class="pv-name a">Vizymo</span></div>
+    <div class="pv-meta a">1 row</div>
+    <div class="pv-act a">+ Pick articles</div>
+  </div>
+</div>
+
+<!-- Article 1 -->
+<div class="nd av av1 av-blue a">
+  <div class="hl hl-l a"></div>
+  <div class="hl hl-r a"></div>
+  <div class="ah a">
+    <div class="adot a" style="background:#3b82f6"></div>
+    <div class="aslug a">Business Product Advertising</div>
+    <div class="aicons a"><span class="axpnd a">▼</span></div>
+  </div>
+</div>
+
+<!-- Article 2 -->
+<div class="nd av av2 av-blue a">
+  <div class="hl hl-l a"></div>
+  <div class="hl hl-r a"></div>
+  <div class="ah a">
+    <div class="adot a" style="background:#3b82f6"></div>
+    <div class="aslug a">SME Phone Plans</div>
+    <div class="aicons a"><span class="axpnd a">▼</span></div>
+  </div>
+</div>
+
+<!-- Article 3 (expanded) -->
+<div class="nd av av3 av-orange a">
+  <div class="hl hl-l a" style="top:44px;transform:none"></div>
+  <div class="hl hl-r a" style="top:44px;transform:none"></div>
+  <div class="ah a">
+    <div class="adot a" style="background:#f97316"></div>
+    <div class="aslug a">SME phone packages</div>
+    <div class="aicons a"><span class="axpnd a">▲</span></div>
+  </div>
+  <div class="aexp a">
+    <div><div class="aexp-label a">Headline</div><div class="aexp-sel a">More about phone packages for s…</div></div>
+    <div><div class="aexp-label a">Call to Action</div><div class="aexp-sel a">MORE</div></div>
+  </div>
+</div>
+
+<!-- Ad Account -->
+<div class="nd acct a">
+  <div class="hl hl-l a" style="left:-10px;top:50%;transform:translateY(-50%)"></div>
+  <div class="hl hl-r a"></div>
+  <div class="acct-row a">
+    <div class="acct-av a">US</div>
+    <div>
+      <div class="acct-name a">US</div>
+    </div>
+  </div>
+  <div class="acct-sub a">US · $10/day</div>
+</div>
+
+<!-- Preset -->
+<div class="nd pst a">
+  <div class="hl hl-l a"></div>
+  <div class="pst-hd a">
+    <div class="pst-dot a"></div>
+    <div class="pst-name a">Predicto 1</div>
+  </div>
+  <div class="pst-meta a">US · $10/day</div>
+  <div class="pst-rows a">
+    <div class="pst-ri a"><span class="pst-rl a">Business Product Advertising</span><div class="pst-rc a"><div class="pst-rb a">−</div><span class="pst-rn a">1</span><div class="pst-rb a">+</div></div></div>
+    <div class="pst-ri a"><span class="pst-rl a">SME Phone Plans</span><div class="pst-rc a"><div class="pst-rb a">−</div><span class="pst-rn a">1</span><div class="pst-rb a">+</div></div></div>
+  </div>
+</div>
+
+</div></div>
+</div><!-- /opt-a -->
+
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     OPTION B — Precision Dark
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="opt" id="opt-b">
+<div class="opt-desc">
+  <strong>Precision Dark</strong> — Flattens curves to 6px corners, adds colored top-bar bands on every node (replacing the left stripe), uses monospace font for all metadata, and routes edges orthogonally with arrowheads. Square handles. Dense information layout with badge-level detail. Feels like a technical dashboard.
+</div>
+<div class="canvas-wrap"><div class="canvas b">
+
+<svg class="edges" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="b-arr-blue" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <polygon points="0 0, 6 3, 0 6" fill="#3b82f6" opacity=".7"/>
+    </marker>
+    <marker id="b-arr-orange" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <polygon points="0 0, 6 3, 0 6" fill="#f97316" opacity=".7"/>
+    </marker>
+    <marker id="b-arr-gray" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <polygon points="0 0, 6 3, 0 6" fill="#4b5563" opacity=".7"/>
+    </marker>
+  </defs>
+  <!-- Row → Predicto -->
+  <path d="M 720,310 L 760,310 L 760,245 L 794,245" stroke="#3b82f6" stroke-width="1" fill="none" stroke-dasharray="4,3" opacity=".7" marker-end="url(#b-arr-blue)"/>
+  <!-- Row → Vizymo -->
+  <path d="M 720,310 L 760,310 L 760,438 L 794,438" stroke="#f97316" stroke-width="1" fill="none" stroke-dasharray="4,3" opacity=".7" marker-end="url(#b-arr-orange)"/>
+  <!-- Predicto → Article 1 -->
+  <path d="M 970,245 L 1008,245 L 1008,166 L 1044,166" stroke="#3b82f6" stroke-width="1" fill="none" opacity=".6" marker-end="url(#b-arr-blue)"/>
+  <!-- Predicto → Article 2 -->
+  <path d="M 970,245 L 1008,245 L 1008,308 L 1044,308" stroke="#3b82f6" stroke-width="1" fill="none" opacity=".6" marker-end="url(#b-arr-blue)"/>
+  <!-- Vizymo → Article 3 -->
+  <path d="M 970,438 L 1008,438 L 1008,440 L 1044,440" stroke="#f97316" stroke-width="1" fill="none" opacity=".6" marker-end="url(#b-arr-orange)"/>
+  <!-- Article 1 → Account -->
+  <path d="M 1284,166 L 1322,166 L 1322,262 L 1356,262" stroke="#4b5563" stroke-width="1" fill="none" opacity=".6" marker-end="url(#b-arr-gray)"/>
+  <!-- Article 2 → Account -->
+  <path d="M 1284,308 L 1322,308 L 1322,262 L 1356,262" stroke="#4b5563" stroke-width="1" fill="none" opacity=".6" marker-end="url(#b-arr-gray)"/>
+  <!-- Article 3 → Account -->
+  <path d="M 1284,440 L 1322,440 L 1322,262 L 1356,262" stroke="#4b5563" stroke-width="1" fill="none" opacity=".4" marker-end="url(#b-arr-gray)"/>
+  <!-- Account → Preset -->
+  <path d="M 1548,262 L 1600,262 L 1600,240 L 1608,240" stroke="#4b5563" stroke-width="1" fill="none" opacity=".6" marker-end="url(#b-arr-gray)"/>
+</svg>
+
+<div class="nd row-nd b">
+  <div class="cards">
+    <div>
+      <div class="card b"><div class="card-top-bar" style="background:#3b82f6"></div><div class="card-thumb b">🎬</div><div class="card-name b">energy_saving_v_002</div></div>
+      <div class="card-add b">+ add creative</div>
+    </div>
+    <div>
+      <div class="card b"><div class="card-top-bar" style="background:#3b82f6"></div><div class="card-thumb b">📱</div><div class="card-name b">energy_saving_v_001</div></div>
+      <div class="card-add b">+ add creative</div>
+    </div>
+    <div>
+      <div class="card b"><div class="card-top-bar" style="background:linear-gradient(to right,#3b82f6,#f97316)"></div><div class="card-thumb b">🍔<div class="x2-badge b">×2</div></div><div class="card-name b">food_tester_mba_v_006</div></div>
+      <div class="card-add b">+ add creative</div>
+    </div>
+  </div>
+  <div class="dock b">
+    <div class="dg b">
+      <div class="db db-blue b">⊞ <span>Add slot</span></div>
+      <div class="db db-blue b">🔗 <span>Provider</span></div>
+    </div>
+    <div class="dsep b"></div>
+    <div class="dg b">
+      <div class="db db-gray b">↓ <span>New row</span></div>
+      <div class="db db-gray b">⧉ <span>Duplicate</span></div>
+    </div>
+    <div class="dsep b"></div>
+    <div class="db db-red b">✕ <span>Remove row</span></div>
+  </div>
+  <div class="rh b"></div>
+</div>
+
+<div class="nd pv pv-pred b">
+  <div class="pv-bar b" style="background:#3b82f6"></div>
+  <div class="hl hl-l b"></div><div class="hl hl-r b"></div>
+  <div class="pv-body b">
+    <div class="pv-row b"><div class="pv-dot b" style="background:#3b82f6"></div><span class="pv-name b">Predicto</span></div>
+    <div class="pv-meta b">1 row · 2 articles</div>
+    <div class="pv-act b">+ Pick articles</div>
+  </div>
+</div>
+
+<div class="nd pv pv-viz b">
+  <div class="pv-bar b" style="background:#f97316"></div>
+  <div class="hl hl-l b"></div><div class="hl hl-r b"></div>
+  <div class="pv-body b">
+    <div class="pv-row b"><div class="pv-dot b" style="background:#f97316"></div><span class="pv-name b">Vizymo</span></div>
+    <div class="pv-meta b">1 row · 1 article</div>
+    <div class="pv-act b">+ Pick articles</div>
+  </div>
+</div>
+
+<div class="nd av av1 av-blue b">
+  <div class="hl hl-l b"></div><div class="hl hl-r b"></div>
+  <div class="ah b"><div class="adot b" style="background:#3b82f6"></div><div class="aslug b">Business Product Advertising</div><div class="aicons b"><span class="axpnd b">▼</span></div></div>
+</div>
+<div class="nd av av2 av-blue b">
+  <div class="hl hl-l b"></div><div class="hl hl-r b"></div>
+  <div class="ah b"><div class="adot b" style="background:#3b82f6"></div><div class="aslug b">SME Phone Plans</div><div class="aicons b"><span class="axpnd b">▼</span></div></div>
+</div>
+<div class="nd av av3 av-orange b">
+  <div class="hl hl-l b" style="top:42px;transform:none"></div><div class="hl hl-r b" style="top:42px;transform:none"></div>
+  <div class="ah b"><div class="adot b" style="background:#f97316"></div><div class="aslug b">SME phone packages</div><div class="aicons b"><span class="axpnd b">▲</span></div></div>
+  <div class="aexp b">
+    <div><div class="aexp-label b">HEADLINE</div><div class="aexp-sel b">More about phone packages for s…</div></div>
+    <div><div class="aexp-label b">CALL TO ACTION</div><div class="aexp-sel b">MORE</div></div>
+  </div>
+</div>
+
+<div class="nd acct b">
+  <div class="hl hl-l b" style="left:-7px;top:50%;transform:translateY(-50%)"></div>
+  <div class="hl hl-r b"></div>
+  <div class="acct-row b"><div class="acct-av b">US</div><div><div class="acct-name b">US</div></div></div>
+  <div class="acct-sub b">us_acc · $10/day</div>
+</div>
+<div class="nd pst b">
+  <div class="hl hl-l b"></div>
+  <div class="pst-hd b"><div class="pst-dot b"></div><div class="pst-name b">Predicto 1</div></div>
+  <div class="pst-meta b">preset_p1 · US · $10/day</div>
+  <div class="pst-rows b">
+    <div class="pst-ri b"><span class="pst-rl b">Business Product Advertising</span><div class="pst-rc b"><div class="pst-rb b">−</div><span class="pst-rn b">1</span><div class="pst-rb b">+</div></div></div>
+    <div class="pst-ri b"><span class="pst-rl b">SME Phone Plans</span><div class="pst-rc b"><div class="pst-rb b">−</div><span class="pst-rn b">1</span><div class="pst-rb b">+</div></div></div>
+  </div>
+</div>
+
+</div></div>
+</div><!-- /opt-b -->
+
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     OPTION C — Vivid Flow
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="opt" id="opt-c">
+<div class="opt-desc">
+  <strong>Vivid Flow</strong> — Adds provider color zones (faint radial glow behind each provider's cluster), thick gradient-stroke edges with bloom, and large ring handles that glow in provider color. Nodes have gradient backgrounds and deeper shadows. The strongest visual hierarchy — each provider "owns" its space on the canvas.
+</div>
+<div class="canvas-wrap"><div class="canvas c">
+
+<svg class="edges" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow-blue">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glow-orange">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="c-bl-h" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity=".9"/>
+      <stop offset="100%" stop-color="#6366f1" stop-opacity=".6"/>
+    </linearGradient>
+    <linearGradient id="c-or-h" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f97316" stop-opacity=".9"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity=".6"/>
+    </linearGradient>
+    <linearGradient id="c-gy-h" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity=".5"/>
+      <stop offset="100%" stop-color="#6366f1" stop-opacity=".3"/>
+    </linearGradient>
+  </defs>
+  <!-- Row → Predicto -->
+  <path d="M 722,310 C 760,310 760,242 794,242" stroke="url(#c-bl-h)" stroke-width="2.5" fill="none" stroke-dasharray="6,4" filter="url(#glow-blue)" opacity=".9"/>
+  <!-- Row → Vizymo -->
+  <path d="M 722,310 C 760,310 760,440 794,440" stroke="url(#c-or-h)" stroke-width="2.5" fill="none" stroke-dasharray="6,4" filter="url(#glow-orange)" opacity=".9"/>
+  <!-- Predicto → Article 1 -->
+  <path d="M 970,242 C 1008,242 1008,162 1044,162" stroke="url(#c-bl-h)" stroke-width="2" fill="none" filter="url(#glow-blue)" opacity=".8"/>
+  <!-- Predicto → Article 2 -->
+  <path d="M 970,242 C 1008,242 1008,304 1044,304" stroke="url(#c-bl-h)" stroke-width="2" fill="none" filter="url(#glow-blue)" opacity=".8"/>
+  <!-- Vizymo → Article 3 -->
+  <path d="M 970,440 C 1008,440 1008,497 1044,497" stroke="url(#c-or-h)" stroke-width="2" fill="none" filter="url(#glow-orange)" opacity=".8"/>
+  <!-- Article 1 → Account -->
+  <path d="M 1284,162 C 1320,162 1320,252 1356,252" stroke="url(#c-bl-h)" stroke-width="2" fill="none" opacity=".6"/>
+  <!-- Article 2 → Account -->
+  <path d="M 1284,304 C 1320,304 1320,252 1356,252" stroke="url(#c-bl-h)" stroke-width="2" fill="none" opacity=".6"/>
+  <!-- Article 3 → Account -->
+  <path d="M 1284,497 C 1320,497 1320,252 1356,252" stroke="url(#c-or-h)" stroke-width="2" fill="none" opacity=".5"/>
+  <!-- Account → Preset -->
+  <path d="M 1552,252 C 1578,252 1578,230 1605,230" stroke="url(#c-gy-h)" stroke-width="2" fill="none" opacity=".7"/>
+</svg>
+
+<!-- Color zones -->
+<div class="nd zone-blue c" style="z-index:1;pointer-events:none"></div>
+<div class="nd zone-orange c" style="z-index:1;pointer-events:none"></div>
+
+<div class="nd row-nd c">
+  <div class="cards">
+    <div>
+      <div class="card c"><div class="card-stripe c" style="background:linear-gradient(to bottom,#3b82f6 0%,#3b82f680 100%)"></div><div class="card-thumb c">🎬</div><div class="card-name c">energy_saving_v_002</div></div>
+      <div class="card-add c">＋ Add creative</div>
+    </div>
+    <div>
+      <div class="card c"><div class="card-stripe c" style="background:linear-gradient(to bottom,#3b82f6 0%,#3b82f680 100%)"></div><div class="card-thumb c">📱</div><div class="card-name c">energy_saving_v_001</div></div>
+      <div class="card-add c">＋ Add creative</div>
+    </div>
+    <div>
+      <div class="card c"><div class="card-stripe c" style="background:linear-gradient(to bottom,#3b82f6 0%,#f97316 100%)"></div><div class="card-thumb c">🍔<div class="x2-badge c">×2</div></div><div class="card-name c">food_tester_mba_v_006</div></div>
+      <div class="card-add c">＋ Add creative</div>
+    </div>
+  </div>
+  <div class="dock c">
+    <div class="dg c">
+      <div class="db db-blue c">⊞ <span>Add slot</span></div>
+      <div class="db db-blue c">🔗 <span>Provider</span></div>
+    </div>
+    <div class="dsep c"></div>
+    <div class="dg c">
+      <div class="db db-gray c">↓ <span>New row</span></div>
+      <div class="db db-gray c">⧉ <span>Duplicate</span></div>
+    </div>
+    <div class="dsep c"></div>
+    <div class="db db-red c">✕ <span>Remove row</span></div>
+  </div>
+  <div class="rh c"></div>
+</div>
+
+<div class="nd pv pv-pred c" style="border-radius:16px;overflow:hidden;border:1px solid rgba(59,130,246,.3);box-shadow:0 8px 30px rgba(0,0,0,.5),0 0 28px rgba(59,130,246,.15)">
+  <div class="pv-bar c" style="background:linear-gradient(to bottom,#3b82f6,#6366f1)"></div>
+  <div class="pv-glow c" style="background:linear-gradient(to right,#3b82f6,transparent)"></div>
+  <div class="hl hl-l c" style="left:-11px;top:50%;transform:translateY(-50%);border-color:rgba(107,114,128,.6);color:rgba(107,114,128,.6)"></div>
+  <div class="hl hl-r c" style="right:-11px;top:50%;transform:translateY(-50%);border-color:rgba(107,114,128,.6);color:rgba(107,114,128,.6)"></div>
+  <div class="pv-body c">
+    <div class="pv-row c"><div class="pv-dot c" style="background:#3b82f6;color:#3b82f6"></div><span class="pv-name c">Predicto</span></div>
+    <div class="pv-meta c">1 row</div>
+    <div class="pv-act c">+ Pick articles</div>
+  </div>
+</div>
+
+<div class="nd pv pv-viz c" style="border-radius:16px;overflow:hidden;border:1px solid rgba(249,115,22,.3);box-shadow:0 8px 30px rgba(0,0,0,.5),0 0 28px rgba(249,115,22,.15)">
+  <div class="pv-bar c" style="background:linear-gradient(to bottom,#f97316,#f59e0b)"></div>
+  <div class="pv-glow c" style="background:linear-gradient(to right,#f97316,transparent)"></div>
+  <div class="hl hl-l c" style="left:-11px;top:50%;transform:translateY(-50%);border-color:rgba(107,114,128,.6);color:rgba(107,114,128,.6)"></div>
+  <div class="hl hl-r c" style="right:-11px;top:50%;transform:translateY(-50%);border-color:rgba(107,114,128,.6);color:rgba(107,114,128,.6)"></div>
+  <div class="pv-body c">
+    <div class="pv-row c"><div class="pv-dot c" style="background:#f97316;color:#f97316"></div><span class="pv-name c">Vizymo</span></div>
+    <div class="pv-meta c">1 row</div>
+    <div class="pv-act c">+ Pick articles</div>
+  </div>
+</div>
+
+<div class="nd av av1 av-blue c">
+  <div class="hl hl-l c hl-blue"></div><div class="hl hl-r c hl-blue"></div>
+  <div class="ah c"><div class="adot c" style="background:#3b82f6;color:#3b82f6"></div><div class="aslug c">Business Product Advertising</div><div class="aicons c"><span class="axpnd c">▼</span></div></div>
+</div>
+<div class="nd av av2 av-blue c">
+  <div class="hl hl-l c hl-blue"></div><div class="hl hl-r c hl-blue"></div>
+  <div class="ah c"><div class="adot c" style="background:#3b82f6;color:#3b82f6"></div><div class="aslug c">SME Phone Plans</div><div class="aicons c"><span class="axpnd c">▼</span></div></div>
+</div>
+<div class="nd av av3 av-orange c">
+  <div class="hl hl-l c hl-orange" style="top:44px;transform:none"></div><div class="hl hl-r c hl-orange" style="top:44px;transform:none"></div>
+  <div class="ah c"><div class="adot c" style="background:#f97316;color:#f97316"></div><div class="aslug c">SME phone packages</div><div class="aicons c"><span class="axpnd c">▲</span></div></div>
+  <div class="aexp c" style="border-color:rgba(249,115,22,.2);background:rgba(249,115,22,.06)">
+    <div><div class="aexp-label c">Headline</div><div class="aexp-sel c">More about phone packages for s…</div></div>
+    <div><div class="aexp-label c">Call to Action</div><div class="aexp-sel c">MORE</div></div>
+  </div>
+</div>
+
+<div class="nd acct c">
+  <div class="hl hl-l c hl-blue" style="left:-11px;top:50%;transform:translateY(-50%)"></div>
+  <div class="hl hl-r c hl-blue"></div>
+  <div class="acct-row c"><div class="acct-av c">US</div><div><div class="acct-name c">US</div></div></div>
+  <div class="acct-sub c">US · $10/day</div>
+</div>
+<div class="nd pst c">
+  <div class="hl hl-l c hl-blue"></div>
+  <div class="pst-hd c"><div class="pst-dot c"></div><div class="pst-name c">Predicto 1</div></div>
+  <div class="pst-meta c">US · $10/day</div>
+  <div class="pst-rows c">
+    <div class="pst-ri c"><span class="pst-rl c">Business Product Advertising</span><div class="pst-rc c"><div class="pst-rb c">−</div><span class="pst-rn c">1</span><div class="pst-rb c">+</div></div></div>
+    <div class="pst-ri c"><span class="pst-rl c">SME Phone Plans</span><div class="pst-rc c"><div class="pst-rb c">−</div><span class="pst-rn c">1</span><div class="pst-rb c">+</div></div></div>
+  </div>
+</div>
+
+</div></div>
+</div><!-- /opt-c -->
+
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     OPTION D — Handle Options
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="opt" id="opt-d">
+<div class="opt-desc">
+  Three alternative handle designs shown on the same article node. Each handle appears on both sides (input left, output right). The provider accent color used is blue (Predicto) to show how color propagates.
+</div>
+
+<style>
+/* ── Handle Demo Shared ── */
+.hd-wrap{display:flex;gap:48px;justify-content:center;align-items:flex-start;padding:60px 40px;flex-wrap:wrap}
+.hd-col{display:flex;flex-direction:column;align-items:center;gap:16px}
+.hd-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#475569}
+.hd-desc{font-size:12px;color:#334155;text-align:center;max-width:180px;line-height:1.5}
+.hd-node{position:relative;width:240px;background:#111827;border:2px solid rgba(59,130,246,.5);border-radius:14px;padding:12px 14px;background:linear-gradient(135deg,rgba(59,130,246,.06),rgba(17,24,39,1))}
+.hd-node .left-stripe{position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:2px;background:#3b82f6}
+.hd-node .slug{font-size:13px;font-weight:600;color:#e2e8f0;padding-left:10px}
+.hd-node .meta{font-size:11px;color:#475569;padding-left:10px;margin-top:3px}
+.hd-edge-line{position:absolute;top:50%;width:60px;height:1.5px;background:rgba(59,130,246,.4)}
+.hd-edge-l{left:-60px}
+.hd-edge-r{right:-60px}
+
+/* H1 — Diamond */
+.h1-handle{position:absolute;width:12px;height:12px;background:#3b82f6;transform:rotate(45deg);border-radius:2px;top:50%;margin-top:-6px;z-index:2}
+.h1-l{left:-6px}
+.h1-r{right:-6px}
+
+/* H2 — Ghost Ring */
+.h2-handle{position:absolute;width:14px;height:14px;border-radius:50%;background:#0d1523;border:2px solid #3b82f6;top:50%;margin-top:-7px;z-index:2}
+.h2-l{left:-7px}
+.h2-r{right:-7px}
+.h2-handle::after{content:'';position:absolute;inset:3px;border-radius:50%;background:#3b82f6;opacity:.35}
+
+/* H3 — Slot Port */
+.h3-handle{position:absolute;width:5px;height:20px;background:#3b82f6;border-radius:3px;top:50%;margin-top:-10px;z-index:2;box-shadow:0 0 8px rgba(59,130,246,.6)}
+.h3-l{left:-3px}
+.h3-r{right:-3px}
+</style>
+
+<div style="background:#0b1120;border-radius:16px;margin:0 32px 32px;padding:40px 32px">
+  <div class="hd-wrap">
+
+    <!-- H1 — Diamond -->
+    <div class="hd-col">
+      <div class="hd-label">H1 — Diamond</div>
+      <div style="position:relative;padding:0 70px">
+        <div style="position:absolute;top:50%;left:0;width:70px;height:1.5px;background:rgba(59,130,246,.3);transform:translateY(-50%)"></div>
+        <div style="position:absolute;top:50%;right:0;width:70px;height:1.5px;background:rgba(59,130,246,.3);transform:translateY(-50%)"></div>
+        <div class="hd-node">
+          <div class="left-stripe"></div>
+          <div class="h1-handle h1-l"></div>
+          <div class="h1-handle h1-r"></div>
+          <div class="slug">SME Phone Plans</div>
+          <div class="meta">Headline · MORE</div>
+        </div>
+      </div>
+      <div class="hd-desc">Rotated square filled with provider color. Compact, directional, no border. Instantly recognizable as a connection point.</div>
+    </div>
+
+    <!-- H2 — Ghost Ring -->
+    <div class="hd-col">
+      <div class="hd-label">H2 — Ghost Ring</div>
+      <div style="position:relative;padding:0 70px">
+        <div style="position:absolute;top:50%;left:0;width:70px;height:1.5px;background:rgba(59,130,246,.3);transform:translateY(-50%)"></div>
+        <div style="position:absolute;top:50%;right:0;width:70px;height:1.5px;background:rgba(59,130,246,.3);transform:translateY(-50%)"></div>
+        <div class="hd-node">
+          <div class="left-stripe"></div>
+          <div class="h2-handle h2-l"></div>
+          <div class="h2-handle h2-r"></div>
+          <div class="slug">SME Phone Plans</div>
+          <div class="meta">Headline · MORE</div>
+        </div>
+      </div>
+      <div class="hd-desc">Dark-filled circle with accent border and faint inner glow. Understated — blends with the card, lights up the edge connection without shouting.</div>
+    </div>
+
+    <!-- H3 — Slot Port -->
+    <div class="hd-col">
+      <div class="hd-label">H3 — Slot Port</div>
+      <div style="position:relative;padding:0 70px">
+        <div style="position:absolute;top:50%;left:0;width:70px;height:1.5px;background:rgba(59,130,246,.3);transform:translateY(-50%)"></div>
+        <div style="position:absolute;top:50%;right:0;width:70px;height:1.5px;background:rgba(59,130,246,.3);transform:translateY(-50%)"></div>
+        <div class="hd-node">
+          <div class="left-stripe"></div>
+          <div class="h3-handle h3-l"></div>
+          <div class="h3-handle h3-r"></div>
+          <div class="slug">SME Phone Plans</div>
+          <div class="meta">Headline · MORE</div>
+        </div>
+      </div>
+      <div class="hd-desc">Thin vertical pill in accent color with soft glow. Flush with the card edge — minimal footprint, hardware-port aesthetic.</div>
+    </div>
+
+  </div>
+</div>
+
+</div><!-- /opt-d -->
+
+<script>
+function show(id, el) {
+  document.querySelectorAll('.opt').forEach(o => o.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('opt-' + id).classList.add('active');
+  el.classList.add('active');
+}
+</script>
+</body>
+</html>
