@@ -21,6 +21,11 @@ const CARD_W = 160;
 const CARD_GAP = 12;
 const CARD_H = Math.round(CARD_W * (16 / 9)); // 285
 
+// Dock geometry — handle sits at the node's right edge, past the dock
+const DOCK_LEAD = 32;       // gap: cards right → dock left
+const DOCK_W = 142;         // dock panel fixed width
+const DOCK_TO_HANDLE = 22;  // gap: dock right → handle center
+
 // Per-creative accent colours for multi-creative name pills (index-stable)
 const CREATIVE_NAME_COLORS = [
   { stripe: "#3b82f6", bg: "rgba(59,130,246,0.2)",  border: "rgba(59,130,246,0.4)",  text: "#bfdbfe" },
@@ -147,19 +152,20 @@ export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
   const previewAsset = previewId ? getAssetById(previewId) : null;
   const isEmpty = row.groupIds.length === 0;
 
-  const rowWidth = isEmpty ? CARD_W : row.groupIds.length * CARD_W + (row.groupIds.length - 1) * CARD_GAP;
+  const rowWidth = row.groupIds.length * CARD_W + Math.max(0, row.groupIds.length - 1) * CARD_GAP;
+  // nodeWidth extends past the dock so the handle (Position.Right) lands to the right of it
+  const nodeWidth = isEmpty ? CARD_W : rowWidth + DOCK_LEAD + DOCK_W + DOCK_TO_HANDLE;
 
   return (
     <>
-      <div className="relative" style={{ width: rowWidth }}>
+      <div className="relative" style={{ width: nodeWidth }}>
 
-        {/* Row handle — nudged 2px to the right */}
+        {/* Row handle — anchored at right edge of nodeWidth, past the side dock */}
         <Handle
           type="source"
           position={Position.Right}
           id="out"
           className="!w-7 !h-7 !rounded-full !bg-white !border-[3px] !border-gray-700 !shadow-md !z-20"
-          style={{ right: -2 }}
         />
 
         {isEmpty ? (
@@ -289,11 +295,11 @@ export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
           </div>
         )}
 
-        {/* Side dock — always visible, absolutely positioned past the handle */}
+        {/* Side dock — sits between cards and handle inside the wider nodeWidth */}
         {!isEmpty && (
           <div
             className="absolute flex flex-col justify-center gap-[5px]"
-            style={{ left: rowWidth + 32, top: 0, height: CARD_H }}
+            style={{ left: rowWidth + DOCK_LEAD, top: 0, height: CARD_H, width: DOCK_W }}
           >
             {/* Group 1: creative / connection */}
             <button
