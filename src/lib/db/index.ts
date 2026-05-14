@@ -30,8 +30,10 @@ export interface ChannelRow {
   traffic_source: string;
   status: "available" | "in-use" | "cooldown";
   campaign_snap_id: string | null;
+  ad_squad_snap_id: string | null;
   in_use_since: string | null;
   cooldown_since: string | null;
+  paused_since: string | null;
   created_at: string;
 }
 
@@ -41,20 +43,21 @@ export async function normalizeChannelStatuses(feedProviderId: string, googleUse
   const now = new Date();
   const h24ago = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
 
-  // in-use → cooldown after 24h
+  // in-use → cooldown: only when paused for ≥ 24h (not time-since-assignment)
   await sql`
     UPDATE feed_provider_channels
-    SET status = 'cooldown', cooldown_since = NOW(), campaign_snap_id = NULL
+    SET status = 'cooldown', cooldown_since = NOW(), campaign_snap_id = NULL, paused_since = NULL
     WHERE feed_provider_id = ${feedProviderId}
       AND google_user_id = ${googleUserId}
       AND status = 'in-use'
-      AND in_use_since < ${h24ago}::timestamptz
+      AND paused_since IS NOT NULL
+      AND paused_since < ${h24ago}::timestamptz
   `;
 
-  // cooldown → available after 24h
+  // cooldown → available after 24h; clear all lifecycle timestamps
   await sql`
     UPDATE feed_provider_channels
-    SET status = 'available', in_use_since = NULL, cooldown_since = NULL
+    SET status = 'available', in_use_since = NULL, cooldown_since = NULL, paused_since = NULL
     WHERE feed_provider_id = ${feedProviderId}
       AND google_user_id = ${googleUserId}
       AND status = 'cooldown'
@@ -92,6 +95,47 @@ export async function bulkInsertChannels(
 export async function deleteChannels(ids: string[], googleUserId: string): Promise<void> {
   for (const id of ids) {
     await sql`DELETE FROM feed_provider_channels WHERE id = ${id} AND google_user_id = ${googleUserId}`;
+  }
+}
+
+export async function getInUseChannelsByUser(googleUserId: string): Promise<ChannelRow[]> {
+  const { rows } = await sql<ChannelRow>`
+    SELECT * FROM feed_provider_channels
+    WHERE google_user_id = ${googleUserId}
+      AND status = 'in-use'
+      AND ad_squad_snap_id IS NOT NULL
+    ORDER BY in_use_since ASC
+  `;
+  return rows;
+}
+
+export async function updateChannelPausedStatus(
+  adSquadIds: string[],
+  googleUserId: string,
+  action: "set" | "clear"
+): Promise<void> {
+  if (adSquadIds.length === 0) return;
+  for (const adSquadId of adSquadIds) {
+    if (action === "set") {
+      // Guard: only stamp if not already stamped — preserves the original pause time
+      await sql`
+        UPDATE feed_provider_channels
+        SET paused_since = NOW()
+        WHERE ad_squad_snap_id = ${adSquadId}
+          AND google_user_id = ${googleUserId}
+          AND status = 'in-use'
+          AND paused_since IS NULL
+      `;
+    } else {
+      await sql`
+        UPDATE feed_provider_channels
+        SET paused_since = NULL
+        WHERE ad_squad_snap_id = ${adSquadId}
+          AND google_user_id = ${googleUserId}
+          AND status = 'in-use'
+          AND paused_since IS NOT NULL
+      `;
+    }
   }
 }
 

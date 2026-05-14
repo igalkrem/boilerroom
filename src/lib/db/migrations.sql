@@ -80,3 +80,8 @@ CREATE TABLE IF NOT EXISTS predicto_report (
 
 ALTER TABLE feed_provider_channels ADD COLUMN IF NOT EXISTS ad_squad_snap_id TEXT;
 ALTER TABLE predicto_report ADD COLUMN IF NOT EXISTS impressions BIGINT NOT NULL DEFAULT 0;
+
+ALTER TABLE feed_provider_channels ADD COLUMN IF NOT EXISTS paused_since TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS fpc_ad_squad ON feed_provider_channels(ad_squad_snap_id)
+  WHERE ad_squad_snap_id IS NOT NULL;
