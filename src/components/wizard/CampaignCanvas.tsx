@@ -613,9 +613,15 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     // This ensures provider nodes (and all downstream columns) always appear to the right of
     // the side dock, regardless of how many card slots the widest row has.
     const { creativeRows, expandedArticleIds } = useCanvasStore.getState();
-    const maxSlots = Math.max(1, ...creativeRows.map((r) => Math.max(1, r.groupIds.length)));
-    const maxRowW = maxSlots * CARD_W + Math.max(0, maxSlots - 1) * CARD_GAP + DOCK_LEAD + DOCK_W + DOCK_TO_HANDLE;
-    const P = maxRowW + 60; // 60px gap between row handle and provider node left edge
+    // P = rightmost row handle position + gap. Must use actual stored x (which shifts left
+    // on every card prepend) rather than raw nodeWidth, otherwise P grows ~576px for a 4-slot row.
+    const maxRowHandleX = creativeRows.reduce((mx, r) => {
+      const slots = Math.max(1, r.groupIds.length);
+      const nw = slots * CARD_W + Math.max(0, slots - 1) * CARD_GAP + DOCK_LEAD + DOCK_W + DOCK_TO_HANDLE;
+      const sx = nodePositionsRef.current[`row-${r.id}`]?.x ?? 0;
+      return Math.max(mx, sx + nw);
+    }, 0);
+    const P = maxRowHandleX + 40;
     const dynColX = { group: 0, provider: P, router: P + 240, article: P + 480, adaccount: P + 800, preset: P + 1100 };
 
     // Build stable tiebreaker priorities so nodes from provider[0] always sort above provider[1].

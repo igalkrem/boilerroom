@@ -58,28 +58,25 @@ export function ArticleNode({ id, data }: {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-800 dark:text-gray-200 break-words">{data.article.slug}</p>
         </div>
-        {/* Page icon + expand */}
-        <div className="flex items-center gap-1 shrink-0">
-          <span className="text-gray-300 text-xs">📄</span>
-          {connected && (
-            <button
-              type="button"
-              onClick={() => useCanvasStore.getState().toggleArticleExpanded(id)}
-              className="nodrag text-xs text-gray-400 hover:text-gray-600"
-            >
-              {expanded ? "▲" : "▼"}
-            </button>
-          )}
-        </div>
+        {connected && (
+          <button
+            type="button"
+            onClick={() => useCanvasStore.getState().toggleArticleExpanded(id)}
+            className="nodrag shrink-0 w-5 h-5 flex items-center justify-center rounded-md text-xs font-semibold text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            {expanded ? "▲" : "▼"}
+          </button>
+        )}
       </div>
 
       {connected && expanded && articleEdges.map((ae) => (
         <div
           key={`${ae.feedProviderId}-${ae.articleId}`}
-          className="nodrag mt-2 border border-blue-200 dark:border-blue-700 rounded-xl p-2 space-y-2 bg-blue-50/40 dark:bg-blue-900/20"
+          className="nodrag mt-2 rounded-xl p-2.5 space-y-2 border"
+          style={{ borderColor: `${data.color}30`, background: `${data.color}08` }}
         >
           <div>
-            <label className="text-xs text-gray-500 block mb-0.5">Headline</label>
+            <label className="text-[10px] font-semibold text-gray-500 block mb-1 uppercase tracking-wider">Headline</label>
             {data.article.allowedHeadlines.length > 0 ? (
               <select
                 value={ae.headline}
@@ -88,7 +85,7 @@ export function ArticleNode({ id, data }: {
                   const rac = data.article.allowedHeadlines.find((h) => h.text === val)?.rac ?? "";
                   store.setArticleContent(ae.feedProviderId, data.article.id, val, ae.callToAction, rac);
                 }}
-                className="w-full text-xs border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-2 py-1 focus:outline-none"
+                className="w-full text-xs rounded-lg px-2 py-1 focus:outline-none bg-white/5 border border-white/10 text-gray-300"
               >
                 <option value="">— Select headline —</option>
                 {data.article.allowedHeadlines.map((h) => (
@@ -104,18 +101,18 @@ export function ArticleNode({ id, data }: {
                 onChange={(e) =>
                   store.setArticleContent(ae.feedProviderId, data.article.id, e.target.value, ae.callToAction, "")
                 }
-                className="w-full text-xs border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-2 py-1 focus:outline-none"
+                className="w-full text-xs rounded-lg px-2 py-1 focus:outline-none bg-white/5 border border-white/10 text-gray-300 placeholder-gray-600"
               />
             )}
           </div>
           <div>
-            <label className="text-xs text-gray-500 block mb-0.5">Call to Action</label>
+            <label className="text-[10px] font-semibold text-gray-500 block mb-1 uppercase tracking-wider">Call to Action</label>
             <select
               value={ae.callToAction}
               onChange={(e) =>
                 store.setArticleContent(ae.feedProviderId, data.article.id, ae.headline, e.target.value, ae.headlineRac)
               }
-              className="w-full text-xs border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-2 py-1 focus:outline-none"
+              className="w-full text-xs rounded-lg px-2 py-1 focus:outline-none bg-white/5 border border-white/10 text-gray-300"
             >
               <option value="">— None —</option>
               {CTA_OPTIONS.map((c) => (
