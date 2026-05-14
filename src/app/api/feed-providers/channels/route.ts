@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getSession, isSessionValid } from "@/lib/session";
-import { runMigrations, listChannels, bulkInsertChannels, deleteChannels } from "@/lib/db";
+import { runMigrations, listChannels, bulkInsertChannels, deleteChannels, forceChannelStatus } from "@/lib/db";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const session = await getSession();
@@ -43,6 +43,29 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     await bulkInsertChannels(body.feedProviderId, body.rows, session.googleUserId);
     return NextResponse.json({ ok: true, count: body.rows.length });
+  } catch {
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest): Promise<NextResponse> {
+  const session = await getSession();
+  if (!isSessionValid(session)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  await runMigrations();
+  let body: { id: string; newStatus: "available" | "cooldown" };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+  if (!body.id || !["available", "cooldown"].includes(body.newStatus)) {
+    return NextResponse.json({ error: "id and newStatus (available|cooldown) required" }, { status: 400 });
+  }
+  try {
+    await forceChannelStatus(body.id, session.googleUserId, body.newStatus);
+    return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
