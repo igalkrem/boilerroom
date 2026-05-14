@@ -163,6 +163,30 @@ export async function assignChannel(
   return row.channel_id;
 }
 
+export async function forceChannelStatus(
+  id: string,
+  googleUserId: string,
+  newStatus: "available" | "cooldown"
+): Promise<void> {
+  if (newStatus === "available") {
+    await sql`
+      UPDATE feed_provider_channels
+      SET status = 'available', in_use_since = NULL, cooldown_since = NULL, paused_since = NULL, campaign_snap_id = NULL
+      WHERE id = ${id}
+        AND google_user_id = ${googleUserId}
+        AND status = 'in-use'
+    `;
+  } else {
+    await sql`
+      UPDATE feed_provider_channels
+      SET status = 'cooldown', cooldown_since = NOW(), paused_since = NULL, campaign_snap_id = NULL
+      WHERE id = ${id}
+        AND google_user_id = ${googleUserId}
+        AND status = 'in-use'
+    `;
+  }
+}
+
 export async function releaseChannel(campaignSnapId: string, googleUserId: string): Promise<void> {
   await sql`
     UPDATE feed_provider_channels

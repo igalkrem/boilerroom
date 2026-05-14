@@ -95,6 +95,15 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
     loadChannels();
   }
 
+  async function moveChannel(id: string, newStatus: "available" | "cooldown") {
+    await fetch("/api/feed-providers/channels", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, newStatus }),
+    });
+    loadChannels();
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -175,16 +184,33 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
                     {expandedGroup === group && items.length > 0 && (
                       <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-48 overflow-y-auto">
                         {items.map((ch) => (
-                          <div key={ch.id} className="flex items-center gap-3 px-4 py-2 text-xs">
-                            <span className="font-mono text-gray-800 dark:text-gray-200">{ch.channel_id}</span>
-                            <span className="text-gray-400">{ch.traffic_source}</span>
-                            {ch.campaign_snap_id && (
-                              <span className="text-gray-300 font-mono ml-auto">{ch.campaign_snap_id.slice(0, 12)}…</span>
+                          <div key={ch.id} className="flex items-center gap-2 px-4 py-2 text-xs">
+                            <span className="font-mono text-gray-800 dark:text-gray-200 flex-1 truncate">{ch.channel_id}</span>
+                            <span className="text-gray-400 shrink-0">{ch.traffic_source}</span>
+                            {group === "inUse" && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => moveChannel(ch.id, "available")}
+                                  title="Move to Available"
+                                  className="px-1.5 py-0.5 text-[10px] rounded bg-green-900/40 text-green-400 hover:bg-green-700/60 shrink-0"
+                                >
+                                  → Avail
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveChannel(ch.id, "cooldown")}
+                                  title="Move to Cooldown"
+                                  className="px-1.5 py-0.5 text-[10px] rounded bg-yellow-900/40 text-yellow-400 hover:bg-yellow-700/60 shrink-0"
+                                >
+                                  → Cool
+                                </button>
+                              </>
                             )}
                             <button
                               type="button"
                               onClick={() => deleteSelected([ch.id])}
-                              className="text-gray-300 hover:text-red-500 ml-auto shrink-0"
+                              className="text-gray-300 hover:text-red-500 shrink-0"
                             >
                               ✕
                             </button>
