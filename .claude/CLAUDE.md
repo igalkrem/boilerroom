@@ -90,7 +90,7 @@ src/
 │   │   ├── auth/                      # logout, refresh, session; google/{login,callback}; snapchat/{connect,callback,disconnect}
 │   │   ├── data/                      # GET/POST — reads/writes user-scoped JSON blobs for persistent metadata
 │   │   ├── feed-providers/
-│   │   │   └── channels/              # GET/POST/DELETE — list, bulk-insert, hard-delete channels
+│   │   │   └── channels/              # GET/POST/PATCH/DELETE — list, bulk-insert, force status (PATCH {id, newStatus}), hard-delete channels
 │   │   │       ├── assign/            # POST — picks oldest available channel, marks in-use
 │   │   │       ├── release/           # POST — moves in-use channel to cooldown
 │   │   │       └── link-squad/        # PATCH {channelId, adSquadId} — stores channel→ad_squad mapping for Predicto revenue JOIN
@@ -193,7 +193,7 @@ src/
 │   ├── kv-sync.ts                     # hydrateFromKV(key) + syncToKV(key, data) — debounced 1.5s writes to /api/data
 │   ├── channel-status-sync.ts         # syncChannelPausedStatus(googleUserId, accessToken) — polls Snapchat squad status for all in-use channels and stamps/clears paused_since; called by cron-sync per user
 │   ├── db/
-│   │   ├── index.ts                   # sql helper + runMigrations() + channel CRUD: normalizeChannelStatuses(), assignChannel(), releaseChannel(), listChannels(), bulkInsertChannels(), deleteChannels(), getInUseChannelsByUser(), updateChannelPausedStatus() + token CRUD: upsertUserToken(), updateAdAccountIds(), getAllUserTokens(), deleteUserToken()
+│   │   ├── index.ts                   # sql helper + runMigrations() + channel CRUD: normalizeChannelStatuses(), assignChannel(), releaseChannel(), forceChannelStatus(), listChannels(), bulkInsertChannels(), deleteChannels(), getInUseChannelsByUser(), updateChannelPausedStatus() + token CRUD: upsertUserToken(), updateAdAccountIds(), getAllUserTokens(), deleteUserToken()
 │   │   ├── token-crypto.ts            # AES-256-GCM encrypt/decrypt for Snapchat refresh tokens (SESSION_SECRET as key) + verifyCronSecret() using timingSafeEqual
 │   │   └── migrations.sql             # CREATE TABLE IF NOT EXISTS for all 5 tables (3 reporting + feed_provider_channels + user_snapchat_tokens)
 │   ├── country-map.ts                 # countryNameToCode / countryCodeToName — normalises KingsRoad country_name ↔ Snapchat ISO-2
