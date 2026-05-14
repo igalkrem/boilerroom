@@ -621,7 +621,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       const sx = nodePositionsRef.current[`row-${r.id}`]?.x ?? 0;
       return Math.max(mx, sx + nw);
     }, 0);
-    const P = maxRowHandleX + 40;
+    const P = maxRowHandleX + 120;
     const dynColX = { group: 0, provider: P, router: P + 240, article: P + 480, adaccount: P + 800, preset: P + 1100 };
 
     // Build stable tiebreaker priorities so nodes from provider[0] always sort above provider[1].
