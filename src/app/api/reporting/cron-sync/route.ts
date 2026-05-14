@@ -3,6 +3,7 @@ import { getAllUserTokens, upsertUserToken } from "@/lib/db";
 import { refreshAccessToken } from "@/lib/snapchat/auth";
 import { syncAccount } from "@/lib/reporting/sync-logic";
 import { verifyCronSecret } from "@/lib/db/token-crypto";
+import { syncChannelPausedStatus } from "@/lib/channel-status-sync";
 
 export const maxDuration = 300;
 
@@ -46,6 +47,18 @@ export async function GET(request: NextRequest) {
       } catch (err) {
         console.error(`[cron-sync] token refresh failed for user ${user.google_user_id}:`, err);
         return; // skip this user, retry next run
+      }
+
+      // Update paused_since for all in-use channels before normalizeChannelStatuses
+      // runs lazily on next assignChannel/listChannels call.
+      try {
+        const channelSync = await syncChannelPausedStatus(user.google_user_id, accessToken);
+        if (channelSync.checked > 0) {
+          console.log(`[cron-sync] channel sync for ${user.google_user_id}:`, channelSync);
+        }
+      } catch (err) {
+        // Non-fatal — report sync must not fail because of channel sync.
+        console.error(`[cron-sync] channel status sync failed for user ${user.google_user_id}:`, err);
       }
 
       await Promise.allSettled(

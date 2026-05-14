@@ -12,9 +12,11 @@ export async function getAdSquads(campaignId: string, token?: string): Promise<S
     .map((item) => item.adsquad!);
 }
 
-export async function getAdSquad(adSquadId: string): Promise<SnapAdSquad> {
+export async function getAdSquad(adSquadId: string, token?: string): Promise<SnapAdSquad> {
   const data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
-    `/adsquads/${adSquadId}`
+    `/adsquads/${adSquadId}`,
+    {},
+    token
   );
   const item = data.adsquads?.[0];
   if (!item?.adsquad) throw new Error("Ad squad not found");
