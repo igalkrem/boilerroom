@@ -19,14 +19,26 @@ interface CreativeRowNodeData {
 
 const CARD_W = 160;
 const CARD_GAP = 12;
+const CARD_H = Math.round(CARD_W * (16 / 9)); // 285
+
+// Per-creative accent colours for multi-creative name pills (index-stable)
+const CREATIVE_NAME_COLORS = [
+  { stripe: "#3b82f6", bg: "rgba(59,130,246,0.2)",  border: "rgba(59,130,246,0.4)",  text: "#bfdbfe" },
+  { stripe: "#818cf8", bg: "rgba(99,102,241,0.2)",   border: "rgba(99,102,241,0.4)",  text: "#c7d2fe" },
+  { stripe: "#a78bfa", bg: "rgba(139,92,246,0.2)",   border: "rgba(139,92,246,0.4)",  text: "#ddd6fe" },
+  { stripe: "#34d399", bg: "rgba(52,211,153,0.2)",   border: "rgba(52,211,153,0.4)",  text: "#a7f3d0" },
+  { stripe: "#fb923c", bg: "rgba(251,146,60,0.2)",   border: "rgba(251,146,60,0.4)",  text: "#fed7aa" },
+];
 
 function CardFace({
   asset,
+  allAssets,
   accentColors,
   onPreview,
   onRemove,
 }: {
   asset: SiloAsset;
+  allAssets: SiloAsset[];
   accentColors: string[];
   onPreview: () => void;
   onRemove: () => void;
@@ -38,9 +50,11 @@ function CardFace({
       ? { background: accentColors[0] }
       : {};
 
+  const multi = allAssets.length > 1;
+
   return (
     <div className="relative w-full h-full group/card">
-      {/* Left accent stripe */}
+      {/* Left provider accent stripe */}
       {accentColors.length > 0 && (
         <div className="absolute left-0 top-0 bottom-0 w-[3px] z-10" style={stripeStyle} />
       )}
@@ -62,18 +76,49 @@ function CardFace({
         </div>
       )}
 
-      {/* Bottom gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/75 pointer-events-none" />
+      {/* Bottom gradient — deeper when stacking multiple name pills */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: multi
+            ? "linear-gradient(to bottom, transparent 20%, rgba(0,0,0,0.97) 100%)"
+            : "linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.75) 100%)",
+        }}
+      />
 
-      {/* Asset name */}
-      <p
-        className="absolute bottom-2 left-3 right-3 z-10 text-white text-[11px] font-semibold truncate pointer-events-none"
-        style={{ textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}
-      >
-        {asset.name ?? asset.originalFileName ?? ""}
-      </p>
+      {/* Asset name area */}
+      <div className="absolute bottom-2 left-2 right-2 z-10 flex flex-col gap-1">
+        {multi ? (
+          /* Stacked coloured pills — one per creative in the slot */
+          allAssets.map((a, i) => {
+            const c = CREATIVE_NAME_COLORS[i % CREATIVE_NAME_COLORS.length];
+            return (
+              <div
+                key={a.id}
+                className="flex items-stretch overflow-hidden rounded-[5px]"
+                style={{ background: c.bg, border: `1px solid ${c.border}` }}
+              >
+                <div className="w-[3px] shrink-0 rounded-l-[5px]" style={{ background: c.stripe }} />
+                <span className="text-[10px] font-bold px-1.5 py-[3px] truncate" style={{ color: c.text }}>
+                  {a.name ?? a.originalFileName ?? ""}
+                </span>
+              </div>
+            );
+          })
+        ) : (
+          /* Single asset — subtle frosted pill */
+          <div className="flex items-center overflow-hidden rounded-[5px] bg-white/[0.08] border border-white/[0.12]">
+            <p
+              className="text-[11px] font-semibold text-white px-1.5 py-[3px] truncate"
+              style={{ textShadow: "0 1px 3px rgba(0,0,0,0.9)" }}
+            >
+              {asset.name ?? asset.originalFileName ?? ""}
+            </p>
+          </div>
+        )}
+      </div>
 
-      {/* Per-card remove button — visible on card hover */}
+      {/* Slot-level remove (hover-reveal is fine — it's a destructive action on one slot) */}
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onRemove(); }}
@@ -93,8 +138,6 @@ export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
   const row = store.creativeRows.find((r) => r.id === data.rowId);
   if (!row) return null;
 
-  // groupIds[0] = newest (prepended on add) = leftmost.
-  // groupIds[last] = oldest = rightmost, closest to the handle.
   const groupsInDomOrder = row.groupIds;
 
   const connectedColors = store.edges.rowToProvider
@@ -104,44 +147,20 @@ export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
   const previewAsset = previewId ? getAssetById(previewId) : null;
   const isEmpty = row.groupIds.length === 0;
 
-  // The visible row width helps us position the "+" button above the
-  // rightmost card. With CARD_W and CARD_GAP, the rightmost card's right
-  // edge sits at the container's right edge (the handle is anchored there).
   const rowWidth = isEmpty ? CARD_W : row.groupIds.length * CARD_W + (row.groupIds.length - 1) * CARD_GAP;
 
   return (
     <>
-      <div className="relative group/node" style={{ width: rowWidth }}>
-        {/* Shared row handle — anchored at right edge */}
+      <div className="relative" style={{ width: rowWidth }}>
+
+        {/* Row handle — nudged 2px to the right */}
         <Handle
           type="source"
           position={Position.Right}
           id="out"
           className="!w-7 !h-7 !rounded-full !bg-white !border-[3px] !border-gray-700 !shadow-md !z-20"
+          style={{ right: -2 }}
         />
-
-        {/* Whole-row remove button — top-right, visible on row hover */}
-        <button
-          type="button"
-          onClick={() => data.onRemoveRow(data.rowId)}
-          title="Remove row"
-          className="nodrag absolute -top-2 -right-2 z-30 w-6 h-6 rounded-full bg-gray-900 border border-gray-600 flex items-center justify-center text-gray-400 hover:text-white hover:bg-red-600 hover:border-red-500 text-[10px] opacity-0 group-hover/node:opacity-100 transition-all"
-        >
-          ✕
-        </button>
-
-        {/* "+" button — above the rightmost card, visible on row hover */}
-        {!isEmpty && row.groupIds.length < 8 && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); data.onAddToRow(data.rowId); }}
-            title="Add creative slot"
-            className="nodrag absolute z-30 w-8 h-8 rounded-full bg-gray-900 border border-gray-600 flex items-center justify-center text-gray-300 hover:text-white hover:bg-blue-600 hover:border-blue-500 text-lg leading-none opacity-0 group-hover/node:opacity-100 transition-all shadow-md"
-            style={{ top: -36, right: (CARD_W - 32) / 2 }}
-          >
-            +
-          </button>
-        )}
 
         {isEmpty ? (
           /* ── Empty state ── */
@@ -156,7 +175,7 @@ export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
             <span className="text-xs text-gray-600 font-medium">Add creative</span>
           </div>
         ) : (
-          /* ── Row of cards ── */
+          /* ── Row of slot columns ── */
           <div className="flex flex-row" style={{ gap: CARD_GAP }}>
             {groupsInDomOrder.map((groupId) => {
               const group = store.creativeGroups.find((g) => g.id === groupId);
@@ -174,85 +193,94 @@ export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
                   </div>
                 );
               }
+
               const creativeCount = group.creativeIds.length;
+              const allGroupAssets = group.creativeIds
+                .map((id) => getAssetById(id))
+                .filter(Boolean) as SiloAsset[];
+
               return (
-                <div
-                  key={groupId}
-                  className="relative rounded-xl overflow-hidden shadow-xl shrink-0 group/slot"
-                  style={{ width: CARD_W, aspectRatio: "9/16" }}
-                >
-                  <CardFace
-                    asset={asset}
-                    accentColors={connectedColors}
-                    onPreview={() => setPreviewId(asset.id)}
-                    onRemove={() => store.removeGroupFromRow(data.rowId, groupId)}
-                  />
+                /* Per-slot column: card on top, add-creative button below */
+                <div key={groupId} className="flex flex-col gap-1.5" style={{ width: CARD_W }}>
 
-                  {/* Multi-creative count badge — clickable to expand/collapse slot */}
-                  {creativeCount > 1 && (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setExpandedGroupId(expandedGroupId === groupId ? null : groupId); }}
-                      title="Expand slot"
-                      className={`nodrag absolute top-2 left-2 z-20 backdrop-blur-sm border rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white transition-colors ${
-                        expandedGroupId === groupId
-                          ? "bg-blue-600/80 border-blue-400/40"
-                          : "bg-black/60 border-white/15 hover:bg-black/80"
-                      }`}
-                    >
-                      ×{creativeCount}
-                    </button>
-                  )}
+                  {/* Card */}
+                  <div
+                    className="relative rounded-xl overflow-hidden shadow-xl shrink-0 group/slot"
+                    style={{ width: CARD_W, aspectRatio: "9/16" }}
+                  >
+                    <CardFace
+                      asset={asset}
+                      allAssets={allGroupAssets}
+                      accentColors={connectedColors}
+                      onPreview={() => setPreviewId(asset.id)}
+                      onRemove={() => store.removeGroupFromRow(data.rowId, groupId)}
+                    />
 
-                  {/* Slot expansion overlay — shows all creatives in this group */}
-                  {expandedGroupId === groupId && (
-                    <div
-                      className="nodrag absolute inset-0 z-25 bg-black/80 rounded-xl flex flex-col items-center justify-center gap-2 p-2"
-                      onClick={(e) => { e.stopPropagation(); setExpandedGroupId(null); }}
-                    >
-                      <p className="text-[9px] text-gray-400 font-medium tracking-wide uppercase">Slot creatives</p>
-                      <div className="flex gap-1.5 flex-wrap justify-center" onClick={(e) => e.stopPropagation()}>
-                        {group.creativeIds.map((cId) => {
-                          const cAsset = getAssetById(cId);
-                          if (!cAsset) return null;
-                          return (
-                            <div key={cId} className="relative rounded-md overflow-hidden shrink-0 group/mini" style={{ width: 44, aspectRatio: "9/16" }}>
-                              {cAsset.thumbnailUrl ? (
-                                <img
-                                  src={cAsset.thumbnailUrl}
-                                  alt={cAsset.name ?? ""}
-                                  className="w-full h-full object-cover cursor-pointer"
-                                  onClick={() => setPreviewId(cId)}
-                                />
-                              ) : (
-                                <div className="w-full h-full bg-gray-700 flex items-center justify-center text-gray-400 text-xs cursor-pointer" onClick={() => setPreviewId(cId)}>
-                                  {cAsset.mediaType === "VIDEO" ? "▶" : "🖼"}
-                                </div>
-                              )}
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); store.removeCreativeFromGroup(groupId, cId); }}
-                                className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-red-600/80 text-[8px] opacity-0 group-hover/mini:opacity-100 transition-all"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          );
-                        })}
+                    {/* Multi-creative count badge — clickable to expand/collapse */}
+                    {creativeCount > 1 && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setExpandedGroupId(expandedGroupId === groupId ? null : groupId); }}
+                        title="Expand slot"
+                        className={`nodrag absolute top-2 left-2 z-20 backdrop-blur-sm border rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white transition-colors ${
+                          expandedGroupId === groupId
+                            ? "bg-blue-600/80 border-blue-400/40"
+                            : "bg-black/60 border-white/15 hover:bg-black/80"
+                        }`}
+                      >
+                        ×{creativeCount}
+                      </button>
+                    )}
+
+                    {/* Slot expansion overlay */}
+                    {expandedGroupId === groupId && (
+                      <div
+                        className="nodrag absolute inset-0 z-25 bg-black/80 rounded-xl flex flex-col items-center justify-center gap-2 p-2"
+                        onClick={(e) => { e.stopPropagation(); setExpandedGroupId(null); }}
+                      >
+                        <p className="text-[9px] text-gray-400 font-medium tracking-wide uppercase">Slot creatives</p>
+                        <div className="flex gap-1.5 flex-wrap justify-center" onClick={(e) => e.stopPropagation()}>
+                          {group.creativeIds.map((cId) => {
+                            const cAsset = getAssetById(cId);
+                            if (!cAsset) return null;
+                            return (
+                              <div key={cId} className="relative rounded-md overflow-hidden shrink-0 group/mini" style={{ width: 44, aspectRatio: "9/16" }}>
+                                {cAsset.thumbnailUrl ? (
+                                  <img
+                                    src={cAsset.thumbnailUrl}
+                                    alt={cAsset.name ?? ""}
+                                    className="w-full h-full object-cover cursor-pointer"
+                                    onClick={() => setPreviewId(cId)}
+                                  />
+                                ) : (
+                                  <div className="w-full h-full bg-gray-700 flex items-center justify-center text-gray-400 text-xs cursor-pointer" onClick={() => setPreviewId(cId)}>
+                                    {cAsset.mediaType === "VIDEO" ? "▶" : "🖼"}
+                                  </div>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); store.removeCreativeFromGroup(groupId, cId); }}
+                                  className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-red-600/80 text-[8px] opacity-0 group-hover/mini:opacity-100 transition-all"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[9px] text-gray-500">tap outside to close</p>
                       </div>
-                      <p className="text-[9px] text-gray-500">tap outside to close</p>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
-                  {/* Add-to-slot button — bottom center, visible on slot hover */}
+                  {/* Add creative to this slot — always visible below the card */}
                   {creativeCount < 5 && expandedGroupId !== groupId && (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); data.onAddToSlot(groupId); }}
-                      title="Add creative to this slot"
-                      className="nodrag absolute bottom-8 left-1/2 -translate-x-1/2 z-20 w-7 h-7 rounded-full bg-black/55 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white/70 hover:text-white hover:bg-blue-600/80 text-sm leading-none opacity-0 group-hover/slot:opacity-100 transition-all"
+                      className="nodrag w-full flex items-center justify-center gap-1 h-8 rounded-lg text-[11px] font-semibold text-gray-500 bg-gray-900/80 border border-dashed border-gray-600 hover:bg-blue-900/20 hover:border-blue-500/40 hover:text-blue-400 transition-colors cursor-pointer"
                     >
-                      +
+                      <span className="text-sm leading-none">＋</span> Add creative
                     </button>
                   )}
                 </div>
@@ -261,32 +289,59 @@ export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
           </div>
         )}
 
-        {/* "New row" / "Duplicate" / "Provider" — below row, visible on row hover */}
-        <div className="absolute left-0 right-0 flex justify-center gap-2 opacity-0 group-hover/node:opacity-100 transition-opacity" style={{ bottom: -36 }}>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); data.onNewRow(); }}
-            className="nodrag px-2.5 py-1 text-[11px] font-medium text-gray-300 bg-gray-900/90 hover:bg-gray-800 border border-gray-600 hover:border-gray-500 rounded-md shadow-sm transition-colors"
+        {/* Side dock — always visible, absolutely positioned past the handle */}
+        {!isEmpty && (
+          <div
+            className="absolute flex flex-col justify-center gap-[5px]"
+            style={{ left: rowWidth + 32, top: 0, height: CARD_H }}
           >
-            ↓ New row
-          </button>
-          {!isEmpty && (
+            {/* Group 1: creative / connection */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); data.onAddToRow(data.rowId); }}
+              disabled={row.groupIds.length >= 8}
+              className="nodrag flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-semibold bg-blue-900/30 border border-blue-500/40 text-blue-300 hover:bg-blue-800/40 hover:border-blue-400/60 disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+            >
+              <span>⊞</span> Add slot
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); data.onPickProviders(data.rowId); }}
+              className="nodrag flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-semibold bg-blue-900/20 border border-blue-500/30 text-blue-400 hover:bg-blue-800/30 hover:border-blue-400/50 transition-colors whitespace-nowrap"
+            >
+              <span>🔗</span> Provider
+            </button>
+
+            <div className="h-px bg-gray-700 mx-1" />
+
+            {/* Group 2: row management */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); data.onNewRow(); }}
+              className="nodrag flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-semibold bg-gray-800 border border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap"
+            >
+              <span>↓</span> New row
+            </button>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); data.onDuplicateRow(data.rowId); }}
-              className="nodrag px-2.5 py-1 text-[11px] font-medium text-gray-300 bg-gray-900/90 hover:bg-gray-800 border border-gray-600 hover:border-gray-500 rounded-md shadow-sm transition-colors"
+              className="nodrag flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-semibold bg-gray-800 border border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap"
             >
-              ⧉ Duplicate
+              <span>⧉</span> Duplicate
             </button>
-          )}
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); data.onPickProviders(data.rowId); }}
-            className="nodrag px-2.5 py-1 text-[11px] font-medium text-gray-300 bg-gray-900/90 hover:bg-gray-800 border border-gray-600 hover:border-gray-500 rounded-md shadow-sm transition-colors"
-          >
-            ＋ Provider
-          </button>
-        </div>
+
+            <div className="h-px bg-gray-700 mx-1" />
+
+            {/* Group 3: destructive */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); data.onRemoveRow(data.rowId); }}
+              className="nodrag flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-semibold bg-red-900/10 border border-red-500/30 text-red-300 hover:bg-red-900/25 hover:border-red-400/50 transition-colors whitespace-nowrap"
+            >
+              <span>✕</span> Remove row
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Preview modal */}
