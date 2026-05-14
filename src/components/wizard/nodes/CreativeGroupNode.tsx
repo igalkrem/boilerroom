@@ -17,14 +17,14 @@ interface CreativeRowNodeData {
   onPickProviders: (rowId: string) => void;
 }
 
-const CARD_W = 160;
-const CARD_GAP = 12;
+export const CARD_W = 160;
+export const CARD_GAP = 12;
 const CARD_H = Math.round(CARD_W * (16 / 9)); // 285
 
 // Dock geometry — handle sits at the node's right edge, past the dock
-const DOCK_LEAD = 32;       // gap: cards right → dock left
-const DOCK_W = 142;         // dock panel fixed width
-const DOCK_TO_HANDLE = 22;  // gap: dock right → handle center
+export const DOCK_LEAD = 32;
+export const DOCK_W = 142;
+export const DOCK_TO_HANDLE = 22;
 
 // Per-creative accent colours for multi-creative name pills (index-stable)
 const CREATIVE_NAME_COLORS = [

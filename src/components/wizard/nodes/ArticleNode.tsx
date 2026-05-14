@@ -1,17 +1,17 @@
 "use client";
 
-import { useState } from "react";
 import { Handle, Position } from "@xyflow/react";
 import { useCanvasStore } from "@/hooks/useCanvasStore";
 import type { Article } from "@/types/article";
 
 const CTA_OPTIONS = ["MORE","SHOP_NOW","SIGN_UP","DOWNLOAD","WATCH","GET_NOW","ORDER_NOW","BOOK_NOW","APPLY_NOW","BUY_NOW"];
 
-export function ArticleNode({ data }: {
+export function ArticleNode({ id, data }: {
+  id: string;
   data: { article: Article; color: string; onDisconnectTarget: (nodeId: string) => void };
 }) {
   const store = useCanvasStore();
-  const [expanded, setExpanded] = useState(false);
+  const expanded = useCanvasStore((s) => s.expandedArticleIds.has(id));
 
   const articleEdges = store.edges.providerToArticle.filter((e) => e.articleId === data.article.id);
   const connected = articleEdges.length > 0;
@@ -46,7 +46,7 @@ export function ArticleNode({ data }: {
           {connected && (
             <button
               type="button"
-              onClick={() => setExpanded((v) => !v)}
+              onClick={() => useCanvasStore.getState().toggleArticleExpanded(id)}
               className="nodrag text-xs text-gray-400 hover:text-gray-600"
             >
               {expanded ? "▲" : "▼"}
