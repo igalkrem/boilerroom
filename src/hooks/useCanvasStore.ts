@@ -78,6 +78,9 @@ interface CanvasStore {
   removeRouter: (routerId: string) => void;
   reset: () => void;
 
+  expandedArticleIds: Set<string>;
+  toggleArticleExpanded: (nodeId: string) => void;
+
   buildCampaignMatrix: () => CampaignBuildItem[];
 }
 
@@ -101,6 +104,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   edges: { ...initialEdges },
   nodePositions: {},
   routerNodes: [],
+  expandedArticleIds: new Set<string>(),
 
   addRow: () => {
     const newRow: CreativeRow = { id: freshId("row"), groupIds: [] };
@@ -345,6 +349,15 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       edges: { ...initialEdges },
       nodePositions: {},
       routerNodes: [],
+      expandedArticleIds: new Set<string>(),
+    }),
+
+  toggleArticleExpanded: (nodeId) =>
+    set((s) => {
+      const next = new Set(s.expandedArticleIds);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return { expandedArticleIds: next };
     }),
 
   buildCampaignMatrix: (): CampaignBuildItem[] => {

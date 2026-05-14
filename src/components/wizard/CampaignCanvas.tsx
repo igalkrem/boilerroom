@@ -30,8 +30,8 @@ import type { FeedProvider } from "@/types/feed-provider";
 import type { Article } from "@/types/article";
 import type { CampaignPreset } from "@/types/preset";
 import type { AdAccountConfig } from "@/types/ad-account";
-import { computeAutoLayout, CanvasControls } from "./CanvasControls";
-import { CreativeGroupNode } from "./nodes/CreativeGroupNode";
+import { computeAutoLayout, CanvasControls, ARTICLE_EXPANDED_H } from "./CanvasControls";
+import { CreativeGroupNode, CARD_W, CARD_GAP, DOCK_LEAD, DOCK_W, DOCK_TO_HANDLE } from "./nodes/CreativeGroupNode";
 import { ProviderNode } from "./nodes/ProviderNode";
 import { RouterNode } from "./nodes/RouterNode";
 import { ArticleNode } from "./nodes/ArticleNode";
@@ -609,6 +609,15 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     const connectedNodes = currentNodes.filter((n) => connectedIds.has(n.id));
     if (connectedNodes.length === 0) return;
 
+    // Compute dynamic column X positions based on the widest row node currently in the canvas.
+    // This ensures provider nodes (and all downstream columns) always appear to the right of
+    // the side dock, regardless of how many card slots the widest row has.
+    const { creativeRows, expandedArticleIds } = useCanvasStore.getState();
+    const maxSlots = Math.max(1, ...creativeRows.map((r) => Math.max(1, r.groupIds.length)));
+    const maxRowW = maxSlots * CARD_W + Math.max(0, maxSlots - 1) * CARD_GAP + DOCK_LEAD + DOCK_W + DOCK_TO_HANDLE;
+    const P = maxRowW + 60; // 60px gap between row handle and provider node left edge
+    const dynColX = { group: 0, provider: P, router: P + 240, article: P + 480, adaccount: P + 800, preset: P + 1100 };
+
     // Build stable tiebreaker priorities so nodes from provider[0] always sort above provider[1].
     // Without this, routers and sibling providers land in the same dagre rank with identical
     // avgUpstreamY, making the sort non-deterministic and flipping the whole right-side cascade.
@@ -629,9 +638,9 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         .forEach((ape) => { nodePriority[`preset-${ape.presetId}`] = Math.min(nodePriority[`preset-${ape.presetId}`] ?? 999, i); });
     });
 
-    const positions = computeAutoLayout(connectedNodes, currentEdges, nodePriority);
+    const positions = computeAutoLayout(connectedNodes, currentEdges, nodePriority, expandedArticleIds);
 
-    // Override dagre x: use COLUMN_X for all non-row nodes; for row nodes restore
+    // Override dagre x: use dynColX for all non-row nodes; for row nodes restore
     // the stored x so card-prepend shifts are never clobbered by dagre.
     for (const n of connectedNodes) {
       if (!positions[n.id] || !n.type) continue;
@@ -639,7 +648,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         const storedX = nodePositionsRef.current[n.id]?.x;
         if (storedX !== undefined) positions[n.id].x = storedX;
       } else {
-        const colX = COLUMN_X[n.type as keyof typeof COLUMN_X];
+        const colX = dynColX[n.type as keyof typeof dynColX];
         if (colX !== undefined) positions[n.id].x = colX;
       }
     }
@@ -651,7 +660,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       const anchorY = anchorIdx >= 0 ? positions[providerNodes[anchorIdx].id]!.y : 0;
       providerNodes.forEach((n, i) => {
         if (!positions[n.id]) {
-          positions[n.id] = { x: COLUMN_X.provider, y: anchorY + (i - anchorIdx) * ROW_GAP };
+          positions[n.id] = { x: dynColX.provider, y: anchorY + (i - anchorIdx) * ROW_GAP };
         }
       });
     }
@@ -671,7 +680,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     }
     for (const n of currentNodes) {
       if (positions[n.id] || n.type === "provider" || !n.type) continue;
-      const colX = COLUMN_X[n.type as keyof typeof COLUMN_X];
+      const colX = dynColX[n.type as keyof typeof dynColX];
       if (colX === undefined) continue;
       const idx = typeCounters[n.type] ?? 0;
       typeCounters[n.type] = idx + 1;
@@ -679,9 +688,15 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       positions[n.id] = { x: colX, y: articleMidY + (idx - (count - 1) / 2) * ROW_GAP };
     }
 
-    // Collision resolution: within each node-type column, sort by y and enforce
-    // minimum ROW_GAP between node tops so dagre-positioned and fallback-positioned
-    // nodes never visually overlap.
+    // Collision resolution: sort by y within each node-type column and enforce a minimum
+    // gap. For article nodes the gap is based on their actual dagre height (expanded or not)
+    // so expanded articles never visually overlap the node below them.
+    const nodeMinGap = (id: string): number => {
+      const n = currentNodes.find((nd) => nd.id === id);
+      if (n?.type === "article" && expandedArticleIds.has(id)) return ARTICLE_EXPANDED_H + 20;
+      if (n?.type === "group") return 285 + 20; // GROUP_CARD_H + gap
+      return ROW_GAP;
+    };
     const byTypeIds: Record<string, string[]> = {};
     for (const n of currentNodes) {
       if (!positions[n.id] || !n.type) continue;
@@ -692,8 +707,23 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       if (nodeIds.length <= 1) continue;
       nodeIds.sort((a, b) => positions[a].y - positions[b].y);
       for (let i = 1; i < nodeIds.length; i++) {
-        const minY = positions[nodeIds[i - 1]].y + ROW_GAP;
+        const minY = positions[nodeIds[i - 1]].y + nodeMinGap(nodeIds[i - 1]);
         if (positions[nodeIds[i]].y < minY) positions[nodeIds[i]].y = minY;
+      }
+    }
+
+    // Enforce creation order for providers: after collision resolution (which sorts by y),
+    // do a final pass keyed on sortIndex so unconnected providers never land above an
+    // earlier-created connected provider.
+    const sortedProviders = providerNodes
+      .slice()
+      .sort((a, b) => ((a.data?.sortIndex as number) ?? 0) - ((b.data?.sortIndex as number) ?? 0));
+    for (let i = 1; i < sortedProviders.length; i++) {
+      const prev = sortedProviders[i - 1];
+      const curr = sortedProviders[i];
+      if (!positions[curr.id] || !positions[prev.id]) continue;
+      if (positions[curr.id].y < positions[prev.id].y + ROW_GAP) {
+        positions[curr.id].y = positions[prev.id].y + ROW_GAP;
       }
     }
 
@@ -703,6 +733,11 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   }, [buildNodes, buildEdges, setNodes]);
 
   useEffect(() => { handleAutoLayout(); }, [handleAutoLayout]);
+
+  // Re-run layout whenever an article is expanded or collapsed so dagre
+  // can allocate the correct vertical space for the new node height.
+  const expandedArticleIds = useCanvasStore((s) => s.expandedArticleIds);
+  useEffect(() => { handleAutoLayout(); }, [expandedArticleIds, handleAutoLayout]);
 
   const matrix = store.buildCampaignMatrix();
 

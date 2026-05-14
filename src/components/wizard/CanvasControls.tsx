@@ -7,8 +7,9 @@ const NODE_WIDTH = 220;
 const NODE_HEIGHT = 90;
 const GROUP_CARD_W = 340; // approx two-card row estimate for dagre
 const GROUP_CARD_H = 285;
+export const ARTICLE_EXPANDED_H = 230;
 
-export function computeAutoLayout(nodes: Node[], edges: Edge[], nodePriority?: Record<string, number>): Record<string, { x: number; y: number }> {
+export function computeAutoLayout(nodes: Node[], edges: Edge[], nodePriority?: Record<string, number>, expandedArticleIds?: Set<string>): Record<string, { x: number; y: number }> {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: "LR", ranksep: 200, nodesep: 60, marginx: 60, marginy: 60 });
@@ -16,8 +17,9 @@ export function computeAutoLayout(nodes: Node[], edges: Edge[], nodePriority?: R
   nodes.forEach((n) => {
     const isRouter = n.type === "router";
     const isGroup = n.type === "group";
+    const isExpandedArticle = n.type === "article" && expandedArticleIds?.has(n.id);
     const w = isRouter ? 36 : isGroup ? GROUP_CARD_W : NODE_WIDTH;
-    const h = isRouter ? 36 : isGroup ? GROUP_CARD_H : NODE_HEIGHT;
+    const h = isRouter ? 36 : isGroup ? GROUP_CARD_H : isExpandedArticle ? ARTICLE_EXPANDED_H : NODE_HEIGHT;
     g.setNode(n.id, { width: w, height: h });
   });
   edges.forEach((e) => g.setEdge(e.source, e.target));
@@ -30,8 +32,9 @@ export function computeAutoLayout(nodes: Node[], edges: Edge[], nodePriority?: R
   const topLeft = (id: string, cx: number, cy: number) => {
     const isRouter = nodeType[id] === "router";
     const isGroup = nodeType[id] === "group";
+    const isExpandedArticle = nodeType[id] === "article" && expandedArticleIds?.has(id);
     const w = isRouter ? 36 : isGroup ? GROUP_CARD_W : NODE_WIDTH;
-    const h = isRouter ? 36 : isGroup ? GROUP_CARD_H : NODE_HEIGHT;
+    const h = isRouter ? 36 : isGroup ? GROUP_CARD_H : isExpandedArticle ? ARTICLE_EXPANDED_H : NODE_HEIGHT;
     return { x: cx - w / 2, y: cy - h / 2 };
   };
 
