@@ -492,6 +492,54 @@ export function PerformanceTable({
     onFilteredRowsChange?.(filtered);
   }, [filtered, onFilteredRowsChange]);
 
+  const totals = useMemo((): AggrRow | null => {
+    if (filtered.length === 0) return null;
+    const s = filtered.reduce((acc, r) => {
+      acc.spend_usd             += r.spend_usd;
+      acc.revenue_usd           += r.revenue_usd;
+      acc.revenue_eur           += r.revenue_eur;
+      acc.impressions           += r.impressions;
+      acc.swipes                += r.swipes;
+      acc.clicks                += r.clicks;
+      acc.page_views            += r.page_views;
+      acc.video_views           += r.video_views;
+      acc.ad_requests           += r.ad_requests;
+      acc.matched_ad_requests   += r.matched_ad_requests;
+      acc.requests              += r.requests;
+      acc.feed_impressions      += r.feed_impressions;
+      acc.funnel_clicks         += r.funnel_clicks;
+      acc.funnel_impressions    += r.funnel_impressions;
+      acc.funnel_requests       += r.funnel_requests;
+      acc.snap_results          += r.snap_results;
+      acc.snap_purchase_value_usd += r.snap_purchase_value_usd;
+      return acc;
+    }, {
+      spend_usd: 0, revenue_usd: 0, revenue_eur: 0,
+      impressions: 0, swipes: 0, clicks: 0, page_views: 0, video_views: 0,
+      ad_requests: 0, matched_ad_requests: 0, requests: 0, feed_impressions: 0,
+      funnel_clicks: 0, funnel_impressions: 0, funnel_requests: 0,
+      snap_results: 0, snap_purchase_value_usd: 0,
+    });
+    return {
+      ad_squad_id: "__totals__", ad_squad_name: "", domain_name: "",
+      feed_provider_id: "", ad_account_id: "",
+      ...s,
+      profit:               s.revenue_usd - s.spend_usd,
+      roi_pct:              s.spend_usd > 0 ? (s.revenue_usd / s.spend_usd) * 100 : null,
+      roi_1d: null, spend_1d: null, revenue_1d: null,
+      roi_2d: null, spend_2d: null, revenue_2d: null,
+      roi_3d: null, spend_3d: null, revenue_3d: null,
+      rpc:                  s.funnel_clicks >= 10 && s.clicks > 0 ? s.revenue_usd / s.clicks : null,
+      cpm:                  s.impressions > 0 ? (s.spend_usd / s.impressions) * 1000 : null,
+      cpc:                  s.swipes > 0 ? s.spend_usd / s.swipes : null,
+      ctr:                  s.impressions > 0 ? (s.swipes / s.impressions) * 100 : null,
+      rpr:                  s.funnel_clicks >= 10 && s.snap_results > 0 ? s.revenue_usd / s.snap_results : null,
+      fill_rate:            s.swipes > 0 ? (s.funnel_impressions / s.swipes) * 100 : null,
+      cvr:                  s.swipes > 0 ? (s.funnel_clicks / s.swipes) * 100 : null,
+      snap_cost_per_result: s.snap_results > 0 ? s.spend_usd / s.snap_results : null,
+    };
+  }, [filtered]);
+
   function toggleSort(key: SortKey) {
     if (key === sortKey) setSortDesc((d) => !d);
     else { setSortKey(key); setSortDesc(true); }
@@ -1319,6 +1367,29 @@ export function PerformanceTable({
                 );
               })}
             </tbody>
+
+            {totals && (
+              <tfoot>
+                <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/60">
+                  <td className="px-3 py-2.5" />
+                  <td
+                    className="px-3 py-2.5 text-sm font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap"
+                    style={{ width: nameColWidth, minWidth: nameColWidth, maxWidth: nameColWidth }}
+                  >
+                    Total ({filtered.length})
+                  </td>
+                  <td className="px-3 py-2.5" />
+                  <td className="px-3 py-2.5" />
+                  <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-600">—</td>
+                  <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-600">—</td>
+                  {columnOrder.map((key) => {
+                    const col = METRIC_COLS[key];
+                    if (!col) return null;
+                    return optTd(key, col.render(totals), col.tdClass ?? "", col.padX);
+                  })}
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 
