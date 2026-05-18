@@ -27,7 +27,7 @@ export function buildAuthUrl(state: string): string {
     client_id: APP_ID,
     redirect_uri: REDIRECT_URI,
     response_type: "code",
-    scope: "ads_read",
+    scope: "ads_read,ads_management",
     state,
   });
   return `${META_AUTH_URL}?${params.toString()}`;
