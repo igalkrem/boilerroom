@@ -3,7 +3,7 @@
 import { v4 as uuid } from "uuid";
 import type { FeedProvider, FeedProviderDomain } from "@/types/feed-provider";
 
-const TRAFFIC_SOURCES = ["Snap", "Meta"];
+const TRAFFIC_SOURCES = ["Snap"];
 
 interface DomainsTabProps {
   domains: FeedProvider["domains"];

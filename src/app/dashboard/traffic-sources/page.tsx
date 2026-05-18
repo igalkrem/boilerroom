@@ -1,13 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useSnapchatAuth } from "@/hooks/useSnapchatAuth";
 import { useAdAccounts } from "@/hooks/useAdAccounts";
-import { useMetaAuth } from "@/hooks/useMetaAuth";
-import { useMetaAdAccounts } from "@/hooks/useMetaAdAccounts";
 import { loadAdAccountConfigs, upsertAdAccountConfig } from "@/lib/adAccounts";
-import { loadMetaAdAccountConfigs, upsertMetaAdAccountConfig, type MetaAdAccountConfig } from "@/lib/metaAdAccounts";
 import { loadFeedProviders, upsertFeedProvider } from "@/lib/feed-providers";
 import { loadPixels, deletePixel } from "@/lib/pixels";
 import { Button, Card, Badge, Spinner } from "@/components/ui";
@@ -23,44 +20,17 @@ function SnapchatLogo({ className }: { className?: string }) {
   );
 }
 
-function MetaLogo({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
-      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-    </svg>
-  );
-}
-
-const META_ERROR_MESSAGES: Record<string, string> = {
-  meta_not_configured: "Meta credentials are not configured on this server. Add META_APP_ID, META_APP_SECRET, and META_REDIRECT_URI to your environment variables.",
-  token_exchange_failed: "Could not complete Meta login. Please try again.",
-  invalid_state: "Security check failed. Please try again.",
-  missing_params: "Authorization failed. Please try again.",
-};
-
 export default function TrafficSourcesPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const metaError = searchParams.get("error");
-
-  // Snap state
   const { snapConnected, isLoading: authLoading } = useSnapchatAuth();
   const { accounts: snapAccounts, isLoading: accountsLoading } = useAdAccounts();
   const [adAccountConfigs, setAdAccountConfigs] = useState<AdAccountConfig[]>([]);
-  const [disconnecting, setDisconnecting] = useState(false);
-
-  // Meta state
-  const { metaConnected, metaExpiresAt, isLoading: metaAuthLoading } = useMetaAuth();
-  const { accounts: metaAccounts, isLoading: metaAccountsLoading } = useMetaAdAccounts();
-  const [metaAdAccountConfigs, setMetaAdAccountConfigs] = useState<MetaAdAccountConfig[]>([]);
-  const [metaDisconnecting, setMetaDisconnecting] = useState(false);
-
   const [feedProviders, setFeedProviders] = useState<FeedProvider[]>([]);
   const [pixels, setPixels] = useState<SavedPixel[]>([]);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   const reloadLocal = useCallback(() => {
     setAdAccountConfigs(loadAdAccountConfigs());
-    setMetaAdAccountConfigs(loadMetaAdAccountConfigs());
     setFeedProviders(loadFeedProviders());
     setPixels(loadPixels());
   }, []);
@@ -68,14 +38,6 @@ export default function TrafficSourcesPage() {
   useEffect(() => {
     reloadLocal();
   }, [reloadLocal]);
-
-  // Days until Meta token expires (null when not connected or unknown)
-  const metaDaysUntilExpiry = metaExpiresAt
-    ? Math.floor((metaExpiresAt - Date.now()) / (1000 * 60 * 60 * 24))
-    : null;
-  const metaExpiryWarning = metaDaysUntilExpiry !== null && metaDaysUntilExpiry <= 7;
-
-  // ─── Snap handlers ──────────────────────────────────────────────────────────
 
   const handleDisconnectSnap = async () => {
     if (!confirm("Disconnect Snapchat? Campaign creation will be unavailable until you reconnect.")) return;
@@ -88,7 +50,7 @@ export default function TrafficSourcesPage() {
     }
   };
 
-  const getSnapConfig = (accountId: string): AdAccountConfig => {
+  const getConfig = (accountId: string): AdAccountConfig => {
     const existing = adAccountConfigs.find((c) => c.id === accountId);
     const account = snapAccounts.find((a) => a.id === accountId);
     return (
@@ -102,16 +64,17 @@ export default function TrafficSourcesPage() {
     );
   };
 
-  const toggleSnapHidden = (accountId: string) => {
-    const config = getSnapConfig(accountId);
+  const toggleHidden = (accountId: string) => {
+    const config = getConfig(accountId);
     const updated = { ...config, hidden: !config.hidden, updatedAt: new Date().toISOString() };
     upsertAdAccountConfig(updated);
     setAdAccountConfigs(loadAdAccountConfigs());
-    syncSnapFeedProviderAssignments(accountId, updated.feedProviderIds, !config.hidden);
+    // Update feed providers whose allowedAdAccountIds reference this account
+    syncFeedProviderAssignments(accountId, updated.feedProviderIds, !config.hidden);
   };
 
-  const toggleSnapFeedProvider = (accountId: string, providerId: string) => {
-    const config = getSnapConfig(accountId);
+  const toggleFeedProvider = (accountId: string, providerId: string) => {
+    const config = getConfig(accountId);
     const alreadyAssigned = config.feedProviderIds.includes(providerId);
     const newProviderIds = alreadyAssigned
       ? config.feedProviderIds.filter((id) => id !== providerId)
@@ -119,10 +82,11 @@ export default function TrafficSourcesPage() {
     const updated = { ...config, feedProviderIds: newProviderIds, updatedAt: new Date().toISOString() };
     upsertAdAccountConfig(updated);
     setAdAccountConfigs(loadAdAccountConfigs());
-    syncSnapFeedProviderAssignments(accountId, newProviderIds, config.hidden);
+    syncFeedProviderAssignments(accountId, newProviderIds, config.hidden);
   };
 
-  const syncSnapFeedProviderAssignments = (
+  // Sync FeedProvider.snapConfig.allowedAdAccountIds from AdAccountConfig assignments
+  const syncFeedProviderAssignments = (
     accountId: string,
     newProviderIds: string[],
     isHidden: boolean
@@ -147,81 +111,6 @@ export default function TrafficSourcesPage() {
     setFeedProviders(loadFeedProviders());
   };
 
-  // ─── Meta handlers ──────────────────────────────────────────────────────────
-
-  const handleDisconnectMeta = async () => {
-    if (!confirm("Disconnect Meta? You will need to reconnect to access Meta ad accounts.")) return;
-    setMetaDisconnecting(true);
-    try {
-      await fetch("/api/auth/meta/disconnect", { method: "POST" });
-      window.location.reload();
-    } finally {
-      setMetaDisconnecting(false);
-    }
-  };
-
-  const getMetaConfig = (accountId: string): MetaAdAccountConfig => {
-    const existing = metaAdAccountConfigs.find((c) => c.id === accountId);
-    const account = metaAccounts.find((a) => a.id === accountId);
-    return (
-      existing ?? {
-        id: accountId,
-        name: account?.name ?? accountId,
-        hidden: false,
-        feedProviderIds: [],
-        updatedAt: new Date().toISOString(),
-      }
-    );
-  };
-
-  const toggleMetaHidden = (accountId: string) => {
-    const config = getMetaConfig(accountId);
-    const updated = { ...config, hidden: !config.hidden, updatedAt: new Date().toISOString() };
-    upsertMetaAdAccountConfig(updated);
-    setMetaAdAccountConfigs(loadMetaAdAccountConfigs());
-    syncMetaFeedProviderAssignments(accountId, updated.feedProviderIds, !config.hidden);
-  };
-
-  const toggleMetaFeedProvider = (accountId: string, providerId: string) => {
-    const config = getMetaConfig(accountId);
-    const alreadyAssigned = config.feedProviderIds.includes(providerId);
-    const newProviderIds = alreadyAssigned
-      ? config.feedProviderIds.filter((id) => id !== providerId)
-      : [...config.feedProviderIds, providerId];
-    const updated = { ...config, feedProviderIds: newProviderIds, updatedAt: new Date().toISOString() };
-    upsertMetaAdAccountConfig(updated);
-    setMetaAdAccountConfigs(loadMetaAdAccountConfigs());
-    syncMetaFeedProviderAssignments(accountId, newProviderIds, config.hidden);
-  };
-
-  // Mirrors syncSnapFeedProviderAssignments but writes to metaConfig.allowedAdAccountIds.
-  const syncMetaFeedProviderAssignments = (
-    accountId: string,
-    newProviderIds: string[],
-    isHidden: boolean
-  ) => {
-    const allProviders = loadFeedProviders();
-    for (const provider of allProviders) {
-      const wasAssigned = provider.metaConfig?.allowedAdAccountIds?.includes(accountId) ?? false;
-      const shouldBeAssigned = !isHidden && newProviderIds.includes(provider.id);
-      if (wasAssigned !== shouldBeAssigned) {
-        const updated: FeedProvider = {
-          ...provider,
-          metaConfig: {
-            ...provider.metaConfig,
-            allowedAdAccountIds: shouldBeAssigned
-              ? [...(provider.metaConfig?.allowedAdAccountIds ?? []), accountId]
-              : (provider.metaConfig?.allowedAdAccountIds ?? []).filter((id) => id !== accountId),
-          },
-        };
-        upsertFeedProvider(updated);
-      }
-    }
-    setFeedProviders(loadFeedProviders());
-  };
-
-  // ─── Pixels ─────────────────────────────────────────────────────────────────
-
   const handleDeletePixel = (id: string, name: string) => {
     if (!confirm(`Delete pixel "${name}"? This cannot be undone.`)) return;
     deletePixel(id);
@@ -237,18 +126,10 @@ export default function TrafficSourcesPage() {
         </p>
       </div>
 
-      {/* Error banner from OAuth redirects */}
-      {metaError && (
-        <div className="px-4 py-3 bg-red-950 border border-red-800 rounded-lg text-sm text-red-400">
-          {META_ERROR_MESSAGES[metaError] ?? "An error occurred connecting to Meta. Please try again."}
-        </div>
-      )}
-
       {/* Section 1: Connected Sources */}
       <section>
         <h2 className="text-base font-semibold text-gray-800 mb-3">Connected Sources</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-
           {/* Snapchat Card */}
           <Card className="flex flex-col gap-4">
             <div className="flex items-center gap-3">
@@ -288,56 +169,27 @@ export default function TrafficSourcesPage() {
             )}
           </Card>
 
-          {/* Meta Card */}
-          <Card className="flex flex-col gap-4">
+          {/* Facebook placeholder (future) */}
+          <Card className="flex flex-col gap-4 opacity-50 pointer-events-none select-none">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
-                <MetaLogo className="w-6 h-6 text-white" />
+                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="currentColor">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                </svg>
               </div>
-              <div className="min-w-0">
-                <h3 className="font-semibold text-gray-900 text-sm">Meta</h3>
-                {metaAuthLoading ? (
-                  <p className="text-xs text-gray-400">Checking…</p>
-                ) : metaConnected ? (
-                  <Badge variant="green">Connected</Badge>
-                ) : (
-                  <Badge variant="gray">Not connected</Badge>
-                )}
+              <div>
+                <h3 className="font-semibold text-gray-900 text-sm">Facebook</h3>
+                <span className="text-xs text-gray-400">Coming soon</span>
               </div>
             </div>
-            {metaExpiryWarning && metaConnected && (
-              <p className="text-xs text-amber-500">
-                Token expires in {metaDaysUntilExpiry} day{metaDaysUntilExpiry === 1 ? "" : "s"} — reconnect soon.
-              </p>
-            )}
-            {!metaAuthLoading && (
-              metaConnected ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-red-500 hover:text-red-600 mt-auto"
-                  onClick={handleDisconnectMeta}
-                  disabled={metaDisconnecting}
-                >
-                  {metaDisconnecting ? "Disconnecting…" : "Disconnect"}
-                </Button>
-              ) : (
-                <a
-                  href="/api/auth/meta/connect"
-                  className="block w-full text-center py-1.5 px-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors text-sm mt-auto"
-                >
-                  Connect Meta
-                </a>
-              )
-            )}
           </Card>
         </div>
       </section>
 
-      {/* Section 2: Snap Ad Accounts */}
+      {/* Section 2: Ad Accounts */}
       {snapConnected && (
         <section>
-          <h2 className="text-base font-semibold text-gray-800 mb-3">Snapchat Ad Accounts</h2>
+          <h2 className="text-base font-semibold text-gray-800 mb-3">Ad Accounts</h2>
           {accountsLoading ? (
             <div className="flex items-center gap-2 text-gray-500 text-sm">
               <Spinner /> Loading accounts…
@@ -349,24 +201,27 @@ export default function TrafficSourcesPage() {
           ) : (
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
               {snapAccounts.map((account) => {
-                const config = getSnapConfig(account.id);
+                const config = getConfig(account.id);
                 return (
                   <div key={account.id} className="p-4 flex flex-col sm:flex-row sm:items-start gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-gray-900 text-sm">{account.name}</span>
-                        {config.hidden && <Badge variant="gray">Hidden</Badge>}
+                        {config.hidden && (
+                          <Badge variant="gray">Hidden</Badge>
+                        )}
                       </div>
                       <p className="text-xs text-gray-400 font-mono mt-0.5">{account.id}</p>
                     </div>
 
                     <div className="flex flex-col gap-3 sm:w-64 shrink-0">
+                      {/* Hide toggle */}
                       <label className="flex items-center justify-between gap-3 text-sm cursor-pointer">
                         <span className="text-gray-600">Hide from campaigns</span>
                         <button
                           role="switch"
                           aria-checked={config.hidden}
-                          onClick={() => toggleSnapHidden(account.id)}
+                          onClick={() => toggleHidden(account.id)}
                           className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
                             config.hidden ? "bg-gray-400" : "bg-cyan-500"
                           }`}
@@ -379,6 +234,7 @@ export default function TrafficSourcesPage() {
                         </button>
                       </label>
 
+                      {/* Feed provider assignment */}
                       {feedProviders.length > 0 && (
                         <div>
                           <p className="text-xs text-gray-500 mb-1.5">Assign to feed providers:</p>
@@ -388,7 +244,7 @@ export default function TrafficSourcesPage() {
                                 <input
                                   type="checkbox"
                                   checked={config.feedProviderIds.includes(fp.id)}
-                                  onChange={() => toggleSnapFeedProvider(account.id, fp.id)}
+                                  onChange={() => toggleFeedProvider(account.id, fp.id)}
                                   className="w-3.5 h-3.5 rounded border-gray-300 text-cyan-500 focus:ring-cyan-500"
                                 />
                                 <span className="text-gray-700 truncate">{fp.name}</span>
@@ -406,82 +262,7 @@ export default function TrafficSourcesPage() {
         </section>
       )}
 
-      {/* Section 3: Meta Ad Accounts */}
-      {metaConnected && (
-        <section>
-          <h2 className="text-base font-semibold text-gray-800 mb-3">Meta Ad Accounts</h2>
-          {metaAccountsLoading ? (
-            <div className="flex items-center gap-2 text-gray-500 text-sm">
-              <Spinner /> Loading accounts…
-            </div>
-          ) : metaAccounts.length === 0 ? (
-            <p className="text-sm text-gray-500">
-              No Meta ad accounts found. Make sure your account has Business Manager access.
-            </p>
-          ) : (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
-              {metaAccounts.map((account) => {
-                const config = getMetaConfig(account.id);
-                return (
-                  <div key={account.id} className="p-4 flex flex-col sm:flex-row sm:items-start gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-gray-900 text-sm">{account.name}</span>
-                        {config.hidden && <Badge variant="gray">Hidden</Badge>}
-                        {account.account_status !== 1 && (
-                          <Badge variant="gray">Inactive</Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-400 font-mono mt-0.5">{account.id}</p>
-                    </div>
-
-                    <div className="flex flex-col gap-3 sm:w-64 shrink-0">
-                      <label className="flex items-center justify-between gap-3 text-sm cursor-pointer">
-                        <span className="text-gray-600">Hide from campaigns</span>
-                        <button
-                          role="switch"
-                          aria-checked={config.hidden}
-                          onClick={() => toggleMetaHidden(account.id)}
-                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            config.hidden ? "bg-gray-400" : "bg-blue-500"
-                          }`}
-                        >
-                          <span
-                            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                              config.hidden ? "translate-x-1" : "translate-x-5"
-                            }`}
-                          />
-                        </button>
-                      </label>
-
-                      {feedProviders.length > 0 && (
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1.5">Assign to feed providers:</p>
-                          <div className="space-y-1">
-                            {feedProviders.map((fp) => (
-                              <label key={fp.id} className="flex items-center gap-2 text-xs cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={config.feedProviderIds.includes(fp.id)}
-                                  onChange={() => toggleMetaFeedProvider(account.id, fp.id)}
-                                  className="w-3.5 h-3.5 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
-                                />
-                                <span className="text-gray-700 truncate">{fp.name}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* Section 4: Pixels */}
+      {/* Section 3: Pixels */}
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-semibold text-gray-800">Snap Pixels</h2>
@@ -504,40 +285,40 @@ export default function TrafficSourcesPage() {
                 fp.snapConfig?.allowedPixelIds?.includes(pixel.id)
               );
               return (
-                <div key={pixel.id} className="px-4 py-3 flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="font-medium text-gray-900 text-sm">{pixel.name}</p>
-                    <p className="text-xs text-gray-400 font-mono mt-0.5 truncate">{pixel.pixelId}</p>
-                    {assignedProviders.length > 0 && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Used by:{" "}
-                        {assignedProviders.map((fp, i) => (
-                          <span key={fp.id}>
-                            <span className="font-medium text-gray-700">{fp.name}</span>
-                            {i < assignedProviders.length - 1 && ", "}
-                          </span>
-                        ))}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => router.push(`/dashboard/pixels/${pixel.id}/edit`)}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-red-500 hover:text-red-600"
-                      onClick={() => handleDeletePixel(pixel.id, pixel.name)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
+              <div key={pixel.id} className="px-4 py-3 flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-900 text-sm">{pixel.name}</p>
+                  <p className="text-xs text-gray-400 font-mono mt-0.5 truncate">{pixel.pixelId}</p>
+                  {assignedProviders.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Used by:{" "}
+                      {assignedProviders.map((fp, i) => (
+                        <span key={fp.id}>
+                          <span className="font-medium text-gray-700">{fp.name}</span>
+                          {i < assignedProviders.length - 1 && ", "}
+                        </span>
+                      ))}
+                    </p>
+                  )}
                 </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => router.push(`/dashboard/pixels/${pixel.id}/edit`)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-red-500 hover:text-red-600"
+                    onClick={() => handleDeletePixel(pixel.id, pixel.name)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
               );
             })}
           </div>

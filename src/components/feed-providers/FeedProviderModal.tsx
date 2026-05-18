@@ -10,16 +10,15 @@ import { SnapTab } from "./tabs/SnapTab";
 import { ChannelsTab } from "./tabs/ChannelsTab";
 import { DomainsTab } from "./tabs/DomainsTab";
 import { CombosTab } from "./tabs/CombosTab";
-import { MetaTab } from "./tabs/MetaTab";
 
-type Tab = "snap" | "channels" | "domains" | "combos" | "meta";
+type Tab = "snap" | "channels" | "domains" | "combos" | "facebook";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "snap",     label: "Snap" },
   { id: "channels", label: "Channels" },
   { id: "domains",  label: "Domains" },
   { id: "combos",   label: "Combos" },
-  { id: "meta",     label: "Meta" },
+  { id: "facebook", label: "Facebook" },
 ];
 
 interface FeedProviderModalProps {
@@ -138,8 +137,10 @@ export function FeedProviderModal({ provider, onClose, onSaved }: FeedProviderMo
               onChange={(combos) => setData((d) => ({ ...d, combos }))}
             />
           )}
-          {activeTab === "meta" && (
-            <MetaTab metaConfig={data.metaConfig} />
+          {activeTab === "facebook" && (
+            <div className="flex items-center justify-center h-32 text-sm text-gray-400 italic">
+              Coming soon
+            </div>
           )}
         </div>
 
