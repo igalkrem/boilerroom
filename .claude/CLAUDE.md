@@ -30,12 +30,12 @@ Do not skip any step. Do not ask for confirmation before running these commands.
 
 - **Framework:** Next.js 14 (App Router), TypeScript, Tailwind CSS — **permanent dark mode**: `darkMode: 'class'` in `tailwind.config.ts`, `<html class="dark">` set in `src/app/layout.tsx` (no toggle). All components use `dark:` Tailwind variants alongside their light classes. `src/app/globals.css` defines `--node-bg: #1f2937` (dark canvas background color used by nodes), a safety-net rule that forces dark backgrounds/text on any native input/select/textarea without explicit Tailwind dark classes, and a React Flow attribution override. Never remove the `dark` class from `<html>` and never add a light/dark toggle — the platform is dark-only.
 - **Canvas:** `@xyflow/react` (React Flow v12) + `@dagrejs/dagre` for auto-layout
-- **Auth:** Google OAuth2 (primary login) + Snapchat OAuth2 (traffic source, optional) + Meta OAuth2 (traffic source, optional — infrastructure complete; UI deferred) + iron-session (encrypted HttpOnly cookies). Session type (`src/types/session.ts`) includes `pendingUploads?: Record<string, { addPath: string; finalizePath: string }>` for server-pinned chunked upload paths (see Security Notes). Meta session fields: `metaAccessToken`, `metaExpiresAt` (unix ms, ~60 days), `metaUserId`, `metaOAuthState`, `metaAllowedAdAccountIds`. **Meta has no refresh_token** — long-lived tokens (~60 days) are stored directly in `user_meta_tokens` (encrypted); users must reconnect after expiry.
+- **Auth:** Google OAuth2 (primary login) + Snapchat OAuth2 (traffic source, optional) + iron-session (encrypted HttpOnly cookies). Session type (`src/types/session.ts`) includes `pendingUploads?: Record<string, { addPath: string; finalizePath: string }>` for server-pinned chunked upload paths (see Security Notes). Meta session fields (`metaAccessToken`, `metaExpiresAt`, `metaUserId`, `metaOAuthState`, `metaAllowedAdAccountIds`) and helpers (`isMetaConnected`, `isMetaAdAccountAllowed` in `session.ts`) are stubbed in the types/session layer for future use — the OAuth routes and UI are not yet built.
 - **Forms:** react-hook-form + Zod
 - **State:** Zustand — `useCanvasStore` (canvas wizard graph state), `useWizardStore` (legacy, still used by `LoadPresetBanner` and preset/use page)
 - **Storage:** Vercel Blob (`@vercel/blob`) — client-side uploads, public access, store: `boilerroom-silo`. Also used for persistent metadata storage (see KV Sync below).
 - **Video transcoding:** `@ffmpeg/ffmpeg` + `@ffmpeg/core` + `@ffmpeg/util` (browser WASM). Core files (~31 MB) are copied from `node_modules/@ffmpeg/core/dist/umd/` to `public/ffmpeg/` at build time by `scripts/copy-ffmpeg.mjs` (runs as `prebuild`/`predev`). `public/ffmpeg/` is gitignored — regenerated on every build.
-- **Database:** Neon Postgres via `@vercel/postgres` (`POSTGRES_URL` env var) — reporting cache (4 tables: `snapchat_ad_squad_stats`, `kingsroad_report`, `predicto_report` — includes `impressions` column added via migration, `report_sync_log`) + channel lifecycle (`feed_provider_channels` — includes `ad_squad_snap_id` column for Predicto revenue JOIN) + cron token storage (`user_snapchat_tokens`) + Meta token storage (`user_meta_tokens` — stores encrypted long-lived access token, Meta user ID, ad account IDs, and expiry). Migrations run automatically on first call to either `/api/reporting/sync` or `/api/reporting/combined` via `runMigrations()` in `src/lib/db/index.ts`. **Note:** `@vercel/postgres` is deprecated upstream — migrate to `@neondatabase/serverless` when convenient.
+- **Database:** Neon Postgres via `@vercel/postgres` (`POSTGRES_URL` env var) — reporting cache (4 tables: `snapchat_ad_squad_stats`, `kingsroad_report`, `predicto_report` — includes `impressions` column added via migration, `report_sync_log`) + channel lifecycle (`feed_provider_channels` — includes `ad_squad_snap_id` column for Predicto revenue JOIN) + cron token storage (`user_snapchat_tokens`) + Meta token storage (`user_meta_tokens` — schema ready for future Meta OAuth; CRUD in `db/index.ts`). Migrations run automatically on first call to either `/api/reporting/sync` or `/api/reporting/combined` via `runMigrations()` in `src/lib/db/index.ts`. **Note:** `@vercel/postgres` is deprecated upstream — migrate to `@neondatabase/serverless` when convenient.
 - **API:** Snapchat Marketing API v1 — all calls are server-side only, proxied through Next.js API routes
 - **KingsRoad API:** `https://partnerhub-api.kingsroad.io/api/v3` — sell-side revenue reporting. Bearer token in `KINGSROAD_API_TOKEN`. Paginated `/report/` endpoint, page_size=2000. Used only server-side in `/api/reporting/sync`.
 - **Predicto API:** `https://server.predicto.ai/api/v1/search/reporting` (**no trailing slash** — trailing slash causes a 307 HTTPS→HTTP redirect that strips the Authorization header, silently failing every sync) — second sell-side revenue source. Bearer token in `PREDICTO_API_TOKEN`. Flat (non-paginated) response. Revenue field in response is `estimated_revenue` (not `revenue`); click/funnel metrics return as strings and need `Number()` coercion. Revenue already in USD (no FX conversion). Synced alongside KingsRoad inside `syncAccount()` in `sync-logic.ts`. If `PREDICTO_API_TOKEN` is not set, Predicto sync is silently skipped.
@@ -87,7 +87,7 @@ src/
 ├── app/
 │   ├── (auth)/                        # Login & OAuth callback pages
 │   ├── api/
-│   │   ├── auth/                      # logout, refresh, session; google/{login,callback}; snapchat/{connect,callback,disconnect}; meta/{connect,callback,disconnect}
+│   │   ├── auth/                      # logout, refresh, session; google/{login,callback}; snapchat/{connect,callback,disconnect}
 │   │   ├── data/                      # GET/POST — reads/writes user-scoped JSON blobs for persistent metadata
 │   │   ├── feed-providers/
 │   │   │   └── channels/              # GET/POST/PATCH/DELETE — list, bulk-insert, force status (PATCH {id, newStatus}), hard-delete channels
@@ -102,8 +102,6 @@ src/
 │   │   ├── silo/
 │   │   │   ├── upload/                # Vercel Blob client-upload token endpoint (handleUpload)
 │   │   │   └── delete/                # DELETE handler — removes blobs by URL array
-│   │   ├── meta/
-│   │   │   └── ad-accounts/           # GET — list Meta ad accounts; caches metaAllowedAdAccountIds in session; updates user_meta_tokens
 │   │   └── snapchat/
 │   │       ├── campaigns/
 │   │       ├── adsquads/
@@ -144,14 +142,13 @@ src/
 │   │   ├── SubmissionProgress.tsx
 │   │   └── LoadPresetBanner.tsx
 │   ├── feed-providers/
-│   │   ├── FeedProviderModal.tsx      # Large modal (max-w-3xl) with 5 tabs: Snap | Channels | Domains | Combos | Meta
+│   │   ├── FeedProviderModal.tsx      # Large modal (max-w-3xl) with 5 tabs: Snap | Channels | Domains | Combos | Facebook
 │   │   └── tabs/
 │   │       ├── SnapTab.tsx            # Org ID, ad accounts, pixels + URL Parameters + Campaign Naming Template section (violet card; NamingTemplateEditor with segment pills + live preview)
 │   │       ├── UrlParametersTab.tsx   # Parameter rows, always-visible filtered macro chips (two groups: Snapchat Native / BoilerRoom), live preview; hideBaseUrl prop
 │   │       ├── ChannelsTab.tsx        # CSV upload, status table, lifecycle controls
-│   │       ├── DomainsTab.tsx         # Domain rows (baseDomain + baseUrl + traffic source checkboxes — "Snap" and "Meta")
-│   │       ├── CombosTab.tsx          # Named combos (pixel + domain + channel config)
-│   │       └── MetaTab.tsx            # Read-only list of assigned Meta ad accounts (managed from Traffic Sources page); links to Traffic Sources for management
+│   │       ├── DomainsTab.tsx         # Domain rows (baseDomain + baseUrl + traffic source checkboxes)
+│   │       └── CombosTab.tsx          # Named combos (pixel + domain + channel config)
 │   ├── silo/
 │   │   ├── SiloUploader.tsx           # Batch uploader: hash → optimize → Blob upload (3 concurrent)
 │   │   ├── SiloBrowser.tsx            # Picker modal for canvas wizard integration
@@ -177,9 +174,7 @@ src/
 │   └── articles/                      # ArticleForm component
 ├── hooks/
 │   ├── useCanvasStore.ts              # Zustand store for canvas wizard graph state + buildCampaignMatrix()
-│   ├── useWizardStore.ts              # Legacy Zustand store (still used by LoadPresetBanner + preset/use page)
-│   ├── useMetaAuth.ts                 # SWR hook reading metaConnected/metaUserId/metaExpiresAt from /api/auth/session
-│   └── useMetaAdAccounts.ts           # SWR hook fetching Meta ad accounts from /api/meta/ad-accounts
+│   └── useWizardStore.ts              # Legacy Zustand store (still used by LoadPresetBanner + preset/use page)
 ├── lib/
 │   ├── snapchat/                      # Server-side API client (campaigns, adsquads, creatives, media, profiles, auth, stats)
 │   ├── submission-orchestrator.ts     # Sequences: uploadMedia → channel assign → campaigns → adSquads → URL resolve → creatives → ads → patchCreatives
@@ -198,23 +193,18 @@ src/
 │   ├── kv-sync.ts                     # hydrateFromKV(key) + syncToKV(key, data) — debounced 1.5s writes to /api/data
 │   ├── channel-status-sync.ts         # syncChannelPausedStatus(googleUserId, accessToken) — polls Snapchat squad status for all in-use channels and stamps/clears paused_since; called by cron-sync per user
 │   ├── db/
-│   │   ├── index.ts                   # sql helper + runMigrations() + channel CRUD: normalizeChannelStatuses(), assignChannel(), releaseChannel(), forceChannelStatus(), listChannels(), bulkInsertChannels(), deleteChannels(), getInUseChannelsByUser(), updateChannelPausedStatus() + Snap token CRUD: upsertUserToken(), updateAdAccountIds(), getAllUserTokens(), deleteUserToken() + Meta token CRUD: upsertUserMetaToken(), updateMetaAdAccountIds(), getAllUserMetaTokens(), deleteUserMetaToken()
-│   │   ├── token-crypto.ts            # AES-256-GCM encrypt/decrypt for tokens (SESSION_SECRET as key) — shared by Snap refresh tokens and Meta access tokens + verifyCronSecret() using timingSafeEqual
+│   │   ├── index.ts                   # sql helper + runMigrations() + channel CRUD: normalizeChannelStatuses(), assignChannel(), releaseChannel(), forceChannelStatus(), listChannels(), bulkInsertChannels(), deleteChannels(), getInUseChannelsByUser(), updateChannelPausedStatus() + Snap token CRUD: upsertUserToken(), updateAdAccountIds(), getAllUserTokens(), deleteUserToken() + Meta token CRUD stubs: upsertUserMetaToken(), updateMetaAdAccountIds(), getAllUserMetaTokens(), deleteUserMetaToken() (ready for future Meta OAuth routes)
+│   │   ├── token-crypto.ts            # AES-256-GCM encrypt/decrypt for Snapchat refresh tokens (SESSION_SECRET as key) + verifyCronSecret() using timingSafeEqual
 │   │   └── migrations.sql             # CREATE TABLE IF NOT EXISTS for all 6 tables (3 reporting + feed_provider_channels + user_snapchat_tokens + user_meta_tokens)
 │   ├── country-map.ts                 # countryNameToCode / countryCodeToName — normalises KingsRoad country_name ↔ Snapchat ISO-2
 │   ├── fx-rate.ts                     # getEurToUsd() — fetches frankfurter.app, cached 1h in module memory
 │   ├── kingsroad.ts                   # fetchKingsRoadReport(startDate, endDate) — paginated KingsRoad /report/ client
 │   ├── predicto.ts                    # fetchPredictoReport(startDate, endDate) — Predicto general reporting (flat, USD, skips gracefully if PREDICTO_API_TOKEN unset); API returns revenue as `estimated_revenue` and metrics as strings — both coerced in the mapper
-│   ├── session.ts                     # iron-session helpers & auth validation; isMetaConnected(), isMetaAdAccountAllowed()
-│   ├── metaAdAccounts.ts              # MetaAdAccountConfig CRUD (localStorage key: boilerroom_meta_ad_accounts_v1); separate from Snap's adAccounts.ts
-│   ├── meta/
-│   │   ├── auth.ts                    # Meta OAuth helpers: buildAuthUrl(), exchangeCodeForTokens(), exchangeForLongLivedToken(), getMeId(); env vars read lazily (getMetaEnv() inside each function); OAuth scope: ads_read,ads_management
-│   │   └── adaccounts.ts              # getMetaAdAccounts(accessToken) — GET /me/adaccounts with pagination
+│   ├── session.ts                     # iron-session helpers & auth validation; isMetaConnected(), isMetaAdAccountAllowed() stubbed for future use
 │   └── rate-limiter.ts                # rateLimitedCall (token bucket, max 10 req/s) + rateLimitedFetch (wraps rateLimitedCall + 429 retry w/ exponential backoff: 2s/4s/8s/16s, 4 retries). All direct Snapchat API calls (including upload-from-blob) use rateLimitedFetch for automatic 429 retry.
 └── types/
     ├── wizard.ts                      # CampaignFormData, AdSquadFormData, CreativeFormData, SubmissionResults, CreativeGroup, CanvasEdges, CampaignBuildItem
     ├── feed-provider.ts               # FeedProvider (full type with snapConfig, urlConfig, channelConfig, domains, combos, metaConfig), UrlParameter, FeedProviderDomain, FeedProviderCombo, ChannelSetupType
-    ├── meta.ts                        # MetaTokenResponse, MetaAdAccount types
     ├── article.ts                     # Article (id, feedProviderId, slug, query, allowedHeadlines, createdAt)
     ├── preset.ts                      # CampaignPreset (includes trafficSource, feedProviderId, comboId, creativeDefaults)
     ├── snapchat.ts                    # API payload types (SnapCampaignPayload, etc.)
@@ -307,7 +297,7 @@ src/
   - `domains[]` — `FeedProviderDomain` (`id`, `baseDomain`, `baseUrl?`, `trafficSources[]`). Each domain carries its own `baseUrl`. `buildUrlTemplate()` resolves base URL as `domain.baseUrl ?? provider.urlConfig.baseUrl ?? ""` (latter is the fallback for old records).
   - `combos[]` — `FeedProviderCombo` (named preset of pixel + domain + channel settings)
 
-  **Modal tabs:** Snap | Channels | Domains | Combos | Meta. The "URL Parameters" standalone tab was removed — URL parameter configuration now lives at the bottom of the Snap tab (rendered via `UrlParametersTab` with `hideBaseUrl`). Below URL Parameters, a violet **Campaign Naming Template** card (`NamingTemplateEditor`) lets users build segment-based names (literal text chips + macro chips joined by " | "). Macros: `{{preset.tag}}`, `{{article.name}}`, `{{date_ddmm}}`, `{{unique_id_4}}`, `{{creative.vname}}`, `{{channel.id}}`. Live preview resolves against example values (`{{channel.id}}` shows as literal `{{channel.id}}` — resolved at launch time). Meta tab (`MetaTab.tsx`) shows the read-only list of assigned Meta ad accounts.
+  **Modal tabs:** Snap | Channels | Domains | Combos | Facebook. The "URL Parameters" standalone tab was removed — URL parameter configuration now lives at the bottom of the Snap tab (rendered via `UrlParametersTab` with `hideBaseUrl`). Below URL Parameters, a violet **Campaign Naming Template** card (`NamingTemplateEditor`) lets users build segment-based names (literal text chips + macro chips joined by " | "). Macros: `{{preset.tag}}`, `{{article.name}}`, `{{date_ddmm}}`, `{{unique_id_4}}`, `{{creative.vname}}`, `{{channel.id}}`. Live preview resolves against example values (`{{channel.id}}` shows as literal `{{channel.id}}` — resolved at launch time). Facebook tab is a placeholder (coming soon).
 
   **`UrlParametersTab` behaviour:** macro chips are always visible above the preview URL (not a focus-gated popup). Chips are filtered to only show macros not already present in any parameter value. Clicking a chip inserts into the last-focused value input (tracked via `lastActiveIndexRef`). Chips are split into two labeled groups: **Snapchat Native** (yellow — `{{campaign.id}}`, `{{adset.id}}`, `{{ad.id}}` — substituted by Snapchat at click time) and **BoilerRoom** (blue — all others — resolved before sending to Snapchat). Each parameter row has a compact **"enc" checkbox** (`accent-violet-500`); when checked it sets `UrlParameter.encode = true`, turns the label violet, and causes the preview URL to show the encoded value via `encodeURIComponent(p.value)`. Preview URL uses a structured renderer (not a flat split): base URL, parameter keys, `?`, `&`, and `=` are regular weight; hardcoded literal parameter values are **bold**; macros are highlighted yellow (Snapchat native) or blue (BoilerRoom). The `source` field on each MACROS entry (`"snap"` | `"br"`) drives both the chip style and the preview highlight color.
 
@@ -363,9 +353,6 @@ src/
 - **`/api/auth/refresh` skips Snapchat when token is still valid:** Pre-check compares `session.snapExpiresAt` against now − 5 min; returns `{ ok: true, cached: true }` without hitting Snapchat's token endpoint.
 - **Session cookie has `maxAge: 14 days`:** Prevents indefinite persistence on shared machines. iron-session resets the clock on every `save()`.
 - **Snapchat token revoked on disconnect:** `/api/auth/snapchat/disconnect` calls Snapchat's `revoke_token` endpoint (best-effort) before clearing the session fields.
-- **Meta access tokens are AES-256-GCM encrypted at rest:** `user_meta_tokens.access_token_enc` uses the same `encryptToken`/`decryptToken` helpers as Snap refresh tokens (key = first 32 bytes of `SESSION_SECRET`). `isMetaAdAccountAllowed(session, id)` checks `session.metaAllowedAdAccountIds` — separate from Snap's `isAdAccountAllowed`. Meta has no refresh_token; long-lived tokens (~60 days) must be reconnected after expiry.
-- **Meta disconnect revokes app permissions:** `/api/auth/meta/disconnect` calls `DELETE /{userId}/permissions` on the Graph API (best-effort) before clearing session fields and deleting the DB row.
-- **Meta connect route catches missing env vars:** `/api/auth/meta/connect` wraps `buildAuthUrl()` in try-catch — if `META_APP_ID`, `META_APP_SECRET`, or `META_REDIRECT_URI` are unset it redirects to Traffic Sources with `?error=meta_not_configured` instead of throwing a 500.
 - **Snapchat error bodies are not forwarded verbatim:** Routes `console.error` full details and return generic codes to the client (`"upload_failed"`, `"internal_error"`, etc.).
 - **Content Security Policy (`next.config.mjs`):** `img-src` allows `'self' data: blob: https://*.public.blob.vercel-storage.com https://lh3.googleusercontent.com`. If you add images from a new external domain, update this list or they will be silently blocked. **`script-src`:** Dev includes `'unsafe-eval'` (webpack fast refresh); **production omits `'unsafe-eval'`** — only `'wasm-unsafe-eval'` (for ffmpeg.wasm WebAssembly compilation) and `'unsafe-inline'` are present. `worker-src 'self' blob:` — `'self'` covers the webpack-bundled ffmpeg worker chunk (`/_next/static/chunks/`); `blob:` is kept for safety. ffmpeg core is served same-origin so no external CDN entry is needed in `connect-src`.
 - **Auth rate limiting (`src/middleware.ts`):** Next.js Edge middleware rate-limits all `/api/auth/*` endpoints: 20 requests per IP per 60-second window. Returns 429 with `Retry-After` header when exceeded. Per-instance in-memory Map — not a hard distributed guarantee across multiple Vercel Edge instances, but effective against sustained single-IP abuse.
