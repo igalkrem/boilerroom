@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSnapchatAuth } from "@/hooks/useSnapchatAuth";
 import { useAdAccounts } from "@/hooks/useAdAccounts";
 import { useMetaAuth } from "@/hooks/useMetaAuth";
@@ -31,8 +31,17 @@ function MetaLogo({ className }: { className?: string }) {
   );
 }
 
+const META_ERROR_MESSAGES: Record<string, string> = {
+  meta_not_configured: "Meta credentials are not configured on this server. Add META_APP_ID, META_APP_SECRET, and META_REDIRECT_URI to your environment variables.",
+  token_exchange_failed: "Could not complete Meta login. Please try again.",
+  invalid_state: "Security check failed. Please try again.",
+  missing_params: "Authorization failed. Please try again.",
+};
+
 export default function TrafficSourcesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const metaError = searchParams.get("error");
 
   // Snap state
   const { snapConnected, isLoading: authLoading } = useSnapchatAuth();
@@ -227,6 +236,13 @@ export default function TrafficSourcesPage() {
           Manage traffic source connections and ad account settings.
         </p>
       </div>
+
+      {/* Error banner from OAuth redirects */}
+      {metaError && (
+        <div className="px-4 py-3 bg-red-950 border border-red-800 rounded-lg text-sm text-red-400">
+          {META_ERROR_MESSAGES[metaError] ?? "An error occurred connecting to Meta. Please try again."}
+        </div>
+      )}
 
       {/* Section 1: Connected Sources */}
       <section>

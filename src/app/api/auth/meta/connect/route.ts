@@ -15,6 +15,14 @@ export async function GET() {
   session.metaOAuthState = state;
   await session.save();
 
-  const url = buildAuthUrl(state);
+  let url: string;
+  try {
+    url = buildAuthUrl(state);
+  } catch (err) {
+    console.error("[auth/meta/connect] missing env vars:", err);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    return NextResponse.redirect(`${appUrl}/dashboard/traffic-sources?error=meta_not_configured`);
+  }
+
   return NextResponse.redirect(url);
 }
