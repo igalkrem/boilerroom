@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession, isSessionValid, isSnapchatConnected } from "@/lib/session";
+import { getSession, isSessionValid, isSnapchatConnected, isMetaConnected } from "@/lib/session";
 
 export async function GET() {
   const session = await getSession();
@@ -14,5 +14,8 @@ export async function GET() {
     googleAvatar: session.googleAvatar,
     snapConnected: isSnapchatConnected(session),
     snapUserId: session.snapUserId,
+    metaConnected: isMetaConnected(session),
+    metaUserId: session.metaUserId,
+    metaExpiresAt: session.metaExpiresAt,
   });
 }

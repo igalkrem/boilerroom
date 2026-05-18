@@ -42,3 +42,12 @@ export function isAdAccountAllowed(session: SessionData, adAccountId: string): b
   if (!session.allowedAdAccountIds?.length) return false;
   return session.allowedAdAccountIds.includes(adAccountId);
 }
+
+export function isMetaConnected(session: SessionData): boolean {
+  return !!(session.metaAccessToken && session.metaUserId);
+}
+
+export function isMetaAdAccountAllowed(session: SessionData, adAccountId: string): boolean {
+  if (!session.metaAllowedAdAccountIds?.length) return false;
+  return session.metaAllowedAdAccountIds.includes(adAccountId);
+}

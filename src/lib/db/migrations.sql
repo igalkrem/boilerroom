@@ -85,3 +85,13 @@ ALTER TABLE feed_provider_channels ADD COLUMN IF NOT EXISTS paused_since TIMESTA
 
 CREATE INDEX IF NOT EXISTS fpc_ad_squad ON feed_provider_channels(ad_squad_snap_id)
   WHERE ad_squad_snap_id IS NOT NULL;
+
+-- Meta long-lived token storage (no refresh_token; user must reconnect after ~60 days)
+CREATE TABLE IF NOT EXISTS user_meta_tokens (
+  google_user_id   TEXT        PRIMARY KEY,
+  meta_user_id     TEXT        NOT NULL DEFAULT '',
+  access_token_enc TEXT        NOT NULL,
+  ad_account_ids   JSONB       NOT NULL DEFAULT '[]',
+  expires_at       BIGINT      NOT NULL DEFAULT 0,
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

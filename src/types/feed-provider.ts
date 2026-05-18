@@ -37,6 +37,10 @@ export interface FeedProvider {
     allowedPixelIds: string[];
     campaignNamingTemplate?: NamingSegment[]; // Snap-specific naming template; segments joined by " | "
   };
+  // Meta tab
+  metaConfig: {
+    allowedAdAccountIds: string[];
+  };
   // URL Parameters tab
   urlConfig: {
     baseUrl: string;
@@ -58,6 +62,7 @@ export function emptyFeedProvider(): Omit<FeedProvider, "id" | "createdAt"> {
   return {
     name: "",
     snapConfig: { allowedAdAccountIds: [], allowedPixelIds: [] },
+    metaConfig: { allowedAdAccountIds: [] },
     urlConfig: { baseUrl: "", parameters: [] },
     channelConfig: { type: "parameter-based" },
     domains: [],
