@@ -5,7 +5,11 @@ import { createPortal } from "react-dom";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import type { Article } from "@/types/article";
 import type { FeedProvider } from "@/types/feed-provider";
+import type { SquadDetail } from "@/components/performance/PerformanceTable";
 import { resolveProviderKey } from "@/lib/reporting/provider-key";
+
+// Same palette as CampaignCanvas — providers keep consistent colors across the app.
+const PROVIDER_COLORS = ["#3b82f6", "#f97316", "#8b5cf6", "#10b981", "#ec4899", "#f59e0b"] as const;
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -66,6 +70,8 @@ interface SummaryRow {
   revenue_1d?: number;
   spend_2d?: number;
   revenue_2d?: number;
+  squadIds: string[];
+  providerColor: string;
 }
 
 interface Props {
@@ -73,6 +79,7 @@ interface Props {
   historicalRows: CombinedRow[];
   startDate: string;
   last30Rows?: CombinedRow[];
+  squadDetails?: Map<string, SquadDetail>;
 }
 
 // ── ROI pill with hover tooltip ────────────────────────────────────────────
@@ -109,6 +116,27 @@ function RoiPill({ pct, meta }: { pct: number | null; meta?: { spend: number; re
   );
 }
 
+// ── Live count badge ───────────────────────────────────────────────────────
+
+function LiveBadge({ count }: { count: number }) {
+  if (count === 0) return <span className="text-gray-600">—</span>;
+  return (
+    <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-gray-700 text-gray-200 text-xs font-medium">
+      {count}
+    </span>
+  );
+}
+
+// ── Sort helpers ───────────────────────────────────────────────────────────
+
+type SortCol = "spend" | "revenue" | "profit" | "roi" | "roi_1d" | "roi_2d" | "live" | null;
+type DateSortCol = "spend" | "revenue" | "profit" | "roi" | "live" | null;
+
+function sortIndicator(active: string | null, col: string, dir: "asc" | "desc") {
+  if (active !== col) return null;
+  return <span className="ml-0.5 opacity-80">{dir === "asc" ? "↑" : "↓"}</span>;
+}
+
 // ── ROI table (article / feed) ─────────────────────────────────────────────
 
 function RoiTable({
@@ -117,13 +145,58 @@ function RoiTable({
   rows,
   totalRow,
   showFeed = false,
+  showTotal = true,
+  squadDetails,
 }: {
   title: string;
   labelHeader: string;
   rows: SummaryRow[];
   totalRow: SummaryRow;
   showFeed?: boolean;
+  showTotal?: boolean;
+  squadDetails?: Map<string, SquadDetail>;
 }) {
+  const [sortCol, setSortCol] = useState<SortCol>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  function handleSort(col: SortCol) {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("desc"); }
+  }
+
+  // Returns the className portion for a sortable th (no onClick — avoids duplicate prop TS2783)
+  function thCls(col: SortCol, extra = "") {
+    const active = sortCol === col ? "text-gray-200" : "text-gray-400 hover:text-gray-300";
+    return `cursor-pointer select-none font-medium transition-colors ${active}${extra ? " " + extra : ""}`;
+  }
+
+  const sortedRows = useMemo(() => {
+    if (!sortCol) return rows;
+    return [...rows].sort((a, b) => {
+      let av: number | null = null;
+      let bv: number | null = null;
+      if      (sortCol === "spend")   { av = a.spend;   bv = b.spend; }
+      else if (sortCol === "revenue") { av = a.revenue; bv = b.revenue; }
+      else if (sortCol === "profit")  { av = a.profit;  bv = b.profit; }
+      else if (sortCol === "roi")     { av = a.roi;     bv = b.roi; }
+      else if (sortCol === "roi_1d")  { av = a.roi_1d;  bv = b.roi_1d; }
+      else if (sortCol === "roi_2d")  { av = a.roi_2d;  bv = b.roi_2d; }
+      else if (sortCol === "live") {
+        av = a.squadIds.filter(id => squadDetails?.get(id)?.status === "ACTIVE").length;
+        bv = b.squadIds.filter(id => squadDetails?.get(id)?.status === "ACTIVE").length;
+      }
+      if (av === null && bv === null) return 0;
+      if (av === null) return 1;
+      if (bv === null) return -1;
+      return sortDir === "asc" ? av - bv : bv - av;
+    });
+  }, [rows, sortCol, sortDir, squadDetails]);
+
+  const totalLive = useMemo(() => {
+    const all = new Set(rows.flatMap(r => r.squadIds.filter(id => squadDetails?.get(id)?.status === "ACTIVE")));
+    return all.size;
+  }, [rows, squadDetails]);
+
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden flex flex-col">
       <div className="px-3 py-2 border-b border-gray-700 flex-shrink-0">
@@ -132,57 +205,85 @@ function RoiTable({
       <div className="overflow-auto max-h-48">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-gray-400 border-b border-gray-700 bg-gray-800 sticky top-0 z-10">
-              <th className="text-left px-3 py-1.5 font-medium">{labelHeader}</th>
-              {showFeed && <th className="text-left px-2 py-1.5 font-medium">Feed</th>}
-              <th className="text-right px-2 py-1.5 font-medium">Cost</th>
-              <th className="text-right px-2 py-1.5 font-medium">Revenue</th>
-              <th className="text-right px-2 py-1.5 font-medium">Profit</th>
-              <th className="text-center px-2 py-1.5 font-medium whitespace-nowrap">Today ROI</th>
-              <th className="text-center px-2 py-1.5 font-medium whitespace-nowrap">1D ago</th>
-              <th className="text-center px-2 py-1.5 font-medium whitespace-nowrap">2D ago</th>
+            <tr className="border-b border-gray-700 bg-gray-800 sticky top-0 z-10">
+              <th className="text-left px-3 py-1.5 font-medium text-gray-400">{labelHeader}</th>
+              {showFeed && <th className="text-left px-2 py-1.5 font-medium text-gray-400">Feed</th>}
+              <th className={thCls("spend", "text-right px-2 py-1.5")} onClick={() => handleSort("spend")}>
+                Cost {sortIndicator(sortCol, "spend", sortDir)}
+              </th>
+              <th className={thCls("revenue", "text-right px-2 py-1.5")} onClick={() => handleSort("revenue")}>
+                Revenue {sortIndicator(sortCol, "revenue", sortDir)}
+              </th>
+              <th className={thCls("profit", "text-right px-2 py-1.5")} onClick={() => handleSort("profit")}>
+                Profit {sortIndicator(sortCol, "profit", sortDir)}
+              </th>
+              <th className={thCls("live", "text-center px-2 py-1.5")} onClick={() => handleSort("live")}>
+                Live {sortIndicator(sortCol, "live", sortDir)}
+              </th>
+              <th className={thCls("roi", "text-center px-2 py-1.5 whitespace-nowrap")} onClick={() => handleSort("roi")}>
+                Today ROI {sortIndicator(sortCol, "roi", sortDir)}
+              </th>
+              <th className={thCls("roi_1d", "text-center px-2 py-1.5 whitespace-nowrap")} onClick={() => handleSort("roi_1d")}>
+                1D ago {sortIndicator(sortCol, "roi_1d", sortDir)}
+              </th>
+              <th className={thCls("roi_2d", "text-center px-2 py-1.5 whitespace-nowrap")} onClick={() => handleSort("roi_2d")}>
+                2D ago {sortIndicator(sortCol, "roi_2d", sortDir)}
+              </th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.key} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
-                <td className="px-3 py-1.5 text-gray-200" title={r.label}>{r.label}</td>
-                {showFeed && (
-                  <td className="px-2 py-1.5 text-gray-400 max-w-[80px] truncate" title={r.feedLabel}>{r.feedLabel ?? "—"}</td>
-                )}
-                <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.spend)}</td>
-                <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.revenue)}</td>
-                <td className={`px-2 py-1.5 text-right whitespace-nowrap ${r.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(r.profit)}</td>
+            {sortedRows.map((r) => {
+              const liveCount = r.squadIds.filter(id => squadDetails?.get(id)?.status === "ACTIVE").length;
+              return (
+                <tr key={r.key} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
+                  <td
+                    className="px-3 py-1.5 text-gray-200"
+                    style={{ borderLeft: `3px solid ${r.providerColor}` }}
+                    title={r.label}
+                  >
+                    {r.label}
+                  </td>
+                  {showFeed && (
+                    <td className="px-2 py-1.5 text-gray-400 max-w-[80px] truncate" title={r.feedLabel}>{r.feedLabel ?? "—"}</td>
+                  )}
+                  <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.spend)}</td>
+                  <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.revenue)}</td>
+                  <td className={`px-2 py-1.5 text-right whitespace-nowrap ${r.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(r.profit)}</td>
+                  <td className="px-2 py-1.5 text-center"><LiveBadge count={liveCount} /></td>
+                  <td className="px-2 py-1.5 text-center">
+                    <RoiPill pct={r.roi} meta={{ spend: r.spend, revenue: r.revenue }} />
+                  </td>
+                  <td className="px-2 py-1.5 text-center">
+                    <RoiPill pct={r.roi_1d} meta={r.spend_1d !== undefined ? { spend: r.spend_1d, revenue: r.revenue_1d! } : undefined} />
+                  </td>
+                  <td className="px-2 py-1.5 text-center">
+                    <RoiPill pct={r.roi_2d} meta={r.spend_2d !== undefined ? { spend: r.spend_2d, revenue: r.revenue_2d! } : undefined} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          {showTotal && (
+            <tfoot>
+              <tr className="border-t-2 border-gray-600 bg-gray-700/50">
+                <td className="px-3 py-1.5 font-semibold text-gray-100">Total</td>
+                {showFeed && <td className="px-2 py-1.5" />}
+                <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.spend)}</td>
+                <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.revenue)}</td>
+                <td className={`px-2 py-1.5 text-right font-semibold whitespace-nowrap ${totalRow.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(totalRow.profit)}</td>
+                <td className="px-2 py-1.5 text-center"><LiveBadge count={totalLive} /></td>
                 <td className="px-2 py-1.5 text-center">
-                  <RoiPill pct={r.roi} meta={{ spend: r.spend, revenue: r.revenue }} />
+                  <RoiPill pct={totalRow.roi} meta={{ spend: totalRow.spend, revenue: totalRow.revenue }} />
                 </td>
                 <td className="px-2 py-1.5 text-center">
-                  <RoiPill pct={r.roi_1d} meta={r.spend_1d !== undefined ? { spend: r.spend_1d, revenue: r.revenue_1d! } : undefined} />
+                  <RoiPill pct={totalRow.roi_1d} meta={totalRow.spend_1d !== undefined ? { spend: totalRow.spend_1d, revenue: totalRow.revenue_1d! } : undefined} />
                 </td>
                 <td className="px-2 py-1.5 text-center">
-                  <RoiPill pct={r.roi_2d} meta={r.spend_2d !== undefined ? { spend: r.spend_2d, revenue: r.revenue_2d! } : undefined} />
+                  <RoiPill pct={totalRow.roi_2d} meta={totalRow.spend_2d !== undefined ? { spend: totalRow.spend_2d, revenue: totalRow.revenue_2d! } : undefined} />
                 </td>
               </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="border-t-2 border-gray-600 bg-gray-700/50">
-              <td className="px-3 py-1.5 font-semibold text-gray-100">Total</td>
-              {showFeed && <td className="px-2 py-1.5" />}
-              <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.spend)}</td>
-              <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.revenue)}</td>
-              <td className={`px-2 py-1.5 text-right font-semibold whitespace-nowrap ${totalRow.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(totalRow.profit)}</td>
-              <td className="px-2 py-1.5 text-center">
-                <RoiPill pct={totalRow.roi} meta={{ spend: totalRow.spend, revenue: totalRow.revenue }} />
-              </td>
-              <td className="px-2 py-1.5 text-center">
-                <RoiPill pct={totalRow.roi_1d} meta={totalRow.spend_1d !== undefined ? { spend: totalRow.spend_1d, revenue: totalRow.revenue_1d! } : undefined} />
-              </td>
-              <td className="px-2 py-1.5 text-center">
-                <RoiPill pct={totalRow.roi_2d} meta={totalRow.spend_2d !== undefined ? { spend: totalRow.spend_2d, revenue: totalRow.revenue_2d! } : undefined} />
-              </td>
-            </tr>
-          </tfoot>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>
@@ -200,6 +301,36 @@ function DateTable({
   rows: SummaryRow[];
   totalRow: SummaryRow;
 }) {
+  const [sortCol, setSortCol] = useState<DateSortCol>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  function handleSort(col: DateSortCol) {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("desc"); }
+  }
+
+  function thCls(col: DateSortCol, extra = "") {
+    const active = sortCol === col ? "text-gray-200" : "text-gray-400 hover:text-gray-300";
+    return `cursor-pointer select-none font-medium transition-colors ${active}${extra ? " " + extra : ""}`;
+  }
+
+  const sortedRows = useMemo(() => {
+    if (!sortCol) return rows;
+    return [...rows].sort((a, b) => {
+      let av: number | null = null;
+      let bv: number | null = null;
+      if      (sortCol === "spend")   { av = a.spend;          bv = b.spend; }
+      else if (sortCol === "revenue") { av = a.revenue;        bv = b.revenue; }
+      else if (sortCol === "profit")  { av = a.profit;         bv = b.profit; }
+      else if (sortCol === "roi")     { av = a.roi;            bv = b.roi; }
+      else if (sortCol === "live")    { av = a.squadIds.length; bv = b.squadIds.length; }
+      if (av === null && bv === null) return 0;
+      if (av === null) return 1;
+      if (bv === null) return -1;
+      return sortDir === "asc" ? av - bv : bv - av;
+    });
+  }, [rows, sortCol, sortDir]);
+
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden flex flex-col">
       <div className="px-3 py-2 border-b border-gray-700 flex-shrink-0">
@@ -208,21 +339,33 @@ function DateTable({
       <div className="overflow-auto max-h-48">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-gray-400 border-b border-gray-700 bg-gray-800 sticky top-0 z-10">
-              <th className="text-left px-3 py-1.5 font-medium">Date</th>
-              <th className="text-right px-2 py-1.5 font-medium">Cost</th>
-              <th className="text-right px-2 py-1.5 font-medium">Revenue</th>
-              <th className="text-right px-2 py-1.5 font-medium">Profit</th>
-              <th className="text-center px-2 py-1.5 font-medium">ROI</th>
+            <tr className="border-b border-gray-700 bg-gray-800 sticky top-0 z-10">
+              <th className="text-left px-3 py-1.5 font-medium text-gray-400">Date</th>
+              <th className={thCls("spend", "text-right px-2 py-1.5")} onClick={() => handleSort("spend")}>
+                Cost {sortIndicator(sortCol, "spend", sortDir)}
+              </th>
+              <th className={thCls("revenue", "text-right px-2 py-1.5")} onClick={() => handleSort("revenue")}>
+                Revenue {sortIndicator(sortCol, "revenue", sortDir)}
+              </th>
+              <th className={thCls("profit", "text-right px-2 py-1.5")} onClick={() => handleSort("profit")}>
+                Profit {sortIndicator(sortCol, "profit", sortDir)}
+              </th>
+              <th className={thCls("live", "text-center px-2 py-1.5")} onClick={() => handleSort("live")}>
+                Live {sortIndicator(sortCol, "live", sortDir)}
+              </th>
+              <th className={thCls("roi", "text-center px-2 py-1.5")} onClick={() => handleSort("roi")}>
+                ROI {sortIndicator(sortCol, "roi", sortDir)}
+              </th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {sortedRows.map((r) => (
               <tr key={r.key} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
                 <td className="px-3 py-1.5 text-gray-200">{r.label}</td>
                 <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.spend)}</td>
                 <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.revenue)}</td>
                 <td className={`px-2 py-1.5 text-right whitespace-nowrap ${r.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(r.profit)}</td>
+                <td className="px-2 py-1.5 text-center"><LiveBadge count={r.squadIds.length} /></td>
                 <td className="px-2 py-1.5 text-center">
                   <RoiPill pct={r.roi} meta={{ spend: r.spend, revenue: r.revenue }} />
                 </td>
@@ -235,6 +378,7 @@ function DateTable({
               <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.spend)}</td>
               <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.revenue)}</td>
               <td className={`px-2 py-1.5 text-right font-semibold whitespace-nowrap ${totalRow.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(totalRow.profit)}</td>
+              <td className="px-2 py-1.5 text-center text-gray-500">—</td>
               <td className="px-2 py-1.5 text-center">
                 <RoiPill pct={totalRow.roi} meta={{ spend: totalRow.spend, revenue: totalRow.revenue }} />
               </td>
@@ -248,7 +392,7 @@ function DateTable({
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export function PerformanceSummaryTables({ rows, historicalRows, startDate, last30Rows }: Props) {
+export function PerformanceSummaryTables({ rows, historicalRows, startDate, last30Rows, squadDetails }: Props) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [providers, setProviders] = useState<FeedProvider[]>([]);
 
@@ -262,6 +406,14 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
       if (raw) setProviders(JSON.parse(raw) as FeedProvider[]);
     } catch { /* ignore */ }
   }, []);
+
+  // Provider color map — same sort-by-createdAt logic as CampaignCanvas.
+  const providerColorMap = useMemo<Map<string, string>>(() => {
+    const sorted = [...providers].sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
+    const map = new Map<string, string>();
+    sorted.forEach((p, i) => { map.set(p.id, PROVIDER_COLORS[i % PROVIDER_COLORS.length]); });
+    return map;
+  }, [providers]);
 
   const d1 = dateMinus(startDate, 1);
   const d2 = dateMinus(startDate, 2);
@@ -286,6 +438,7 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
       const label = article ? article.slug : "Other";
       const provider = providers.find(p => p.id === pKey);
       const feedLabel = provider?.name ?? (pKey === "__unknown__" ? "Unknown" : pKey);
+      const providerColor = providerColorMap.get(pKey) ?? "#6b7280";
       const pred = (r: CombinedRow) => {
         const normName = norm(r.ad_squad_name);
         const articleMatches = article
@@ -309,10 +462,12 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
         revenue_1d: h1?.revenue,
         spend_2d: h2?.spend,
         revenue_2d: h2?.revenue,
+        squadIds: [...new Set(groupRows.map(r => r.ad_squad_id))],
+        providerColor,
       });
     }
     return result.sort((a, b) => b.spend - a.spend);
-  }, [rows, historicalRows, articles, providers, d1, d2]);
+  }, [rows, historicalRows, articles, providers, providerColorMap, d1, d2]);
 
   // ── Feed provider grouping ────────────────────────────────────────────────
   const feedSummary = useMemo<SummaryRow[]>(() => {
@@ -327,6 +482,7 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
       const { spend, revenue } = sumRows(groupRows);
       const provider = providers.find(p => p.id === key);
       const label = provider?.name ?? (key === "__unknown__" ? "Unknown" : key);
+      const providerColor = providerColorMap.get(key) ?? "#6b7280";
       const pred = (r: CombinedRow) => resolveProviderKey(r, providers) === key;
       const h1 = histStats(historicalRows, d1, pred);
       const h2 = histStats(historicalRows, d2, pred);
@@ -343,10 +499,12 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
         revenue_1d: h1?.revenue,
         spend_2d: h2?.spend,
         revenue_2d: h2?.revenue,
+        squadIds: [...new Set(groupRows.map(r => r.ad_squad_id))],
+        providerColor,
       });
     }
     return result.sort((a, b) => b.spend - a.spend);
-  }, [rows, historicalRows, providers, d1, d2]);
+  }, [rows, historicalRows, providers, providerColorMap, d1, d2]);
 
   // ── Date grouping (uses last30Rows when available, falls back to rows) ──────
   const dateSummary = useMemo<SummaryRow[]>(() => {
@@ -368,6 +526,8 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
         roi: roiPct(spend, revenue),
         roi_1d: null,
         roi_2d: null,
+        squadIds: [...new Set(groupRows.map(r => r.ad_squad_id))],
+        providerColor: "#6b7280",
       });
     }
     return result.sort((a, b) => b.key.localeCompare(a.key));
@@ -391,25 +551,44 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
   const articleTotal = useMemo<SummaryRow>(() => {
     const spend = articleSummary.reduce((s, r) => s + r.spend, 0);
     const revenue = articleSummary.reduce((s, r) => s + r.revenue, 0);
-    return { key: "__total__", label: "Total", spend, revenue, profit: revenue - spend, roi: roiPct(spend, revenue), roi_1d: histTotals.roi1, roi_2d: histTotals.roi2, spend_1d: histTotals.spend_1d, revenue_1d: histTotals.revenue_1d, spend_2d: histTotals.spend_2d, revenue_2d: histTotals.revenue_2d };
+    return {
+      key: "__total__", label: "Total", spend, revenue, profit: revenue - spend,
+      roi: roiPct(spend, revenue), roi_1d: histTotals.roi1, roi_2d: histTotals.roi2,
+      spend_1d: histTotals.spend_1d, revenue_1d: histTotals.revenue_1d,
+      spend_2d: histTotals.spend_2d, revenue_2d: histTotals.revenue_2d,
+      squadIds: [...new Set(articleSummary.flatMap(r => r.squadIds))],
+      providerColor: "#6b7280",
+    };
   }, [articleSummary, histTotals]);
 
   const feedTotal = useMemo<SummaryRow>(() => {
     const spend = feedSummary.reduce((s, r) => s + r.spend, 0);
     const revenue = feedSummary.reduce((s, r) => s + r.revenue, 0);
-    return { key: "__total__", label: "Total", spend, revenue, profit: revenue - spend, roi: roiPct(spend, revenue), roi_1d: histTotals.roi1, roi_2d: histTotals.roi2, spend_1d: histTotals.spend_1d, revenue_1d: histTotals.revenue_1d, spend_2d: histTotals.spend_2d, revenue_2d: histTotals.revenue_2d };
+    return {
+      key: "__total__", label: "Total", spend, revenue, profit: revenue - spend,
+      roi: roiPct(spend, revenue), roi_1d: histTotals.roi1, roi_2d: histTotals.roi2,
+      spend_1d: histTotals.spend_1d, revenue_1d: histTotals.revenue_1d,
+      spend_2d: histTotals.spend_2d, revenue_2d: histTotals.revenue_2d,
+      squadIds: [...new Set(feedSummary.flatMap(r => r.squadIds))],
+      providerColor: "#6b7280",
+    };
   }, [feedSummary, histTotals]);
 
   const dateTotal = useMemo<SummaryRow>(() => {
     const spend = dateSummary.reduce((s, r) => s + r.spend, 0);
     const revenue = dateSummary.reduce((s, r) => s + r.revenue, 0);
-    return { key: "__total__", label: "Total", spend, revenue, profit: revenue - spend, roi: roiPct(spend, revenue), roi_1d: null, roi_2d: null };
+    return {
+      key: "__total__", label: "Total", spend, revenue, profit: revenue - spend,
+      roi: roiPct(spend, revenue), roi_1d: null, roi_2d: null,
+      squadIds: [],
+      providerColor: "#6b7280",
+    };
   }, [dateSummary]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-4 mt-4 mb-6">
-      <RoiTable title="By Article" labelHeader="Article" rows={articleSummary} totalRow={articleTotal} showFeed />
-      <RoiTable title="By Feed" labelHeader="Feed" rows={feedSummary} totalRow={feedTotal} />
+      <RoiTable title="By Article" labelHeader="Article" rows={articleSummary} totalRow={articleTotal} showFeed squadDetails={squadDetails} />
+      <RoiTable title="By Feed" labelHeader="Feed" rows={feedSummary} totalRow={feedTotal} showTotal={false} squadDetails={squadDetails} />
       <DateTable title="By Date" rows={dateSummary} totalRow={dateTotal} />
     </div>
   );

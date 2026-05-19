@@ -294,6 +294,7 @@ export default function PerformancePage() {
             historicalRows={historicalRows}
             startDate={startDate}
             last30Rows={last30Rows}
+            squadDetails={squadDetails}
           />
           <PerformanceTable
           rows={rows}
