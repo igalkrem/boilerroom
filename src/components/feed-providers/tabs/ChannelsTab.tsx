@@ -42,6 +42,29 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
     if (channelConfig.type === "provider-supplied") loadChannels();
   }, [channelConfig.type, loadChannels]);
 
+  function parseLines(text: string) {
+    return text
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.split(",");
+        return { channelId: parts[0]?.trim() ?? "", trafficSource: parts[1]?.trim() ?? "Snap" };
+      })
+      .filter((r) => r.channelId);
+  }
+
+  function deduplicateRows(rows: { channelId: string; trafficSource: string }[]) {
+    if (!channels) return { newRows: rows, skipped: [] as string[] };
+    const existing = new Set([
+      ...channels.available.map((c) => c.channel_id),
+      ...channels.inUse.map((c) => c.channel_id),
+      ...channels.cooldown.map((c) => c.channel_id),
+    ]);
+    const newRows = rows.filter((r) => !existing.has(r.channelId));
+    const skipped = rows.filter((r) => existing.has(r.channelId)).map((r) => r.channelId);
+    return { newRows, skipped };
+  }
+
   async function handleCsvUpload(file: File) {
     if (!feedProviderId) {
       setUploadMsg("Save the feed provider first before uploading channels.");
@@ -51,23 +74,34 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
     setUploadMsg("");
     try {
       const text = await file.text();
-      const rows = text
-        .split(/\r?\n/)
-        .filter(Boolean)
-        .map((line) => {
-          const parts = line.split(",");
-          return { channelId: parts[0]?.trim() ?? "", trafficSource: parts[1]?.trim() ?? "Snap" };
-        })
-        .filter((r) => r.channelId);
+      const parsed = parseLines(text);
+      const { newRows, skipped } = deduplicateRows(parsed);
+
+      if (!newRows.length) {
+        setUploadMsg(
+          skipped.length
+            ? `All ${skipped.length} channel${skipped.length > 1 ? "s" : ""} already exist.`
+            : "No valid channel IDs found."
+        );
+        return;
+      }
 
       const res = await fetch("/api/feed-providers/channels", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feedProviderId, rows }),
+        body: JSON.stringify({ feedProviderId, rows: newRows }),
       });
       const data = await res.json();
-      setUploadMsg(res.ok ? `Uploaded ${data.count} channels.` : "Upload failed.");
-      if (res.ok) loadChannels();
+      if (res.ok) {
+        loadChannels();
+        setUploadMsg(
+          skipped.length
+            ? `Uploaded ${data.count} channel${data.count > 1 ? "s" : ""}. Skipped ${skipped.length} already existing.`
+            : `Uploaded ${data.count} channel${data.count > 1 ? "s" : ""}.`
+        );
+      } else {
+        setUploadMsg("Upload failed.");
+      }
     } catch {
       setUploadMsg("Upload failed.");
     } finally {
@@ -80,32 +114,38 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
       setManualMsg("Save the feed provider first.");
       return;
     }
-    const rows = manualText
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .map((line) => {
-        const parts = line.split(",");
-        return { channelId: parts[0]?.trim() ?? "", trafficSource: parts[1]?.trim() ?? "Snap" };
-      })
-      .filter((r) => r.channelId);
-    if (!rows.length) {
-      setManualMsg("No valid channel IDs found.");
+    const parsed = parseLines(manualText);
+    const { newRows, skipped } = deduplicateRows(parsed);
+
+    if (!newRows.length) {
+      setManualMsg(
+        skipped.length
+          ? `All ${skipped.length} channel${skipped.length > 1 ? "s" : ""} already exist.`
+          : "No valid channel IDs found."
+      );
       return;
     }
+
     setManualUploading(true);
     setManualMsg("");
     try {
       const res = await fetch("/api/feed-providers/channels", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feedProviderId, rows }),
+        body: JSON.stringify({ feedProviderId, rows: newRows }),
       });
       const data = await res.json();
       if (res.ok) {
         setManualText("");
         loadChannels();
+        setManualMsg(
+          skipped.length
+            ? `Added ${data.count} channel${data.count > 1 ? "s" : ""}. Skipped ${skipped.length} already existing.`
+            : `Added ${data.count} channel${data.count > 1 ? "s" : ""}.`
+        );
+      } else {
+        setManualMsg("Failed to add channels.");
       }
-      setManualMsg(res.ok ? `Added ${data.count} channels.` : "Failed to add channels.");
     } catch {
       setManualMsg("Failed to add channels.");
     } finally {
