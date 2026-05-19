@@ -599,6 +599,50 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     [articles, adAccountConfigs, presets]
   );
 
+  // Drop connection on node body (not just on the tiny handle)
+  const onConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent, connectionState: { isValid: boolean | null; fromNode: { id: string } | null; fromHandle: { type: string; id?: string | null } | null }) => {
+      // A handle-to-handle connection was already made — nothing to do
+      if (connectionState?.isValid) return;
+      // Only intercept drags that started from a source handle
+      if (connectionState?.fromHandle?.type !== "source") return;
+      const fromNodeId: string | undefined = connectionState?.fromNode?.id;
+      if (!fromNodeId) return;
+
+      const clientX =
+        "changedTouches" in event
+          ? (event as TouchEvent).changedTouches[0]?.clientX
+          : (event as MouseEvent).clientX;
+      const clientY =
+        "changedTouches" in event
+          ? (event as TouchEvent).changedTouches[0]?.clientY
+          : (event as MouseEvent).clientY;
+      if (clientX == null || clientY == null) return;
+
+      // Walk through stacked DOM elements at the drop point looking for a React Flow node
+      const els = document.elementsFromPoint(clientX, clientY);
+      const nodeEl = els.find((el) =>
+        el.classList.contains("react-flow__node")
+      ) as HTMLElement | undefined;
+      if (!nodeEl) return;
+
+      const targetNodeId = nodeEl.dataset.id;
+      if (!targetNodeId || targetNodeId === fromNodeId) return;
+
+      const connection: Connection = {
+        source: fromNodeId,
+        sourceHandle: connectionState?.fromHandle?.id ?? "out",
+        target: targetNodeId,
+        targetHandle: "in",
+      };
+
+      if (isValidConnection(connection)) {
+        onConnect(connection);
+      }
+    },
+    [onConnect, isValidConnection]
+  );
+
   // Auto-layout — dagre positions connected nodes; disconnected-but-visible nodes
   // are placed in their correct columns so they don't float at y=0.
   const handleAutoLayout = useCallback(() => {
@@ -769,6 +813,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onConnectEnd={onConnectEnd}
           isValidConnection={isValidConnection}
           onEdgesDelete={onEdgesDelete}
           nodeTypes={NODE_TYPES}
