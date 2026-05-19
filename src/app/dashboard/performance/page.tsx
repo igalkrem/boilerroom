@@ -47,6 +47,12 @@ export default function PerformancePage() {
   const [minutesAgo, setMinutesAgo] = useState<number | null>(null);
 
   const [kpiRows, setKpiRows] = useState<AggrRow[]>([]);
+  const [summaryFilter, setSummaryFilter] = useState<{ squadIds: Set<string>; label: string } | null>(null);
+
+  const tableRows = useMemo(
+    () => summaryFilter ? rows.filter(r => summaryFilter.squadIds.has(r.ad_squad_id)) : rows,
+    [rows, summaryFilter]
+  );
 
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => loadSavedColumns());
   const [columnOrder, setColumnOrder] = useState<string[]>(() => loadSavedOrder());
@@ -238,6 +244,7 @@ export default function PerformancePage() {
   function handleDateChange(start: string, end: string) {
     setStartDate(start);
     setEndDate(end);
+    setSummaryFilter(null);
     // Always force-sync on date change so fresh data is fetched even when DB has stale rows.
     void syncAndReload(activeAccounts, start, end, true);
   }
@@ -295,9 +302,10 @@ export default function PerformancePage() {
             startDate={startDate}
             last30Rows={last30Rows}
             squadDetails={squadDetails}
+            onFilterChange={setSummaryFilter}
           />
           <PerformanceTable
-          rows={rows}
+          rows={tableRows}
           eurToUsd={eurToUsd}
           visibleColumns={visibleColumns}
           onColumnsChange={setVisibleColumns}

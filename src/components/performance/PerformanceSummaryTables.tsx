@@ -80,6 +80,7 @@ interface Props {
   startDate: string;
   last30Rows?: CombinedRow[];
   squadDetails?: Map<string, SquadDetail>;
+  onFilterChange?: (filter: { squadIds: Set<string>; label: string } | null) => void;
 }
 
 // ── ROI pill with hover tooltip ────────────────────────────────────────────
@@ -147,6 +148,8 @@ function RoiTable({
   showFeed = false,
   showTotal = true,
   squadDetails,
+  onRowClick,
+  isRowSelected,
 }: {
   title: string;
   labelHeader: string;
@@ -155,6 +158,8 @@ function RoiTable({
   showFeed?: boolean;
   showTotal?: boolean;
   squadDetails?: Map<string, SquadDetail>;
+  onRowClick?: (rowKey: string) => void;
+  isRowSelected?: (rowKey: string) => boolean;
 }) {
   const [sortCol, setSortCol] = useState<SortCol>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -234,10 +239,15 @@ function RoiTable({
           <tbody>
             {sortedRows.map((r) => {
               const liveCount = r.squadIds.filter(id => squadDetails?.get(id)?.status === "ACTIVE").length;
+              const selected = isRowSelected?.(r.key) ?? false;
               return (
-                <tr key={r.key} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
+                <tr
+                  key={r.key}
+                  className={`border-b border-gray-700/50 transition-colors ${onRowClick ? "cursor-pointer" : ""} ${selected ? "bg-blue-500/10" : "hover:bg-gray-700/30"}`}
+                  onClick={onRowClick ? () => onRowClick(r.key) : undefined}
+                >
                   <td
-                    className="px-3 py-1.5 text-gray-200"
+                    className={`px-3 py-1.5 ${selected ? "text-white font-semibold" : "text-gray-200"}`}
                     style={{ borderLeft: `3px solid ${r.providerColor}` }}
                     title={r.label}
                   >
@@ -392,9 +402,11 @@ function DateTable({
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export function PerformanceSummaryTables({ rows, historicalRows, startDate, last30Rows, squadDetails }: Props) {
+export function PerformanceSummaryTables({ rows, historicalRows, startDate, last30Rows, squadDetails, onFilterChange }: Props) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [providers, setProviders] = useState<FeedProvider[]>([]);
+  const [selectedArticleKey, setSelectedArticleKey] = useState<string | null>(null);
+  const [selectedFeedKey, setSelectedFeedKey] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -418,7 +430,7 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
   const d1 = dateMinus(startDate, 1);
   const d2 = dateMinus(startDate, 2);
 
-  // ── Article × Feed provider grouping ─────────────────────────────────────
+  // ── Article × Feed provider grouping (always uses raw rows — all articles stay visible) ──
   const articleSummary = useMemo<SummaryRow[]>(() => {
     const buckets = new Map<string, CombinedRow[]>();
     for (const row of rows) {
@@ -469,10 +481,47 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
     return result.sort((a, b) => b.spend - a.spend);
   }, [rows, historicalRows, articles, providers, providerColorMap, d1, d2]);
 
-  // ── Feed provider grouping ────────────────────────────────────────────────
+  // ── Rows filtered by active selection (used by feedSummary + dateSummary) ──
+  // Placed after articleSummary (no cycle: articleSummary ← rows; this ← rows + articleSummary)
+  const internalFilteredRows = useMemo(() => {
+    if (!selectedArticleKey && !selectedFeedKey) return rows;
+    let filtered = rows;
+    if (selectedArticleKey) {
+      const ids = new Set(
+        articleSummary
+          .filter(r => r.key.startsWith(selectedArticleKey + "|||"))
+          .flatMap(r => r.squadIds)
+      );
+      filtered = filtered.filter(r => ids.has(r.ad_squad_id));
+    }
+    if (selectedFeedKey) {
+      filtered = filtered.filter(r => resolveProviderKey(r, providers) === selectedFeedKey);
+    }
+    return filtered;
+  }, [rows, selectedArticleKey, selectedFeedKey, articleSummary, providers]);
+
+  const filteredLast30Rows = useMemo(() => {
+    const source = last30Rows ?? rows;
+    if (!selectedArticleKey && !selectedFeedKey) return source;
+    let filtered = source;
+    if (selectedArticleKey) {
+      const ids = new Set(
+        articleSummary
+          .filter(r => r.key.startsWith(selectedArticleKey + "|||"))
+          .flatMap(r => r.squadIds)
+      );
+      filtered = filtered.filter(r => ids.has(r.ad_squad_id));
+    }
+    if (selectedFeedKey) {
+      filtered = filtered.filter(r => resolveProviderKey(r, providers) === selectedFeedKey);
+    }
+    return filtered;
+  }, [last30Rows, rows, selectedArticleKey, selectedFeedKey, articleSummary, providers]);
+
+  // ── Feed provider grouping (uses internalFilteredRows) ────────────────────
   const feedSummary = useMemo<SummaryRow[]>(() => {
     const buckets = new Map<string, CombinedRow[]>();
-    for (const row of rows) {
+    for (const row of internalFilteredRows) {
       const key = resolveProviderKey(row, providers);
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key)!.push(row);
@@ -504,11 +553,11 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
       });
     }
     return result.sort((a, b) => b.spend - a.spend);
-  }, [rows, historicalRows, providers, providerColorMap, d1, d2]);
+  }, [internalFilteredRows, historicalRows, providers, providerColorMap, d1, d2]);
 
-  // ── Date grouping (uses last30Rows when available, falls back to rows) ──────
+  // ── Date grouping (uses filteredLast30Rows) ────────────────────────────────
   const dateSummary = useMemo<SummaryRow[]>(() => {
-    const source = last30Rows ?? rows;
+    const source = filteredLast30Rows;
     const buckets = new Map<string, CombinedRow[]>();
     for (const row of source) {
       if (!buckets.has(row.stat_date)) buckets.set(row.stat_date, []);
@@ -531,7 +580,7 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
       });
     }
     return result.sort((a, b) => b.key.localeCompare(a.key));
-  }, [last30Rows, rows]);
+  }, [filteredLast30Rows]);
 
   // ── Historical totals for footer rows ────────────────────────────────────
   const histTotals = useMemo(() => {
@@ -585,11 +634,89 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
     };
   }, [dateSummary]);
 
+  // ── Click handlers ────────────────────────────────────────────────────────
+
+  function handleArticleRowClick(rowKey: string) {
+    const articleId = rowKey.split("|||")[0];
+    const newKey = selectedArticleKey === articleId ? null : articleId;
+    setSelectedArticleKey(newKey);
+    setSelectedFeedKey(null);
+    if (newKey) {
+      const matching = articleSummary.filter(r => r.key.startsWith(newKey + "|||"));
+      const squadIds = new Set(matching.flatMap(r => r.squadIds));
+      onFilterChange?.({ squadIds, label: matching[0]?.label ?? "article" });
+    } else {
+      onFilterChange?.(null);
+    }
+  }
+
+  function handleFeedRowClick(rowKey: string) {
+    const newKey = selectedFeedKey === rowKey ? null : rowKey;
+    setSelectedFeedKey(newKey);
+    setSelectedArticleKey(null);
+    if (newKey) {
+      // Compute from raw rows directly — avoids stale feedSummary while article filter clears
+      const squadIds = new Set(
+        rows.filter(r => resolveProviderKey(r, providers) === newKey).map(r => r.ad_squad_id)
+      );
+      const feedRow = feedSummary.find(r => r.key === newKey);
+      onFilterChange?.({ squadIds, label: feedRow?.label ?? newKey });
+    } else {
+      onFilterChange?.(null);
+    }
+  }
+
+  // ── Filter chip label ─────────────────────────────────────────────────────
+  const filterLabel = selectedArticleKey
+    ? (articleSummary.find(r => r.key.startsWith(selectedArticleKey + "|||"))?.label ?? "Article")
+    : selectedFeedKey
+    ? (feedSummary.find(r => r.key === selectedFeedKey)?.label ?? "Feed")
+    : null;
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-4 mt-4 mb-6">
-      <RoiTable title="By Article" labelHeader="Article" rows={articleSummary} totalRow={articleTotal} showFeed squadDetails={squadDetails} />
-      <RoiTable title="By Feed" labelHeader="Feed" rows={feedSummary} totalRow={feedTotal} showTotal={false} squadDetails={squadDetails} />
-      <DateTable title="By Date" rows={dateSummary} totalRow={dateTotal} />
+    <div className="mt-4 mb-6">
+      {filterLabel && (
+        <div className="flex items-center gap-2 mb-2 text-xs">
+          <span className="text-gray-400">Filtered by:</span>
+          <span className="flex items-center gap-1 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded px-2 py-0.5 font-medium">
+            {filterLabel}
+            <button
+              onClick={() => {
+                setSelectedArticleKey(null);
+                setSelectedFeedKey(null);
+                onFilterChange?.(null);
+              }}
+              className="ml-1 text-blue-400 hover:text-white leading-none"
+              aria-label="Clear filter"
+            >
+              ×
+            </button>
+          </span>
+        </div>
+      )}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-4">
+        <RoiTable
+          title="By Article"
+          labelHeader="Article"
+          rows={articleSummary}
+          totalRow={articleTotal}
+          showFeed
+          squadDetails={squadDetails}
+          onRowClick={handleArticleRowClick}
+          isRowSelected={key => selectedArticleKey !== null && key.startsWith(selectedArticleKey + "|||")}
+        />
+        <RoiTable
+          title="By Feed"
+          labelHeader="Feed"
+          rows={feedSummary}
+          totalRow={feedTotal}
+          showTotal={false}
+          squadDetails={squadDetails}
+          onRowClick={handleFeedRowClick}
+          isRowSelected={key => key === selectedFeedKey}
+        />
+        <DateTable title="By Date" rows={dateSummary} totalRow={dateTotal} />
+      </div>
     </div>
   );
 }
