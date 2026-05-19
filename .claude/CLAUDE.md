@@ -146,7 +146,7 @@ src/
 │   │   └── tabs/
 │   │       ├── SnapTab.tsx            # Org ID, ad accounts, pixels + URL Parameters + Campaign Naming Template section (violet card; NamingTemplateEditor with segment pills + live preview)
 │   │       ├── UrlParametersTab.tsx   # Parameter rows, always-visible filtered macro chips (two groups: Snapchat Native / BoilerRoom), live preview; hideBaseUrl prop
-│   │       ├── ChannelsTab.tsx        # CSV upload, status table, lifecycle controls
+│   │       ├── ChannelsTab.tsx        # CSV upload + manual textarea entry (one channel ID per line), status table, lifecycle controls
 │   │       ├── DomainsTab.tsx         # Domain rows (baseDomain + baseUrl + traffic source checkboxes)
 │   │       └── CombosTab.tsx          # Named combos (pixel + domain + channel config)
 │   ├── silo/

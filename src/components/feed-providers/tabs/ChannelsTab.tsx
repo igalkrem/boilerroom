@@ -21,6 +21,9 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState("");
+  const [manualText, setManualText] = useState("");
+  const [manualUploading, setManualUploading] = useState(false);
+  const [manualMsg, setManualMsg] = useState("");
   const [expandedGroup, setExpandedGroup] = useState<"available" | "inUse" | "cooldown" | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -69,6 +72,44 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
       setUploadMsg("Upload failed.");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleManualAdd() {
+    if (!feedProviderId) {
+      setManualMsg("Save the feed provider first.");
+      return;
+    }
+    const rows = manualText
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.split(",");
+        return { channelId: parts[0]?.trim() ?? "", trafficSource: parts[1]?.trim() ?? "Snap" };
+      })
+      .filter((r) => r.channelId);
+    if (!rows.length) {
+      setManualMsg("No valid channel IDs found.");
+      return;
+    }
+    setManualUploading(true);
+    setManualMsg("");
+    try {
+      const res = await fetch("/api/feed-providers/channels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedProviderId, rows }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setManualText("");
+        loadChannels();
+      }
+      setManualMsg(res.ok ? `Added ${data.count} channels.` : "Failed to add channels.");
+    } catch {
+      setManualMsg("Failed to add channels.");
+    } finally {
+      setManualUploading(false);
     }
   }
 
@@ -157,6 +198,29 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
                 {uploading ? "Uploading…" : "Choose CSV…"}
               </button>
               {uploadMsg && <span className="text-xs text-gray-500 self-center">{uploadMsg}</span>}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Or enter channel IDs manually</p>
+            <p className="text-xs text-gray-500 mb-2">One channel ID per line. Optionally: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">channelId, TrafficSource</code></p>
+            <textarea
+              value={manualText}
+              onChange={(e) => setManualText(e.target.value)}
+              rows={4}
+              placeholder={"ch12345\nch67890, Snap\nch11111"}
+              className="w-full font-mono text-xs bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+            />
+            <div className="flex items-center gap-3 mt-2">
+              <button
+                type="button"
+                disabled={manualUploading || !manualText.trim()}
+                onClick={handleManualAdd}
+                className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg"
+              >
+                {manualUploading ? "Adding…" : "Add Channels"}
+              </button>
+              {manualMsg && <span className="text-xs text-gray-500">{manualMsg}</span>}
             </div>
           </div>
 
