@@ -86,16 +86,41 @@ interface Props {
 // ── ROI pill with hover tooltip ────────────────────────────────────────────
 
 function RoiCell({ pct, meta }: { pct: number | null; meta?: { spend: number; revenue: number } }) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  if (pct === null) return <span className="text-gray-500 text-xs">—</span>;
+  const bg = pct >= 120 ? "bg-green-500" : pct > 105 ? "bg-orange-400" : "bg-red-500";
   const profit = meta ? meta.revenue - meta.spend : null;
   return (
-    <div className="flex flex-col items-center gap-1">
-      <RoiPill pct={pct} meta={meta} />
-      {profit !== null && pct !== null && (
-        <span className={`inline-flex items-center px-1.5 py-px rounded bg-gray-700 text-xs font-semibold tabular-nums leading-none ${profit >= 0 ? "text-green-400" : "text-red-400"}`}>
-          {fmtMoney(profit)}
-        </span>
+    <>
+      <div
+        className={`inline-flex flex-col rounded overflow-hidden cursor-default ${bg}`}
+        onMouseEnter={meta ? (e) => { const r = e.currentTarget.getBoundingClientRect(); setPos({ x: r.left + r.width / 2, y: r.top }); } : undefined}
+        onMouseLeave={meta ? () => setPos(null) : undefined}
+      >
+        <div className="px-1.5 py-0.5 text-center font-semibold text-gray-900 text-xs tabular-nums">
+          {Math.round(pct)}%
+        </div>
+        {profit !== null && (
+          <>
+            <div className="border-t border-black/20 mx-1" />
+            <div className="px-1.5 py-0.5 text-center text-[10px] font-semibold tabular-nums text-gray-900/80 leading-none">
+              {fmtMoney(profit)}
+            </div>
+          </>
+        )}
+      </div>
+      {pos && meta && createPortal(
+        <div
+          style={{ position: "fixed", left: pos.x, top: pos.y - 8, transform: "translate(-50%, -100%)", zIndex: 9999 }}
+          className="bg-gray-900 border border-gray-700 rounded-md px-2.5 py-1.5 text-xs text-gray-300 shadow-xl pointer-events-none whitespace-nowrap"
+        >
+          <div>Spend: <span className="text-white font-medium">{fmtMoney(meta.spend)}</span></div>
+          <div>Revenue: <span className="text-white font-medium">{fmtMoney(meta.revenue)}</span></div>
+          <div>Profit: <span className={`font-medium ${profit! >= 0 ? "text-green-400" : "text-red-400"}`}>{profit! >= 0 ? "+" : ""}{fmtMoney(profit!)}</span></div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 

@@ -60,22 +60,24 @@ function RoiCell({ pct, meta }: { pct: number | null; meta?: { spend: number; re
   const bg = pct >= 120 ? "bg-green-500" : pct > 105 ? "bg-orange-400" : "bg-red-500";
   const profit = meta ? meta.revenue - meta.spend : null;
   return (
-    <div className="flex flex-col items-center gap-1">
-      <span
-        className={`inline-flex items-center justify-center w-full px-1 py-0.5 rounded font-semibold text-gray-900 text-sm cursor-default ${bg}`}
-        onMouseEnter={meta ? (e) => {
-          const r = e.currentTarget.getBoundingClientRect();
-          setPos({ x: r.left + r.width / 2, y: r.top });
-        } : undefined}
+    <>
+      <div
+        className={`flex flex-col w-full rounded overflow-hidden cursor-default ${bg}`}
+        onMouseEnter={meta ? (e) => { const r = e.currentTarget.getBoundingClientRect(); setPos({ x: r.left + r.width / 2, y: r.top }); } : undefined}
         onMouseLeave={meta ? () => setPos(null) : undefined}
       >
-        {Math.round(pct).toFixed(0)}%
-      </span>
-      {profit !== null && (
-        <span className={`inline-flex items-center px-1.5 py-px rounded bg-gray-700 text-xs font-semibold tabular-nums leading-none ${profit >= 0 ? "text-green-400" : "text-red-400"}`}>
-          {profit < 0 ? "-" : ""}${Math.round(Math.abs(profit))}
-        </span>
-      )}
+        <div className="px-1 py-0.5 text-center font-semibold text-gray-900 text-sm tabular-nums">
+          {Math.round(pct)}%
+        </div>
+        {profit !== null && (
+          <>
+            <div className="border-t border-black/20 mx-1" />
+            <div className="px-1 py-0.5 text-center text-xs font-semibold tabular-nums text-gray-900/80 leading-none">
+              {profit < 0 ? "-" : ""}${Math.round(Math.abs(profit))}
+            </div>
+          </>
+        )}
+      </div>
       {pos && meta && createPortal(
         <div
           style={{ position: "fixed", left: pos.x, top: pos.y - 8, transform: "translate(-50%, -100%)", zIndex: 9999 }}
@@ -87,7 +89,7 @@ function RoiCell({ pct, meta }: { pct: number | null; meta?: { spend: number; re
         </div>,
         document.body
       )}
-    </div>
+    </>
   );
 }
 function fmtNum(n: number) { return n.toLocaleString(); }
