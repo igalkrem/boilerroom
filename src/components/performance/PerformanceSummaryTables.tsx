@@ -101,7 +101,7 @@ function RoiCell({ pct, meta }: { pct: number | null; meta?: { spend: number; re
           {Math.round(pct)}%
         </div>
         {profit !== null && (
-          <div className="px-1.5 pb-0.5 text-center text-[11px] font-bold tabular-nums text-white leading-none bg-black/20 rounded-b">
+          <div className="px-1.5 pt-px pb-0.5 text-center text-[11px] font-bold tabular-nums text-white leading-none bg-black/20 rounded-b">
             {profit >= 0 ? "+" : ""}{fmtMoney(profit)}
           </div>
         )}

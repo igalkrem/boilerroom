@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import type { FeedProvider } from "@/types/feed-provider";
 import { resolveProviderKey } from "@/lib/reporting/provider-key";
+import { addChangeEntry, getEntriesForSquad } from "@/lib/campaign-changelog";
 import { DrilldownModal } from "./DrilldownModal";
 import { ColumnSelector } from "./ColumnSelector";
 
@@ -70,7 +71,7 @@ function RoiCell({ pct, meta }: { pct: number | null; meta?: { spend: number; re
           {Math.round(pct)}%
         </div>
         {profit !== null && (
-          <div className="px-1 pb-0.5 text-center text-xs font-bold tabular-nums text-white leading-none bg-black/20 rounded-b">
+          <div className="px-1 pt-px pb-0.5 text-center text-xs font-bold tabular-nums text-white leading-none bg-black/20 rounded-b">
             {profit >= 0 ? "+" : "-"}${Math.round(Math.abs(profit))}
           </div>
         )}
@@ -180,7 +181,35 @@ const METRIC_COLS: Record<string, MetricColDef> = {
   snap_results:             { label: "Results",           sortKey: "snap_results",             render: (r) => fmtNum(r.snap_results),                                                                tdClass: "text-gray-700 dark:text-gray-300" },
   snap_cost_per_result:     { label: "Cost per Result",   sortKey: "snap_cost_per_result",     render: (r) => r.snap_cost_per_result !== null ? fmt$(r.snap_cost_per_result) : "—",                  tdClass: "text-gray-700 dark:text-gray-300" },
   snap_purchase_value_usd:  { label: "Purchase Value",    sortKey: "snap_purchase_value_usd",  render: (r) => fmt$(r.snap_purchase_value_usd),                                                       tdClass: "text-gray-700 dark:text-gray-300" },
+  last_change: {
+    label: "Last Change",
+    render: (r) => {
+      const entry = getEntriesForSquad(r.ad_squad_id)[0];
+      if (!entry) return <span className="text-gray-400 dark:text-gray-600">—</span>;
+      const fieldLabel = entry.field === "budget" ? "Budget" : entry.field === "bid" ? "Bid" : "Status";
+      const ago = timeAgo(entry.timestamp);
+      return (
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <span className="text-xs text-gray-200 whitespace-nowrap">
+            {fieldLabel}&nbsp;
+            <span className="text-gray-400">{entry.oldValue}</span>
+            <span className="text-gray-500 mx-0.5">→</span>
+            <span className="text-white font-medium">{entry.newValue}</span>
+          </span>
+          <span className="text-[10px] text-gray-500 whitespace-nowrap">{ago}</span>
+        </div>
+      );
+    },
+  },
 };
+
+function timeAgo(iso: string): string {
+  const secs = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (secs < 60) return "just now";
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+  return `${Math.floor(secs / 86400)}d ago`;
+}
 
 const FILTERABLE_METRICS = [
   { key: "spend_usd",     label: "Spend ($)" },
@@ -604,6 +633,7 @@ export function PerformanceTable({
     if (isNaN(dollars) || dollars <= 0) { setInlineError("Budget must be > $0"); return; }
     const detail = squadDetails.get(squadId);
     if (!detail) return;
+    const oldValue = `$${microToDollar(detail.daily_budget_micro).toFixed(2)}`;
     setSavingInline(squadId + "_budget");
     setInlineError(null);
     const newMicro = dollarToMicro(dollars);
@@ -615,6 +645,7 @@ export function PerformanceTable({
       });
       if (!res.ok) throw new Error(await readPatchError(res));
       onSquadPatched?.(squadId, { daily_budget_micro: newMicro });
+      addChangeEntry({ squadId, field: "budget", oldValue, newValue: `$${dollars.toFixed(2)}`, timestamp: new Date().toISOString() });
       onSquadUpdated();
     } catch (err) {
       setInlineError(`Budget save failed: ${err instanceof Error ? err.message : "unknown"}`);
@@ -628,6 +659,7 @@ export function PerformanceTable({
     if (isNaN(dollars) || dollars < 0.01) { setInlineError("Min bid $0.01"); return; }
     const detail = squadDetails.get(squadId);
     if (!detail) return;
+    const oldValue = `$${microToDollar(detail.bid_micro).toFixed(2)}`;
     setSavingInline(squadId + "_bid");
     setInlineError(null);
     const newMicro = dollarToMicro(dollars);
@@ -639,6 +671,7 @@ export function PerformanceTable({
       });
       if (!res.ok) throw new Error(await readPatchError(res));
       onSquadPatched?.(squadId, { bid_micro: newMicro });
+      addChangeEntry({ squadId, field: "bid", oldValue, newValue: `$${dollars.toFixed(2)}`, timestamp: new Date().toISOString() });
       onSquadUpdated();
     } catch (err) {
       setInlineError(`Bid save failed: ${err instanceof Error ? err.message : "unknown"}`);
@@ -650,7 +683,8 @@ export function PerformanceTable({
   async function toggleStatus(squadId: string) {
     const detail = squadDetails.get(squadId);
     if (!detail) return;
-    const newStatus = detail.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
+    const oldStatus = detail.status;
+    const newStatus = oldStatus === "ACTIVE" ? "PAUSED" : "ACTIVE";
     try {
       const res = await fetch("/api/snapchat/adsquads", {
         method: "PATCH",
@@ -659,6 +693,7 @@ export function PerformanceTable({
       });
       if (!res.ok) throw new Error(await readPatchError(res));
       onSquadPatched?.(squadId, { status: newStatus });
+      addChangeEntry({ squadId, field: "status", oldValue: oldStatus, newValue: newStatus, timestamp: new Date().toISOString() });
       onSquadUpdated();
     } catch (err) {
       console.error("status toggle failed", err);
