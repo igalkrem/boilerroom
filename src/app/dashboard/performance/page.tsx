@@ -9,6 +9,7 @@ import { DateRangePicker } from "@/components/performance/DateRangePicker";
 import { loadSavedColumns, loadSavedOrder } from "@/components/performance/ColumnSelector";
 import { KpiSummaryBar } from "@/components/performance/KpiSummaryBar";
 import { PerformanceSummaryTables } from "@/components/performance/PerformanceSummaryTables";
+import { SyncStatusBar } from "@/components/performance/SyncStatusBar";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import type { SquadDetail, AggrRow } from "@/components/performance/PerformanceTable";
 import type { SnapAdAccount } from "@/types/snapchat";
@@ -44,10 +45,10 @@ export default function PerformancePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastLoaded, setLastLoaded] = useState<Date | null>(null);
-  const [minutesAgo, setMinutesAgo] = useState<number | null>(null);
 
   const [kpiRows, setKpiRows] = useState<AggrRow[]>([]);
   const [summaryFilter, setSummaryFilter] = useState<{ squadIds: Set<string>; label: string } | null>(null);
+  const [syncRefreshTrigger, setSyncRefreshTrigger] = useState(0);
 
   const tableRows = useMemo(
     () => summaryFilter ? rows.filter(r => summaryFilter.squadIds.has(r.ad_squad_id)) : rows,
@@ -138,6 +139,7 @@ export default function PerformancePage() {
 
     setSyncing(false);
     await loadFromDb(accts, start, end);
+    setSyncRefreshTrigger((n) => n + 1);
     isRefreshing.current = false;
   }, [loadFromDb]);
 
@@ -235,16 +237,6 @@ export default function PerformancePage() {
     }
   }, [rows, activeAccounts, loadSquadDetails]);
 
-  // ── "X min ago" display clock ──────────────────────────────────────────────
-  useEffect(() => {
-    if (!lastLoaded) return;
-    function tick() {
-      setMinutesAgo(Math.floor((Date.now() - lastLoaded!.getTime()) / 60_000));
-    }
-    tick();
-    const id = setInterval(tick, 60_000);
-    return () => clearInterval(id);
-  }, [lastLoaded]);
 
   function handleDateChange(start: string, end: string) {
     setStartDate(start);
@@ -266,29 +258,20 @@ export default function PerformancePage() {
         Full-funnel metrics — Snapchat spend joined with KingsRoad revenue.
       </p>
 
+      <SyncStatusBar
+        onForceRefresh={handleManualRefresh}
+        syncing={syncing}
+        loading={loading}
+        refreshTrigger={syncRefreshTrigger}
+      />
+
       <div className="flex flex-wrap gap-3 mb-5 items-center">
         <DateRangePicker startDate={startDate} endDate={endDate} onChange={handleDateChange} />
-
-        {/* Manual refresh button */}
-        <button
-          onClick={handleManualRefresh}
-          disabled={syncing || loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {syncing ? <Spinner /> : <span>↻</span>}
-          {syncing ? "Syncing…" : "Refresh"}
-        </button>
-
         {loading && !syncing && (
           <div className="flex items-center gap-1.5 text-gray-400 text-sm">
             <Spinner />
             Loading…
           </div>
-        )}
-        {!syncing && !loading && minutesAgo !== null && (
-          <span className="text-xs text-gray-400">
-            Updated {minutesAgo === 0 ? "just now" : `${minutesAgo} min ago`}
-          </span>
         )}
       </div>
 

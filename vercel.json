@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/reporting/cron-sync",
-      "schedule": "*/30 * * * *"
+      "schedule": "17,47 * * * *"
     }
   ]
 }

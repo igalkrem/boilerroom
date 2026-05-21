@@ -6,6 +6,40 @@ import { getAdSquadStats } from "@/lib/snapchat/stats";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// Returns the timestamp of the most recent occurrence of updateMinute in the current hour
+// (or the previous hour if we haven't reached updateMinute yet this hour).
+function lastUpdateWindowTime(updateMinute: number): number {
+  const now = new Date();
+  const t = new Date(now);
+  t.setSeconds(0, 0);
+  t.setMinutes(updateMinute);
+  if (now.getMinutes() < updateMinute) {
+    t.setHours(t.getHours() - 1);
+  }
+  return t.getTime();
+}
+
+// Feed-source skip check (KingsRoad / Predicto). Not bypassable by `force` because
+// re-fetching before the source's next hourly update returns identical data.
+async function shouldSkipFeed(source: "kingsroad" | "predicto", date: string, updateMinute: number): Promise<boolean> {
+  const { rows } = await sql`
+    SELECT last_synced FROM report_sync_log
+    WHERE source = ${source} AND sync_date = ${date} AND ad_account_id = ''
+  `;
+  if (rows.length === 0) return false;
+
+  const raw = rows[0].last_synced;
+  const lastSynced = (raw instanceof Date ? raw : new Date(raw as string)).getTime();
+
+  const dateObj = new Date(date);
+  const yesterday = new Date();
+  yesterday.setUTCHours(0, 0, 0, 0);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+
+  if (dateObj < yesterday) return true;
+  return lastSynced >= lastUpdateWindowTime(updateMinute);
+}
+
 async function shouldSkip(source: string, date: string, adAccountId: string): Promise<boolean> {
   const { rows } = await sql`
     SELECT last_synced FROM report_sync_log
@@ -99,7 +133,7 @@ export async function syncAccount(
   // ── KingsRoad ─────────────────────────────────────────────────────────────
   const kingsroadDatesToFetch: string[] = [];
   for (const date of dates) {
-    if (!force && await shouldSkip("kingsroad", date, "")) {
+    if (await shouldSkipFeed("kingsroad", date, 15)) {
       kingsroadSkipped++;
     } else {
       kingsroadDatesToFetch.push(date);
@@ -150,7 +184,7 @@ export async function syncAccount(
   // ── Predicto ──────────────────────────────────────────────────────────────
   const predictoDatesToFetch: string[] = [];
   for (const date of dates) {
-    if (!force && await shouldSkip("predicto", date, "")) {
+    if (await shouldSkipFeed("predicto", date, 16)) {
       predictoSkipped++;
     } else {
       predictoDatesToFetch.push(date);
