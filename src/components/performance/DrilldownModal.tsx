@@ -121,6 +121,7 @@ export function DrilldownModal({
   const [colOrder, setColOrder]       = useState<string[]>(() => loadDrilldownOrder());
 
   const [activeTab, setActiveTab] = useState<"breakdown" | "history">("breakdown");
+  const [logVersion, setLogVersion] = useState(0);
   const [budgetDraft, setBudgetDraft]   = useState("");
   const [bidDraft, setBidDraft]         = useState("");
   const [editingBudget, setEditingBudget] = useState(false);
@@ -167,6 +168,7 @@ export function DrilldownModal({
     setLocalDetail((d) => d ? { ...d, ...patch } : d);
     onSquadPatched?.(patch);
     addChangeEntry({ squadId: adSquadId, field: "budget", oldValue, newValue: `$${dollars.toFixed(2)}`, timestamp: new Date().toISOString() });
+    setLogVersion((v) => v + 1);
     setEditingBudget(false);
   }
 
@@ -187,6 +189,7 @@ export function DrilldownModal({
     setLocalDetail((d) => d ? { ...d, ...patch } : d);
     onSquadPatched?.(patch);
     addChangeEntry({ squadId: adSquadId, field: "bid", oldValue, newValue: `$${dollars.toFixed(2)}`, timestamp: new Date().toISOString() });
+    setLogVersion((v) => v + 1);
     setEditingBid(false);
   }
 
@@ -205,6 +208,7 @@ export function DrilldownModal({
     setLocalDetail((d) => d ? { ...d, ...patch } : d);
     onSquadPatched?.(patch);
     addChangeEntry({ squadId: adSquadId, field: "status", oldValue: oldStatus, newValue: newStatus, timestamp: new Date().toISOString() });
+    setLogVersion((v) => v + 1);
   }
 
   // totals
@@ -406,8 +410,9 @@ export function DrilldownModal({
           ))}
         </div>
 
-        {/* history tab */}
+        {/* history tab — logVersion in scope to force re-read after local edits */}
         {activeTab === "history" && (() => {
+          void logVersion;
           const entries = getEntriesForSquad(adSquadId);
           return (
             <div className="overflow-auto flex-1 p-6">

@@ -53,7 +53,17 @@ export function loadSavedColumns(): Set<string> {
     if (!raw) return new Set(DEFAULT_VISIBLE_COLUMNS);
     const arr = JSON.parse(raw) as unknown;
     if (!Array.isArray(arr)) return new Set(DEFAULT_VISIBLE_COLUMNS);
-    return new Set(arr as string[]);
+    const saved = new Set(arr as string[]);
+    // Auto-add any DEFAULT_VISIBLE_COLUMNS key that wasn't in the saved order
+    // (meaning it was added after the user last saved their preferences).
+    const rawOrder = localStorage.getItem(LS_ORDER_KEY);
+    const knownAtSaveTime = rawOrder
+      ? new Set((JSON.parse(rawOrder) as string[]))
+      : null;
+    for (const key of DEFAULT_VISIBLE_COLUMNS) {
+      if (knownAtSaveTime && !knownAtSaveTime.has(key)) saved.add(key);
+    }
+    return saved;
   } catch {
     return new Set(DEFAULT_VISIBLE_COLUMNS);
   }
