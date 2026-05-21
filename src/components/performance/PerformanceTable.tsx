@@ -62,7 +62,7 @@ function RoiCell({ pct, meta }: { pct: number | null; meta?: { spend: number; re
   return (
     <div className="flex flex-col items-center gap-px">
       <span
-        className={`inline-flex items-center justify-center w-full px-1 py-px rounded font-semibold text-gray-900 text-sm cursor-default ${bg}`}
+        className={`inline-flex items-center justify-center w-full px-1 py-0 rounded font-semibold text-gray-900 text-sm cursor-default ${bg}`}
         onMouseEnter={meta ? (e) => {
           const r = e.currentTarget.getBoundingClientRect();
           setPos({ x: r.left + r.width / 2, y: r.top });
@@ -72,7 +72,7 @@ function RoiCell({ pct, meta }: { pct: number | null; meta?: { spend: number; re
         {Math.round(pct).toFixed(0)}%
       </span>
       {profit !== null && (
-        <span className={`text-[10px] font-medium tabular-nums leading-tight ${profit >= 0 ? "text-green-400" : "text-red-400"}`}>
+        <span className={`text-xs font-semibold tabular-nums leading-none ${profit >= 0 ? "text-green-400" : "text-red-400"}`}>
           {profit < 0 ? "-" : ""}${Math.round(Math.abs(profit))}
         </span>
       )}
