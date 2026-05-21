@@ -242,8 +242,11 @@ export default function PerformancePage() {
     setStartDate(start);
     setEndDate(end);
     setSummaryFilter(null);
-    // Always force-sync on date change so fresh data is fetched even when DB has stale rows.
-    void syncAndReload(activeAccounts, start, end, true);
+    void loadFromDb(activeAccounts, start, end).then((count) => {
+      if (count === 0) {
+        void syncAndReload(activeAccounts, start, end, true);
+      }
+    });
   }
 
   function handleManualRefresh() {
