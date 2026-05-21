@@ -60,9 +60,9 @@ function RoiCell({ pct, meta }: { pct: number | null; meta?: { spend: number; re
   const bg = pct >= 120 ? "bg-green-500" : pct > 105 ? "bg-orange-400" : "bg-red-500";
   const profit = meta ? meta.revenue - meta.spend : null;
   return (
-    <>
+    <div className="flex flex-col items-center gap-px">
       <span
-        className={`inline-flex items-center justify-center w-full px-1 py-0.5 rounded font-semibold text-gray-900 text-sm cursor-default ${bg}`}
+        className={`inline-flex items-center justify-center w-full px-1 py-px rounded font-semibold text-gray-900 text-sm cursor-default ${bg}`}
         onMouseEnter={meta ? (e) => {
           const r = e.currentTarget.getBoundingClientRect();
           setPos({ x: r.left + r.width / 2, y: r.top });
@@ -71,6 +71,11 @@ function RoiCell({ pct, meta }: { pct: number | null; meta?: { spend: number; re
       >
         {Math.round(pct).toFixed(0)}%
       </span>
+      {profit !== null && (
+        <span className={`text-[10px] font-medium tabular-nums leading-tight ${profit >= 0 ? "text-green-400" : "text-red-400"}`}>
+          {profit < 0 ? "-" : ""}${Math.round(Math.abs(profit))}
+        </span>
+      )}
       {pos && meta && createPortal(
         <div
           style={{ position: "fixed", left: pos.x, top: pos.y - 8, transform: "translate(-50%, -100%)", zIndex: 9999 }}
@@ -82,7 +87,7 @@ function RoiCell({ pct, meta }: { pct: number | null; meta?: { spend: number; re
         </div>,
         document.body
       )}
-    </>
+    </div>
   );
 }
 function fmtNum(n: number) { return n.toLocaleString(); }
@@ -149,7 +154,7 @@ interface MetricColDef {
 const METRIC_COLS: Record<string, MetricColDef> = {
   spend_usd:           { label: "Spend ($)",          sortKey: "spend_usd",           render: (r) => fmt$(r.spend_usd),   tdClass: "text-gray-900 dark:text-gray-100 font-medium" },
   revenue_usd:         { label: "Revenue ($)",         sortKey: "revenue_usd",         render: (r) => fmt$(r.revenue_usd), tdClass: "text-gray-900 dark:text-gray-100" },
-  roi_pct:             { label: "ROI",   sortKey: "roi_pct",  render: (r) => <RoiCell pct={r.roi_pct} />, thClass: "pl-3 pr-[1px] border-l border-gray-200 dark:border-gray-600", padX: "pl-3 pr-[1px] border-l border-gray-100 dark:border-gray-700/50" },
+  roi_pct:             { label: "ROI",   sortKey: "roi_pct",  render: (r) => <RoiCell pct={r.roi_pct} meta={{ spend: r.spend_usd, revenue: r.revenue_usd }} />, thClass: "pl-3 pr-[1px] border-l border-gray-200 dark:border-gray-600", padX: "pl-3 pr-[1px] border-l border-gray-100 dark:border-gray-700/50" },
   roi_1d:              { label: "-1D",   sortKey: "roi_1d",   render: (r) => <RoiCell pct={r.roi_1d}  meta={r.spend_1d  !== null ? { spend: r.spend_1d,  revenue: r.revenue_1d! } : undefined} />, thClass: "px-[1px]", padX: "px-[1px]" },
   roi_2d:              { label: "-2D",   sortKey: "roi_2d",   render: (r) => <RoiCell pct={r.roi_2d}  meta={r.spend_2d  !== null ? { spend: r.spend_2d,  revenue: r.revenue_2d! } : undefined} />, thClass: "px-[1px]", padX: "px-[1px]" },
   roi_3d:              { label: "-3D",   sortKey: "roi_3d",   render: (r) => <RoiCell pct={r.roi_3d}  meta={r.spend_3d  !== null ? { spend: r.spend_3d,  revenue: r.revenue_3d! } : undefined} />, thClass: "pl-[1px] pr-3", padX: "pl-[1px] pr-3" },
