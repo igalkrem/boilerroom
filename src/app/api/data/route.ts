@@ -10,6 +10,7 @@ const VALID_KEYS = [
   "br_feed_providers",
   "br_articles",
   "br_ad_accounts_v1",
+  "br_campaign_changelog",
 ] as const;
 type DataKey = (typeof VALID_KEYS)[number];
 

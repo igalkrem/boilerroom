@@ -5,6 +5,7 @@ import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import type { SquadDetail } from "./PerformanceTable";
 import { Spinner } from "@/components/ui";
 import { ColumnSelector } from "./ColumnSelector";
+import { addChangeEntry, getEntriesForSquad } from "@/lib/campaign-changelog";
 
 const DRILLDOWN_COLUMNS = [
   { key: "spend",                  label: "Spend" },
@@ -119,6 +120,7 @@ export function DrilldownModal({
   const [visibleCols, setVisibleCols] = useState<Set<string>>(() => loadDrilldownCols());
   const [colOrder, setColOrder]       = useState<string[]>(() => loadDrilldownOrder());
 
+  const [activeTab, setActiveTab] = useState<"breakdown" | "history">("breakdown");
   const [budgetDraft, setBudgetDraft]   = useState("");
   const [bidDraft, setBidDraft]         = useState("");
   const [editingBudget, setEditingBudget] = useState(false);
@@ -152,6 +154,7 @@ export function DrilldownModal({
     const dollars = parseFloat(budgetDraft);
     if (isNaN(dollars) || dollars <= 0) { setPatchError("Budget must be > $0"); return; }
     if (!localDetail) return;
+    const oldValue = `$${microToDollar(localDetail.daily_budget_micro).toFixed(2)}`;
     setSaving("budget"); setPatchError(null);
     const micro = dollarToMicro(dollars);
     const res = await fetch("/api/snapchat/adsquads", {
@@ -163,6 +166,7 @@ export function DrilldownModal({
     const patch = { daily_budget_micro: micro };
     setLocalDetail((d) => d ? { ...d, ...patch } : d);
     onSquadPatched?.(patch);
+    addChangeEntry({ squadId: adSquadId, field: "budget", oldValue, newValue: `$${dollars.toFixed(2)}`, timestamp: new Date().toISOString() });
     setEditingBudget(false);
   }
 
@@ -170,6 +174,7 @@ export function DrilldownModal({
     const dollars = parseFloat(bidDraft);
     if (isNaN(dollars) || dollars < 0.01) { setPatchError("Min bid $0.01"); return; }
     if (!localDetail) return;
+    const oldValue = `$${microToDollar(localDetail.bid_micro).toFixed(2)}`;
     setSaving("bid"); setPatchError(null);
     const micro = dollarToMicro(dollars);
     const res = await fetch("/api/snapchat/adsquads", {
@@ -181,12 +186,14 @@ export function DrilldownModal({
     const patch = { bid_micro: micro };
     setLocalDetail((d) => d ? { ...d, ...patch } : d);
     onSquadPatched?.(patch);
+    addChangeEntry({ squadId: adSquadId, field: "bid", oldValue, newValue: `$${dollars.toFixed(2)}`, timestamp: new Date().toISOString() });
     setEditingBid(false);
   }
 
   async function toggleStatus() {
     if (!localDetail) return;
-    const newStatus = localDetail.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
+    const oldStatus = localDetail.status;
+    const newStatus = oldStatus === "ACTIVE" ? "PAUSED" : "ACTIVE";
     setSaving("status"); setPatchError(null);
     const res = await fetch("/api/snapchat/adsquads", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
@@ -197,6 +204,7 @@ export function DrilldownModal({
     const patch = { status: newStatus } as Partial<SquadDetail>;
     setLocalDetail((d) => d ? { ...d, ...patch } : d);
     onSquadPatched?.(patch);
+    addChangeEntry({ squadId: adSquadId, field: "status", oldValue: oldStatus, newValue: newStatus, timestamp: new Date().toISOString() });
   }
 
   // totals
@@ -381,8 +389,67 @@ export function DrilldownModal({
           </div>
         )}
 
-        {/* table */}
-        <div className="overflow-auto flex-1">
+        {/* tab bar */}
+        <div className="flex border-b border-gray-200 dark:border-gray-700 px-6">
+          {(["breakdown", "history"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2.5 text-xs font-semibold capitalize border-b-2 transition-colors ${
+                activeTab === tab
+                  ? "border-blue-500 text-blue-500"
+                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+              }`}
+            >
+              {tab === "breakdown" ? "Daily Breakdown" : "History"}
+            </button>
+          ))}
+        </div>
+
+        {/* history tab */}
+        {activeTab === "history" && (() => {
+          const entries = getEntriesForSquad(adSquadId);
+          return (
+            <div className="overflow-auto flex-1 p-6">
+              {entries.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">No changes recorded yet.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
+                    <tr>
+                      {["When", "Field", "Before", "After"].map((h) => (
+                        <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {entries.map((e) => (
+                      <tr key={e.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <td className="px-4 py-2.5 text-gray-500 dark:text-gray-400 whitespace-nowrap text-xs">
+                          {new Date(e.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                            e.field === "budget" ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300" :
+                            e.field === "bid"    ? "bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300" :
+                                                   "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300"
+                          }`}>
+                            {e.field === "budget" ? "Budget" : e.field === "bid" ? "Bid" : "Status"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-gray-400 dark:text-gray-500 text-xs whitespace-nowrap">{e.oldValue}</td>
+                        <td className="px-4 py-2.5 text-gray-900 dark:text-gray-100 font-medium text-xs whitespace-nowrap">{e.newValue}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* breakdown tab */}
+        <div className={`overflow-auto flex-1 ${activeTab !== "breakdown" ? "hidden" : ""}`}>
           {loading && (
             <div className="flex items-center justify-center py-16 gap-2 text-gray-400 text-sm">
               <Spinner /> Loading…

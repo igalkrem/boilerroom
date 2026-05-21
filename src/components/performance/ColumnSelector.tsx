@@ -32,6 +32,7 @@ const ALL_COLUMNS = [
   { key: "page_views",           label: "Page Views" },
   { key: "domain_name",          label: "Domain" },
   { key: "video_views",          label: "Video Views" },
+  { key: "last_change",          label: "Last Change" },
 ] as const;
 
 const ALL_KEYS = ALL_COLUMNS.map((c) => c.key as string);
@@ -42,7 +43,7 @@ const LS_ORDER_KEY = "br_perf_cols_order";
 
 export const DEFAULT_VISIBLE_COLUMNS = new Set<string>([
   "spend_usd", "revenue_usd", "roi_pct", "roi_1d", "roi_2d", "roi_3d",
-  "swipes", "funnel_clicks", "rpc", "profit", "ctr",
+  "swipes", "funnel_clicks", "rpc", "profit", "ctr", "last_change",
 ]);
 
 export function loadSavedColumns(): Set<string> {
