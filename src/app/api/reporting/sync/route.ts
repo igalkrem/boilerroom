@@ -3,6 +3,8 @@ import { z } from "zod";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import { syncAccount } from "@/lib/reporting/sync-logic";
 
+export const maxDuration = 120;
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const syncBodySchema = z.object({
   adAccountId: z.string().min(1),

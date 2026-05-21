@@ -108,8 +108,13 @@ export default function PerformancePage() {
   const syncAndReload = useCallback(async (accts: SnapAdAccount[], start: string, end: string, force = true) => {
     if (accts.length === 0 || isRefreshing.current) return;
     isRefreshing.current = true;
-    setSyncing(true);
     setError(null);
+
+    // Show whatever is already in the DB immediately — don't make the user wait
+    // for the full sync before seeing any data.
+    await loadFromDb(accts, start, end);
+
+    setSyncing(true);
 
     const histStart = dateMinus(start, 3);
     const histEnd = dateMinus(start, 1);
