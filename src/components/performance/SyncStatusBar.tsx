@@ -19,6 +19,9 @@ function minutesAgo(ts: string | null): number | null {
   return Math.floor((Date.now() - new Date(ts).getTime()) / 60_000);
 }
 
+// Feeds sync every ~60 min (cron :17). Older than 75 min = a cron cycle was missed.
+const FEED_OVERDUE_MINUTES = 75;
+
 function StatusPill({
   label,
   ts,
@@ -26,7 +29,7 @@ function StatusPill({
 }: {
   label: string;
   ts: string | null;
-  dotColor: "green" | "amber" | "gray";
+  dotColor: "green" | "amber" | "red" | "gray";
 }) {
   const mins = minutesAgo(ts);
   const dotClass =
@@ -34,13 +37,17 @@ function StatusPill({
       ? "bg-green-500"
       : dotColor === "amber"
       ? "bg-amber-400"
+      : dotColor === "red"
+      ? "bg-red-500"
       : "bg-gray-600";
+  const timeClass =
+    dotColor === "red" ? "text-red-400" : ts ? "text-gray-400" : "text-gray-600";
 
   return (
     <span className="flex items-center gap-1 text-gray-500">
       <span className="text-gray-600">{label}</span>
       <span className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotClass}`} />
-      <span className={ts ? "text-gray-400" : "text-gray-600"}>
+      <span className={timeClass}>
         {mins === null ? "—" : mins === 0 ? "just now" : `${mins}m`}
       </span>
     </span>
@@ -48,7 +55,9 @@ function StatusPill({
 }
 
 function FeedRow({ name, status }: { name: string; status: FeedStatus }) {
-  const feedDot = status.feedLastSynced ? "green" : "gray";
+  const feedMins = minutesAgo(status.feedLastSynced);
+  const feedOverdue = feedMins !== null && feedMins > FEED_OVERDUE_MINUTES;
+  const feedDot = feedOverdue ? "red" : status.feedLastSynced ? "green" : "gray";
   const snapDot = status.snapLastSynced
     ? status.inSync
       ? "green"
