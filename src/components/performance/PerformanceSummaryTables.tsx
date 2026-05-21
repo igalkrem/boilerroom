@@ -88,10 +88,10 @@ interface Props {
 function RoiCell({ pct, meta }: { pct: number | null; meta?: { spend: number; revenue: number } }) {
   const profit = meta ? meta.revenue - meta.spend : null;
   return (
-    <div className="flex flex-col items-center gap-0.5">
+    <div className="flex flex-col items-center gap-1">
       <RoiPill pct={pct} meta={meta} />
       {profit !== null && pct !== null && (
-        <span className={`text-[10px] font-medium tabular-nums ${profit >= 0 ? "text-green-400" : "text-red-400"}`}>
+        <span className={`inline-flex items-center px-1.5 py-px rounded bg-gray-700 text-xs font-semibold tabular-nums leading-none ${profit >= 0 ? "text-green-400" : "text-red-400"}`}>
           {fmtMoney(profit)}
         </span>
       )}
