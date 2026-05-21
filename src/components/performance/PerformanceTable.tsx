@@ -62,20 +62,17 @@ function RoiCell({ pct, meta }: { pct: number | null; meta?: { spend: number; re
   return (
     <>
       <div
-        className={`flex flex-col w-full rounded overflow-hidden cursor-default ${bg}`}
+        className={`flex flex-col w-full rounded cursor-default ${bg}`}
         onMouseEnter={meta ? (e) => { const r = e.currentTarget.getBoundingClientRect(); setPos({ x: r.left + r.width / 2, y: r.top }); } : undefined}
         onMouseLeave={meta ? () => setPos(null) : undefined}
       >
-        <div className="px-1 py-0.5 text-center font-semibold text-gray-900 text-sm tabular-nums">
+        <div className={`px-1 text-center font-bold text-gray-900 text-sm tabular-nums ${profit !== null ? "pt-0.5 pb-0" : "py-0.5"}`}>
           {Math.round(pct)}%
         </div>
         {profit !== null && (
-          <>
-            <div className="border-t border-black/20 mx-1" />
-            <div className="px-1 py-0.5 text-center text-xs font-semibold tabular-nums text-gray-900/80 leading-none">
-              {profit < 0 ? "-" : ""}${Math.round(Math.abs(profit))}
-            </div>
-          </>
+          <div className="px-1 pb-0.5 text-center text-xs font-bold tabular-nums text-gray-900 leading-none">
+            {profit >= 0 ? "+" : "-"}${Math.round(Math.abs(profit))}
+          </div>
         )}
       </div>
       {pos && meta && createPortal(
