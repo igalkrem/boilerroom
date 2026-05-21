@@ -10,15 +10,6 @@ interface KpiRow {
   funnel_clicks: number;
 }
 
-interface KpiCard {
-  label: string;
-  value: string;
-  valueClass: string;
-  cardClass: string;
-  subValue?: string;
-  subValueClass?: string;
-}
-
 interface Props {
   rows: KpiRow[];
   isLoading: boolean;
@@ -81,7 +72,7 @@ export function KpiSummaryBar({ rows, isLoading }: Props) {
     );
   }
 
-  const cards: KpiCard[] = [
+  const cards = [
     {
       label: "Amount Spent",
       value: fmt$(totals.spend),
@@ -99,8 +90,6 @@ export function KpiSummaryBar({ rows, isLoading }: Props) {
       value: fmtPct(totals.roi),
       valueClass: roiValueColor(totals.roi),
       cardClass: `${roiBg(totals.roi) || "bg-white dark:bg-gray-800"}`,
-      subValue: fmt$(totals.profit),
-      subValueClass: profitColor(totals.profit),
     },
     {
       label: "Profit",
@@ -143,11 +132,6 @@ export function KpiSummaryBar({ rows, isLoading }: Props) {
         >
           <p className="text-xs text-gray-500 mb-0.5 whitespace-nowrap">{card.label}</p>
           <p className={`text-base font-bold whitespace-nowrap ${card.valueClass}`}>{card.value}</p>
-          {card.subValue && (
-            <p className={`text-xs font-medium whitespace-nowrap mt-0.5 opacity-80 ${card.subValueClass}`}>
-              {card.subValue}
-            </p>
-          )}
         </div>
       ))}
     </div>

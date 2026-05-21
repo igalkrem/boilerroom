@@ -85,6 +85,20 @@ interface Props {
 
 // ── ROI pill with hover tooltip ────────────────────────────────────────────
 
+function RoiCell({ pct, meta }: { pct: number | null; meta?: { spend: number; revenue: number } }) {
+  const profit = meta ? meta.revenue - meta.spend : null;
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <RoiPill pct={pct} meta={meta} />
+      {profit !== null && pct !== null && (
+        <span className={`text-[10px] font-medium tabular-nums ${profit >= 0 ? "text-green-400" : "text-red-400"}`}>
+          {fmtMoney(profit)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function RoiPill({ pct, meta }: { pct: number | null; meta?: { spend: number; revenue: number } }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   if (pct === null) return <span className="text-gray-500 text-xs">—</span>;
@@ -260,14 +274,14 @@ function RoiTable({
                   <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.revenue)}</td>
                   <td className={`px-2 py-1.5 text-right whitespace-nowrap ${r.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(r.profit)}</td>
                   <td className="px-2 py-1.5 text-center"><LiveBadge count={liveCount} /></td>
-                  <td className="px-2 py-1.5 text-center">
-                    <RoiPill pct={r.roi} meta={{ spend: r.spend, revenue: r.revenue }} />
+                  <td className="px-2 py-2 text-center">
+                    <RoiCell pct={r.roi} meta={{ spend: r.spend, revenue: r.revenue }} />
                   </td>
-                  <td className="px-2 py-1.5 text-center">
-                    <RoiPill pct={r.roi_1d} meta={r.spend_1d !== undefined ? { spend: r.spend_1d, revenue: r.revenue_1d! } : undefined} />
+                  <td className="px-2 py-2 text-center">
+                    <RoiCell pct={r.roi_1d} meta={r.spend_1d !== undefined ? { spend: r.spend_1d, revenue: r.revenue_1d! } : undefined} />
                   </td>
-                  <td className="px-2 py-1.5 text-center">
-                    <RoiPill pct={r.roi_2d} meta={r.spend_2d !== undefined ? { spend: r.spend_2d, revenue: r.revenue_2d! } : undefined} />
+                  <td className="px-2 py-2 text-center">
+                    <RoiCell pct={r.roi_2d} meta={r.spend_2d !== undefined ? { spend: r.spend_2d, revenue: r.revenue_2d! } : undefined} />
                   </td>
                 </tr>
               );
@@ -282,14 +296,14 @@ function RoiTable({
                 <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.revenue)}</td>
                 <td className={`px-2 py-1.5 text-right font-semibold whitespace-nowrap ${totalRow.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(totalRow.profit)}</td>
                 <td className="px-2 py-1.5 text-center"><LiveBadge count={totalLive} /></td>
-                <td className="px-2 py-1.5 text-center">
-                  <RoiPill pct={totalRow.roi} meta={{ spend: totalRow.spend, revenue: totalRow.revenue }} />
+                <td className="px-2 py-2 text-center">
+                  <RoiCell pct={totalRow.roi} meta={{ spend: totalRow.spend, revenue: totalRow.revenue }} />
                 </td>
-                <td className="px-2 py-1.5 text-center">
-                  <RoiPill pct={totalRow.roi_1d} meta={totalRow.spend_1d !== undefined ? { spend: totalRow.spend_1d, revenue: totalRow.revenue_1d! } : undefined} />
+                <td className="px-2 py-2 text-center">
+                  <RoiCell pct={totalRow.roi_1d} meta={totalRow.spend_1d !== undefined ? { spend: totalRow.spend_1d, revenue: totalRow.revenue_1d! } : undefined} />
                 </td>
-                <td className="px-2 py-1.5 text-center">
-                  <RoiPill pct={totalRow.roi_2d} meta={totalRow.spend_2d !== undefined ? { spend: totalRow.spend_2d, revenue: totalRow.revenue_2d! } : undefined} />
+                <td className="px-2 py-2 text-center">
+                  <RoiCell pct={totalRow.roi_2d} meta={totalRow.spend_2d !== undefined ? { spend: totalRow.spend_2d, revenue: totalRow.revenue_2d! } : undefined} />
                 </td>
               </tr>
             </tfoot>
