@@ -184,7 +184,7 @@ export async function syncAccount(
   // ── Predicto ──────────────────────────────────────────────────────────────
   const predictoDatesToFetch: string[] = [];
   for (const date of dates) {
-    if (await shouldSkipFeed("predicto", date, 16)) {
+    if (await shouldSkipFeed("predicto", date, 46)) {
       predictoSkipped++;
     } else {
       predictoDatesToFetch.push(date);

@@ -1,9 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAllUserTokens, upsertUserToken } from "@/lib/db";
+import { getAllUserTokens, upsertUserToken, sql } from "@/lib/db";
 import { refreshAccessToken } from "@/lib/snapchat/auth";
 import { syncAccount } from "@/lib/reporting/sync-logic";
 import { verifyCronSecret } from "@/lib/db/token-crypto";
 import { syncChannelPausedStatus } from "@/lib/channel-status-sync";
+
+async function getAccountNetwork(adAccountId: string): Promise<"kingsroad" | "predicto" | "unknown"> {
+  const [kr, pred] = await Promise.all([
+    sql`SELECT 1 FROM snapchat_ad_squad_stats sas
+        INNER JOIN kingsroad_report kr ON kr.custom_channel_name = sas.ad_squad_id
+        WHERE sas.ad_account_id = ${adAccountId} LIMIT 1`,
+    sql`SELECT 1 FROM snapchat_ad_squad_stats sas
+        INNER JOIN feed_provider_channels fpc ON fpc.ad_squad_snap_id = sas.ad_squad_id
+        WHERE sas.ad_account_id = ${adAccountId} LIMIT 1`,
+  ]);
+  if (kr.rows.length > 0) return "kingsroad";
+  if (pred.rows.length > 0) return "predicto";
+  return "unknown";
+}
 
 export const maxDuration = 300;
 
@@ -29,6 +43,11 @@ export async function GET(request: NextRequest) {
 
   const today = todayStr();
   const yesterday = yesterdayStr();
+
+  // :17 run = KingsRoad window (sync KingsRoad feed + KingsRoad Snap accounts)
+  // :47 run = Predicto window  (sync Predicto feed + Predicto Snap accounts)
+  const isKingsRoadRun = new Date().getUTCMinutes() < 30;
+
   let totalUsers = 0;
   let totalAccounts = 0;
 
@@ -61,8 +80,23 @@ export async function GET(request: NextRequest) {
         console.error(`[cron-sync] channel status sync failed for user ${user.google_user_id}:`, err);
       }
 
+      // Classify accounts by network, then only sync the ones relevant to this window.
+      // Unknown accounts (no data yet) are included in both windows as a fallback.
+      const classified = await Promise.all(
+        user.ad_account_ids.map(async ({ id, timezone }) => ({
+          id,
+          timezone,
+          network: await getAccountNetwork(id),
+        }))
+      );
+
+      const accountsToSync = classified.filter(({ network }) =>
+        network === "unknown" ||
+        (isKingsRoadRun ? network === "kingsroad" : network === "predicto")
+      );
+
       await Promise.allSettled(
-        user.ad_account_ids.map(async ({ id, timezone }) => {
+        accountsToSync.map(async ({ id, timezone }) => {
           try {
             await syncAccount(id, yesterday, today, timezone || "America/Los_Angeles", accessToken, true);
             totalAccounts++;
