@@ -25,9 +25,9 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function yesterdayStr() {
+function nDaysAgoStr(n: number) {
   const d = new Date();
-  d.setUTCDate(d.getUTCDate() - 1);
+  d.setUTCDate(d.getUTCDate() - n);
   return d.toISOString().slice(0, 10);
 }
 
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
   }
 
   const today = todayStr();
-  const yesterday = yesterdayStr();
+  const startDate = nDaysAgoStr(3); // last 4 days: ensures partial syncs from prior days get healed
 
   // :17 run = KingsRoad window (sync KingsRoad feed + KingsRoad Snap accounts)
   // :47 run = Predicto window  (sync Predicto feed + Predicto Snap accounts)
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
       await Promise.allSettled(
         accountsToSync.map(async ({ id, timezone }) => {
           try {
-            await syncAccount(id, yesterday, today, timezone || "America/Los_Angeles", accessToken, true);
+            await syncAccount(id, startDate, today, timezone || "America/Los_Angeles", accessToken, true);
             totalAccounts++;
           } catch (err) {
             console.error(`[cron-sync] sync failed for account ${id}:`, err);
