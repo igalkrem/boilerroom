@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
   }
 
   const today = todayStr();
-  const startDate = nDaysAgoStr(3); // last 4 days: ensures partial syncs from prior days get healed
+  const startDate = nDaysAgoStr(1); // today + yesterday
 
   // :17 run = KingsRoad window (sync KingsRoad feed + KingsRoad Snap accounts)
   // :47 run = Predicto window  (sync Predicto feed + Predicto Snap accounts)
