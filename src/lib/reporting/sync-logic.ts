@@ -6,6 +6,22 @@ import { getAdSquadStats } from "@/lib/snapchat/stats";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// Run async tasks over items with a cap on how many run at once.
+async function withConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<void>
+): Promise<void> {
+  const queue = [...items];
+  async function worker() {
+    while (queue.length > 0) {
+      const item = queue.shift()!;
+      await fn(item);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+}
+
 // Returns the timestamp of the most recent occurrence of updateMinute in the current hour
 // (or the previous hour if we haven't reached updateMinute yet this hour).
 function lastUpdateWindowTime(updateMinute: number): number {
@@ -262,13 +278,15 @@ export async function syncAccount(
 
       // Fetch stats for all squads (active and paused) — a paused squad may have
       // un-synced historical spend from dates when it was still active.
-      await Promise.all(
-        adSquads.map(async (squad) => {
-          try {
-            const statRows = await getAdSquadStats(squad.id, snapStart, snapEnd, timezone, accessToken);
-            debugStatRows += statRows.length;
-            for (const r of statRows) {
-              await sql`
+      // Cap at 5 concurrent API calls to avoid triggering the rate limiter backoff chain.
+      await withConcurrency(adSquads, 5, async (squad) => {
+        try {
+          const statRows = await getAdSquadStats(squad.id, snapStart, snapEnd, timezone, accessToken);
+          debugStatRows += statRows.length;
+          // Parallelize DB inserts within the squad — no ordering dependency.
+          await Promise.all(
+            statRows.map((r) =>
+              sql`
                 INSERT INTO snapchat_ad_squad_stats
                   (ad_squad_id, ad_account_id, ad_squad_name, stat_date, country_code,
                    impressions, swipes, spend_micro, video_views,
@@ -287,15 +305,15 @@ export async function syncAccount(
                   conversion_purchases = EXCLUDED.conversion_purchases,
                   conversion_purchase_value = EXCLUDED.conversion_purchase_value,
                   fetched_at = NOW()
-              `;
-            }
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error(`[reporting/sync] stats error for squad ${squad.id}:`, err);
-            debugSquadErrors.push({ id: squad.id, error: msg });
-          }
-        })
-      );
+              `
+            )
+          );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[reporting/sync] stats error for squad ${squad.id}:`, err);
+          debugSquadErrors.push({ id: squad.id, error: msg });
+        }
+      });
 
       const allSquadsFailed = adSquads.length > 0 && debugSquadErrors.length === adSquads.length;
       if (!allSquadsFailed) {
