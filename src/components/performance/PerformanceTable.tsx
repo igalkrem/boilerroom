@@ -255,6 +255,7 @@ export function PerformanceTable({
   const [drilldown, setDrilldown] = useState<{ id: string; name: string; accountId: string } | null>(null);
   const [filterQuery, setFilterQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const lastCheckedIdx = useRef<number | null>(null);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [hiddenSquadIds, setHiddenSquadIds] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
@@ -826,12 +827,14 @@ export function PerformanceTable({
     } else {
       setSelectedIds(new Set(filtered.map(r => r.ad_squad_id)));
     }
+    lastCheckedIdx.current = null;
   }
 
   function clearSelection() {
     setSelectedIds(new Set());
     setShowBulkEdit(false);
     setBulkError(null);
+    lastCheckedIdx.current = null;
   }
 
   function downloadCsv() {
@@ -1427,7 +1430,7 @@ export function PerformanceTable({
             </thead>
 
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-900">
-              {filtered.map((r) => {
+              {filtered.map((r, rowIndex) => {
                 const detail = squadDetails.get(r.ad_squad_id);
                 const isSelected = selectedIds.has(r.ad_squad_id);
                 const isActive = detail ? detail.status === "ACTIVE" : false;
@@ -1450,10 +1453,22 @@ export function PerformanceTable({
                       <input
                         type="checkbox"
                         checked={isSelected}
-                        onChange={() => {
+                        onChange={() => {/* controlled via onClick */}}
+                        onClick={(e) => {
+                          const willCheck = !selectedIds.has(r.ad_squad_id);
                           const next = new Set(selectedIds);
-                          if (next.has(r.ad_squad_id)) next.delete(r.ad_squad_id);
-                          else next.add(r.ad_squad_id);
+                          if (e.shiftKey && lastCheckedIdx.current !== null) {
+                            const lo = Math.min(lastCheckedIdx.current, rowIndex);
+                            const hi = Math.max(lastCheckedIdx.current, rowIndex);
+                            for (let i = lo; i <= hi; i++) {
+                              if (willCheck) next.add(filtered[i].ad_squad_id);
+                              else next.delete(filtered[i].ad_squad_id);
+                            }
+                          } else {
+                            if (willCheck) next.add(r.ad_squad_id);
+                            else next.delete(r.ad_squad_id);
+                          }
+                          lastCheckedIdx.current = rowIndex;
                           setSelectedIds(next);
                         }}
                         className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
