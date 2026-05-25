@@ -764,6 +764,19 @@ export function PerformanceTable({
           patch = { status: bulkStatus };
         }
 
+        let oldValue = "";
+        let newValue = "";
+        if (field === "budget" && patch.daily_budget_micro !== undefined) {
+          oldValue = `$${microToDollar(detail.daily_budget_micro).toFixed(2)}`;
+          newValue = `$${microToDollar(patch.daily_budget_micro).toFixed(2)}`;
+        } else if (field === "bid" && patch.bid_micro !== undefined) {
+          oldValue = `$${microToDollar(detail.bid_micro).toFixed(2)}`;
+          newValue = `$${microToDollar(patch.bid_micro).toFixed(2)}`;
+        } else if (field === "status" && patch.status) {
+          oldValue = detail.status;
+          newValue = patch.status;
+        }
+
         const body: Record<string, unknown> = { adAccountId: detail.ad_account_id, squadId, ...patch };
         const res = await fetch("/api/snapchat/adsquads", {
           method: "PATCH",
@@ -771,7 +784,7 @@ export function PerformanceTable({
           body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error(await readPatchError(res));
-        return { squadId, patch };
+        return { squadId, patch, changeField: field, oldValue, newValue };
       })
     );
 
@@ -780,6 +793,13 @@ export function PerformanceTable({
     for (const r of results) {
       if (r.status === "fulfilled") {
         onSquadPatched?.(r.value.squadId, r.value.patch);
+        addChangeEntry({
+          squadId: r.value.squadId,
+          field: r.value.changeField,
+          oldValue: r.value.oldValue,
+          newValue: r.value.newValue,
+          timestamp: new Date().toISOString(),
+        });
       } else {
         failures++;
         if (!firstErrorMsg) firstErrorMsg = r.reason instanceof Error ? r.reason.message : String(r.reason);
