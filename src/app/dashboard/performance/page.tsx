@@ -225,9 +225,21 @@ export default function PerformancePage() {
     if (activeAccounts.length > 0 && !didLoad.current) {
       didLoad.current = true;
       void loadFromDb(activeAccounts, startDate, endDate).then((count) => {
-        // If DB has no data for this range, auto-sync to seed it.
         if (count === 0) {
+          // No data at all — seed from APIs.
           void syncAndReload(activeAccounts, startDate, endDate, true);
+        } else {
+          // Cron-miss safety net: auto-heal if any feed is overdue (>75 min).
+          void fetch("/api/reporting/sync-status")
+            .then((r) => r.json())
+            .then((s: { kingsroad: { feedLastSynced: string | null }; predicto: { feedLastSynced: string | null } }) => {
+              const overdue = (ts: string | null) =>
+                ts !== null && (Date.now() - new Date(ts).getTime()) / 60_000 > 75;
+              if (overdue(s.kingsroad.feedLastSynced) || overdue(s.predicto.feedLastSynced)) {
+                void syncAndReload(activeAccounts, startDate, endDate, true);
+              }
+            })
+            .catch(() => {});
         }
       });
       void loadLast30Days(activeAccounts);
