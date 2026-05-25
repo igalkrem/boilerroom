@@ -277,6 +277,8 @@ export function PerformanceTable({
   const [providerDropOpen, setProviderDropOpen] = useState(false);
   const articleDropRef = useRef<HTMLDivElement>(null);
   const providerDropRef = useRef<HTMLDivElement>(null);
+  const [articleSearch, setArticleSearch] = useState("");
+  const [providerSearch, setProviderSearch] = useState("");
 
   function toggleHideSquad(squadId: string) {
     setHiddenSquadIds((prev) => {
@@ -308,7 +310,7 @@ export function PerformanceTable({
   }, [providers]);
 
   useEffect(() => {
-    if (!articleDropOpen) return;
+    if (!articleDropOpen) { setArticleSearch(""); return; }
     function h(e: MouseEvent) {
       if (articleDropRef.current && !articleDropRef.current.contains(e.target as Node)) setArticleDropOpen(false);
     }
@@ -317,7 +319,7 @@ export function PerformanceTable({
   }, [articleDropOpen]);
 
   useEffect(() => {
-    if (!providerDropOpen) return;
+    if (!providerDropOpen) { setProviderSearch(""); return; }
     function h(e: MouseEvent) {
       if (providerDropRef.current && !providerDropRef.current.contains(e.target as Node)) setProviderDropOpen(false);
     }
@@ -364,6 +366,10 @@ export function PerformanceTable({
   const [bulkStatus, setBulkStatus] = useState<"ACTIVE" | "PAUSED">("ACTIVE");
   const [bulkSaving, setBulkSaving] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
+  const [budgetMode, setBudgetMode] = useState<"set" | "add" | "pct">("set");
+  const [budgetDir, setBudgetDir] = useState<"+" | "-">("+");
+  const [bidMode, setBidMode] = useState<"set" | "add" | "pct">("set");
+  const [bidDir, setBidDir] = useState<"+" | "-">("+");
 
   const y1 = dateMinus(startDate, 1);
   const y2 = dateMinus(startDate, 2);
@@ -705,23 +711,59 @@ export function PerformanceTable({
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     setBulkError(null);
+
     if (field === "budget") {
       const v = parseFloat(bulkBudget);
-      if (isNaN(v) || v <= 0) { setBulkError("Budget must be > $0"); return; }
+      if (isNaN(v) || v <= 0) {
+        setBulkError(budgetMode === "pct" ? "Percentage must be > 0" : "Amount must be > $0");
+        return;
+      }
     } else if (field === "bid") {
       const v = parseFloat(bulkBid);
-      if (isNaN(v) || v < 0.01) { setBulkError("Bid must be at least $0.01"); return; }
+      if (isNaN(v) || v <= 0) {
+        setBulkError(bidMode === "pct" ? "Percentage must be > 0" : "Amount must be > $0");
+        return;
+      }
     }
+
     setBulkSaving(true);
-    let patch: Partial<SquadDetail> = {};
-    if (field === "budget") patch = { daily_budget_micro: dollarToMicro(parseFloat(bulkBudget)) };
-    else if (field === "bid") patch = { bid_micro: dollarToMicro(parseFloat(bulkBid)) };
-    else patch = { status: bulkStatus };
 
     const results = await Promise.allSettled(
       ids.map(async (squadId) => {
         const detail = squadDetails.get(squadId);
         if (!detail) throw new Error("squad not loaded");
+
+        let patch: Partial<SquadDetail> = {};
+        if (field === "budget") {
+          const v = parseFloat(bulkBudget);
+          if (budgetMode === "set") {
+            patch = { daily_budget_micro: dollarToMicro(v) };
+          } else if (budgetMode === "add") {
+            const cur = detail.daily_budget_micro ?? 0;
+            const delta = dollarToMicro(v);
+            patch = { daily_budget_micro: Math.max(0, budgetDir === "+" ? cur + delta : cur - delta) };
+          } else {
+            const cur = detail.daily_budget_micro ?? 0;
+            const factor = budgetDir === "+" ? 1 + v / 100 : 1 - v / 100;
+            patch = { daily_budget_micro: Math.max(0, Math.round(cur * factor)) };
+          }
+        } else if (field === "bid") {
+          const v = parseFloat(bulkBid);
+          if (bidMode === "set") {
+            patch = { bid_micro: dollarToMicro(v) };
+          } else if (bidMode === "add") {
+            const cur = detail.bid_micro ?? 0;
+            const delta = dollarToMicro(v);
+            patch = { bid_micro: Math.max(0, bidDir === "+" ? cur + delta : cur - delta) };
+          } else {
+            const cur = detail.bid_micro ?? 0;
+            const factor = bidDir === "+" ? 1 + v / 100 : 1 - v / 100;
+            patch = { bid_micro: Math.max(0, Math.round(cur * factor)) };
+          }
+        } else {
+          patch = { status: bulkStatus };
+        }
+
         const body: Record<string, unknown> = { adAccountId: detail.ad_account_id, squadId, ...patch };
         const res = await fetch("/api/snapchat/adsquads", {
           method: "PATCH",
@@ -729,7 +771,7 @@ export function PerformanceTable({
           body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error(await readPatchError(res));
-        return squadId;
+        return { squadId, patch };
       })
     );
 
@@ -737,7 +779,7 @@ export function PerformanceTable({
     let failures = 0;
     for (const r of results) {
       if (r.status === "fulfilled") {
-        onSquadPatched?.(r.value, patch);
+        onSquadPatched?.(r.value.squadId, r.value.patch);
       } else {
         failures++;
         if (!firstErrorMsg) firstErrorMsg = r.reason instanceof Error ? r.reason.message : String(r.reason);
@@ -972,42 +1014,67 @@ export function PerformanceTable({
 
         {/* Filter panel */}
         {showFilters && (
-          <div className="bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
-            <div className="flex flex-wrap items-start gap-4">
+          <div className="bg-gray-800/50 border-b border-gray-700 px-4 py-3">
+            <div className="flex flex-wrap items-start gap-3">
+              <span className="text-[10px] uppercase tracking-widest text-gray-500 self-center mr-1">Filters</span>
 
               {/* Article multi-select */}
               <div className="relative" ref={articleDropRef}>
                 <button
                   onClick={() => setArticleDropOpen(v => !v)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border transition-colors ${
+                    filterArticleIds.size > 0
+                      ? "border-blue-500 bg-blue-600/10 text-blue-400"
+                      : "border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500"
+                  }`}
                 >
                   {filterArticleIds.size > 0 ? `Article · ${filterArticleIds.size}` : "Article"}
-                  <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
                 {articleDropOpen && (
-                  <div className="absolute top-full left-0 mt-1 z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 w-56 max-h-60 overflow-y-auto">
-                    {articles.length === 0 ? (
-                      <p className="px-3 py-2 text-xs text-gray-400">No articles found</p>
-                    ) : (
-                      articles.map(a => (
-                        <label key={a.id} className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={filterArticleIds.has(a.id)}
-                            onChange={() => setFilterArticleIds(prev => {
-                              const next = new Set(prev);
-                              if (next.has(a.id)) next.delete(a.id); else next.add(a.id);
-                              return next;
-                            })}
-                            onClick={e => e.stopPropagation()}
-                            className="w-3.5 h-3.5 rounded border-gray-300 text-cyan-500 focus:ring-cyan-500 flex-shrink-0"
-                          />
-                          <span className="truncate">{a.slug}</span>
-                        </label>
-                      ))
-                    )}
+                  <div className="absolute top-full left-0 mt-1 z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-xl w-60">
+                    <div className="px-2 pt-2 pb-1.5 border-b border-gray-800">
+                      <div className="relative">
+                        <svg className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                        </svg>
+                        <input
+                          autoFocus
+                          type="text"
+                          placeholder="Search articles…"
+                          value={articleSearch}
+                          onChange={e => setArticleSearch(e.target.value)}
+                          className="w-full pl-6 pr-2 py-1 text-xs rounded border border-gray-700 bg-gray-800 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto py-1">
+                      {articles.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-gray-500">No articles found</p>
+                      ) : (() => {
+                        const filtered = articles.filter(a => a.slug.toLowerCase().includes(articleSearch.toLowerCase()));
+                        return filtered.length === 0
+                          ? <p className="px-3 py-2 text-xs text-gray-500">No matches</p>
+                          : filtered.map(a => (
+                            <label key={a.id} className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={filterArticleIds.has(a.id)}
+                                onChange={() => setFilterArticleIds(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(a.id)) next.delete(a.id); else next.add(a.id);
+                                  return next;
+                                })}
+                                onClick={e => e.stopPropagation()}
+                                className="w-3.5 h-3.5 rounded border-gray-600 text-blue-500 focus:ring-blue-500 flex-shrink-0"
+                              />
+                              <span className="truncate">{a.slug}</span>
+                            </label>
+                          ));
+                      })()}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1016,35 +1083,59 @@ export function PerformanceTable({
               <div className="relative" ref={providerDropRef}>
                 <button
                   onClick={() => setProviderDropOpen(v => !v)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border transition-colors ${
+                    filterProviderIds.size > 0
+                      ? "border-blue-500 bg-blue-600/10 text-blue-400"
+                      : "border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500"
+                  }`}
                 >
                   {filterProviderIds.size > 0 ? `Provider · ${filterProviderIds.size}` : "Feed Provider"}
-                  <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
                 {providerDropOpen && (
-                  <div className="absolute top-full left-0 mt-1 z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 w-56 max-h-60 overflow-y-auto">
-                    {providers.length === 0 ? (
-                      <p className="px-3 py-2 text-xs text-gray-400">No providers found</p>
-                    ) : (
-                      providers.map(p => (
-                        <label key={p.id} className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={filterProviderIds.has(p.id)}
-                            onChange={() => setFilterProviderIds(prev => {
-                              const next = new Set(prev);
-                              if (next.has(p.id)) next.delete(p.id); else next.add(p.id);
-                              return next;
-                            })}
-                            onClick={e => e.stopPropagation()}
-                            className="w-3.5 h-3.5 rounded border-gray-300 text-cyan-500 focus:ring-cyan-500 flex-shrink-0"
-                          />
-                          <span className="truncate">{p.name}</span>
-                        </label>
-                      ))
-                    )}
+                  <div className="absolute top-full left-0 mt-1 z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-xl w-60">
+                    <div className="px-2 pt-2 pb-1.5 border-b border-gray-800">
+                      <div className="relative">
+                        <svg className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                        </svg>
+                        <input
+                          autoFocus
+                          type="text"
+                          placeholder="Search providers…"
+                          value={providerSearch}
+                          onChange={e => setProviderSearch(e.target.value)}
+                          className="w-full pl-6 pr-2 py-1 text-xs rounded border border-gray-700 bg-gray-800 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto py-1">
+                      {providers.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-gray-500">No providers found</p>
+                      ) : (() => {
+                        const filtered = providers.filter(p => p.name.toLowerCase().includes(providerSearch.toLowerCase()));
+                        return filtered.length === 0
+                          ? <p className="px-3 py-2 text-xs text-gray-500">No matches</p>
+                          : filtered.map(p => (
+                            <label key={p.id} className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={filterProviderIds.has(p.id)}
+                                onChange={() => setFilterProviderIds(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(p.id)) next.delete(p.id); else next.add(p.id);
+                                  return next;
+                                })}
+                                onClick={e => e.stopPropagation()}
+                                className="w-3.5 h-3.5 rounded border-gray-600 text-blue-500 focus:ring-blue-500 flex-shrink-0"
+                              />
+                              <span className="truncate">{p.name}</span>
+                            </label>
+                          ));
+                      })()}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1056,7 +1147,7 @@ export function PerformanceTable({
                     <select
                       value={mf.metric}
                       onChange={e => setMetricFilters(prev => prev.map((f, fi) => fi === i ? { ...f, metric: e.target.value } : f))}
-                      className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="border border-gray-600 rounded px-2 py-1 text-xs bg-gray-800 text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     >
                       <option value="">— metric —</option>
                       {FILTERABLE_METRICS.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
@@ -1064,7 +1155,7 @@ export function PerformanceTable({
                     <select
                       value={mf.op}
                       onChange={e => setMetricFilters(prev => prev.map((f, fi) => fi === i ? { ...f, op: e.target.value } : f))}
-                      className="border border-gray-300 dark:border-gray-600 rounded px-1.5 py-1 text-xs bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500 w-12"
+                      className="border border-gray-600 rounded px-1.5 py-1 text-xs bg-gray-800 text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-12"
                     >
                       <option value=">">&gt;</option>
                       <option value=">=">&ge;</option>
@@ -1076,11 +1167,11 @@ export function PerformanceTable({
                       value={mf.value}
                       onChange={e => setMetricFilters(prev => prev.map((f, fi) => fi === i ? { ...f, value: e.target.value } : f))}
                       placeholder="value"
-                      className="w-20 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-20 border border-gray-600 rounded px-2 py-1 text-xs bg-gray-800 text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                     <button
                       onClick={() => setMetricFilters(prev => prev.filter((_, fi) => fi !== i))}
-                      className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+                      className="p-0.5 text-gray-500 hover:text-red-400 transition-colors"
                     >
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -1090,7 +1181,7 @@ export function PerformanceTable({
                 ))}
                 <button
                   onClick={() => setMetricFilters(prev => [...prev, { id: Math.random().toString(36).slice(2), metric: "", op: ">", value: "" }])}
-                  className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mt-0.5"
+                  className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-0.5"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -1103,7 +1194,7 @@ export function PerformanceTable({
               {activeFilterCount > 0 && (
                 <button
                   onClick={clearAllFilters}
-                  className="ml-auto self-start text-xs text-gray-400 hover:text-red-500 underline transition-colors"
+                  className="ml-auto self-start text-xs text-gray-500 hover:text-red-400 underline transition-colors"
                 >
                   Clear all
                 </button>
@@ -1114,61 +1205,144 @@ export function PerformanceTable({
 
         {/* Bulk edit panel */}
         {showBulkEdit && hasSelection && (
-          <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800 px-4 py-2.5 flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-medium text-blue-700">Budget $</span>
-              <input
-                type="number" min={0.01} step={0.01} placeholder="0.00"
-                value={bulkBudget}
-                onChange={(e) => setBulkBudget(e.target.value)}
-                className="w-20 border border-blue-200 dark:border-blue-700 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-800 dark:text-gray-100"
-              />
-              <button
-                onClick={() => void applyBulk("budget")}
-                disabled={bulkSaving}
-                className="px-2.5 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 font-medium"
-              >
-                Apply
-              </button>
+          <div className="bg-gray-800/60 border-b border-gray-700 px-4 py-3">
+            <div className="flex flex-wrap items-start gap-3">
+
+              {/* Budget card */}
+              <div className="bg-gray-900/70 border border-gray-700 rounded-lg px-3 py-2 flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] uppercase tracking-widest text-gray-500 font-medium">Budget</span>
+                  <div className="flex rounded overflow-hidden border border-gray-700 text-[10px]">
+                    {(["set", "add", "pct"] as const).map(m => (
+                      <button
+                        key={m}
+                        onClick={() => setBudgetMode(m)}
+                        className={`px-2 py-0.5 transition-colors ${
+                          budgetMode === m
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-400 hover:text-gray-200 hover:bg-gray-800"
+                        }`}
+                      >
+                        {m === "set" ? "$ Set" : m === "add" ? "+/- $" : "+/- %"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {budgetMode !== "set" && (
+                    <button
+                      onClick={() => setBudgetDir(d => d === "+" ? "-" : "+")}
+                      className={`w-6 h-6 rounded text-xs font-bold flex items-center justify-center transition-colors border ${
+                        budgetDir === "+"
+                          ? "border-green-600 text-green-400 bg-green-900/30 hover:bg-green-900/50"
+                          : "border-red-600 text-red-400 bg-red-900/30 hover:bg-red-900/50"
+                      }`}
+                    >
+                      {budgetDir}
+                    </button>
+                  )}
+                  <div className="relative">
+                    <input
+                      type="number" min={0.01} step={budgetMode === "pct" ? 1 : 0.01}
+                      placeholder={budgetMode === "pct" ? "20" : "0.00"}
+                      value={bulkBudget}
+                      onChange={(e) => setBulkBudget(e.target.value)}
+                      className="w-20 border border-gray-600 rounded px-2 py-1 pr-5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-gray-800 text-gray-100"
+                    />
+                    <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 pointer-events-none">
+                      {budgetMode === "pct" ? "%" : "$"}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => void applyBulk("budget")}
+                    disabled={bulkSaving}
+                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 font-medium transition-colors"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+
+              {/* Bid card */}
+              <div className="bg-gray-900/70 border border-gray-700 rounded-lg px-3 py-2 flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] uppercase tracking-widest text-gray-500 font-medium">Bid</span>
+                  <div className="flex rounded overflow-hidden border border-gray-700 text-[10px]">
+                    {(["set", "add", "pct"] as const).map(m => (
+                      <button
+                        key={m}
+                        onClick={() => setBidMode(m)}
+                        className={`px-2 py-0.5 transition-colors ${
+                          bidMode === m
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-400 hover:text-gray-200 hover:bg-gray-800"
+                        }`}
+                      >
+                        {m === "set" ? "$ Set" : m === "add" ? "+/- $" : "+/- %"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {bidMode !== "set" && (
+                    <button
+                      onClick={() => setBidDir(d => d === "+" ? "-" : "+")}
+                      className={`w-6 h-6 rounded text-xs font-bold flex items-center justify-center transition-colors border ${
+                        bidDir === "+"
+                          ? "border-green-600 text-green-400 bg-green-900/30 hover:bg-green-900/50"
+                          : "border-red-600 text-red-400 bg-red-900/30 hover:bg-red-900/50"
+                      }`}
+                    >
+                      {bidDir}
+                    </button>
+                  )}
+                  <div className="relative">
+                    <input
+                      type="number" min={0.01} step={bidMode === "pct" ? 1 : 0.01}
+                      placeholder={bidMode === "pct" ? "20" : "1.00"}
+                      value={bulkBid}
+                      onChange={(e) => setBulkBid(e.target.value)}
+                      className="w-20 border border-gray-600 rounded px-2 py-1 pr-5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-gray-800 text-gray-100"
+                    />
+                    <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 pointer-events-none">
+                      {bidMode === "pct" ? "%" : "$"}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => void applyBulk("bid")}
+                    disabled={bulkSaving}
+                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 font-medium transition-colors"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+
+              {/* Status card */}
+              <div className="bg-gray-900/70 border border-gray-700 rounded-lg px-3 py-2 flex flex-col gap-2">
+                <span className="text-[10px] uppercase tracking-widest text-gray-500 font-medium">Status</span>
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={bulkStatus}
+                    onChange={(e) => setBulkStatus(e.target.value as "ACTIVE" | "PAUSED")}
+                    className="border border-gray-600 rounded px-2 py-1 text-xs focus:outline-none bg-gray-800 text-gray-100"
+                  >
+                    <option value="ACTIVE">Active</option>
+                    <option value="PAUSED">Paused</option>
+                  </select>
+                  <button
+                    onClick={() => void applyBulk("status")}
+                    disabled={bulkSaving}
+                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 font-medium transition-colors"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+
             </div>
-            <div className="w-px h-4 bg-blue-200" />
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-medium text-blue-700">Bid $</span>
-              <input
-                type="number" min={0.01} step={0.01} placeholder="1.00"
-                value={bulkBid}
-                onChange={(e) => setBulkBid(e.target.value)}
-                className="w-16 border border-blue-200 dark:border-blue-700 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-800 dark:text-gray-100"
-              />
-              <button
-                onClick={() => void applyBulk("bid")}
-                disabled={bulkSaving}
-                className="px-2.5 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 font-medium"
-              >
-                Apply
-              </button>
-            </div>
-            <div className="w-px h-4 bg-blue-200" />
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-medium text-blue-700">Status</span>
-              <select
-                value={bulkStatus}
-                onChange={(e) => setBulkStatus(e.target.value as "ACTIVE" | "PAUSED")}
-                className="border border-blue-200 dark:border-blue-700 rounded px-2 py-0.5 text-xs focus:outline-none bg-white dark:bg-gray-800 dark:text-gray-100"
-              >
-                <option value="ACTIVE">Active</option>
-                <option value="PAUSED">Paused</option>
-              </select>
-              <button
-                onClick={() => void applyBulk("status")}
-                disabled={bulkSaving}
-                className="px-2.5 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 font-medium"
-              >
-                Apply
-              </button>
-            </div>
-            {bulkSaving && <span className="text-xs text-blue-500 ml-1">Saving…</span>}
-            {bulkError && <span className="text-xs text-red-500 ml-1">{bulkError}</span>}
+            {bulkSaving && <span className="text-xs text-blue-400 mt-2 block">Saving…</span>}
+            {bulkError && <span className="text-xs text-red-400 mt-2 block">{bulkError}</span>}
           </div>
         )}
 
