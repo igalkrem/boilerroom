@@ -106,7 +106,7 @@ export default function PerformancePage() {
   }, []);
 
   // ── Sync then reload (slow — hits Snapchat + KingsRoad APIs) ──────────────
-  const syncAndReload = useCallback(async (accts: SnapAdAccount[], start: string, end: string, force = true) => {
+  const syncAndReload = useCallback(async (accts: SnapAdAccount[], start: string, end: string, force = true, includeHistorical = true) => {
     if (accts.length === 0 || isRefreshing.current) return;
     isRefreshing.current = true;
     setError(null);
@@ -121,20 +121,25 @@ export default function PerformancePage() {
     const histEnd = dateMinus(start, 1);
 
     await Promise.allSettled(
-      accts.flatMap((a) => [
-        fetch("/api/reporting/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ adAccountId: a.id, startDate: start, endDate: end, timezone: a.timezone, force }),
-        }),
-        // Sync the 3 days before the range for -1D/-2D/-3D ROI columns.
-        // force=false so finalized historical dates are not re-fetched unnecessarily.
-        fetch("/api/reporting/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ adAccountId: a.id, startDate: histStart, endDate: histEnd, timezone: a.timezone, force }),
-        }),
-      ])
+      accts.flatMap((a) => {
+        const calls: Promise<Response>[] = [
+          fetch("/api/reporting/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ adAccountId: a.id, startDate: start, endDate: end, timezone: a.timezone, force }),
+          }),
+        ];
+        if (includeHistorical) {
+          calls.push(
+            fetch("/api/reporting/sync", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ adAccountId: a.id, startDate: histStart, endDate: histEnd, timezone: a.timezone, force }),
+            })
+          );
+        }
+        return calls;
+      })
     );
 
     setSyncing(false);
@@ -250,7 +255,7 @@ export default function PerformancePage() {
   }
 
   function handleManualRefresh() {
-    void syncAndReload(activeAccounts, startDate, endDate, true);
+    void syncAndReload(activeAccounts, startDate, endDate, true, false);
     void loadLast30Days(activeAccounts);
   }
 
