@@ -126,6 +126,7 @@ export function ArticleForm({ article }: ArticleFormProps) {
     const saved: Article = {
       id: article?.id ?? uuid(),
       feedProviderId: data.feedProviderId,
+      status: article?.status ?? "active",
       slug: data.slug,
       query: data.query.trim(),
       title: data.title.trim() || undefined,
