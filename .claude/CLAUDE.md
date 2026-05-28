@@ -118,6 +118,7 @@ src/
 │       ├── create/                    # Campaign builder (no pre-selected account)
 │       ├── pixels/                    # Pixel CRUD UI (new/[id]/edit)
 │       ├── presets/                   # Campaign preset CRUD UI (new/[id]/edit); card grid shows feed/geo/pixel/bid/budget/device + Duplicate action; no "Load in Wizard"
+│       ├── catalogue/                 # Image hosting for Snap product catalogue — upload images (JPEG/PNG/WebP/GIF, 20 MB max), table shows thumbnail + public URL (copy) + delete; data: localStorage + KV (boilerroom_catalogue_v1 / br_catalogue_v1); upload endpoint: /api/catalogue/upload (images only); delete endpoint: /api/catalogue/delete (ownership-verified against KV); sidebar nav item between Silo and Articles
 │       ├── articles/                  # Article CRUD UI (new/[id]/edit)
 │       ├── feed-providers/            # Feed Provider board UI (card grid + FeedProviderModal) — own top-nav tab
 │       ├── performance/               # **Default landing page** — loads from DB immediately on mount; SyncStatusBar shows per-feed sync status with subtle icon-only Force Refresh; cron keeps DB fresh
