@@ -25,6 +25,7 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
   const [manualUploading, setManualUploading] = useState(false);
   const [manualMsg, setManualMsg] = useState("");
   const [expandedGroup, setExpandedGroup] = useState<"available" | "inUse" | "cooldown" | null>(null);
+  const [bulkMoving, setBulkMoving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadChannels = useCallback(async () => {
@@ -185,6 +186,21 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
     loadChannels();
   }
 
+  async function moveAllInUse(newStatus: "available" | "cooldown") {
+    if (!feedProviderId) return;
+    setBulkMoving(true);
+    try {
+      await fetch("/api/feed-providers/channels", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedProviderId, newStatus }),
+      });
+      loadChannels();
+    } finally {
+      setBulkMoving(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -274,38 +290,76 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
                 const color = group === "available" ? "green" : group === "inUse" ? "blue" : "yellow";
                 return (
                   <div key={group} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedGroup(expandedGroup === group ? null : group)}
-                      className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
-                    >
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                        <span className={`inline-block w-2 h-2 rounded-full bg-${color}-400`} />
-                        {label}
-                      </span>
-                      <span className="text-xs text-gray-500">{items.length} channels {expandedGroup === group ? "▲" : "▼"}</span>
-                    </button>
+                    <div className="flex items-center bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedGroup(expandedGroup === group ? null : group)}
+                        className="flex-1 flex items-center justify-between px-4 py-2.5 text-left"
+                      >
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                          <span className={`inline-block w-2 h-2 rounded-full bg-${color}-400`} />
+                          {label}
+                        </span>
+                        <span className="text-xs text-gray-500">{items.length} channels {expandedGroup === group ? "▲" : "▼"}</span>
+                      </button>
+                      {group === "inUse" && items.length > 0 && (
+                        <div className="flex items-center gap-1.5 pr-3">
+                          {bulkMoving ? (
+                            <span className="text-xs text-gray-400">Moving…</span>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); moveAllInUse("available"); }}
+                                title="Move all in-use channels to Available"
+                                className="px-2 py-0.5 text-[10px] rounded bg-green-900/40 text-green-400 hover:bg-green-700/60 whitespace-nowrap"
+                              >
+                                → Avail All ({items.length})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); moveAllInUse("cooldown"); }}
+                                title="Move all in-use channels to Cooldown"
+                                className="px-2 py-0.5 text-[10px] rounded bg-yellow-900/40 text-yellow-400 hover:bg-yellow-700/60 whitespace-nowrap"
+                              >
+                                → Cool All ({items.length})
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     {expandedGroup === group && items.length > 0 && (
                       <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-48 overflow-y-auto">
                         {items.map((ch) => (
                           <div key={ch.id} className="flex items-center gap-2 px-4 py-2 text-xs">
+                            {group === "inUse" && !ch.campaign_snap_id && !ch.ad_squad_snap_id && (
+                              <span
+                                title="Squad unknown — cannot auto-monitor. Release manually if campaign is no longer active."
+                                className="text-amber-400 shrink-0 cursor-default"
+                              >
+                                ⚠
+                              </span>
+                            )}
                             <span className="font-mono text-gray-800 dark:text-gray-200 flex-1 truncate">{ch.channel_id}</span>
                             <span className="text-gray-400 shrink-0">{ch.traffic_source}</span>
                             {group === "inUse" && (
                               <>
                                 <button
                                   type="button"
+                                  disabled={bulkMoving}
                                   onClick={() => moveChannel(ch.id, "available")}
                                   title="Move to Available"
-                                  className="px-1.5 py-0.5 text-[10px] rounded bg-green-900/40 text-green-400 hover:bg-green-700/60 shrink-0"
+                                  className="px-1.5 py-0.5 text-[10px] rounded bg-green-900/40 text-green-400 hover:bg-green-700/60 shrink-0 disabled:opacity-40"
                                 >
                                   → Avail
                                 </button>
                                 <button
                                   type="button"
+                                  disabled={bulkMoving}
                                   onClick={() => moveChannel(ch.id, "cooldown")}
                                   title="Move to Cooldown"
-                                  className="px-1.5 py-0.5 text-[10px] rounded bg-yellow-900/40 text-yellow-400 hover:bg-yellow-700/60 shrink-0"
+                                  className="px-1.5 py-0.5 text-[10px] rounded bg-yellow-900/40 text-yellow-400 hover:bg-yellow-700/60 shrink-0 disabled:opacity-40"
                                 >
                                   → Cool
                                 </button>

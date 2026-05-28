@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getSession, isSessionValid } from "@/lib/session";
-import { runMigrations, listChannels, bulkInsertChannels, deleteChannels, forceChannelStatus } from "@/lib/db";
+import { runMigrations, listChannels, bulkInsertChannels, deleteChannels, forceChannelStatus, bulkForceChannelStatus } from "@/lib/db";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const session = await getSession();
@@ -54,16 +54,25 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   await runMigrations();
-  let body: { id: string; newStatus: "available" | "cooldown" };
+  let body: { id?: string; feedProviderId?: string; newStatus: "available" | "cooldown" };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
-  if (!body.id || !["available", "cooldown"].includes(body.newStatus)) {
-    return NextResponse.json({ error: "id and newStatus (available|cooldown) required" }, { status: 400 });
+  if (!["available", "cooldown"].includes(body.newStatus)) {
+    return NextResponse.json({ error: "newStatus (available|cooldown) required" }, { status: 400 });
   }
   try {
+    // Bulk: move all in-use channels for a provider at once
+    if (body.feedProviderId && !body.id) {
+      const updated = await bulkForceChannelStatus(body.feedProviderId, session.googleUserId, body.newStatus);
+      return NextResponse.json({ ok: true, updated });
+    }
+    // Single: move one channel by row ID
+    if (!body.id) {
+      return NextResponse.json({ error: "id or feedProviderId required" }, { status: 400 });
+    }
     await forceChannelStatus(body.id, session.googleUserId, body.newStatus);
     return NextResponse.json({ ok: true });
   } catch {

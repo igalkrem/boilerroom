@@ -207,6 +207,38 @@ export async function updateChannelAdSquadId(channelId: string, adSquadId: strin
   `;
 }
 
+export async function bulkForceChannelStatus(
+  feedProviderId: string,
+  googleUserId: string,
+  newStatus: "available" | "cooldown"
+): Promise<number> {
+  const { rowCount } = await sql`
+    UPDATE feed_provider_channels
+    SET
+      status           = ${newStatus},
+      cooldown_since   = CASE WHEN ${newStatus} = 'cooldown'  THEN NOW() ELSE NULL END,
+      in_use_since     = CASE WHEN ${newStatus} = 'available' THEN NULL ELSE in_use_since END,
+      paused_since     = NULL,
+      campaign_snap_id = NULL
+    WHERE feed_provider_id = ${feedProviderId}
+      AND google_user_id   = ${googleUserId}
+      AND status = 'in-use'
+  `;
+  return rowCount ?? 0;
+}
+
+export async function getInUseChannelsWithoutSquadId(googleUserId: string): Promise<ChannelRow[]> {
+  const { rows } = await sql<ChannelRow>`
+    SELECT * FROM feed_provider_channels
+    WHERE google_user_id       = ${googleUserId}
+      AND status               = 'in-use'
+      AND campaign_snap_id     IS NOT NULL
+      AND ad_squad_snap_id     IS NULL
+    ORDER BY in_use_since ASC
+  `;
+  return rows;
+}
+
 // ─── Snapchat token storage (for server-side cron sync) ────────────────────
 // Only the refresh_token is persisted — access tokens are transient and
 // fetched fresh at sync time. Tokens are AES-256-GCM encrypted at rest.
