@@ -101,6 +101,25 @@ export default function CataloguePage() {
     } catch {}
   }
 
+  function downloadCsv() {
+    const header = ["Name", "Format", "Size (bytes)", "Uploaded", "Public URL"];
+    const rows = items.map((item) => [
+      `"${item.name.replace(/"/g, '""')}"`,
+      item.fileFormat,
+      String(item.fileSize),
+      new Date(item.uploadDate).toISOString(),
+      item.url,
+    ]);
+    const csv = [header, ...rows].map((r) => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `catalogue-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function onDragOver(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(true);
@@ -121,11 +140,24 @@ export default function CataloguePage() {
       <div className="max-w-5xl mx-auto w-full space-y-6">
 
         {/* Header */}
-        <div>
-          <h1 className="text-xl font-semibold text-white">Catalogue</h1>
-          <p className="text-sm text-gray-400 mt-0.5">
-            Upload product images and copy their public URLs for use in your Snap catalogue.
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold text-white">Catalogue</h1>
+            <p className="text-sm text-gray-400 mt-0.5">
+              Upload product images and copy their public URLs for use in your Snap catalogue.
+            </p>
+          </div>
+          {items.length > 0 && (
+            <button
+              onClick={downloadCsv}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-300 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Download CSV
+            </button>
+          )}
         </div>
 
         {/* Upload zone */}
