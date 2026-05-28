@@ -19,6 +19,7 @@ export default function CataloguePage() {
   const [dragOver, setDragOver] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [hoverPreview, setHoverPreview] = useState<{ url: string; name: string; top: number; left: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -263,7 +264,17 @@ export default function CataloguePage() {
                       <img
                         src={item.url}
                         alt={item.name}
-                        className="w-10 h-10 object-cover rounded-md bg-gray-700"
+                        className="w-10 h-10 object-cover rounded-md bg-gray-700 cursor-zoom-in"
+                        onMouseEnter={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setHoverPreview({
+                            url: item.url,
+                            name: item.name,
+                            top: rect.top + rect.height / 2,
+                            left: rect.right + 12,
+                          });
+                        }}
+                        onMouseLeave={() => setHoverPreview(null)}
                       />
                     </td>
 
@@ -339,6 +350,21 @@ export default function CataloguePage() {
           </p>
         )}
       </div>
+
+      {/* Hover preview — fixed so it escapes the table's overflow:hidden */}
+      {hoverPreview && (
+        <div
+          className="fixed z-50 pointer-events-none -translate-y-1/2"
+          style={{ top: hoverPreview.top, left: hoverPreview.left }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={hoverPreview.url}
+            alt={hoverPreview.name}
+            className="w-52 h-52 object-contain rounded-xl shadow-2xl border border-gray-700 bg-gray-900"
+          />
+        </div>
+      )}
     </div>
   );
 }
