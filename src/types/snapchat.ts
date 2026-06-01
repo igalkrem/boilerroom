@@ -106,6 +106,9 @@ export interface SnapAdSquadPayload {
   start_time?: string;
   end_time?: string;
   pixel_id?: string;
+  // Server-computed — returned by GET, must never be sent in PUT (causes E2025 / sub_request_status ERROR)
+  effective_status?: string;
+  delivery_status?: string[];
 }
 
 export interface SnapAdSquad extends SnapAdSquadPayload {

@@ -31,17 +31,29 @@ export async function syncChannelPausedStatus(
       channels.map(async (ch) => {
         try {
           const squad = await getAdSquad(ch.ad_squad_snap_id!, accessToken);
-          if (squad.status === "PAUSED" && ch.paused_since == null) {
-            toSetPaused.push(ch.ad_squad_snap_id!);
-          } else if (squad.status === "ACTIVE" && ch.paused_since != null) {
+          // Squad is inactive if admin status is not ACTIVE, OR if Snapchat's effective_status
+          // indicates non-delivery (e.g. all ads rejected — status stays ACTIVE but effective_status changes)
+          const isInactive =
+            squad.status !== "ACTIVE" ||
+            (squad.effective_status !== undefined && squad.effective_status !== "ACTIVE");
+          if (!isInactive && ch.paused_since != null) {
             toClearPaused.push(ch.ad_squad_snap_id!);
+          } else if (isInactive && ch.paused_since == null) {
+            toSetPaused.push(ch.ad_squad_snap_id!);
           }
-        } catch (err) {
-          errors++;
-          console.error(
-            `[channel-status-sync] failed to fetch squad ${ch.ad_squad_snap_id} for user ${googleUserId}:`,
-            err
-          );
+        } catch (err: unknown) {
+          const msg = String(err);
+          const isGone = msg.includes("not found") || msg.includes("404");
+          if (isGone && ch.paused_since == null) {
+            // Squad deleted or missing — start the 24h grace clock so channel exits in-use
+            toSetPaused.push(ch.ad_squad_snap_id!);
+          } else {
+            errors++;
+            console.error(
+              `[channel-status-sync] failed to fetch squad ${ch.ad_squad_snap_id} for user ${googleUserId}:`,
+              err
+            );
+          }
         }
       })
     );
