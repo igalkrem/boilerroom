@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui";
-import { loadArticles, deleteArticle } from "@/lib/articles";
+import { loadArticles, deleteArticle, toggleArticleStatus, duplicateArticle } from "@/lib/articles";
 import { loadFeedProviders } from "@/lib/feed-providers";
 import type { Article } from "@/types/article";
 import type { FeedProvider } from "@/types/feed-provider";
@@ -34,6 +34,7 @@ function formatDate(iso: string) {
 
 type SortCol = "provider" | "slug" | "headlines" | "date";
 type SortDir = "asc" | "desc";
+type StatusFilter = "all" | "active" | "paused";
 
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   if (!active) return <span className="ml-1 text-gray-300">↕</span>;
@@ -50,10 +51,15 @@ export default function ArticlesPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [search, setSearch] = useState("");
   const [filterProvider, setFilterProvider] = useState("all");
+  const [filterStatus, setFilterStatus] = useState<StatusFilter>("all");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
+  function reload() {
     setArticles(loadArticles());
+  }
+
+  useEffect(() => {
+    reload();
     setProviders(loadFeedProviders());
   }, []);
 
@@ -76,7 +82,17 @@ export default function ArticlesPage() {
   function handleDelete(id: string, slug: string) {
     if (!window.confirm(`Delete article "${slug}"? This cannot be undone.`)) return;
     deleteArticle(id);
-    setArticles(loadArticles());
+    reload();
+  }
+
+  function handleToggleStatus(id: string) {
+    toggleArticleStatus(id);
+    reload();
+  }
+
+  function handleDuplicate(id: string) {
+    duplicateArticle(id);
+    reload();
   }
 
   function toggleSort(col: SortCol) {
@@ -110,6 +126,9 @@ export default function ArticlesPage() {
     if (filterProvider !== "all") {
       rows = rows.filter((a) => a.feedProviderId === filterProvider);
     }
+    if (filterStatus !== "all") {
+      rows = rows.filter((a) => a.status === filterStatus);
+    }
 
     rows.sort((a, b) => {
       let cmp = 0;
@@ -134,7 +153,7 @@ export default function ArticlesPage() {
     });
 
     return rows;
-  }, [articles, search, filterProvider, sortCol, sortDir, providerMap]);
+  }, [articles, search, filterProvider, filterStatus, sortCol, sortDir, providerMap]);
 
   const thClass =
     "px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide cursor-pointer select-none hover:text-gray-700 whitespace-nowrap";
@@ -199,6 +218,15 @@ export default function ArticlesPage() {
                 </option>
               ))}
             </select>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as StatusFilter)}
+              className="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+            >
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+            </select>
             <span className="ml-auto text-xs text-gray-400">
               {filtered.length} article{filtered.length !== 1 ? "s" : ""}
             </span>
@@ -235,36 +263,58 @@ export default function ArticlesPage() {
                   <tbody>
                     {filtered.map((article, i) => {
                       const provider = providerMap[article.feedProviderId];
-                      const color = providerColorMap[article.feedProviderId] ?? "#94a3b8";
+                      const isPaused = article.status === "paused";
+                      const color = isPaused ? "#6b7280" : (providerColorMap[article.feedProviderId] ?? "#94a3b8");
                       const isExpanded = expandedRows.has(article.id);
+
+                      // Headline preview: prefer default headline, fall back to first
+                      const previewHeadline =
+                        article.defaultHeadlineIndex !== undefined
+                          ? article.allowedHeadlines[article.defaultHeadlineIndex]?.text
+                          : article.allowedHeadlines[0]?.text;
+
                       return (
                         <>
                           <tr
                             key={article.id}
-                            className={`border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${i % 2 === 0 ? "" : "bg-gray-50/40 dark:bg-gray-800/20"} ${isExpanded ? "border-b-0" : "last:border-0"}`}
+                            className={`border-b border-gray-100 dark:border-gray-700 transition-colors ${i % 2 === 0 ? "" : "bg-gray-50/40 dark:bg-gray-800/20"} ${isExpanded ? "border-b-0" : "last:border-0"} ${isPaused ? "opacity-50" : "hover:bg-gray-50 dark:hover:bg-gray-800"}`}
                             style={{ borderLeft: `3px solid ${color}` }}
                           >
                             {/* Provider */}
                             <td className={tdClass}>
-                              <span
-                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border"
-                                style={{
-                                  backgroundColor: `${color}22`,
-                                  borderColor: `${color}55`,
-                                  color,
-                                }}
-                              >
-                                {provider?.name ?? (
-                                  <span className="text-gray-400 italic">Unknown</span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span
+                                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border"
+                                  style={{
+                                    backgroundColor: `${color}22`,
+                                    borderColor: `${color}55`,
+                                    color,
+                                  }}
+                                >
+                                  {provider?.name ?? (
+                                    <span className="text-gray-400 italic">Unknown</span>
+                                  )}
+                                </span>
+                                {isPaused && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700 uppercase tracking-wide">
+                                    Paused
+                                  </span>
                                 )}
-                              </span>
+                              </div>
                             </td>
 
-                            {/* Keyword */}
+                            {/* Keyword + headline preview */}
                             <td className={tdClass}>
-                              <span className="font-mono text-xs text-gray-800 dark:text-gray-200 break-all">
-                                {article.slug}
-                              </span>
+                              <div className="flex flex-col">
+                                <span className="font-mono text-xs text-gray-800 dark:text-gray-200 break-all">
+                                  {article.slug}
+                                </span>
+                                {previewHeadline && (
+                                  <span className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 truncate max-w-[220px]">
+                                    {previewHeadline}
+                                  </span>
+                                )}
+                              </div>
                             </td>
 
                             {/* Language */}
@@ -313,6 +363,27 @@ export default function ArticlesPage() {
                             {/* Actions */}
                             <td className={tdClass}>
                               <div className="flex items-center gap-1.5 flex-wrap">
+                                {/* Status toggle */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleStatus(article.id)}
+                                  className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors border ${
+                                    isPaused
+                                      ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-700 hover:bg-green-100"
+                                      : "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-700 hover:bg-amber-100"
+                                  }`}
+                                >
+                                  {isPaused ? "▶ Resume" : "⏸ Pause"}
+                                </button>
+                                {/* Duplicate */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDuplicate(article.id)}
+                                  className="px-3 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                  ⧉ Copy
+                                </button>
+                                {/* Edit */}
                                 <button
                                   type="button"
                                   onClick={() => router.push(`/dashboard/articles/${article.id}/edit`)}
@@ -344,7 +415,7 @@ export default function ArticlesPage() {
                           {isExpanded && article.allowedHeadlines.length > 0 && (
                             <tr
                               key={`${article.id}-expanded`}
-                              className="bg-gray-50/80 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700 last:border-0"
+                              className={`bg-gray-50/80 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700 last:border-0 ${isPaused ? "opacity-50" : ""}`}
                               style={{ borderLeft: `3px solid ${color}` }}
                             >
                               <td colSpan={TOTAL_COLS} className="px-8 py-3">

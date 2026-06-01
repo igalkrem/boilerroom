@@ -850,7 +850,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       {articlePickerProviderId &&
         (() => {
           const providerArticles = articles.filter(
-            (a) => a.feedProviderId === articlePickerProviderId
+            (a) => a.feedProviderId === articlePickerProviderId && a.status !== "paused"
           );
           const selectedIds = new Set(
             store.edges.providerToArticle

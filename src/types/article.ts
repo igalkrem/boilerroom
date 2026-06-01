@@ -3,6 +3,7 @@ export interface Article {
   feedProviderId: string;
   slug: string; // "Keyword" in UI — resolves {{article.name}}
   query: string;
+  status: "active" | "paused"; // defaults to "active" for old records via upcast()
   title?: string;
   previewUrl?: string;
   domain?: string;

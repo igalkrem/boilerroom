@@ -19,6 +19,7 @@ function upcast(raw: Record<string, unknown>): Article {
     feedProviderId: raw.feedProviderId as string,
     slug: raw.slug as string,
     query: (raw.query as string) ?? "",
+    status: raw.status === "paused" ? "paused" : "active",
     title: (raw.title as string) ?? undefined,
     previewUrl: (raw.previewUrl as string) ?? undefined,
     domain: (raw.domain as string) ?? undefined,
@@ -79,4 +80,30 @@ export function deleteArticle(id: string): void {
 
 export function getArticleById(id: string): Article | undefined {
   return loadArticles().find((a) => a.id === id);
+}
+
+export function toggleArticleStatus(id: string): void {
+  const articles = loadArticles();
+  const idx = articles.findIndex((a) => a.id === id);
+  if (idx < 0) return;
+  articles[idx] = {
+    ...articles[idx],
+    status: articles[idx].status === "paused" ? "active" : "paused",
+  };
+  saveArticles(articles);
+}
+
+export function duplicateArticle(id: string): void {
+  const articles = loadArticles();
+  const src = articles.find((a) => a.id === id);
+  if (!src) return;
+  const copy: Article = {
+    ...src,
+    id: crypto.randomUUID(),
+    slug: `Copy of ${src.slug}`,
+    status: "active",
+    createdAt: new Date().toISOString(),
+  };
+  articles.push(copy);
+  saveArticles(articles);
 }
