@@ -18,6 +18,38 @@ export async function runMigrations(): Promise<void> {
   for (const stmt of statements) {
     await sql.query(stmt);
   }
+
+  // Dedup + unique constraint — cannot use DO $$ ... $$ in the SQL file because
+  // the semicolon-splitter above would break it. Run conditionally here instead.
+  const { rows: existing } = await sql`
+    SELECT 1 FROM pg_constraint WHERE conname = 'feed_provider_channels_unique_channel'
+  `;
+  if (existing.length === 0) {
+    // Keep highest-priority status (in-use > cooldown > available); among equals keep oldest row.
+    await sql`
+      DELETE FROM feed_provider_channels a
+      USING feed_provider_channels b
+      WHERE a.channel_id       = b.channel_id
+        AND a.feed_provider_id = b.feed_provider_id
+        AND a.google_user_id   = b.google_user_id
+        AND a.id <> b.id
+        AND (
+          CASE b.status WHEN 'in-use' THEN 2 WHEN 'cooldown' THEN 1 ELSE 0 END
+            > CASE a.status WHEN 'in-use' THEN 2 WHEN 'cooldown' THEN 1 ELSE 0 END
+          OR (
+            CASE b.status WHEN 'in-use' THEN 2 WHEN 'cooldown' THEN 1 ELSE 0 END
+              = CASE a.status WHEN 'in-use' THEN 2 WHEN 'cooldown' THEN 1 ELSE 0 END
+            AND b.created_at < a.created_at
+          )
+        )
+    `;
+    await sql`
+      ALTER TABLE feed_provider_channels
+        ADD CONSTRAINT feed_provider_channels_unique_channel
+        UNIQUE (channel_id, feed_provider_id, google_user_id)
+    `;
+  }
+
   migrated = true;
 }
 
@@ -87,7 +119,7 @@ export async function bulkInsertChannels(
     await sql`
       INSERT INTO feed_provider_channels (id, feed_provider_id, channel_id, traffic_source, google_user_id)
       VALUES (${id}, ${feedProviderId}, ${row.channelId}, ${row.trafficSource}, ${googleUserId})
-      ON CONFLICT DO NOTHING
+      ON CONFLICT (channel_id, feed_provider_id, google_user_id) DO NOTHING
     `;
   }
 }
