@@ -35,9 +35,9 @@ function lastUpdateWindowTime(updateMinute: number): number {
   return t.getTime();
 }
 
-// Feed-source skip check (KingsRoad / Predicto). Not bypassable by `force` because
-// re-fetching before the source's next hourly update returns identical data.
-async function shouldSkipFeed(source: "kingsroad" | "predicto", date: string, updateMinute: number): Promise<boolean> {
+// Feed-source skip check (KingsRoad / Predicto). Bypassable by `force` for manual
+// recovery of historical dates (e.g. Force Refresh from the dashboard).
+async function shouldSkipFeed(source: "kingsroad" | "predicto", date: string, updateMinute: number, force = false): Promise<boolean> {
   const { rows } = await sql`
     SELECT last_synced FROM report_sync_log
     WHERE source = ${source} AND sync_date = ${date} AND ad_account_id = ''
@@ -52,7 +52,10 @@ async function shouldSkipFeed(source: "kingsroad" | "predicto", date: string, up
   yesterday.setUTCHours(0, 0, 0, 0);
   yesterday.setUTCDate(yesterday.getUTCDate() - 1);
 
-  if (dateObj < yesterday) return true;
+  if (dateObj < yesterday) {
+    if (force) return false; // manual force sync — bypass permanent block for historical dates
+    return true;
+  }
   return lastSynced >= lastUpdateWindowTime(updateMinute);
 }
 
@@ -149,7 +152,7 @@ export async function syncAccount(
   // ── KingsRoad ─────────────────────────────────────────────────────────────
   const kingsroadDatesToFetch: string[] = [];
   for (const date of dates) {
-    if (await shouldSkipFeed("kingsroad", date, 15)) {
+    if (await shouldSkipFeed("kingsroad", date, 15, force)) {
       kingsroadSkipped++;
     } else {
       kingsroadDatesToFetch.push(date);
@@ -200,7 +203,7 @@ export async function syncAccount(
   // ── Predicto ──────────────────────────────────────────────────────────────
   const predictoDatesToFetch: string[] = [];
   for (const date of dates) {
-    if (await shouldSkipFeed("predicto", date, 46)) {
+    if (await shouldSkipFeed("predicto", date, 46, force)) {
       predictoSkipped++;
     } else {
       predictoDatesToFetch.push(date);
