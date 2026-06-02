@@ -10,7 +10,7 @@ import type { SiloAsset } from "@/types/silo";
 export default function SiloUploadPage() {
   const router = useRouter();
   const tags = loadTags();
-  const [selectedTagId, setSelectedTagId] = useState<string>(tags[0]?.id ?? "");
+  const [selectedTagId, setSelectedTagId] = useState<string>("");
   const [uploaded, setUploaded] = useState<SiloAsset[]>([]);
 
   return (
@@ -27,14 +27,16 @@ export default function SiloUploadPage() {
 
       {/* Tag selector */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tag (optional)</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          Tag <span className="text-red-500">*</span>
+        </label>
         <div className="flex gap-3 items-center flex-wrap">
           <select
             className="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-300 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
             value={selectedTagId}
             onChange={(e) => setSelectedTagId(e.target.value)}
           >
-            <option value="">No tag — use filename</option>
+            <option value="" disabled>— Select a tag —</option>
             {tags.map((t) => (
               <option key={t.id} value={t.id}>{t.name} (next: {t.prefix}_v_{String(t.nextIndex).padStart(3, "0")})</option>
             ))}
@@ -52,10 +54,16 @@ export default function SiloUploadPage() {
 
       {/* Uploader */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
-        <SiloUploader
-          tagId={selectedTagId || undefined}
-          onComplete={(assets) => setUploaded((prev) => [...prev, ...assets])}
-        />
+        {selectedTagId ? (
+          <SiloUploader
+            tagId={selectedTagId}
+            onComplete={(assets) => setUploaded((prev) => [...prev, ...assets])}
+          />
+        ) : (
+          <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">
+            Select a tag above to start uploading.
+          </p>
+        )}
       </div>
 
       {/* Post-upload actions */}
