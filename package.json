@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@ffmpeg/core": "^0.12.9",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",

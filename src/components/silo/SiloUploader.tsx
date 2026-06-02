@@ -14,7 +14,6 @@ import {
   getVideoDuration,
   getImageResolution,
   formatFileSize,
-  transcodeVideoToH264,
 } from "@/lib/silo-utils";
 import { findByHash, upsertAsset } from "@/lib/silo";
 import { getTagById, consumeNextIndex, buildAssetName } from "@/lib/silo-tags";
@@ -80,24 +79,14 @@ async function processAndUpload(
       optimizedFile = optResult;
       resolution = res;
     } else {
-      // Generate thumbnail + duration in parallel (fast), then transcode (slow + sequential).
+      // Generate thumbnail + duration in parallel (fast).
       const [thumbResult, dur] = await Promise.all([
         generateThumbnail(file, mediaType),
         getVideoDuration(file),
       ]);
       thumbnailBlob = thumbResult;
       durationSeconds = dur;
-
-      onUpdate({ stage: "transcoding", progress: 0 });
-      try {
-        optimizedFile = await transcodeVideoToH264(file, (msg) => {
-          const pct = msg.match(/(\d+)%/);
-          onUpdate({ stage: "transcoding", progress: pct ? parseInt(pct[1]) : 0 });
-        });
-      } catch (err) {
-        onUpdate({ stage: "failed", error: `Transcoding failed: ${String(err)}` });
-        return null;
-      }
+      // optimizedFile stays null — server will transcode after upload
     }
   } catch (err) {
     onUpdate({ stage: "failed", error: `Processing failed: ${String(err)}` });
@@ -150,8 +139,27 @@ async function processAndUpload(
     onUpdate({ progress: 95 });
 
     const originalUrl = urls[0];
-    const optimizedUrl = optimizedFile ? urls[1] : undefined;
+    let optimizedUrl: string | undefined = optimizedFile ? urls[1] : undefined;
     const thumbnailUrl = urls[optimizedFile ? 2 : 1];
+
+    // Server-side transcode for videos (uploaded raw above; server converts to H.264)
+    if (mediaType === "VIDEO" && !optimizedUrl) {
+      onUpdate({ stage: "transcoding", progress: 0 });
+      try {
+        const res = await fetch("/api/silo/transcode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ blobUrl: originalUrl, fileName: file.name }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          optimizedUrl = data.optimizedUrl;
+        }
+        // On failure: optimizedUrl stays undefined → asset saved with amber ⚠ badge
+      } catch {
+        // Network error — save asset without optimizedUrl
+      }
+    }
 
     // 4. Determine asset name
     let name = safeBase.replace(/\.[^.]+$/, "");
@@ -271,7 +279,7 @@ export function SiloUploader({ tagId, onComplete }: SiloUploaderProps) {
       case "queued": return "Queued";
       case "hashing": return "Checking…";
       case "processing": return "Optimizing…";
-      case "transcoding": return `Transcoding ${f.progress}%`;
+      case "transcoding": return "Transcoding on server…";
       case "uploading": return `Uploading ${f.progress}%`;
       case "done": return "Done ✅";
       case "failed": return `Failed ❌`;
