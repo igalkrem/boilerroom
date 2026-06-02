@@ -13,10 +13,16 @@ export async function getProviderNetworkMap(
     const path = `metadata/${googleUserId}/br_feed_providers.json`;
     const { blobs } = await list({ prefix: path });
     const blob = blobs.find((b) => b.pathname === path);
-    if (!blob) return map;
-    const downloadUrl = await getDownloadUrl(blob.url);
+    if (!blob) {
+      console.log(`[provider-network] no blob found at ${path} (${blobs.length} blobs with prefix)`);
+      return map;
+    }
+    const downloadUrl = getDownloadUrl(blob.url);
     const res = await fetch(downloadUrl, { cache: "no-store" });
-    if (!res.ok) return map;
+    if (!res.ok) {
+      console.error(`[provider-network] fetch failed: ${res.status}`);
+      return map;
+    }
     const providers: Array<{
       snapConfig?: { revenueSource?: string; allowedAdAccountIds?: string[] };
     }> = await res.json();
@@ -27,8 +33,9 @@ export async function getProviderNetworkMap(
         map.set(id, src);
       }
     }
-  } catch {
-    // Non-fatal — callers fall back to DB join classification
+    console.log(`[provider-network] mapped ${map.size} accounts from ${providers.length} providers`);
+  } catch (err) {
+    console.error("[provider-network] error:", err);
   }
   return map;
 }
