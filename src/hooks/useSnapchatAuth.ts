@@ -12,6 +12,8 @@ export interface AuthState {
   googleAvatar?: string;
   snapConnected: boolean;
   snapUserId?: string;
+  metaConnected: boolean;
+  metaExpiresAt?: number;
   isLoading: boolean;
   error: unknown;
 }
@@ -29,6 +31,8 @@ export function useSnapchatAuth(): AuthState {
     googleAvatar: data?.googleAvatar,
     snapConnected: data?.snapConnected === true,
     snapUserId: data?.snapUserId,
+    metaConnected: data?.metaConnected === true,
+    metaExpiresAt: data?.metaExpiresAt,
     isLoading,
     error,
   };

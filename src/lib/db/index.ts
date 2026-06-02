@@ -332,3 +332,67 @@ export async function getAllUserTokens(): Promise<UserTokenRow[]> {
 export async function deleteUserToken(googleUserId: string): Promise<void> {
   await sql`DELETE FROM user_snapchat_tokens WHERE google_user_id = ${googleUserId}`;
 }
+
+// ─── Meta (Facebook) token storage ─────────────────────────────────────────
+// Meta issues long-lived tokens (~60 days) — no refresh token.
+// The access token is AES-256-GCM encrypted using the same key as Snapchat tokens.
+
+export interface UserMetaTokenRow {
+  google_user_id: string;
+  meta_user_id: string;
+  access_token: string; // decrypted
+  ad_account_ids: Array<{ id: string; currency: string; timezone_name: string }>;
+  expires_at: number;   // unix ms
+}
+
+export async function upsertUserMetaToken(
+  googleUserId: string,
+  metaUserId: string,
+  accessToken: string,
+  expiresAt: number
+): Promise<void> {
+  const enc = encryptToken(accessToken);
+  await sql`
+    INSERT INTO user_meta_tokens (google_user_id, meta_user_id, access_token_enc, expires_at, updated_at)
+    VALUES (${googleUserId}, ${metaUserId}, ${enc}, ${expiresAt}, NOW())
+    ON CONFLICT (google_user_id)
+    DO UPDATE SET
+      meta_user_id     = EXCLUDED.meta_user_id,
+      access_token_enc = EXCLUDED.access_token_enc,
+      expires_at       = EXCLUDED.expires_at,
+      updated_at       = NOW()
+  `;
+}
+
+export async function updateMetaAdAccountIds(
+  googleUserId: string,
+  accounts: Array<{ id: string; currency: string; timezone_name: string }>
+): Promise<void> {
+  await sql`
+    UPDATE user_meta_tokens
+    SET ad_account_ids = ${JSON.stringify(accounts)}::jsonb, updated_at = NOW()
+    WHERE google_user_id = ${googleUserId}
+  `;
+}
+
+export async function getAllUserMetaTokens(): Promise<UserMetaTokenRow[]> {
+  const { rows } = await sql<{
+    google_user_id: string;
+    meta_user_id: string;
+    access_token_enc: string;
+    ad_account_ids: Array<{ id: string; currency: string; timezone_name: string }>;
+    expires_at: number;
+  }>`SELECT google_user_id, meta_user_id, access_token_enc, ad_account_ids, expires_at FROM user_meta_tokens`;
+
+  return rows.map((r) => ({
+    google_user_id: r.google_user_id,
+    meta_user_id: r.meta_user_id,
+    access_token: decryptToken(r.access_token_enc),
+    ad_account_ids: r.ad_account_ids ?? [],
+    expires_at: Number(r.expires_at),
+  }));
+}
+
+export async function deleteUserMetaToken(googleUserId: string): Promise<void> {
+  await sql`DELETE FROM user_meta_tokens WHERE google_user_id = ${googleUserId}`;
+}

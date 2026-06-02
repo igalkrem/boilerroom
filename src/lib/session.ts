@@ -33,6 +33,15 @@ export function isSnapchatConnected(session: SessionData): boolean {
   return !!(session.snapAccessToken && session.snapUserId);
 }
 
+export function isMetaConnected(session: SessionData): boolean {
+  return !!(session.metaAccessToken && session.metaUserId);
+}
+
+export function isMetaAdAccountAllowed(session: SessionData, adAccountId: string): boolean {
+  if (!session.metaAllowedAdAccountIds?.length) return false;
+  return session.metaAllowedAdAccountIds.includes(adAccountId);
+}
+
 /**
  * Returns true if the adAccountId is among the user's known accounts.
  * Denies by default if the allowed list has not been populated yet — the

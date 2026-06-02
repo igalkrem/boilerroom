@@ -11,9 +11,16 @@ export interface SessionData {
   snapExpiresAt?: number;
   snapUserId?: string;
 
+  // Meta (Facebook) — optional, added when user connects from Traffic Sources
+  metaAccessToken?: string;
+  metaExpiresAt?: number;   // unix ms — long-lived tokens, ~60 days, no refresh
+  metaUserId?: string;
+  metaAllowedAdAccountIds?: string[];
+
   // OAuth CSRF state — separate per provider to prevent flow collision
   googleOAuthState?: string;
   snapchatOAuthState?: string;
+  metaOAuthState?: string;
 
   // Cached after /api/snapchat/ad-accounts for ownership checks
   allowedAdAccountIds?: string[];

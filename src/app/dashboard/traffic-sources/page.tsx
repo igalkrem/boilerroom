@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSnapchatAuth } from "@/hooks/useSnapchatAuth";
 import { useAdAccounts } from "@/hooks/useAdAccounts";
+import { useMetaAdAccounts } from "@/hooks/useMetaAdAccounts";
 import { loadAdAccountConfigs, upsertAdAccountConfig } from "@/lib/adAccounts";
 import { loadFeedProviders, upsertFeedProvider } from "@/lib/feed-providers";
 import { loadPixels, deletePixel } from "@/lib/pixels";
@@ -22,12 +23,14 @@ function SnapchatLogo({ className }: { className?: string }) {
 
 export default function TrafficSourcesPage() {
   const router = useRouter();
-  const { snapConnected, isLoading: authLoading } = useSnapchatAuth();
+  const { snapConnected, metaConnected, metaExpiresAt, isLoading: authLoading } = useSnapchatAuth();
   const { accounts: snapAccounts, isLoading: accountsLoading } = useAdAccounts();
+  const { accounts: metaAccounts, isLoading: metaAccountsLoading } = useMetaAdAccounts();
   const [adAccountConfigs, setAdAccountConfigs] = useState<AdAccountConfig[]>([]);
   const [feedProviders, setFeedProviders] = useState<FeedProvider[]>([]);
   const [pixels, setPixels] = useState<SavedPixel[]>([]);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [metaDisconnecting, setMetaDisconnecting] = useState(false);
 
   const reloadLocal = useCallback(() => {
     setAdAccountConfigs(loadAdAccountConfigs());
@@ -49,6 +52,22 @@ export default function TrafficSourcesPage() {
       setDisconnecting(false);
     }
   };
+
+  const handleDisconnectMeta = async () => {
+    if (!confirm("Disconnect Meta? Your Meta ad accounts will no longer be accessible.")) return;
+    setMetaDisconnecting(true);
+    try {
+      await fetch("/api/auth/meta/disconnect", { method: "POST" });
+      window.location.reload();
+    } finally {
+      setMetaDisconnecting(false);
+    }
+  };
+
+  // Days until Meta token expires (long-lived tokens last ~60 days, no refresh).
+  const metaTokenDaysLeft = metaExpiresAt
+    ? Math.ceil((metaExpiresAt - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
 
   const getConfig = (accountId: string): AdAccountConfig => {
     const existing = adAccountConfigs.find((c) => c.id === accountId);
@@ -169,19 +188,55 @@ export default function TrafficSourcesPage() {
             )}
           </Card>
 
-          {/* Facebook placeholder (future) */}
-          <Card className="flex flex-col gap-4 opacity-50 pointer-events-none select-none">
+          {/* Meta (Facebook) Card */}
+          <Card className="flex flex-col gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
                 <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="currentColor">
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
                 </svg>
               </div>
-              <div>
-                <h3 className="font-semibold text-gray-900 text-sm">Facebook</h3>
-                <span className="text-xs text-gray-400">Coming soon</span>
+              <div className="min-w-0">
+                <h3 className="font-semibold text-gray-900 text-sm">Meta</h3>
+                {authLoading ? (
+                  <p className="text-xs text-gray-400">Checking…</p>
+                ) : metaConnected ? (
+                  <Badge variant="green">Connected</Badge>
+                ) : (
+                  <Badge variant="gray">Not connected</Badge>
+                )}
               </div>
             </div>
+
+            {/* Token expiry warning — Meta tokens last ~60 days with no refresh */}
+            {metaConnected && metaTokenDaysLeft !== null && metaTokenDaysLeft <= 7 && (
+              <p className={`text-xs px-2 py-1 rounded ${metaTokenDaysLeft <= 0 ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-700"}`}>
+                {metaTokenDaysLeft <= 0
+                  ? "Token expired — reconnect to restore access."
+                  : `Token expires in ${metaTokenDaysLeft} day${metaTokenDaysLeft === 1 ? "" : "s"} — reconnect soon.`}
+              </p>
+            )}
+
+            {!authLoading && (
+              metaConnected ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-red-500 hover:text-red-600 mt-auto"
+                  onClick={handleDisconnectMeta}
+                  disabled={metaDisconnecting}
+                >
+                  {metaDisconnecting ? "Disconnecting…" : "Disconnect"}
+                </Button>
+              ) : (
+                <a
+                  href="/api/auth/meta/connect"
+                  className="block w-full text-center py-1.5 px-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors text-sm mt-auto"
+                >
+                  Connect Meta
+                </a>
+              )
+            )}
           </Card>
         </div>
       </section>
@@ -257,6 +312,38 @@ export default function TrafficSourcesPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Section: Meta Ad Accounts */}
+      {metaConnected && (
+        <section>
+          <h2 className="text-base font-semibold text-gray-800 mb-3">Meta Ad Accounts</h2>
+          {metaAccountsLoading ? (
+            <div className="flex items-center gap-2 text-gray-500 text-sm">
+              <Spinner /> Loading accounts…
+            </div>
+          ) : metaAccounts.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              No Meta ad accounts found. Make sure your Meta Business account has ad account access.
+            </p>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
+              {metaAccounts.map((account) => (
+                <div key={account.id} className="px-4 py-3 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900 text-sm">{account.name}</p>
+                    <p className="text-xs text-gray-400 font-mono mt-0.5">{account.id}</p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0 text-xs text-gray-500">
+                    <span>{account.currency}</span>
+                    <span className="text-gray-300">·</span>
+                    <span>{account.timezone_name}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </section>
