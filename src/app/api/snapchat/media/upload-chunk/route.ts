@@ -14,13 +14,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
   }
 
-  let accessToken: string;
-  try {
-    accessToken = await getValidAccessToken();
-  } catch {
-    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
-  }
-
+  // Parse form data and authorize before fetching the access token — avoids triggering
+  // a token refresh for requests that would be rejected anyway (SEC-5).
   const formData = await request.formData();
   const chunk = formData.get("chunk") as File | null;
   const partNumber = formData.get("partNumber") as string | null;
@@ -33,6 +28,13 @@ export async function POST(request: NextRequest) {
 
   if (!isAdAccountAllowed(session, adAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  let accessToken: string;
+  try {
+    accessToken = await getValidAccessToken();
+  } catch {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
 
   // Use the server-pinned addPath stored at upload-init time — ignore the client-supplied value.

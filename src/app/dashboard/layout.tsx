@@ -1,9 +1,15 @@
+import { redirect } from "next/navigation";
+import { getSession, isSessionValid } from "@/lib/session";
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { KVHydrationProvider } from "@/components/layout/KVHydrationProvider";
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const session = await getSession();
+  if (!isSessionValid(session)) {
+    redirect("/login");
+  }
   return (
     <AuthGuard>
       <KVHydrationProvider>

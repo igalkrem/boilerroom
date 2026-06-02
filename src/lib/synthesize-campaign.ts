@@ -129,7 +129,13 @@ function buildUrlTemplate(provider: FeedProvider, article: Article, headline: st
         .replace(/\{\{organization_id\}\}/gi, encodeURIComponent(provider.snapConfig.organizationId ?? ""))
         // Strip any remaining {{...}} that aren't Snapchat native or orchestrator macros
         .replace(/\{\{(?!campaign\.id|adset\.id|ad\.id|channel\.id)[^}]+\}\}/gi, "");
-      if (p.encode) resolved = encodeURIComponent(resolved);
+      if (p.encode) {
+        // Split on {{channel.id}} so it survives encoding — the orchestrator resolves it
+        // after synthesis, and encodeURIComponent would turn it into %7B%7Bchannel.id%7D%7D
+        // which the orchestrator's regex would never match.
+        const parts = resolved.split(/\{\{channel\.id\}\}/gi);
+        resolved = parts.map((part) => encodeURIComponent(part)).join("{{channel.id}}");
+      }
       return `${p.key}=${resolved}`;
     })
     .join("&");

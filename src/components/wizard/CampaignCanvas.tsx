@@ -535,6 +535,17 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           const articleId = source.replace(/^article-/, "");
           const accountId = target.replace(/^account-/, "");
           s.toggleArticleToAdAccount(articleId, accountId);
+        } else if (srcType === "account" && tgtType === "preset") {
+          // Remove all articleToPreset edges for articles connected to this account-preset pair.
+          const accountId = source.replace(/^account-/, "");
+          const presetId = target.replace(/^preset-/, "");
+          s.edges.articleToAdAccount
+            .filter((ae) => ae.adAccountId === accountId)
+            .forEach((ae) => {
+              if (s.edges.articleToPreset.some((pe) => pe.articleId === ae.articleId && pe.presetId === presetId)) {
+                s.toggleArticleToPreset(ae.articleId, presetId);
+              }
+            });
         }
       }
     },

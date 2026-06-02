@@ -122,10 +122,14 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ adsquad: updated });
   } catch (err) {
     console.error("Update ad squad error:", err);
-    const message = err instanceof Error ? err.message : "internal_error";
-    if (message.startsWith("forbidden:")) {
+    const raw = err instanceof Error ? err.message : "internal_error";
+    if (raw.startsWith("forbidden:")) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
-    return NextResponse.json({ error: "update_failed", message }, { status: 502 });
+    // snapFetch throws "Snapchat API error {status}: {full_body}" — strip the raw response body
+    // so internal debug_message fields are never forwarded to the browser.
+    // Structured sub_request_error_reason strings (e.g. "E2025: ...") are safe to surface.
+    const clientMessage = raw.startsWith("Snapchat API error") ? "snapchat_request_failed" : raw;
+    return NextResponse.json({ error: "update_failed", message: clientMessage }, { status: 502 });
   }
 }

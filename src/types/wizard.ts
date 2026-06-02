@@ -43,8 +43,7 @@ export interface AdSquadFormData {
 export type InteractionType =
   | "SWIPE_TO_OPEN"
   | "WEB_VIEW"
-  | "DEEP_LINK"
-  | "APP_INSTALL";
+  | "DEEP_LINK";
 
 export interface CreativeFormData {
   id: string; // client-side UUID

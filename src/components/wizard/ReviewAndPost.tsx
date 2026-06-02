@@ -29,11 +29,13 @@ export function ReviewAndPost({ onBack, onLaunch, launching, launchProgress }: R
   const store = useCanvasStore();
   const [nameTemplate, setNameTemplate] = useState("{{preset.name}} {{article.name}} {{date}}");
 
-  const matrix = store.buildCampaignMatrix();
-
-  const providers = loadFeedProviders();
-  const articles = loadArticles();
-  const presets = loadPresets();
+  // Memoize expensive operations — these run on every render including each
+  // launchProgress tick during campaign submission (which fires many times).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const matrix = useMemo(() => store.buildCampaignMatrix(), [store.creativeRows, store.creativeGroups, store.edges]);
+  const providers = useMemo(() => loadFeedProviders(), []);
+  const articles = useMemo(() => loadArticles(), []);
+  const presets = useMemo(() => loadPresets(), []);
 
   // Stable per-row preview IDs — only regenerate when matrix length changes
   const previewIds = useMemo(

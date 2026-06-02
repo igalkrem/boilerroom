@@ -19,7 +19,6 @@ export const creativeSchema = z
       "SWIPE_TO_OPEN",
       "WEB_VIEW",
       "DEEP_LINK",
-      "APP_INSTALL",
     ]),
     webViewUrl: z.string().optional(),
     deepLinkUrl: z.string().optional(),
@@ -64,10 +63,7 @@ export const creativeSchema = z
         }
       }
     }
-    if (
-      data.interactionType === "DEEP_LINK" ||
-      data.interactionType === "APP_INSTALL"
-    ) {
+    if (data.interactionType === "DEEP_LINK") {
       if (!data.deepLinkUrl || data.deepLinkUrl.trim() === "") {
         ctx.addIssue({
           code: "custom",

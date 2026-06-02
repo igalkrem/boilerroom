@@ -169,14 +169,16 @@ export async function runSubmission(
       console.warn("[orchestrator] channel assignment threw:", String(err));
     }
 
-    // Always resolve {{channel.id}} — strip the macro when no channel was assigned so
-    // Snapchat never sees a literal {{...}} in a name (causes E1001).
-    const cid = channelId ?? "";
-    const injectChannel = (s: string) => s.replace(/\{\{channel\.id\}\}/gi, cid);
-    campaigns = campaigns.map((c)  => ({ ...c,  name: injectChannel(c.name) }));
-    adSquads  = adSquads.map((sq)  => ({ ...sq, name: injectChannel(sq.name) }));
-    creatives = creatives.map((cr) => ({ ...cr, name: injectChannel(cr.name) }));
   }
+
+  // Always strip {{channel.id}} from names regardless of channel config type.
+  // For provider-supplied channels this replaces with the assigned ID; for all others
+  // it replaces with "" to prevent Snapchat from seeing unknown macro syntax (E1001).
+  const cid = channelId ?? "";
+  const injectChannel = (s: string) => s.replace(/\{\{channel\.id\}\}/gi, cid);
+  campaigns = campaigns.map((c)  => ({ ...c,  name: injectChannel(c.name) }));
+  adSquads  = adSquads.map((sq)  => ({ ...sq, name: injectChannel(sq.name) }));
+  creatives = creatives.map((cr) => ({ ...cr, name: injectChannel(cr.name) }));
 
   // ── Step 1: Create Campaigns ──────────────────────────────────────────────
   onStage("campaigns");
@@ -325,10 +327,13 @@ export async function runSubmission(
   // to so the reporting JOIN can link Predicto's custom_channel_id → ad_squad_id.
   if (channelId && squadIdMap.size > 0) {
     const firstAdSquadId = [...squadIdMap.values()][0];
+    // Include the campaign Snap ID so the backfill cron can find the squad and
+    // populate ad_squad_snap_id for channels created before link-squad existed.
+    const firstCampaignId = [...campaignIdMap.values()][0] ?? "";
     fetch("/api/feed-providers/channels/link-squad", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channelId, adSquadId: firstAdSquadId }),
+      body: JSON.stringify({ channelId, adSquadId: firstAdSquadId, campaignSnapId: firstCampaignId }),
     }).catch((err) => console.warn("[orchestrator] link-squad failed (non-fatal):", String(err)));
   }
 

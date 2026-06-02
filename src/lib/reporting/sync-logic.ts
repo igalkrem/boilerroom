@@ -318,8 +318,10 @@ export async function syncAccount(
         }
       });
 
-      const allSquadsFailed = adSquads.length > 0 && debugSquadErrors.length === adSquads.length;
-      if (!allSquadsFailed) {
+      // Only mark dates as synced when every squad succeeded. If any squad errored,
+      // skip the log update so the next cron run retries those squads — otherwise
+      // partial failures on historical dates permanently lose spend data.
+      if (debugSquadErrors.length === 0) {
         for (const date of snapDatesToFetch) {
           await markSynced("snapchat", date, adAccountId);
           snapchatSynced++;

@@ -20,6 +20,10 @@ function getSnapEnv() {
   return { TOKEN_URL, CLIENT_ID, CLIENT_SECRET, REDIRECT_URI };
 }
 
+// Hardcoded — same treatment as SNAPCHAT_API_BASE_URL — prevents env-var misconfiguration
+// from redirecting OAuth state tokens to an attacker-controlled server.
+const SNAPCHAT_AUTH_URL = "https://accounts.snapchat.com/login/oauth2/authorize";
+
 export function buildAuthUrl(state: string): string {
   const { CLIENT_ID, REDIRECT_URI } = getSnapEnv();
   const params = new URLSearchParams({
@@ -29,7 +33,7 @@ export function buildAuthUrl(state: string): string {
     scope: "snapchat-marketing-api",
     state,
   });
-  return `${process.env.SNAPCHAT_AUTH_URL}?${params.toString()}`;
+  return `${SNAPCHAT_AUTH_URL}?${params.toString()}`;
 }
 
 export async function exchangeCodeForTokens(code: string): Promise<SnapTokenResponse> {

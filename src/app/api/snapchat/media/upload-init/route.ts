@@ -25,13 +25,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
   }
 
-  let accessToken: string;
-  try {
-    accessToken = await getValidAccessToken();
-  } catch {
-    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
-  }
-
+  // Parse and authorize before fetching the access token — avoids triggering a
+  // token refresh for requests that would be rejected anyway (SEC-5).
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
@@ -41,6 +36,13 @@ export async function POST(request: NextRequest) {
 
   if (!isAdAccountAllowed(session, adAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  let accessToken: string;
+  try {
+    accessToken = await getValidAccessToken();
+  } catch {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
 
   const form = new FormData();
@@ -63,8 +65,6 @@ export async function POST(request: NextRequest) {
   const data = JSON.parse(text) as { upload_id?: string; add_path?: string; finalize_path?: string };
 
   // Snapchat may return full URLs or relative paths — normalize to relative /v1/... paths.
-  // Paths may be relative to the server root (/v1/media/...) OR relative to the /v1 base
-  // (/media/...) — both are normalized to start with /v1/.
   function toRelativePath(p: string | undefined): string | undefined {
     if (!p) return p;
     let path: string;
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       const url = new URL(p);
       path = url.pathname + url.search;
     } catch {
-      path = p; // already a relative path
+      path = p;
     }
     if (!path.includes("/v1/")) {
       path = path.startsWith("/") ? `/v1${path}` : `/v1/${path}`;
@@ -83,15 +83,20 @@ export async function POST(request: NextRequest) {
   const normalizedAddPath = toRelativePath(data.add_path);
   const normalizedFinalizePath = toRelativePath(data.finalize_path);
 
-  // Pin paths server-side so upload-chunk and upload-finalize ignore the client's copy.
-  if (data.upload_id && normalizedAddPath && normalizedFinalizePath) {
-    session.pendingUploads = session.pendingUploads ?? {};
-    session.pendingUploads[data.upload_id] = {
-      addPath: normalizedAddPath,
-      finalizePath: normalizedFinalizePath,
-    };
-    await session.save();
+  // Return 502 immediately if Snapchat omits required fields — prevents orphaned
+  // uploads where the client proceeds with undefined upload_id / paths (CR-4).
+  if (!data.upload_id || !normalizedAddPath || !normalizedFinalizePath) {
+    console.error("[upload-init] Snapchat response missing required fields:", data);
+    return NextResponse.json({ error: "internal_error" }, { status: 502 });
   }
+
+  // Pin paths server-side so upload-chunk and upload-finalize ignore the client's copy.
+  session.pendingUploads = session.pendingUploads ?? {};
+  session.pendingUploads[data.upload_id] = {
+    addPath: normalizedAddPath,
+    finalizePath: normalizedFinalizePath,
+  };
+  await session.save();
 
   return NextResponse.json({
     ...data,

@@ -229,14 +229,24 @@ export async function releaseChannel(campaignSnapId: string, googleUserId: strin
   `;
 }
 
-export async function updateChannelAdSquadId(channelId: string, adSquadId: string, googleUserId: string): Promise<void> {
-  await sql`
-    UPDATE feed_provider_channels
-    SET ad_squad_snap_id = ${adSquadId}
-    WHERE channel_id = ${channelId}
-      AND google_user_id = ${googleUserId}
-      AND status = 'in-use'
-  `;
+export async function updateChannelAdSquadId(channelId: string, adSquadId: string, googleUserId: string, campaignSnapId?: string): Promise<void> {
+  if (campaignSnapId) {
+    await sql`
+      UPDATE feed_provider_channels
+      SET ad_squad_snap_id = ${adSquadId}, campaign_snap_id = ${campaignSnapId}
+      WHERE channel_id = ${channelId}
+        AND google_user_id = ${googleUserId}
+        AND status = 'in-use'
+    `;
+  } else {
+    await sql`
+      UPDATE feed_provider_channels
+      SET ad_squad_snap_id = ${adSquadId}
+      WHERE channel_id = ${channelId}
+        AND google_user_id = ${googleUserId}
+        AND status = 'in-use'
+    `;
+  }
 }
 
 export async function bulkForceChannelStatus(
