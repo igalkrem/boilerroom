@@ -205,6 +205,34 @@ export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: 
       </div>
 
       <div>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Revenue Source</p>
+        <div className="flex gap-2">
+          {(["kingsroad", "predicto", "none"] as const).map((val) => {
+            const typed = val === "none" ? undefined : val;
+            const isSelected = (snapConfig.revenueSource ?? "none") === val;
+            const label = val === "kingsroad" ? "KingsRoad" : val === "predicto" ? "Predicto" : "Not set";
+            return (
+              <button
+                key={val}
+                type="button"
+                onClick={() => onChange({ ...snapConfig, revenueSource: typed })}
+                className={`px-3 py-1.5 text-xs rounded-full border font-medium transition-colors ${
+                  isSelected
+                    ? "bg-cyan-600 border-cyan-600 text-white"
+                    : "bg-transparent border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-cyan-400 dark:hover:border-cyan-500"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-gray-400 mt-1">
+          Routes hourly syncs — KingsRoad accounts sync at :15, Predicto at :46.
+        </p>
+      </div>
+
+      <div>
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Assigned Ad Accounts</p>
           <Link

@@ -4,8 +4,17 @@ import { refreshAccessToken } from "@/lib/snapchat/auth";
 import { syncAccount } from "@/lib/reporting/sync-logic";
 import { verifyCronSecret } from "@/lib/db/token-crypto";
 import { syncChannelPausedStatus } from "@/lib/channel-status-sync";
+import { getProviderNetworkMap } from "@/lib/reporting/provider-network";
 
-async function getAccountNetwork(adAccountId: string): Promise<"kingsroad" | "predicto" | "unknown"> {
+async function getAccountNetwork(
+  adAccountId: string,
+  providerMap: Map<string, "kingsroad" | "predicto">
+): Promise<"kingsroad" | "predicto" | "unknown"> {
+  // 1. Explicit provider config (authoritative — no DB data required)
+  const fromProvider = providerMap.get(adAccountId);
+  if (fromProvider) return fromProvider;
+
+  // 2. DB join fallback for accounts not yet configured with revenueSource
   const [kr, pred] = await Promise.all([
     sql`SELECT 1 FROM snapchat_ad_squad_stats sas
         INNER JOIN kingsroad_report kr ON kr.custom_channel_name = sas.ad_squad_id
@@ -82,11 +91,12 @@ export async function GET(request: NextRequest) {
 
       // Classify accounts by network, then only sync the ones relevant to this window.
       // Unknown accounts (no data yet) are included in both windows as a fallback.
+      const providerMap = await getProviderNetworkMap(user.google_user_id);
       const classified = await Promise.all(
         user.ad_account_ids.map(async ({ id, timezone }) => ({
           id,
           timezone,
-          network: await getAccountNetwork(id),
+          network: await getAccountNetwork(id, providerMap),
         }))
       );
 
