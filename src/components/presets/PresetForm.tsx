@@ -31,6 +31,8 @@ const presetFormSchema = z
     targetingDeviceType: z.enum(["WEB", "MOBILE", "ALL"]).optional(),
     targetingOsType: z.enum(["iOS", "ANDROID"]).optional(),
     pixelId: z.string().optional(),
+    minAge: z.string().optional(),
+    maxAge: z.string().optional(),
     status: z.enum(["ACTIVE", "PAUSED"]),
   })
   .superRefine((data, ctx) => {
@@ -155,6 +157,24 @@ const STATUS_OPTIONS = [
   { value: "PAUSED", label: "Paused" },
 ];
 
+const MIN_AGE_OPTIONS = [
+  { value: "", label: "Any" },
+  { value: "13", label: "13" },
+  { value: "18", label: "18" },
+  { value: "21", label: "21" },
+  { value: "25", label: "25" },
+  { value: "35", label: "35" },
+];
+
+const MAX_AGE_OPTIONS = [
+  { value: "", label: "Any" },
+  { value: "20", label: "20" },
+  { value: "24", label: "24" },
+  { value: "34", label: "34" },
+  { value: "35+", label: "35+" },
+  { value: "49+", label: "49+" },
+];
+
 const CTA_OPTIONS = [
   { value: "", label: "— None —" },
   { value: "MORE", label: "More" },
@@ -232,6 +252,8 @@ export function PresetForm({ preset }: PresetFormProps) {
           placementConfig: sq0.placementConfig,
           targetingDeviceType: sq0.targetingDeviceType,
           targetingOsType: sq0.targetingOsType,
+          minAge: sq0.minAge,
+          maxAge: sq0.maxAge,
           pixelId: sq0.pixelId,
           status: sq0.status,
         }
@@ -282,6 +304,8 @@ export function PresetForm({ preset }: PresetFormProps) {
           targetingGender: undefined,
           targetingDeviceType: data.targetingDeviceType,
           targetingOsType: data.targetingOsType,
+          minAge: data.minAge || undefined,
+          maxAge: data.maxAge || undefined,
           pixelId: data.pixelId || undefined,
         },
       ],
@@ -426,6 +450,24 @@ export function PresetForm({ preset }: PresetFormProps) {
         {deviceType === "MOBILE" && (
           <Select label="OS" options={OS_OPTIONS} {...register("targetingOsType")} />
         )}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Min Age</label>
+          <select {...register("minAge")} className={selectCls}>
+            {MIN_AGE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Age</label>
+          <select {...register("maxAge")} className={selectCls}>
+            {MAX_AGE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
 
         <Select label="Placements" options={PLACEMENT_OPTIONS} {...register("placementConfig")} />
       </div>

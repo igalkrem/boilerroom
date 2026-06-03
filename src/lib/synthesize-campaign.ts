@@ -72,6 +72,8 @@ export function synthesizeCampaign(
     targetingGender: squadTemplate.targetingGender,
     targetingDeviceType: squadTemplate.targetingDeviceType,
     targetingOsType: squadTemplate.targetingOsType,
+    minAge: squadTemplate.minAge,
+    maxAge: squadTemplate.maxAge,
     pixelId: squadTemplate.pixelId || undefined,
   };
 

@@ -51,9 +51,12 @@ function buildDemographics(sq: AdSquadFormData): Pick<SnapAdSquadPayload["target
   const out: Pick<SnapAdSquadPayload["targeting"], "demographics" | "devices"> = {};
 
   const hasGender = sq.targetingGender && sq.targetingGender !== "ALL";
-  if (hasGender) {
+  const hasAge = sq.minAge || sq.maxAge;
+  if (hasGender || hasAge) {
     out.demographics = [{
-      genders: [sq.targetingGender as "MALE" | "FEMALE"],
+      ...(hasGender ? { genders: [sq.targetingGender as "MALE" | "FEMALE"] } : {}),
+      ...(sq.minAge ? { min_age: sq.minAge } : {}),
+      ...(sq.maxAge ? { max_age: sq.maxAge } : {}),
     }];
   }
 

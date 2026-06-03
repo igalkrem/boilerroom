@@ -36,6 +36,8 @@ export interface AdSquadFormData {
   targetingGender?: "ALL" | "MALE" | "FEMALE";
   targetingDeviceType?: "WEB" | "MOBILE" | "ALL";
   targetingOsType?: "iOS" | "ANDROID";
+  minAge?: string;
+  maxAge?: string;
   // Tracking
   pixelId?: string;
 }

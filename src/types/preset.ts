@@ -26,6 +26,8 @@ export interface AdSquadPresetData {
   targetingGender?: "ALL" | "MALE" | "FEMALE";
   targetingDeviceType?: "WEB" | "MOBILE" | "ALL";
   targetingOsType?: "iOS" | "ANDROID";
+  minAge?: string;
+  maxAge?: string;
   pixelId?: string;
 }
 
