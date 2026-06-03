@@ -160,7 +160,7 @@ const STATUS_OPTIONS = [
 const AGE_OPTIONS = [
   { value: "", label: "Any" },
   ...Array.from({ length: 42 }, (_, i) => ({ value: String(i + 13), label: String(i + 13) })),
-  { value: "55+", label: "55+" },
+  { value: "55", label: "55+" },
 ];
 
 const CTA_OPTIONS = [
