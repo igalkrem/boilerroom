@@ -157,22 +157,10 @@ const STATUS_OPTIONS = [
   { value: "PAUSED", label: "Paused" },
 ];
 
-const MIN_AGE_OPTIONS = [
+const AGE_OPTIONS = [
   { value: "", label: "Any" },
-  { value: "13", label: "13" },
-  { value: "18", label: "18" },
-  { value: "21", label: "21" },
-  { value: "25", label: "25" },
-  { value: "35", label: "35" },
-];
-
-const MAX_AGE_OPTIONS = [
-  { value: "", label: "Any" },
-  { value: "20", label: "20" },
-  { value: "24", label: "24" },
-  { value: "34", label: "34" },
-  { value: "35+", label: "35+" },
-  { value: "49+", label: "49+" },
+  ...Array.from({ length: 42 }, (_, i) => ({ value: String(i + 13), label: String(i + 13) })),
+  { value: "55+", label: "55+" },
 ];
 
 const CTA_OPTIONS = [
@@ -454,7 +442,7 @@ export function PresetForm({ preset }: PresetFormProps) {
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Min Age</label>
           <select {...register("minAge")} className={selectCls}>
-            {MIN_AGE_OPTIONS.map((o) => (
+            {AGE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
@@ -463,7 +451,7 @@ export function PresetForm({ preset }: PresetFormProps) {
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Age</label>
           <select {...register("maxAge")} className={selectCls}>
-            {MAX_AGE_OPTIONS.map((o) => (
+            {AGE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
