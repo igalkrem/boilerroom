@@ -260,6 +260,12 @@ export function PresetForm({ preset }: PresetFormProps) {
   const bidStrategy = useWatch({ control, name: "bidStrategy" });
   const deviceType = useWatch({ control, name: "targetingDeviceType" });
 
+  useEffect(() => {
+    if (sq0?.pixelId && pixels.length > 0) {
+      setValue("pixelId", sq0.pixelId);
+    }
+  }, [pixels, sq0?.pixelId, setValue]);
+
   const onSubmit = (data: PresetFormValues) => {
     const saved: CampaignPreset = {
       id: preset?.id ?? uuid(),
