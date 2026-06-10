@@ -275,6 +275,7 @@ src/
   | `{{creative.headline}}` | canvas headline input | synthesis time |
   | `{{creative.rac}}` | `rac` field of the selected headline | synthesis time |
   | `{{organization_id}}` | `provider.snapConfig.organizationId` | synthesis time |
+  | `{{ad_account.id}}` | canvas ad account ID (`item.adAccountId`) | synthesis time |
   | `{{channel.id}}` | assigned channel from Postgres | orchestrator (after channel assignment) |
   | `{{campaign.id}}` | Snapchat campaign ID | Snapchat native — substituted at click time |
   | `{{adset.id}}` | Snapchat ad squad ID | Snapchat native — substituted at click time |
