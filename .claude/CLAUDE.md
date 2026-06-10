@@ -328,6 +328,8 @@ src/
 
   **`ArticleForm` gotcha:** `providers` loads async in a `useEffect`, so at mount the domain `<select>` has no options yet — the HTML select silently falls back to the first option. Fix: a second `useEffect` calls `setValue("domain", article.domain)` once `providers.length > 0`, restoring the saved value. Any future field that depends on a provider-driven option list should follow the same pattern.
 
+  **`PresetForm` gotcha (same pattern):** `pixels` are loaded inside a `useEffect` — synchronous localStorage reads, but still deferred until after the first render. The Pixel `<select>` has no options on first render, so react-hook-form's `defaultValues.pixelId` silently falls back to "— None —". Fix: a restoration `useEffect` calls `setValue("pixelId", sq0.pixelId)` once `pixels.length > 0`. The hook must be placed *after* both `sq0` and `setValue` are declared (post-`useForm` destructuring) to avoid a temporal dead zone error.
+
 - **Silo → wizard integration:** `CampaignCanvas` opens `SiloBrowser` modal to pick assets. `getAssetById(creativeId)` is called with the Silo asset ID. Silo asset fields: `mediaType` (not `type`), `originalFileName` (not `fileName`), `optimizedUrl ?? originalUrl` (not `blobUrl`). After submission, `WizardShell` caches new Snapchat mediaIds into Silo assets and records usage history.
 
 - **Media upload (deferred):** The actual upload happens at submission time in the `uploadMedia` stage. Two upload functions in `lib/uploadMediaToSnapchat.ts`:
