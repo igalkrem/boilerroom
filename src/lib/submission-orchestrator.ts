@@ -60,11 +60,17 @@ function buildDemographics(sq: AdSquadFormData): Pick<SnapAdSquadPayload["target
     }];
   }
 
+  // Snapchat targeting.devices uses {os_type, operation} — no device_type field.
+  // MOBILE maps to the selected OS (or both iOS+Android if none specified); WEB → os_type "WEB".
   if (sq.targetingDeviceType && sq.targetingDeviceType !== "ALL") {
-    out.devices = [{
-      device_type: sq.targetingDeviceType as "MOBILE" | "WEB",
-      ...(sq.targetingOsType ? { os_type: sq.targetingOsType } : {}),
-    }];
+    if (sq.targetingDeviceType === "WEB") {
+      out.devices = [{ os_type: "WEB", operation: "INCLUDE" }];
+    } else {
+      const osTypes: Array<"iOS" | "ANDROID"> = sq.targetingOsType
+        ? [sq.targetingOsType as "iOS" | "ANDROID"]
+        : ["iOS", "ANDROID"];
+      out.devices = osTypes.map((os) => ({ os_type: os, operation: "INCLUDE" as const }));
+    }
   }
 
   return out;

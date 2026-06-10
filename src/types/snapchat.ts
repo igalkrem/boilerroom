@@ -82,8 +82,8 @@ export interface SnapAdSquadPayload {
       genders?: Array<"MALE" | "FEMALE">;
     }>;
     devices?: Array<{
-      device_type?: "MOBILE" | "WEB";
-      os_type?: string;
+      os_type?: "iOS" | "ANDROID" | "WEB";
+      operation?: "INCLUDE" | "EXCLUDE";
     }>;
   };
   placement_v2?: {
