@@ -385,6 +385,7 @@ src/
 - `spend_cap_type` is an ad squad field only, not valid on campaigns.
 - Ad squad `delivery_constraint` is required — `"DAILY_BUDGET"` or `"LIFETIME_BUDGET"`. `conversion_location` is NOT valid (E1001).
 - Valid optimization goals (SALES + WEB): `PIXEL_PURCHASE`, `PIXEL_SIGNUP`, `PIXEL_ADD_TO_CART`, `PIXEL_PAGE_VIEW`, `LANDING_PAGE_VIEW`. Do not add goals from other objectives — they return E2844 with SALES objective.
+- `conversion_window` is only sent for pixel-tracked goals (those starting with `PIXEL_`). `LANDING_PAGE_VIEW` is Snapchat-measured (no pixel event) and Snapchat rejects `conversion_window` for it with E1001 at the batch level. The orchestrator uses `sq.optimizationGoal.startsWith("PIXEL_") ? "SWIPE_7DAY" : undefined`.
 - Ad squad pixel tracking: only `pixel_id` sent, always optional. `pixel_conversion_event` is NOT valid (E1001).
 - Creative destination URL: `web_view_properties.url` (WEB_VIEW) or `deep_link_properties.deep_link_uri` (DEEP_LINK). `APP_INSTALL` has been removed from `CreativeType`, `InteractionType` (wizard.ts), and the Zod schema (`creative.schema.ts`) — do not add it back. It was dead code that would silently fall through to `SNAP_AD` with no `app_install_properties`.
 - Ad destination URL: URL fields are NOT sent on the Ad payload — Creative only. Ad payload: `ad_squad_id`, `creative_id`, `name`, `type`, `status`.
