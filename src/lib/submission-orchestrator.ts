@@ -282,7 +282,9 @@ export async function runSubmission(
           sq.spendCapType === "LIFETIME_BUDGET" && sq.lifetimeBudgetUsd
             ? usdToMicro(sq.lifetimeBudgetUsd)
             : undefined,
-        conversion_window: "SWIPE_7DAY",
+        // conversion_window only applies to pixel-tracked goals. LANDING_PAGE_VIEW is
+        // Snapchat-measured (no pixel event), so sending conversion_window for it triggers E1001.
+        conversion_window: sq.optimizationGoal.startsWith("PIXEL_") ? "SWIPE_7DAY" : undefined,
         pacing_type: "STANDARD",
         start_time: sq.startDate ? clampToFuture(toIso(sq.startDate)) : undefined,
         end_time: sq.endDate ? toIso(sq.endDate) : undefined,

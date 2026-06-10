@@ -144,9 +144,8 @@ export async function createAdSquads(
   campaignId: string,
   adsquads: SnapAdSquadPayload[]
 ): Promise<Array<SnapAdSquad & { error?: string }>> {
-  if (process.env.NODE_ENV !== "production") {
-    console.log("[createAdSquads] payload:", JSON.stringify({ adsquads }));
-  }
+  // Log payload in all environments — E1001 batch failures are invisible without this
+  console.log("[createAdSquads] payload:", JSON.stringify({ adsquads }));
   const data = await snapFetch<SnapBatchResponse<SnapAdSquad>>(
     `/campaigns/${campaignId}/adsquads`,
     {
