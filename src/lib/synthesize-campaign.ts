@@ -79,7 +79,7 @@ export function synthesizeCampaign(
 
   // The webViewUrl will be resolved by the orchestrator after channel assignment + snap ID resolution.
   // We store the raw URL template here so the orchestrator can resolve it.
-  const urlTemplatePlaceholder = buildUrlTemplate(provider, article, item.headline, item.headlineRac);
+  const urlTemplatePlaceholder = buildUrlTemplate(provider, article, item.headline, item.headlineRac, item.adAccountId);
   if (!urlTemplatePlaceholder) {
     throw new Error(
       `Provider "${provider.name}" has no base URL and no parameters — configure a base URL on the domain or provider.`
@@ -116,7 +116,7 @@ export function synthesizeCampaign(
   };
 }
 
-function buildUrlTemplate(provider: FeedProvider, article: Article, headline: string, rac: string): string {
+function buildUrlTemplate(provider: FeedProvider, article: Article, headline: string, rac: string, adAccountId: string): string {
   // Build the URL with macros still in place for dynamic ones (campaign.id, adSet.id, ad.id)
   // Static ones (article.name, article.query, creative.headline, creative.rac) are substituted now.
   const domain = provider.domains.find((d) => d.baseDomain === article.domain);
@@ -129,6 +129,7 @@ function buildUrlTemplate(provider: FeedProvider, article: Article, headline: st
         .replace(/\{\{creative\.headline\}\}/gi, encodeURIComponent(headline))
         .replace(/\{\{creative\.rac\}\}/gi, encodeURIComponent(rac))
         .replace(/\{\{organization_id\}\}/gi, encodeURIComponent(provider.snapConfig.organizationId ?? ""))
+        .replace(/\{\{ad_account\.id\}\}/gi, encodeURIComponent(adAccountId))
         // Strip any remaining {{...}} that aren't Snapchat native or orchestrator macros
         .replace(/\{\{(?!campaign\.id|adset\.id|ad\.id|channel\.id)[^}]+\}\}/gi, "");
       if (p.encode) {

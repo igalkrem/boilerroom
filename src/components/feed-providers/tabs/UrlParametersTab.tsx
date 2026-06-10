@@ -14,6 +14,7 @@ const MACROS: Array<{ label: string; title: string; source: "snap" | "br" }> = [
   { label: "{{article.query}}",   title: "Article search keyword",                source: "br" },
   { label: "{{creative.headline}}", title: "Creative headline",                   source: "br" },
   { label: "{{creative.rac}}",    title: "Headline RAC value",                    source: "br" },
+  { label: "{{ad_account.id}}", title: "Snapchat ad account ID from canvas",     source: "br" },
 ];
 
 interface UrlParametersTabProps {
