@@ -271,6 +271,7 @@ export function PerformanceTable({
   const [showFilters, setShowFilters] = useState(false);
   const [filterArticleIds, setFilterArticleIds] = useState<Set<string>>(new Set());
   const [filterProviderIds, setFilterProviderIds] = useState<Set<string>>(new Set());
+  const [filterStatuses, setFilterStatuses] = useState<Set<"ACTIVE" | "PAUSED">>(new Set());
   const [metricFilters, setMetricFilters] = useState<Array<{ id: string; metric: string; op: string; value: string }>>([]);
   const [articles, setArticles] = useState<Array<{ id: string; slug: string }>>([]);
   const [providers, setProviders] = useState<FeedProvider[]>([]);
@@ -511,6 +512,12 @@ export function PerformanceTable({
         if (!filterProviderIds.has(resolveProviderKey(r, providers))) return false;
       }
 
+      // Status filter
+      if (filterStatuses.size > 0) {
+        const squadStatus = squadDetails.get(r.ad_squad_id)?.status ?? "ACTIVE";
+        if (!filterStatuses.has(squadStatus)) return false;
+      }
+
       // Metric filters — AND logic; incomplete rows are skipped
       for (const mf of metricFilters) {
         if (!mf.metric || !mf.value.trim()) continue;
@@ -527,7 +534,7 @@ export function PerformanceTable({
       return true;
     });
   }, [aggregated, filterQuery, squadDetails, hiddenSquadIds, showHidden,
-      filterArticleIds, filterProviderIds, metricFilters, articles, providers]);
+      filterArticleIds, filterProviderIds, filterStatuses, metricFilters, articles, providers]);
 
   useEffect(() => {
     onFilteredRowsChange?.(filtered);
@@ -890,11 +897,13 @@ export function PerformanceTable({
   const activeFilterCount =
     filterArticleIds.size +
     filterProviderIds.size +
+    filterStatuses.size +
     metricFilters.filter(mf => mf.metric && mf.value.trim()).length;
 
   function clearAllFilters() {
     setFilterArticleIds(new Set());
     setFilterProviderIds(new Set());
+    setFilterStatuses(new Set());
     setMetricFilters([]);
   }
 
@@ -1161,6 +1170,32 @@ export function PerformanceTable({
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Status filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 w-24 flex-shrink-0">Status</span>
+                <div className="flex gap-1.5">
+                  {(["ACTIVE", "PAUSED"] as const).map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setFilterStatuses(prev => {
+                        const next = new Set(prev);
+                        if (next.has(s)) next.delete(s); else next.add(s);
+                        return next;
+                      })}
+                      className={`px-3 py-1 rounded text-xs font-medium border transition-colors ${
+                        filterStatuses.has(s)
+                          ? s === "ACTIVE"
+                            ? "bg-green-600 border-green-500 text-white"
+                            : "bg-yellow-600 border-yellow-500 text-white"
+                          : "bg-gray-800 border-gray-600 text-gray-400 hover:border-gray-400"
+                      }`}
+                    >
+                      {s === "ACTIVE" ? "Active" : "Paused"}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Metric filter rows */}
