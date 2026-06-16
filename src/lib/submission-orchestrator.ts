@@ -302,10 +302,10 @@ export async function runSubmission(
         start_time: sq.startDate ? clampToFuture(toIso(sq.startDate)) : undefined,
         end_time: sq.endDate ? toIso(sq.endDate) : undefined,
         pixel_id: sq.pixelId || undefined,
-        // Catalogue (Dynamic Collection Ads): associate the product set at creation time only.
-        // Snapchat auto-sets child_ad_type and catalog_vertical from the creative type — sending
-        // them explicitly in POST triggers E1001 ("Invalid field").
-        product_properties: sq.productSetId ? { product_set_id: sq.productSetId } : undefined,
+        // Catalogue (Collection Ads): product set is specified in the CREATIVE's dynamic_render_properties,
+        // NOT on the ad squad. Setting product_properties on the squad marks it as a fully-dynamic DPA
+        // squad, which causes E2841 ("Static ads cannot be created under an ad squad with product properties")
+        // when you try to create a COLLECTION ad with a static hero image/video.
       }));
 
       const sqRes = await fetch("/api/snapchat/adsquads", {
