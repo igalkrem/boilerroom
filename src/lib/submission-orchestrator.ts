@@ -304,10 +304,10 @@ export async function runSubmission(
         start_time: sq.startDate ? clampToFuture(toIso(sq.startDate)) : undefined,
         end_time: sq.endDate ? toIso(sq.endDate) : undefined,
         pixel_id: sq.pixelId || undefined,
-        // Catalogue (Collection Ads): product set is specified in the CREATIVE's dynamic_render_properties,
-        // NOT on the ad squad. Setting product_properties on the squad marks it as a fully-dynamic DPA
-        // squad, which causes E2841 ("Static ads cannot be created under an ad squad with product properties")
-        // when you try to create a COLLECTION ad with a static hero image/video.
+        // Catalogue (Collection Ads): product_set_id must match between ad squad and creative (E2840).
+        // Only send { product_set_id } — no catalog_vertical (E1001) and no child_ad_type (E1001).
+        // Do NOT set product_properties on the campaign — that propagates to squads and causes E2841.
+        product_properties: sq.productSetId ? { product_set_id: sq.productSetId } : undefined,
       }));
 
       const sqRes = await fetch("/api/snapchat/adsquads", {
