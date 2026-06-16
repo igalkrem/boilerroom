@@ -1,6 +1,9 @@
 # Personal notes
 Notes
 
+# Claude Code local settings (may contain credentials from approved bash commands)
+.claude/settings.local.json
+
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
