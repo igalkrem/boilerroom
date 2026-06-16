@@ -38,6 +38,7 @@ export function loadPresets(): CampaignPreset[] {
         isCatalogue: false,
         ...item,
         adSquads: (item.adSquads ?? []).map((sq: Record<string, unknown>) => ({
+          catalogId: undefined,
           productSetId: undefined,
           dynamicTemplateId: undefined,
           ...sq,

@@ -95,24 +95,19 @@ export async function runSubmission(
   // ── Step 0: Upload all media files in parallel ────────────────────────────
   onStage("uploadMedia");
 
-  // Catalogue (Dynamic Product Ads) creatives have no media — Snapchat renders
-  // them from the product feed. Skip the entire upload stage for catalogue builds.
-  const isCatalogue = creatives.length > 0 && creatives.every((cr) => cr.isCatalogue);
+  // Catalogue (Dynamic Collection Ads) still upload a hero image/video — the creative renders a
+  // static hero plus dynamic product tiles. So media uploads run for ALL creatives, catalogue or not.
 
   // mediaIdMap resolves each creative's client UUID → Snapchat media ID.
   // Creatives that already have a mediaId (e.g. re-submission) skip the upload.
   const mediaIdMap = new Map<string, string>();
 
-  if (isCatalogue) {
-    console.log(`[orchestrator] catalogue mode — skipping media upload for ${creatives.length} creative(s)`);
-  } else {
-    console.log(`[orchestrator] uploadMedia: ${creatives.length} creative(s)`, creatives.map(c => ({ id: c.id, hasFile: !!c.mediaFile, mediaId: c.mediaId || null })));
-  }
+  console.log(`[orchestrator] uploadMedia: ${creatives.length} creative(s)`, creatives.map(c => ({ id: c.id, hasFile: !!c.mediaFile, mediaId: c.mediaId || null, catalogue: !!c.isCatalogue })));
 
   // Limit to 2 concurrent uploads — Snapchat returns E3002 when too many uploads
   // hit the same ad account simultaneously (3+ parallel triggers this reliably).
   const UPLOAD_CONCURRENCY = 2;
-  const uploadQueue = isCatalogue ? [] : creatives.map((cr) => async () => {
+  const uploadQueue = creatives.map((cr) => async () => {
     // Case 1: cached Snapchat mediaId (Silo pre-upload or re-submission)
     if (!cr.mediaFile && !cr.siloAssetBlobUrl) {
       if (cr.mediaId) {
@@ -214,6 +209,8 @@ export async function runSubmission(
           ? usdToMicro(c.dailyBudgetUsd)
           : undefined,
       objective_v2_properties: { objective_v2_type: c.objective },
+      // Catalogue (Dynamic Collection Ads): associate the campaign with the catalogue.
+      product_properties: c.catalogId ? { catalog_id: c.catalogId } : undefined,
     };
   });
 
@@ -298,14 +295,17 @@ export async function runSubmission(
             : undefined,
         // conversion_window only applies to pixel-tracked goals. LANDING_PAGE_VIEW is
         // Snapchat-measured (no pixel event), so sending conversion_window for it triggers E1001.
-        // Catalogue (DPA) squads omit pixel_id and conversion_window — product set drives targeting.
-        conversion_window: (isCatalogue || !sq.optimizationGoal.startsWith("PIXEL_")) ? undefined : "SWIPE_7DAY",
+        // Catalogue (Collection Ads) DO use a pixel + conversion window (confirmed against a live
+        // PIXEL_PURCHASE collection squad), so they follow the same rule as regular squads.
+        conversion_window: !sq.optimizationGoal.startsWith("PIXEL_") ? undefined : "SWIPE_7DAY",
         pacing_type: "STANDARD",
         start_time: sq.startDate ? clampToFuture(toIso(sq.startDate)) : undefined,
         end_time: sq.endDate ? toIso(sq.endDate) : undefined,
-        pixel_id: isCatalogue ? undefined : (sq.pixelId || undefined),
-        // Catalogue (DPA): associate product set at squad creation time only (never in PUT)
-        product_properties: sq.productSetId ? { product_set_id: sq.productSetId } : undefined,
+        pixel_id: sq.pixelId || undefined,
+        // Catalogue (Dynamic Collection Ads): associate the product set + collection child type at
+        // creation time only — never in PUT (both excluded from ADSQUAD_PUT_ALLOWED_FIELDS).
+        product_properties: sq.productSetId ? { product_set_id: sq.productSetId, catalog_vertical: "COMMERCE" } : undefined,
+        child_ad_type: sq.productSetId ? "COLLECTION" : undefined,
       }));
 
       const sqRes = await fetch("/api/snapchat/adsquads", {
@@ -373,20 +373,15 @@ export async function runSubmission(
   // ── Step 3: Create Creatives ──────────────────────────────────────────────
   onStage("creatives");
 
-  // Catalogue creatives require no media upload — all proceed directly.
-  // Regular creatives: only submit those whose media uploaded successfully.
-  const uploadedCreatives = isCatalogue
-    ? creatives
-    : creatives.filter((cr) => mediaIdMap.has(cr.id));
-  if (!isCatalogue) {
-    creatives
-      .filter((cr) => !mediaIdMap.has(cr.id))
-      .forEach((cr) =>
-        results.creatives.push({ clientId: cr.id, snapId: "", name: cr.name, error: "Media upload failed" })
-      );
-  }
+  // Only submit creatives whose media uploaded successfully (catalogue heroes included).
+  const uploadedCreatives = creatives.filter((cr) => mediaIdMap.has(cr.id));
+  creatives
+    .filter((cr) => !mediaIdMap.has(cr.id))
+    .forEach((cr) =>
+      results.creatives.push({ clientId: cr.id, snapId: "", name: cr.name, error: "Media upload failed" })
+    );
 
-  console.log(`[orchestrator] uploadedCreatives: ${uploadedCreatives.length}/${creatives.length} (catalogue: ${isCatalogue})`);
+  console.log(`[orchestrator] uploadedCreatives: ${uploadedCreatives.length}/${creatives.length}`);
 
   if (uploadedCreatives.length === 0) {
     console.warn("[orchestrator] all creatives failed upload — skipping profiles/creatives/ads");
@@ -420,20 +415,74 @@ export async function runSubmission(
     return results;
   }
 
-  const creativePayloads: SnapCreativePayload[] = uploadedCreatives.map((cr) => {
-    // Catalogue (Dynamic Product Ads) — render_type DYNAMIC, no media, no URL
+  // ── Catalogue (Collection Ads): create creative elements + interaction zone ──
+  // Each COLLECTION creative needs an interaction zone holding 4 product-tile placeholders
+  // (creative elements). Build these first; a creative whose zone fails is dropped.
+  const izMap = new Map<string, string>(); // creative client id → interaction_zone_id
+  for (const cr of uploadedCreatives.filter((c) => c.isCatalogue)) {
+    try {
+      const elements = Array.from({ length: 4 }, (_, i) => ({
+        name: `${cr.name} ${i}`.slice(0, 250),
+        type: "BUTTON" as const,
+        interaction_type: "WEB_VIEW" as const,
+        render_type: "DYNAMIC" as const,
+      }));
+      const elemRes = await fetch("/api/snapchat/creative-elements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adAccountId, elements }),
+      });
+      const elemData = await elemRes.json() as { results?: Array<{ id?: string; error?: string }> };
+      const elemIds = (elemData.results ?? []).map((r) => r.id).filter(Boolean) as string[];
+      if (elemIds.length !== 4) {
+        throw new Error(elemData.results?.find((r) => r.error)?.error ?? "creative element creation failed");
+      }
+      const izRes = await fetch("/api/snapchat/interaction-zones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adAccountId,
+          zones: [{ name: cr.name.slice(0, 250), headline: "MORE", creative_element_ids: elemIds, render_type: "DYNAMIC" }],
+        }),
+      });
+      const izData = await izRes.json() as { results?: Array<{ id?: string; error?: string }> };
+      const izId = izData.results?.[0]?.id;
+      if (!izId) throw new Error(izData.results?.[0]?.error ?? "interaction zone creation failed");
+      izMap.set(cr.id, izId);
+    } catch (err) {
+      console.error(`[orchestrator] ${cr.name}: collection setup failed —`, String(err));
+      results.creatives.push({ clientId: cr.id, snapId: "", name: cr.name, error: `Collection setup failed: ${String(err)}` });
+    }
+  }
+
+  // Drop catalogue creatives whose interaction zone failed — they cannot be created.
+  const buildableCreatives = uploadedCreatives.filter((cr) => !cr.isCatalogue || izMap.has(cr.id));
+  if (buildableCreatives.length === 0) {
+    console.warn("[orchestrator] no buildable creatives after collection setup — skipping creatives/ads");
+    onStage("done");
+    return results;
+  }
+
+  const creativePayloads: SnapCreativePayload[] = buildableCreatives.map((cr) => {
+    // Catalogue (Dynamic Collection Ads) — type COLLECTION, static hero media + dynamic product tiles.
     if (cr.isCatalogue) {
       return {
         ad_account_id: adAccountId,
         name: cr.name,
-        type: "SNAP_AD" as CreativeType,
+        type: "COLLECTION" as CreativeType,
+        render_type: "STATIC",
         headline: cr.headline || undefined,
-        call_to_action: cr.callToAction || undefined,
+        brand_name: cr.brandName || undefined,
+        top_snap_media_id: mediaIdMap.get(cr.id) ?? cr.mediaId ?? "",
         profile_properties: { profile_id: snapProfileId! },
-        render_type: "DYNAMIC",
         dynamic_render_properties: {
           product_set_id: cr.productSetId!,
           ...(cr.dynamicTemplateId ? { dynamic_template_id: cr.dynamicTemplateId } : {}),
+        },
+        collection_properties: {
+          interaction_zone_id: izMap.get(cr.id)!,
+          default_fallback_interaction_type: "WEB_VIEW",
+          ...(cr.webViewUrl ? { web_view_properties: { url: cr.webViewUrl } } : {}),
         },
       };
     }
@@ -469,7 +518,7 @@ export async function runSubmission(
   // CR-2: handle top-level HTTP failure
   if (!crRes.ok && !crData.results) {
     console.error("Creatives API error:", crRes.status, crData);
-    uploadedCreatives.forEach((cr) =>
+    buildableCreatives.forEach((cr) =>
       results.creatives.push({ clientId: cr.id, snapId: "", name: cr.name, error: crData.error ?? `HTTP ${crRes.status}` })
     );
     onStage("done");
@@ -477,7 +526,7 @@ export async function runSubmission(
   }
 
   const creativeIdMap = new Map<string, string>();
-  uploadedCreatives.forEach((cr, i) => {
+  buildableCreatives.forEach((cr, i) => {
     // Prefer name match; fall back to positional index (Snapchat may not echo name)
     const snap = crData.results?.find((r) => r.name === cr.name)
       ?? crData.results?.[i];
@@ -494,7 +543,7 @@ export async function runSubmission(
   onStage("ads");
 
   const creativesBySquadId: Record<string, CreativeFormData[]> = {};
-  for (const cr of uploadedCreatives) {
+  for (const cr of buildableCreatives) {
     if (!creativesBySquadId[cr.adSquadId]) {
       creativesBySquadId[cr.adSquadId] = [];
     }
@@ -539,7 +588,8 @@ export async function runSubmission(
           ad_squad_id: snapSquadId,
           creative_id: creativeIdMap.get(cr.id)!,
           name: cr.name,
-          type: AD_TYPE_MAP[creativeType] ?? "SNAP_AD",
+          // Catalogue creatives are COLLECTION; everything else maps from interaction type.
+          type: cr.isCatalogue ? "COLLECTION" : (AD_TYPE_MAP[creativeType] ?? "SNAP_AD"),
           status: cr.adStatus ?? "ACTIVE",
         };
       });

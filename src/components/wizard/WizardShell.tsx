@@ -53,8 +53,8 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
         const preset = presets.find((p) => p.id === item.presetId);
         const assets = item.creativeIds.map((id) => getAssetById(id)).filter(Boolean) as NonNullable<ReturnType<typeof getAssetById>>[];
 
-        // Catalogue (DPA) presets have no Silo assets — allow empty creativeIds for them.
-        if (!provider || !article || !preset || (assets.length === 0 && !preset.isCatalogue)) {
+        // Catalogue (Collection Ads) still need a hero Silo asset, so the asset check applies to all.
+        if (!provider || !article || !preset || assets.length === 0) {
           console.warn(`[wizard] skipping item ${i}: missing provider/article/preset/assets`);
           collectedResults.push({
             uploadMedia: [],
@@ -68,20 +68,18 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
 
         // Block submission for VIDEO assets uploaded before the H.264 transcoding pipeline —
         // they lack optimizedUrl and the raw original will be rejected by Snapchat (E2601).
-        // Catalogue presets have no assets, so skip this check for them.
-        if (!preset.isCatalogue) {
-          const legacyVideos = assets.filter((a) => a.mediaType === "VIDEO" && !a.optimizedUrl);
-          if (legacyVideos.length > 0) {
-            const names = legacyVideos.map((a) => a.originalFileName).join(", ");
-            collectedResults.push({
-              uploadMedia: [],
-              campaigns: [{ clientId: item.creativeIds[0] ?? `item-${i}`, snapId: "", name: `item-${i + 1}`, error: `Video(s) need re-upload for Snap compatibility: ${names} — go to the Silo, delete and re-upload to get H.264 transcoding.` }],
-              adSquads: [],
-              creatives: [],
-              ads: [],
-            });
-            continue;
-          }
+        // Catalogue heroes are real Silo videos too, so this check applies to all builds.
+        const legacyVideos = assets.filter((a) => a.mediaType === "VIDEO" && !a.optimizedUrl);
+        if (legacyVideos.length > 0) {
+          const names = legacyVideos.map((a) => a.originalFileName).join(", ");
+          collectedResults.push({
+            uploadMedia: [],
+            campaigns: [{ clientId: item.creativeIds[0] ?? `item-${i}`, snapId: "", name: `item-${i + 1}`, error: `Video(s) need re-upload for Snap compatibility: ${names} — go to the Silo, delete and re-upload to get H.264 transcoding.` }],
+            adSquads: [],
+            creatives: [],
+            ads: [],
+          });
+          continue;
         }
 
         const ctx = {

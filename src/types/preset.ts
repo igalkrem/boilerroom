@@ -29,9 +29,10 @@ export interface AdSquadPresetData {
   minAge?: string;
   maxAge?: string;
   pixelId?: string;
-  // Catalogue (Dynamic Product Ads) fields
-  productSetId?: string;
-  dynamicTemplateId?: string;
+  // Catalogue (Dynamic Collection Ads) fields
+  catalogId?: string;       // campaign-level catalogue ID
+  productSetId?: string;    // product set within the catalogue (squad + creative)
+  dynamicTemplateId?: string; // optional creative template; Snapchat default if absent
 }
 
 export interface CreativePresetDefaults {

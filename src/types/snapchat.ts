@@ -37,6 +37,8 @@ export interface SnapCampaignPayload {
   objective_v2_properties?: {
     objective_v2_type: CampaignObjective;
   };
+  // Catalogue (Dynamic Collection Ads) — associates the campaign with a Snapchat catalogue.
+  product_properties?: { catalog_id: string };
 }
 
 export interface SnapCampaign extends SnapCampaignPayload {
@@ -106,8 +108,10 @@ export interface SnapAdSquadPayload {
   start_time?: string;
   end_time?: string;
   pixel_id?: string;
-  // Catalogue (Dynamic Product Ads) — set at creation only; omit from PUT (not in ADSQUAD_PUT_ALLOWED_FIELDS)
-  product_properties?: { product_set_id: string };
+  // Catalogue (Dynamic Collection Ads) — set at creation only; omit from PUT (not in ADSQUAD_PUT_ALLOWED_FIELDS).
+  // catalog_vertical is "COMMERCE" for product catalogues; child_ad_type "COLLECTION" makes this a collection squad.
+  product_properties?: { product_set_id: string; catalog_vertical?: "COMMERCE" };
+  child_ad_type?: "COLLECTION";
   // Server-computed — returned by GET, must never be sent in PUT (causes E2025 / sub_request_status ERROR)
   effective_status?: string;
   delivery_status?: string[];
@@ -123,26 +127,63 @@ export interface SnapAdSquad extends SnapAdSquadPayload {
 export type CreativeType =
   | "SNAP_AD"
   | "WEB_VIEW"
-  | "DEEP_LINK";
+  | "DEEP_LINK"
+  | "COLLECTION";
 
 export interface SnapCreativePayload {
   ad_account_id: string;
   name: string;
   type: CreativeType;
   headline?: string; // max 34 chars
-  top_snap_media_id?: string; // omitted for catalogue (Dynamic Product Ads)
+  top_snap_media_id?: string; // the hero image/video (required for COLLECTION)
   call_to_action?: string;
   brand_name?: string;
   profile_properties: { profile_id: string };
   web_view_properties?: { url: string };
   deep_link_properties?: { deep_link_uri: string };
-  // Catalogue (Dynamic Product Ads)
+  // Catalogue (Dynamic Collection Ads). The hero is a static uploaded media (render_type STATIC);
+  // the product tiles below it are rendered dynamically from the product set via the template.
   render_type?: "STATIC" | "DYNAMIC";
   dynamic_render_properties?: { product_set_id: string; dynamic_template_id?: string };
+  collection_properties?: {
+    interaction_zone_id: string;
+    default_fallback_interaction_type?: string; // "WEB_VIEW"
+    web_view_properties?: { url: string };
+  };
 }
 
 export interface SnapCreative extends SnapCreativePayload {
   id: string;
+}
+
+// ─── Creative Elements & Interaction Zones (Collection Ads) ────────────────────
+// A Collection Ad shows 4 product tiles below the hero. Each tile is a "creative element"
+// (a BUTTON placeholder); the 4 elements are grouped into one "interaction zone" referenced
+// by the creative's collection_properties.interaction_zone_id. For dynamic collection ads
+// the elements/zone are DYNAMIC placeholders — Snapchat fills them from the product set.
+
+export interface SnapCreativeElementPayload {
+  name: string;
+  type: "BUTTON";
+  interaction_type: "WEB_VIEW" | "DEEP_LINK";
+  render_type: "STATIC" | "DYNAMIC";
+}
+
+export interface SnapCreativeElement extends SnapCreativeElementPayload {
+  id: string;
+  ad_account_id?: string;
+}
+
+export interface SnapInteractionZonePayload {
+  name: string;
+  headline: string; // tile CTA label, e.g. "MORE"
+  creative_element_ids: string[];
+  render_type: "STATIC" | "DYNAMIC";
+}
+
+export interface SnapInteractionZone extends SnapInteractionZonePayload {
+  id: string;
+  ad_account_id?: string;
 }
 
 // ─── Ads ─────────────────────────────────────────────────────────────────────
@@ -151,7 +192,7 @@ export interface SnapAdPayload {
   ad_squad_id: string;
   creative_id: string;
   name: string;
-  type: "SNAP_AD" | "REMOTE_WEBPAGE";
+  type: "SNAP_AD" | "REMOTE_WEBPAGE" | "COLLECTION";
   status: "ACTIVE" | "PAUSED";
 }
 
@@ -189,6 +230,8 @@ export interface SnapApiItem<T> {
   creative?: T;
   ad?: T;
   media?: T;
+  creative_element?: T;
+  interaction_zone?: T;
 }
 
 export interface SnapBatchResponse<T> {
@@ -199,4 +242,6 @@ export interface SnapBatchResponse<T> {
   creatives?: Array<SnapApiItem<T>>;
   ads?: Array<SnapApiItem<T>>;
   media?: Array<SnapApiItem<T>>;
+  creative_elements?: Array<SnapApiItem<T>>;
+  interaction_zones?: Array<SnapApiItem<T>>;
 }

@@ -10,8 +10,6 @@ interface CreativeRowNodeData {
   rowId: string;
   providerColorMap: Record<string, string>;
   onAddToRow: (rowId: string) => void;
-  onAddCatalogueSlot?: (rowId: string) => void;
-  isCatalogueRow?: boolean;
   onAddToSlot: (groupId: string) => void;
   onRemoveRow: (rowId: string) => void;
   onNewRow: () => void;
@@ -191,34 +189,6 @@ export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
               const firstAssetId = group.creativeIds[0];
               const asset = firstAssetId ? getAssetById(firstAssetId) : undefined;
               if (!asset) {
-                // Catalogue (DPA) groups intentionally have no asset — render a placeholder card
-                if (group.isCatalogue) {
-                  return (
-                    <div key={groupId} className="flex flex-col gap-1.5" style={{ width: CARD_W }}>
-                      <div
-                        className="relative rounded-xl border border-violet-500/40 bg-gradient-to-b from-violet-900/30 to-gray-900/80 shadow-xl shrink-0 flex flex-col items-center justify-center gap-2 group/slot"
-                        style={{ width: CARD_W, aspectRatio: "9/16" }}
-                      >
-                        {connectedColors.length > 0 && (
-                          <div
-                            className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl"
-                            style={{ background: `linear-gradient(to bottom, ${connectedColors.join(", ")})` }}
-                          />
-                        )}
-                        <div className="text-3xl opacity-60">🏷</div>
-                        <p className="text-[11px] font-semibold text-violet-300 text-center px-2">Catalogue</p>
-                        <p className="text-[9px] text-gray-500 text-center px-2">Dynamic Product Ad</p>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); store.removeGroupFromRow(data.rowId, groupId); }}
-                          className="nodrag absolute top-2 right-2 z-20 w-6 h-6 rounded-full bg-black/55 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-red-600/80 text-[10px] opacity-0 group-hover/slot:opacity-100 transition-all"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  );
-                }
                 return (
                   <div
                     key={groupId}
@@ -336,11 +306,7 @@ export function CreativeGroupNode({ data }: { data: CreativeRowNodeData }) {
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                if (data.isCatalogueRow && data.onAddCatalogueSlot) {
-                  data.onAddCatalogueSlot(data.rowId);
-                } else {
-                  data.onAddToRow(data.rowId);
-                }
+                data.onAddToRow(data.rowId);
               }}
               disabled={row.groupIds.length >= 8}
               className="nodrag flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-semibold bg-blue-900/30 border border-blue-500/40 text-blue-300 hover:bg-blue-800/40 hover:border-blue-400/60 disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"

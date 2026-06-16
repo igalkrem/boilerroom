@@ -12,6 +12,8 @@ export interface CampaignFormData {
   spendCapType: "DAILY_BUDGET" | "NO_BUDGET";
   dailyBudgetUsd?: number;
   lifetimeBudgetUsd?: number;
+  // Catalogue (Dynamic Collection Ads) — campaign-level catalogue association
+  catalogId?: string;
 }
 
 export interface AdSquadFormData {
@@ -128,7 +130,6 @@ export type SubmissionStage =
 export interface CreativeGroup {
   id: string;
   creativeIds: string[]; // max 5
-  isCatalogue?: boolean; // true = catalogue slot (no media asset; renders DPA placeholder)
 }
 
 export interface CreativeRow {

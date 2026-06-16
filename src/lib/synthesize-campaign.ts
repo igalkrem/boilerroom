@@ -35,6 +35,23 @@ export function synthesizeCampaign(
   const campaignId = uuid();
   const adSquadId = uuid();
 
+  // Use first ad squad template from preset
+  const squadTemplate = preset.adSquads[0];
+  if (!squadTemplate) {
+    throw new Error(`Preset "${preset.name}" has no ad squad template`);
+  }
+
+  // Catalogue (Dynamic Collection Ads) require a Catalog ID + Product Set ID.
+  const isCatalogue = preset.isCatalogue === true;
+  if (isCatalogue) {
+    if (!squadTemplate.productSetId) {
+      throw new Error(`Catalogue preset "${preset.name}" is missing a Product Set ID`);
+    }
+    if (!squadTemplate.catalogId) {
+      throw new Error(`Catalogue preset "${preset.name}" is missing a Catalog ID`);
+    }
+  }
+
   const campaign: CampaignFormData = {
     id: campaignId,
     name: campaignName,
@@ -45,13 +62,8 @@ export function synthesizeCampaign(
     spendCapType: preset.campaign.spendCapType,
     dailyBudgetUsd: preset.campaign.dailyBudgetUsd,
     lifetimeBudgetUsd: preset.campaign.lifetimeBudgetUsd,
+    catalogId: isCatalogue ? squadTemplate.catalogId : undefined,
   };
-
-  // Use first ad squad template from preset
-  const squadTemplate = preset.adSquads[0];
-  if (!squadTemplate) {
-    throw new Error(`Preset "${preset.name}" has no ad squad template`);
-  }
   const adSquad: AdSquadFormData = {
     id: adSquadId,
     campaignId,
@@ -78,39 +90,10 @@ export function synthesizeCampaign(
     productSetId: squadTemplate.productSetId || undefined,
   };
 
-  // ── Catalogue path (Dynamic Product Ads) ──────────────────────────────────
-  // No media file, no URL template — Snapchat renders the creative from the product feed.
-  if (preset.isCatalogue) {
-    if (!squadTemplate.productSetId) {
-      throw new Error(`Catalogue preset "${preset.name}" is missing a Product Set ID`);
-    }
-    const catalogueCreative: CreativeFormData = {
-      id: uuid(),
-      adSquadId,
-      name: campaignName,
-      headline: item.headline || "",
-      callToAction: item.callToAction || preset.creativeDefaults?.callToAction,
-      interactionType: "WEB_VIEW" as const,
-      articleId: article.id,
-      adStatus: preset.creativeDefaults?.adStatus ?? "PAUSED",
-      uploadStatus: "idle" as const,
-      isCatalogue: true,
-      productSetId: squadTemplate.productSetId,
-      dynamicTemplateId: squadTemplate.dynamicTemplateId,
-    };
-    return {
-      campaigns: [campaign],
-      adSquads: [adSquad],
-      creatives: [catalogueCreative],
-      feedProviderId: provider.id,
-      articleQuery: article.query,
-      articleSlug: article.slug,
-      headline: item.headline,
-    };
-  }
-
-  // The webViewUrl will be resolved by the orchestrator after channel assignment + snap ID resolution.
-  // We store the raw URL template here so the orchestrator can resolve it.
+  // Catalogue (Dynamic Collection Ads) use a hero Silo asset AND a tracking URL, exactly like a
+  // regular ad — they just carry extra catalogue fields (product set + template) that the
+  // orchestrator turns into a COLLECTION creative with an auto-built interaction zone.
+  // The webViewUrl is resolved by the orchestrator after channel assignment + snap ID resolution.
   const urlTemplatePlaceholder = buildUrlTemplate(provider, article, item.headline, item.headlineRac, item.adAccountId);
   if (!urlTemplatePlaceholder) {
     throw new Error(
@@ -135,6 +118,13 @@ export function synthesizeCampaign(
     siloAssetBlobUrl: asset.optimizedUrl ?? asset.originalUrl,
     siloAssetMediaType: asset.mediaType,
     siloAssetOriginalFileName: asset.originalFileName,
+    ...(isCatalogue
+      ? {
+          isCatalogue: true,
+          productSetId: squadTemplate.productSetId,
+          dynamicTemplateId: squadTemplate.dynamicTemplateId,
+        }
+      : {}),
   }));
 
   return {

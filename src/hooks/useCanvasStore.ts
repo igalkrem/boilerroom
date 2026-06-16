@@ -55,7 +55,6 @@ interface CanvasStore {
   removeRow: (rowId: string) => void;
   duplicateRow: (rowId: string) => CreativeRow | null;
   addGroupToRow: (rowId: string, assetId: string) => void;
-  addEmptyGroupToRow: (rowId: string) => void; // catalogue slot — no Silo asset, renders DPA placeholder
   removeGroupFromRow: (rowId: string, groupId: string) => void;
 
   // Group-internal actions (used for multi-creative slots within a group)
@@ -163,20 +162,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       return {
         creativeGroups: [...s.creativeGroups, newGroup],
         // Prepend so the newest group appears leftmost; index 0 = rightmost stays oldest.
-        creativeRows: s.creativeRows.map((r) =>
-          r.id === rowId ? { ...r, groupIds: [newGroup.id, ...r.groupIds] } : r
-        ),
-      };
-    }),
-
-  addEmptyGroupToRow: (rowId) =>
-    set((s) => {
-      const row = s.creativeRows.find((r) => r.id === rowId);
-      if (!row) return {};
-      if (row.groupIds.length >= MAX_GROUPS_PER_ROW) return {};
-      const newGroup: CreativeGroup = { id: freshId("group"), creativeIds: [], isCatalogue: true };
-      return {
-        creativeGroups: [...s.creativeGroups, newGroup],
         creativeRows: s.creativeRows.map((r) =>
           r.id === rowId ? { ...r, groupIds: [newGroup.id, ...r.groupIds] } : r
         ),
@@ -385,8 +370,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
       for (const groupId of row.groupIds) {
         const group = creativeGroups.find((g) => g.id === groupId);
-        // Allow catalogue groups (isCatalogue=true) with no assets — DPA has no Silo media.
-        if (!group || (group.creativeIds.length === 0 && !group.isCatalogue)) continue;
+        if (!group || group.creativeIds.length === 0) continue;
 
         const articleEdges = edges.providerToArticle.filter(
           (e) => e.feedProviderId === feedProviderId
