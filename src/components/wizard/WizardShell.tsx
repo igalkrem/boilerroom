@@ -168,6 +168,17 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
       ? allResults.reduce((acc, r) => acc + (r.campaigns.filter((c) => !c.snapId || c.error).length), 0)
       : 0;
 
+  // Collect sub-stage errors (adSquads/creatives/ads) that succeeded at campaign level but
+  // failed downstream — these are hidden from totalFailed since the campaign was created.
+  const subErrors: string[] =
+    mode === "done"
+      ? allResults.flatMap((r) => [
+          ...r.adSquads.filter((s) => s.error).map((s) => `Ad set "${s.name}": ${s.error}`),
+          ...r.creatives.filter((c) => c.error).map((c) => `Creative "${c.name}": ${c.error}`),
+          ...r.ads.filter((a) => a.error).map((a) => `Ad "${a.name}": ${a.error}`),
+        ])
+      : [];
+
   return (
     <div className="flex flex-col h-full">
       {/* Top nav */}
@@ -203,7 +214,7 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
       <div className="flex-1 min-h-0">
         {mode === "done" ? (
           <div className="flex flex-col items-center justify-center h-full gap-4">
-            <div className="text-4xl">{launchError || totalFailed > 0 ? "⚠️" : "🎉"}</div>
+            <div className="text-4xl">{launchError || totalFailed > 0 || subErrors.length > 0 ? "⚠️" : "🎉"}</div>
             <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
               {totalSucceeded} campaign{totalSucceeded !== 1 ? "s" : ""} launched
               {totalFailed > 0 && `, ${totalFailed} failed`}
@@ -212,6 +223,14 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
               <p className="text-sm text-red-500 dark:text-red-400 max-w-md text-center bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg">
                 {launchError}
               </p>
+            )}
+            {subErrors.length > 0 && (
+              <div className="max-w-lg w-full bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-4 py-3 space-y-1">
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">Partial failures — campaign created but some sub-stages failed:</p>
+                {subErrors.map((e, i) => (
+                  <p key={i} className="text-xs text-amber-800 dark:text-amber-300 font-mono break-all">{e}</p>
+                ))}
+              </div>
             )}
             <div className="flex gap-3">
               <button

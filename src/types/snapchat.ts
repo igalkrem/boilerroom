@@ -109,9 +109,8 @@ export interface SnapAdSquadPayload {
   end_time?: string;
   pixel_id?: string;
   // Catalogue (Dynamic Collection Ads) — set at creation only; omit from PUT (not in ADSQUAD_PUT_ALLOWED_FIELDS).
-  // catalog_vertical is "COMMERCE" for product catalogues; child_ad_type "COLLECTION" makes this a collection squad.
-  product_properties?: { product_set_id: string; catalog_vertical?: "COMMERCE" };
-  child_ad_type?: "COLLECTION";
+  // Snapchat auto-sets child_ad_type and catalog_vertical from the creative type — do not send them in POST (E1001).
+  product_properties?: { product_set_id: string };
   // Server-computed — returned by GET, must never be sent in PUT (causes E2025 / sub_request_status ERROR)
   effective_status?: string;
   delivery_status?: string[];

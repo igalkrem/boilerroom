@@ -302,10 +302,10 @@ export async function runSubmission(
         start_time: sq.startDate ? clampToFuture(toIso(sq.startDate)) : undefined,
         end_time: sq.endDate ? toIso(sq.endDate) : undefined,
         pixel_id: sq.pixelId || undefined,
-        // Catalogue (Dynamic Collection Ads): associate the product set + collection child type at
-        // creation time only — never in PUT (both excluded from ADSQUAD_PUT_ALLOWED_FIELDS).
-        product_properties: sq.productSetId ? { product_set_id: sq.productSetId, catalog_vertical: "COMMERCE" } : undefined,
-        child_ad_type: sq.productSetId ? "COLLECTION" : undefined,
+        // Catalogue (Dynamic Collection Ads): associate the product set at creation time only.
+        // Snapchat auto-sets child_ad_type and catalog_vertical from the creative type — sending
+        // them explicitly in POST triggers E1001 ("Invalid field").
+        product_properties: sq.productSetId ? { product_set_id: sq.productSetId } : undefined,
       }));
 
       const sqRes = await fetch("/api/snapchat/adsquads", {
@@ -332,11 +332,15 @@ export async function runSubmission(
         // Prefer name match; fall back to positional index (Snapchat may not echo name)
         const snap = sqData.results?.find((r) => r.name === sq.name)
           ?? sqData.results?.[i];
+        const adSquadError = snap?.error ?? (snap === undefined ? "No result returned from API" : undefined);
+        if (adSquadError) {
+          console.error(`[orchestrator] adSquad "${sq.name}" failed:`, adSquadError);
+        }
         results.adSquads.push({
           clientId: sq.id,
           snapId: snap?.id ?? "",
           name: sq.name,
-          error: snap?.error ?? (snap === undefined ? "No result returned from API" : undefined),
+          error: adSquadError,
         });
         if (snap?.id) squadIdMap.set(sq.id, snap.id);
       });
