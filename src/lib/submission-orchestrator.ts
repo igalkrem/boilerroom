@@ -595,6 +595,9 @@ export async function runSubmission(
           name: cr.name,
           // Catalogue creatives are COLLECTION; everything else maps from interaction type.
           type: cr.isCatalogue ? "COLLECTION" : (AD_TYPE_MAP[creativeType] ?? "SNAP_AD"),
+          // COLLECTION ads require render_type DYNAMIC — Snapchat defaults to STATIC and
+          // rejects with E2841 ("Static ads cannot be created under an ad squad with product properties").
+          render_type: cr.isCatalogue ? "DYNAMIC" : undefined,
           status: cr.adStatus ?? "ACTIVE",
         };
       });

@@ -193,6 +193,9 @@ export interface SnapAdPayload {
   name: string;
   type: "SNAP_AD" | "REMOTE_WEBPAGE" | "COLLECTION";
   status: "ACTIVE" | "PAUSED";
+  // COLLECTION ads require render_type: "DYNAMIC" — Snapchat defaults to STATIC
+  // and rejects COLLECTION ads under a product-properties squad with E2841 if absent.
+  render_type?: "STATIC" | "DYNAMIC";
 }
 
 export interface SnapAd extends SnapAdPayload {
