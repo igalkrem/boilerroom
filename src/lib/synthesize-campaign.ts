@@ -62,7 +62,6 @@ export function synthesizeCampaign(
     spendCapType: preset.campaign.spendCapType,
     dailyBudgetUsd: preset.campaign.dailyBudgetUsd,
     lifetimeBudgetUsd: preset.campaign.lifetimeBudgetUsd,
-    catalogId: isCatalogue ? squadTemplate.catalogId : undefined,
   };
   const adSquad: AdSquadFormData = {
     id: adSquadId,

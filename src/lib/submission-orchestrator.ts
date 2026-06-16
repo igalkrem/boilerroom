@@ -209,8 +209,10 @@ export async function runSubmission(
           ? usdToMicro(c.dailyBudgetUsd)
           : undefined,
       objective_v2_properties: { objective_v2_type: c.objective },
-      // Catalogue (Dynamic Collection Ads): associate the campaign with the catalogue.
-      product_properties: c.catalogId ? { catalog_id: c.catalogId } : undefined,
+      // Catalogue (Collection Ads): do NOT set product_properties on the campaign.
+      // Snapchat propagates it to child ad squads, causing E2841 when creating COLLECTION ads
+      // (which have a static hero). The catalog association lives on the creative only
+      // (dynamic_render_properties.product_set_id).
     };
   });
 
