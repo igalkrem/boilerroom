@@ -62,6 +62,10 @@ export function synthesizeCampaign(
     spendCapType: preset.campaign.spendCapType,
     dailyBudgetUsd: preset.campaign.dailyBudgetUsd,
     lifetimeBudgetUsd: preset.campaign.lifetimeBudgetUsd,
+    // Catalogue (Dynamic Collection Ads): campaign must declare the catalog.
+    // Confirmed from a live working DPA campaign — catalog_id lives on the campaign;
+    // product_set_id lives on the squad + creative.
+    catalogId: isCatalogue ? squadTemplate.catalogId : undefined,
   };
   const adSquad: AdSquadFormData = {
     id: adSquadId,

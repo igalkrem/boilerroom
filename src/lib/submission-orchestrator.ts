@@ -209,10 +209,10 @@ export async function runSubmission(
           ? usdToMicro(c.dailyBudgetUsd)
           : undefined,
       objective_v2_properties: { objective_v2_type: c.objective },
-      // Catalogue (Collection Ads): do NOT set product_properties on the campaign.
-      // Snapchat propagates it to child ad squads, causing E2841 when creating COLLECTION ads
-      // (which have a static hero). The catalog association lives on the creative only
-      // (dynamic_render_properties.product_set_id).
+      // Catalogue (Dynamic Collection Ads): campaign declares the catalog_id;
+      // squad declares product_set_id; both are required (confirmed from live campaign).
+      // Sending child_ad_type or catalog_vertical on the squad triggers E1001 (read-only).
+      product_properties: c.catalogId ? { catalog_id: c.catalogId } : undefined,
     };
   });
 
@@ -304,9 +304,8 @@ export async function runSubmission(
         start_time: sq.startDate ? clampToFuture(toIso(sq.startDate)) : undefined,
         end_time: sq.endDate ? toIso(sq.endDate) : undefined,
         pixel_id: sq.pixelId || undefined,
-        // Catalogue (Collection Ads): product_set_id must match between ad squad and creative (E2840).
-        // Only send { product_set_id } — no catalog_vertical (E1001) and no child_ad_type (E1001).
-        // Do NOT set product_properties on the campaign — that propagates to squads and causes E2841.
+        // Catalogue: product_set_id on squad must match creative's dynamic_render_properties.product_set_id (E2840).
+        // Do NOT send child_ad_type or catalog_vertical — Snapchat auto-sets them (E1001 if sent explicitly).
         product_properties: sq.productSetId ? { product_set_id: sq.productSetId } : undefined,
       }));
 
