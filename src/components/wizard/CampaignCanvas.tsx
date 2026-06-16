@@ -196,6 +196,19 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     // Creative Rows
     store.creativeRows.forEach((row, i) => {
       const nodeId = `row-${row.id}`;
+
+      // Determine if any preset reachable from this row is a catalogue preset
+      const rowProviderIds = store.edges.rowToProvider
+        .filter((e) => e.rowId === row.id)
+        .map((e) => e.feedProviderId);
+      const rowArticleIds = store.edges.providerToArticle
+        .filter((e) => rowProviderIds.includes(e.feedProviderId))
+        .map((e) => e.articleId);
+      const rowPresetIds = store.edges.articleToPreset
+        .filter((e) => rowArticleIds.includes(e.articleId))
+        .map((e) => e.presetId);
+      const isCatalogueRow = rowPresetIds.some((pid) => presets.find((p) => p.id === pid)?.isCatalogue === true);
+
       nodes.push({
         id: nodeId,
         type: "group",
@@ -204,10 +217,16 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         data: {
           rowId: row.id,
           providerColorMap,
+          isCatalogueRow,
           onAddToRow: (rId: string) => {
             setTargetGroupId(null);
             setTargetRowId(rId);
             setSiloOpen(true);
+          },
+          onAddCatalogueSlot: (rId: string) => {
+            store.addEmptyGroupToRow(rId);
+            const curPos = nodePositionsRef.current[`row-${rId}`] ?? { x: COLUMN_X.group, y: i * ROW_GAP };
+            store.setNodePosition(`row-${rId}`, { x: curPos.x - ROW_CARD_STEP, y: curPos.y });
           },
           onAddToSlot: (gId: string) => {
             setTargetRowId(null);

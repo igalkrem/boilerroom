@@ -75,7 +75,39 @@ export function synthesizeCampaign(
     minAge: squadTemplate.minAge,
     maxAge: squadTemplate.maxAge,
     pixelId: squadTemplate.pixelId || undefined,
+    productSetId: squadTemplate.productSetId || undefined,
   };
+
+  // ── Catalogue path (Dynamic Product Ads) ──────────────────────────────────
+  // No media file, no URL template — Snapchat renders the creative from the product feed.
+  if (preset.isCatalogue) {
+    if (!squadTemplate.productSetId) {
+      throw new Error(`Catalogue preset "${preset.name}" is missing a Product Set ID`);
+    }
+    const catalogueCreative: CreativeFormData = {
+      id: uuid(),
+      adSquadId,
+      name: campaignName,
+      headline: item.headline || "",
+      callToAction: item.callToAction || preset.creativeDefaults?.callToAction,
+      interactionType: "WEB_VIEW" as const,
+      articleId: article.id,
+      adStatus: preset.creativeDefaults?.adStatus ?? "PAUSED",
+      uploadStatus: "idle" as const,
+      isCatalogue: true,
+      productSetId: squadTemplate.productSetId,
+      dynamicTemplateId: squadTemplate.dynamicTemplateId,
+    };
+    return {
+      campaigns: [campaign],
+      adSquads: [adSquad],
+      creatives: [catalogueCreative],
+      feedProviderId: provider.id,
+      articleQuery: article.query,
+      articleSlug: article.slug,
+      headline: item.headline,
+    };
+  }
 
   // The webViewUrl will be resolved by the orchestrator after channel assignment + snap ID resolution.
   // We store the raw URL template here so the orchestrator can resolve it.

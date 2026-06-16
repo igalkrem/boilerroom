@@ -11,9 +11,10 @@ export const creativeSchema = z
       .max(34, "Max 34 characters"),
     brandName: z.string().max(25).optional(),
     callToAction: z.string().optional(),
-    mediaId: z.string(),
+    mediaId: z.string().optional(),
     mediaFileName: z.string().optional(),
     uploadStatus: z.enum(["idle", "uploading", "done", "error"]),
+    isCatalogue: z.boolean().optional(),
     // Interaction
     interactionType: z.enum([
       "SWIPE_TO_OPEN",
@@ -28,6 +29,9 @@ export const creativeSchema = z
     articleId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
+    // Catalogue creatives (DPA) have no media — skip media validation
+    if (data.isCatalogue) return;
+
     // File must be selected and processed (mediaId is resolved at submission time)
     if (data.uploadStatus !== "done") {
       ctx.addIssue({

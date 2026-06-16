@@ -106,6 +106,8 @@ export interface SnapAdSquadPayload {
   start_time?: string;
   end_time?: string;
   pixel_id?: string;
+  // Catalogue (Dynamic Product Ads) — set at creation only; omit from PUT (not in ADSQUAD_PUT_ALLOWED_FIELDS)
+  product_properties?: { product_set_id: string };
   // Server-computed — returned by GET, must never be sent in PUT (causes E2025 / sub_request_status ERROR)
   effective_status?: string;
   delivery_status?: string[];
@@ -128,12 +130,15 @@ export interface SnapCreativePayload {
   name: string;
   type: CreativeType;
   headline?: string; // max 34 chars
-  top_snap_media_id: string;
+  top_snap_media_id?: string; // omitted for catalogue (Dynamic Product Ads)
   call_to_action?: string;
   brand_name?: string;
   profile_properties: { profile_id: string };
   web_view_properties?: { url: string };
   deep_link_properties?: { deep_link_uri: string };
+  // Catalogue (Dynamic Product Ads)
+  render_type?: "STATIC" | "DYNAMIC";
+  dynamic_render_properties?: { product_set_id: string; dynamic_template_id?: string };
 }
 
 export interface SnapCreative extends SnapCreativePayload {

@@ -40,6 +40,8 @@ export interface AdSquadFormData {
   maxAge?: string;
   // Tracking
   pixelId?: string;
+  // Catalogue (Dynamic Product Ads)
+  productSetId?: string;
 }
 
 export type InteractionType =
@@ -71,6 +73,10 @@ export interface CreativeFormData {
   articleId?: string; // references Article.id; drives URL auto-fill + headline constraint in Step 3
   // Ad settings
   adStatus: "ACTIVE" | "PAUSED";
+  // Catalogue (Dynamic Product Ads) — set by synthesizeCampaign when preset.isCatalogue is true
+  isCatalogue?: boolean;
+  productSetId?: string;
+  dynamicTemplateId?: string;
 }
 
 // ─── Submission results ────────────────────────────────────────────────────
@@ -122,6 +128,7 @@ export type SubmissionStage =
 export interface CreativeGroup {
   id: string;
   creativeIds: string[]; // max 5
+  isCatalogue?: boolean; // true = catalogue slot (no media asset; renders DPA placeholder)
 }
 
 export interface CreativeRow {

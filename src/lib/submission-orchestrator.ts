@@ -95,16 +95,24 @@ export async function runSubmission(
   // ── Step 0: Upload all media files in parallel ────────────────────────────
   onStage("uploadMedia");
 
+  // Catalogue (Dynamic Product Ads) creatives have no media — Snapchat renders
+  // them from the product feed. Skip the entire upload stage for catalogue builds.
+  const isCatalogue = creatives.length > 0 && creatives.every((cr) => cr.isCatalogue);
+
   // mediaIdMap resolves each creative's client UUID → Snapchat media ID.
   // Creatives that already have a mediaId (e.g. re-submission) skip the upload.
   const mediaIdMap = new Map<string, string>();
 
-  console.log(`[orchestrator] uploadMedia: ${creatives.length} creative(s)`, creatives.map(c => ({ id: c.id, hasFile: !!c.mediaFile, mediaId: c.mediaId || null })));
+  if (isCatalogue) {
+    console.log(`[orchestrator] catalogue mode — skipping media upload for ${creatives.length} creative(s)`);
+  } else {
+    console.log(`[orchestrator] uploadMedia: ${creatives.length} creative(s)`, creatives.map(c => ({ id: c.id, hasFile: !!c.mediaFile, mediaId: c.mediaId || null })));
+  }
 
   // Limit to 2 concurrent uploads — Snapchat returns E3002 when too many uploads
   // hit the same ad account simultaneously (3+ parallel triggers this reliably).
   const UPLOAD_CONCURRENCY = 2;
-  const uploadQueue = creatives.map((cr) => async () => {
+  const uploadQueue = isCatalogue ? [] : creatives.map((cr) => async () => {
     // Case 1: cached Snapchat mediaId (Silo pre-upload or re-submission)
     if (!cr.mediaFile && !cr.siloAssetBlobUrl) {
       if (cr.mediaId) {
@@ -290,11 +298,14 @@ export async function runSubmission(
             : undefined,
         // conversion_window only applies to pixel-tracked goals. LANDING_PAGE_VIEW is
         // Snapchat-measured (no pixel event), so sending conversion_window for it triggers E1001.
-        conversion_window: sq.optimizationGoal.startsWith("PIXEL_") ? "SWIPE_7DAY" : undefined,
+        // Catalogue (DPA) squads omit pixel_id and conversion_window — product set drives targeting.
+        conversion_window: (isCatalogue || !sq.optimizationGoal.startsWith("PIXEL_")) ? undefined : "SWIPE_7DAY",
         pacing_type: "STANDARD",
         start_time: sq.startDate ? clampToFuture(toIso(sq.startDate)) : undefined,
         end_time: sq.endDate ? toIso(sq.endDate) : undefined,
-        pixel_id: sq.pixelId || undefined,
+        pixel_id: isCatalogue ? undefined : (sq.pixelId || undefined),
+        // Catalogue (DPA): associate product set at squad creation time only (never in PUT)
+        product_properties: sq.productSetId ? { product_set_id: sq.productSetId } : undefined,
       }));
 
       const sqRes = await fetch("/api/snapchat/adsquads", {
@@ -362,15 +373,20 @@ export async function runSubmission(
   // ── Step 3: Create Creatives ──────────────────────────────────────────────
   onStage("creatives");
 
-  // Only submit creatives whose media uploaded successfully
-  const uploadedCreatives = creatives.filter((cr) => mediaIdMap.has(cr.id));
-  creatives
-    .filter((cr) => !mediaIdMap.has(cr.id))
-    .forEach((cr) =>
-      results.creatives.push({ clientId: cr.id, snapId: "", name: cr.name, error: "Media upload failed" })
-    );
+  // Catalogue creatives require no media upload — all proceed directly.
+  // Regular creatives: only submit those whose media uploaded successfully.
+  const uploadedCreatives = isCatalogue
+    ? creatives
+    : creatives.filter((cr) => mediaIdMap.has(cr.id));
+  if (!isCatalogue) {
+    creatives
+      .filter((cr) => !mediaIdMap.has(cr.id))
+      .forEach((cr) =>
+        results.creatives.push({ clientId: cr.id, snapId: "", name: cr.name, error: "Media upload failed" })
+      );
+  }
 
-  console.log(`[orchestrator] uploadedCreatives: ${uploadedCreatives.length}/${creatives.length}`);
+  console.log(`[orchestrator] uploadedCreatives: ${uploadedCreatives.length}/${creatives.length} (catalogue: ${isCatalogue})`);
 
   if (uploadedCreatives.length === 0) {
     console.warn("[orchestrator] all creatives failed upload — skipping profiles/creatives/ads");
@@ -405,6 +421,22 @@ export async function runSubmission(
   }
 
   const creativePayloads: SnapCreativePayload[] = uploadedCreatives.map((cr) => {
+    // Catalogue (Dynamic Product Ads) — render_type DYNAMIC, no media, no URL
+    if (cr.isCatalogue) {
+      return {
+        ad_account_id: adAccountId,
+        name: cr.name,
+        type: "SNAP_AD" as CreativeType,
+        headline: cr.headline || undefined,
+        call_to_action: cr.callToAction || undefined,
+        profile_properties: { profile_id: snapProfileId! },
+        render_type: "DYNAMIC",
+        dynamic_render_properties: {
+          product_set_id: cr.productSetId!,
+          ...(cr.dynamicTemplateId ? { dynamic_template_id: cr.dynamicTemplateId } : {}),
+        },
+      };
+    }
     const creativeType: CreativeType = INTERACTION_TYPE_MAP[cr.interactionType] ?? "SNAP_AD";
     return {
       ad_account_id: adAccountId,

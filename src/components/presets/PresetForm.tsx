@@ -192,6 +192,9 @@ export function PresetForm({ preset }: PresetFormProps) {
   const [trafficSource, setTrafficSource] = useState<"snap" | "facebook">(
     preset?.trafficSource ?? "snap"
   );
+  const [isCatalogue, setIsCatalogue] = useState<boolean>(preset?.isCatalogue ?? false);
+  const [productSetId, setProductSetId] = useState<string>(preset?.adSquads?.[0]?.productSetId ?? "");
+  const [dynamicTemplateId, setDynamicTemplateId] = useState<string>(preset?.adSquads?.[0]?.dynamicTemplateId ?? "");
   const [feedProviderId, setFeedProviderId] = useState<string>(preset?.feedProviderId ?? "");
   const [comboId, setComboId] = useState<string>(preset?.comboId ?? "");
   const [tag, setTag] = useState<string>(preset?.tag ?? "");
@@ -267,11 +270,16 @@ export function PresetForm({ preset }: PresetFormProps) {
   }, [pixels, sq0?.pixelId, setValue]);
 
   const onSubmit = (data: PresetFormValues) => {
+    if (isCatalogue && !productSetId.trim()) {
+      alert("Product Set ID is required for Catalogue campaigns.");
+      return;
+    }
     const saved: CampaignPreset = {
       id: preset?.id ?? uuid(),
       name: data.presetName,
       tag: tag || undefined,
       trafficSource,
+      isCatalogue,
       feedProviderId,
       comboId: comboId || undefined,
       createdAt: preset?.createdAt ?? new Date().toISOString(),
@@ -286,7 +294,7 @@ export function PresetForm({ preset }: PresetFormProps) {
         {
           type: "SNAP_ADS",
           geoCountryCodes: data.geoCountryCodes,
-          optimizationGoal: data.optimizationGoal,
+          optimizationGoal: isCatalogue ? "PIXEL_PURCHASE" : data.optimizationGoal,
           bidStrategy: data.bidStrategy,
           bidAmountUsd: data.bidAmountUsd,
           spendCapType: "DAILY_BUDGET",
@@ -300,7 +308,9 @@ export function PresetForm({ preset }: PresetFormProps) {
           targetingOsType: data.targetingOsType,
           minAge: data.minAge || undefined,
           maxAge: data.maxAge || undefined,
-          pixelId: data.pixelId || undefined,
+          pixelId: isCatalogue ? undefined : (data.pixelId || undefined),
+          productSetId: isCatalogue ? productSetId.trim() : undefined,
+          dynamicTemplateId: isCatalogue && dynamicTemplateId.trim() ? dynamicTemplateId.trim() : undefined,
         },
       ],
       creativeDefaults: {
@@ -314,6 +324,42 @@ export function PresetForm({ preset }: PresetFormProps) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl space-y-8">
+      {/* Campaign Type */}
+      <div>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Campaign Type</p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setIsCatalogue(false)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+              !isCatalogue
+                ? "bg-yellow-400 border-yellow-400 text-gray-900"
+                : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400"
+            }`}
+          >
+            {!isCatalogue && <span className="mr-1">✓</span>}
+            Regular
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsCatalogue(true)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+              isCatalogue
+                ? "bg-violet-500 border-violet-500 text-white"
+                : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400"
+            }`}
+          >
+            {isCatalogue && <span className="mr-1">✓</span>}
+            Catalogue (DPA)
+          </button>
+        </div>
+        {isCatalogue && (
+          <p className="text-xs text-violet-400 mt-2">
+            Snapchat renders ads dynamically from your product feed — no creative media needed.
+          </p>
+        )}
+      </div>
+
       {/* Traffic Source */}
       <div>
         <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Traffic Source</p>
@@ -413,6 +459,40 @@ export function PresetForm({ preset }: PresetFormProps) {
         )}
       </div>
 
+      {/* Catalogue fields */}
+      {isCatalogue && (
+        <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 p-5 space-y-4">
+          <p className="text-sm font-semibold text-violet-300">Dynamic Product Ads Configuration</p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Product Set ID <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={productSetId}
+              onChange={(e) => setProductSetId(e.target.value)}
+              placeholder="e.g. a1b2c3d4-..."
+              className="w-full px-3 py-2 text-sm border border-violet-500/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-400 bg-gray-900 text-gray-100 placeholder-gray-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Find in Snapchat Business Manager → Catalogues → Product Sets.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Dynamic Template ID <span className="text-gray-500">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={dynamicTemplateId}
+              onChange={(e) => setDynamicTemplateId(e.target.value)}
+              placeholder="Leave blank to use Snapchat default"
+              className="w-full px-3 py-2 text-sm border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-400 bg-gray-900 text-gray-100 placeholder-gray-500"
+            />
+          </div>
+        </div>
+      )}
+
       <hr className="border-gray-100 dark:border-gray-700" />
 
       {/* Targeting */}
@@ -470,24 +550,28 @@ export function PresetForm({ preset }: PresetFormProps) {
 
       {/* Bidding & Tracking */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Pixel (optional)</label>
-          <select {...register("pixelId")} className={selectCls}>
-            <option value="">— None —</option>
-            {pixelOptions.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {!isCatalogue && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Pixel (optional)</label>
+            <select {...register("pixelId")} className={selectCls}>
+              <option value="">— None —</option>
+              {pixelOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
-        <Select
-          label="Optimization Goal"
-          options={OPTIMIZATION_GOAL_OPTIONS}
-          {...register("optimizationGoal")}
-          error={errors.optimizationGoal?.message}
-        />
+        {!isCatalogue && (
+          <Select
+            label="Optimization Goal"
+            options={OPTIMIZATION_GOAL_OPTIONS}
+            {...register("optimizationGoal")}
+            error={errors.optimizationGoal?.message}
+          />
+        )}
 
         <Select
           label="Bid Strategy"

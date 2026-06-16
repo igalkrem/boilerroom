@@ -29,6 +29,9 @@ export interface AdSquadPresetData {
   minAge?: string;
   maxAge?: string;
   pixelId?: string;
+  // Catalogue (Dynamic Product Ads) fields
+  productSetId?: string;
+  dynamicTemplateId?: string;
 }
 
 export interface CreativePresetDefaults {
@@ -45,6 +48,7 @@ export interface CampaignPreset {
   feedProviderId: string; // required — preset belongs to one provider ("" for legacy presets)
   comboId?: string; // optional: references a FeedProviderCombo.id from the provider
   createdAt: string; // ISO timestamp
+  isCatalogue?: boolean; // true = Dynamic Product Ads (no Silo media, uses product feed)
   campaign: CampaignPresetData;
   adSquads: AdSquadPresetData[];
   creativeDefaults?: CreativePresetDefaults;

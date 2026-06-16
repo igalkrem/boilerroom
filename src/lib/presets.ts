@@ -33,7 +33,16 @@ export function loadPresets(): CampaignPreset[] {
     // Filter out corrupted entries rather than wiping the entire store.
     return parsed
       .filter((item) => presetSchema.safeParse(item).success)
-      .map((item) => ({ trafficSource: "snap" as const, ...item })) as CampaignPreset[];
+      .map((item) => ({
+        trafficSource: "snap" as const,
+        isCatalogue: false,
+        ...item,
+        adSquads: (item.adSquads ?? []).map((sq: Record<string, unknown>) => ({
+          productSetId: undefined,
+          dynamicTemplateId: undefined,
+          ...sq,
+        })),
+      })) as CampaignPreset[];
   } catch {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
     return [];

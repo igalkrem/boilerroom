@@ -53,11 +53,13 @@ export function ReviewAndPost({ onBack, onLaunch, launching, launchProgress }: R
     const article = articles.find((a) => a.id === item.articleId);
     const firstAsset = getAssetById(item.creativeIds[0]);
     const extraCount = item.creativeIds.length - 1;
-    const creativeFilename = firstAsset
-      ? extraCount > 0
-        ? `${firstAsset.originalFileName} +${extraCount}`
-        : firstAsset.originalFileName
-      : item.creativeIds[0] ?? "—";
+    const creativeFilename = preset?.isCatalogue
+      ? "🏷 Catalogue DPA"
+      : firstAsset
+        ? extraCount > 0
+          ? `${firstAsset.originalFileName} +${extraCount}`
+          : firstAsset.originalFileName
+        : item.creativeIds[0] ?? "—";
     return {
       presetName: preset?.name ?? item.presetId,
       articleSlug: article?.slug ?? item.articleId,
