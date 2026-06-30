@@ -129,6 +129,9 @@ export async function PATCH(request: NextRequest) {
     // snapFetch throws "Snapchat API error {status}: {full_body}" — strip the raw response body
     // so internal debug_message fields are never forwarded to the browser.
     // Structured sub_request_error_reason strings (e.g. "E2025: ...") are safe to surface.
+    if (raw.startsWith("catalogue_squad_readonly:")) {
+      return NextResponse.json({ error: "catalogue_squad_readonly", message: raw.replace("catalogue_squad_readonly: ", "") }, { status: 422 });
+    }
     const clientMessage = raw.startsWith("Snapchat API error") ? "snapchat_request_failed" : raw;
     return NextResponse.json({ error: "update_failed", message: clientMessage }, { status: 502 });
   }

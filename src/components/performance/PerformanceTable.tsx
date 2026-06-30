@@ -639,6 +639,9 @@ export function PerformanceTable({
     if (raw.includes("E2025") || raw.toLowerCase().includes("placement v2")) {
       return "This ad squad's settings are locked — placement was set at creation and cannot be changed via API. Create a new campaign to modify it.";
     }
+    if (raw.includes("catalogue_squad_readonly") || raw.toLowerCase().includes("catalogue") || raw.toLowerCase().includes("collection")) {
+      return "Catalogue (Collection) campaigns cannot be edited via the Snapchat API — budget, bid, and status changes must be made in Snapchat Ads Manager directly.";
+    }
     return raw;
   }
 

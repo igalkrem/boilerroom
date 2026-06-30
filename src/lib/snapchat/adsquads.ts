@@ -105,9 +105,14 @@ export async function updateAdSquad(
   if (!item) throw new Error("Ad squad update failed: empty response");
   if (item.sub_request_status !== "SUCCESS") {
     const detail = item.error_type ?? item.error?.error_type;
-    const msg = item.message ?? item.error?.message ?? item.sub_request_error_reason;
-    const composed = [detail, msg].filter(Boolean).join(": ") || "Snapchat rejected the update";
+    const msg = item.message ?? item.error?.message ?? item.sub_request_error_reason ?? "";
     console.error("[updateAdSquad] Snapchat ERROR:", { adSquadId, updates, raw: item });
+    // E4001: Snapchat server-side bug — fails to copy immutable catalogVertical on Collection ad squads.
+    // Budget/bid/status changes to Catalogue campaigns are not supported via the API.
+    if (typeof msg === "string" && msg.includes("catalogVertical")) {
+      throw new Error("catalogue_squad_readonly: Budget, bid, and status edits are not supported for Catalogue (Collection) campaigns via the Snapchat API.");
+    }
+    const composed = [detail, msg].filter(Boolean).join(": ") || "Snapchat rejected the update";
     throw new Error(composed);
   }
   if (!item.adsquad) throw new Error("Ad squad update failed: no adsquad in response");
