@@ -307,6 +307,9 @@ export async function runSubmission(
         // Catalogue: product_set_id on squad must match creative's dynamic_render_properties.product_set_id (E2840).
         // Do NOT send child_ad_type or catalog_vertical — Snapchat auto-sets them (E1001 if sent explicitly).
         product_properties: sq.productSetId ? { product_set_id: sq.productSetId } : undefined,
+        // AUTOMATIC = all placements (Smart Targeting). Omit for CONTENT (Snapchat's default).
+        // Never send placement_v2 in a follow-up PUT — doing so permanently locks the squad (E2025).
+        placement_v2: sq.placementConfig === "CONTENT" ? undefined : { config: "AUTOMATIC" },
       }));
 
       const sqRes = await fetch("/api/snapchat/adsquads", {
