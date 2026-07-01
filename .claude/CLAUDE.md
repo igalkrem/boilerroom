@@ -9,13 +9,36 @@ SnapAds Manager: a bulk Snapchat ad campaign creation platform. Users connect vi
 **Live:** https://boilerroom-two.vercel.app  
 **Deploy:** Vercel — `npx vercel --prod` (GitHub auto-deploy is unreliable; trigger manually after pushing).
 
+## Workflow
+
+Show a mockup or plan BEFORE implementing UI/design changes. Wait for approval before editing code.
+
+For UI changes: do NOT edit code yet. First show a mockup/description of exactly where each element will go and how it will look. Wait for approval before implementing.
+
+For parallel UI iteration: spawn 3 parallel agents to mock up alternative designs for the feature. Each agent should build its variant on a separate preview branch, deploy to Vercel, and return a live clickable URL plus a screenshot. Present all 3 options side by side and wait for approval. Only after one is picked should it be merged into production and CLAUDE.md updated.
+
+## Debugging
+
+For Snapchat/Meta API failures, inspect Vercel logs and the real live API response BEFORE proposing a fix. Treat third-party docs as unreliable (e.g., Meta `inventory_filter` is write-only; verify field behavior against actual API responses).
+
+Before changing any code for an API error: pull the live Vercel logs and the raw API request/response. Show the exact failing payload, then propose a fix based only on what the real response says — not on documentation.
+
+## Documentation
+
+Update CLAUDE.md as part of any feature or fix that changes app behavior, before considering the task done.
+
+## Output Format
+
+When asked for a link or URL, provide the actual deployed URL, not a local file path.
+
 ## Deploy Workflow (Mandatory)
 
 After completing **any code change session**, always execute these steps in this exact order — no authorization required, run them automatically without asking:
 
-1. **Deploy to Vercel:** `source ~/.nvm/nvm.sh && npx vercel --prod`
-2. **Commit and push to GitHub:** `git add -A && git commit -m "<meaningful description of changes>" && git push`
-3. **Update this CLAUDE.md:** If new routes, components, hooks, patterns, or architectural decisions were introduced, update the relevant sections of this file to keep it accurate.
+1. **TypeScript type-check:** `source ~/.nvm/nvm.sh && npx tsc --noEmit` — fix any errors (no-explicit-any, temporal dead zone, etc.) before proceeding.
+2. **Deploy to Vercel:** `source ~/.nvm/nvm.sh && npx vercel --prod` — confirm the live deployment URL.
+3. **Commit and push to GitHub:** `git add -A && git commit -m "<meaningful description of changes>" && git push`
+4. **Update this CLAUDE.md:** If new routes, components, hooks, patterns, or architectural decisions were introduced, update the relevant sections of this file to keep it accurate.
 
 Do not skip any step. Do not ask for confirmation before running these commands.
 
@@ -25,6 +48,23 @@ Do not skip any step. Do not ask for confirmation before running these commands.
 - **`code-reviewer`** — functional correctness: bugs, type safety, error handling, data flows. Run before any PR.
 - **`security-audit`** — auth, SSRF, access control, secrets, OWASP. Run before any deploy or when new API routes are added.
 - **`snapchat-api-auditor`** — Snapchat API spec compliance: payload field names vs live docs, forbidden fields, invalid enums. Run before any deploy or after a Snapchat API update.
+
+## Reusable Prompts
+
+**Debug a Snapchat/Meta API error:**
+> Before changing any code, pull the live Vercel logs and the raw API request/response for this error. Show me the exact failing payload, then propose a fix based only on what the real response says — not on documentation.
+
+**UI change (mockup-first):**
+> For this UI change, do NOT edit code yet. First show me a mockup/description of exactly where each element will go and how it will look. Wait for my approval before implementing.
+
+**Parallel UI variants:**
+> Before writing any production code, spawn 3 parallel agents to mock up alternative UI designs for [feature]. Each agent should build its variant on a separate preview branch, deploy to Vercel, and return a live clickable URL plus a screenshot. Present all 3 options side by side and wait for my approval. Only after I pick one should you merge it into production and update CLAUDE.md.
+
+**Parallel code review:**
+> Run three parallel review agents over this codebase — one for security, one for type-safety/lint, one for correctness — then consolidate findings into a prioritized fix list before making any changes.
+
+**Continuous review swarm:**
+> Set up a continuous review swarm triggered on each commit. Launch parallel sub-agents: (1) security audit for leaked secrets and vulnerable patterns, scanning git history; (2) TypeScript/ESLint strictness including no-explicit-any; (3) dead-code and unused-export detection. Each agent must apply fixes, run the full type-check and production build to verify zero errors, then open a separate PR with a summary. Only present PRs that build cleanly, and flag any credential exposure as urgent.
 
 ## Stack
 
@@ -126,6 +166,7 @@ src/
 │       ├── catalogue/                 # Image hosting for Snap product catalogue — upload images (JPEG/PNG/WebP/GIF, 20 MB max), table shows thumbnail + public URL (copy) + delete; data: localStorage + KV (boilerroom_catalogue_v1 / br_catalogue_v1); upload endpoint: /api/catalogue/upload (images only); delete endpoint: /api/catalogue/delete (ownership-verified against KV); sidebar nav item between Silo and Articles
 │       ├── articles/                  # Article CRUD UI (new/[id]/edit)
 │       ├── feed-providers/            # Feed Provider board UI (card grid + FeedProviderModal) — own top-nav tab
+│       ├── build-log/                 # Build session history — timeline feed; each launch session is a collapsible card with colored dot (green/amber/red); per-squad table: Time | Name | Status | Budget | Bid | Actions; inline Budget/Bid edit via PATCH /api/snapchat/adsquads; Pause/Activate toggle + Delete (calls DELETE /api/snapchat/adsquads, marks squad DELETED locally); persisted via localStorage + KV (br_build_log); WizardShell appends a session after each launch
 │       ├── performance/               # **Default landing page** — loads from DB immediately on mount; SyncStatusBar shows per-feed sync status with subtle icon-only Force Refresh; cron keeps DB fresh
 │       └── silo/                      # Media library
 │           ├── page.tsx               # Library grid with search/filter/delete; auto-fill grid (minmax 180–240px) keeps cards compact on wide screens
@@ -196,6 +237,7 @@ src/
 │   ├── feed-providers.ts              # FeedProvider CRUD (localStorage + KV sync, key: boilerroom_feed_providers_v1) — upcast() normalises legacy records
 │   ├── articles.ts                    # Article CRUD (localStorage + KV sync, key: boilerroom_articles_v1) — upcast() defaults query: "" for old records
 │   ├── campaign-changelog.ts          # Change log for inline budget/bid/status edits (localStorage + KV sync, key: br_campaign_changelog, max 500 entries); ChangeLogEntry: { id, squadId, field, oldValue, newValue, timestamp }; addChangeEntry() prepends + trims; getEntriesForSquad(squadId) filters newest-first; called by PerformanceTable and DrilldownModal save handlers
+│   ├── build-log.ts                   # Build session log (localStorage + KV sync, key: br_build_log, max 200 sessions); loadBuildLog(), appendSession(), updateSquadInLog(), clearBuildLog(); called by WizardShell after each launch
 │   ├── reporting/
 │   │   └── sync-logic.ts              # syncAccount(adAccountId, startDate, endDate, timezone, accessToken?, force=false) — all Snapchat+KingsRoad+Predicto sync logic; syncs ALL ad squads (Active + Paused); KingsRoad uses shouldSkipFeed(:15), Predicto shouldSkipFeed(:46) — bypassable by force=true for historical dates (< yesterday); Snapchat still respects force; squad stats fetched via withConcurrency(adSquads, 5) — caps concurrent Snapchat API calls at 5 to prevent rate-limit backoff timeouts; DB inserts within each squad run in parallel; exports dateRange(), buildRanges(), SyncResult; imported by sync/route.ts and cron-sync/route.ts
 │   ├── kv-sync.ts                     # hydrateFromKV(key) + syncToKV(key, data) — debounced 1.5s writes to /api/data
@@ -350,7 +392,7 @@ src/
 ## Security Notes
 
 - **`isAdAccountAllowed` denies by default:** When `session.allowedAdAccountIds` is empty (fresh session before dashboard loads), the function returns `false`. It is populated by `/api/snapchat/ad-accounts` — all Snapchat API routes that accept an `adAccountId` must call this check. Do NOT revert the default to `true`. The four Snapchat GET proxy routes (`campaigns`, `adsquads`, `creatives`, `ads`) require `?adAccountId=` and call `isAdAccountAllowed` before fetching. When a single entity ID is provided, each route also performs an IDOR ownership check — fetches the entity from Snapchat and asserts `entity.ad_account_id === adAccountId` — returning 403 if the entity belongs to a different account.
-- **`/api/data` is user-scoped:** Blob paths are `metadata/{googleUserId}/{key}.json`. Blobs use `access: "public"` (store constraint — `boilerroom-silo` is a public store). Paths are non-guessable (contain internal Google user ID) but not secret. Never use a shared path. Valid keys are whitelisted: `br_silo_assets`, `br_silo_tags`, `br_pixels`, `br_presets`, `br_feed_providers`, `br_articles`, `br_ad_accounts_v1`, `br_campaign_changelog`.
+- **`/api/data` is user-scoped:** Blob paths are `metadata/{googleUserId}/{key}.json`. Blobs use `access: "public"` (store constraint — `boilerroom-silo` is a public store). Paths are non-guessable (contain internal Google user ID) but not secret. Never use a shared path. Valid keys are whitelisted: `br_silo_assets`, `br_silo_tags`, `br_pixels`, `br_presets`, `br_feed_providers`, `br_articles`, `br_ad_accounts_v1`, `br_campaign_changelog`, `br_build_log`.
 - **`/api/feed-providers/channels/*` is user-scoped:** GET/POST/DELETE/PATCH pass `session.googleUserId` to all DB functions; queries filter by `google_user_id` so users can only access their own channels. `assignChannel`, `releaseChannel`, `normalizeChannelStatuses`, `updateChannelAdSquadId`, `getInUseChannelsByUser`, `getInUseChannelsWithoutSquadId`, `bulkForceChannelStatus`, and `updateChannelPausedStatus` all require `googleUserId` — never call them without it.
 - **`/api/silo/delete` is user-scoped:** Before calling `del()`, the route fetches `metadata/{googleUserId}/br_silo_assets.json` from the blob store and verifies every URL to be deleted is present in the user's asset list. Fails safe (500) if the KV fetch fails.
 - **`/api/silo/transcode` SSRF guard:** `blobUrl` is validated via Zod `.refine()` to require a hostname ending in `.vercel-storage.com` before the server fetches it — same pattern as `media/upload-from-blob`. Auth: `getSession()` + `isSessionValid()` (no ad account check needed — transcoding is user-scoped to their own Silo assets).
@@ -368,6 +410,7 @@ src/
 - **Snapchat error bodies are not forwarded verbatim:** Routes `console.error` full details and return generic codes to the client (`"upload_failed"`, `"internal_error"`, etc.). The adsquads PATCH handler specifically checks whether the error message starts with `"Snapchat API error"` (raw HTTP body from `snapFetch`) and replaces it with `"snapchat_request_failed"` — only structured sub_request_error_reason strings (e.g. `"E2025: ..."`) are returned to the client.
 - **Content Security Policy (`next.config.mjs`):** `img-src` allows `'self' data: blob: https://*.public.blob.vercel-storage.com https://lh3.googleusercontent.com`. If you add images from a new external domain, update this list or they will be silently blocked. **`script-src`:** Dev includes `'unsafe-eval'` (webpack fast refresh); **production omits `'unsafe-eval'`** — only `'wasm-unsafe-eval'` (for ffmpeg.wasm WebAssembly compilation) and `'unsafe-inline'` are present. `worker-src 'self' blob:` — `'self'` covers the webpack-bundled ffmpeg worker chunk (`/_next/static/chunks/`); `blob:` is kept for safety. ffmpeg core is served same-origin so no external CDN entry is needed in `connect-src`.
 - **Auth rate limiting (`src/middleware.ts`):** Next.js Edge middleware rate-limits all `/api/auth/*` endpoints: 20 requests per IP per 60-second window. Returns 429 with `Retry-After` header when exceeded. Per-instance in-memory Map — not a hard distributed guarantee across multiple Vercel Edge instances, but effective against sustained single-IP abuse.
+- **Ad squad DELETE IDOR protection:** `deleteAdSquad` in `src/lib/snapchat/adsquads.ts` fetches the squad first and asserts `ad_account_id === expectedAdAccountId` before issuing the DELETE — same pattern as `updateAdSquad`. The `DELETE /api/snapchat/adsquads` route requires `isAdAccountAllowed` + maps `"forbidden:"` throws to 403.
 - **Ad squad IDOR protection:** `updateAdSquad` and `setAdSquadPlacement` in `src/lib/snapchat/adsquads.ts` both accept `expectedAdAccountId` (required). After fetching the current squad from Snapchat, they assert `current.ad_account_id === expectedAdAccountId` if the field is present — throwing `"forbidden: ..."` if the squad belongs to a different account. The PATCH route maps this to a 403 response.
 - **Creative PATCH IDOR protection:** `creatives/[id]/route.ts` fetches the existing creative from Snapchat and asserts `existing.ad_account_id === body.adAccountId` before applying URL updates — returning 403 if mismatched.
 - **`SESSION_COOKIE_NAME` must be set in production:** `src/lib/session.ts` throws at request time if `SESSION_COOKIE_NAME` is unset in the production environment. Set it in Vercel environment variables.
@@ -398,6 +441,12 @@ src/
 - Ad squad geo targeting: `targeting.geos` (NOT `geo_locations`) — `{ country_code: string }` with **lowercase** codes. Old presets with `geoCountryCode` (singular) are migrated on load.
 - Ad squad device targeting: `devices[].device_type` is `"MOBILE"` or `"WEB"`. Optional `os_type` (`"iOS"` or `"ANDROID"`) when MOBILE.
 - Ad squad demographic targeting: `min_age` and `max_age` are **plain integer strings** between `"13"` and `"55"`, not numbers and not `"55+"`. Sending numbers causes E1001; sending `"55+"` causes E2401 ("max_age value must be between 13 and 55"). The Snapchat UI labels the upper bound as "55+" but the API value is `"55"`. The `AGE_OPTIONS` constant in `PresetForm.tsx` stores `value: "55"` with `label: "55+"` to handle this divergence.
+- **`placement_v2` and Dynamic Product Ads (DPA/Catalogue) — CHAT_FEED conflict:** Snapchat's official docs state that Dynamic Product Ads **prohibit CHAT_FEED** entirely. However, for PIXEL_PURCHASE optimization goal, CHAT_FEED is **mandatory** (enforced since Nov 27, 2025 — E21011 if missing). This creates an impossible constraint: no CUSTOM `placement_v2` config is valid for catalogue ad squads. AUTOMATIC would create the squad but permanently lock it against API updates (E2025). **The only safe path for catalogue squads is to omit `placement_v2` entirely** — same as regular squads.
+
+- **`placement_v2` — AUTOMATIC config restriction:** When `config` is `"AUTOMATIC"`, no other properties (`platforms`, `snapchat_positions`) may be included in the `placement_v2` object — Snapchat rejects the payload if they are present.
+
+- **`placement_v2` — INTERSTITIAL_SPOTLIGHT cannot stand alone:** Must always be combined with at least one other `snapchat_positions` value.
+
 - **Catalogue (Dynamic Collection Ads) API fields** — confirmed from live campaign `625ce435-d6f3-42b1-b39d-d605df3f866f` and ad squad `35d2ad6a-3ae9-4874-b3e3-c401a6b92e00`. A catalogue ad is a **Collection Ad**: a static hero image/video on top + a row of 4 dynamic product tiles below it. It is NOT a media-free ad. Full creation chain:
   - **Campaign:** `product_properties: { catalog_id: string }` (required — Snapchat validates squad's product_set_id against this catalog; omitting causes E2973). Objective still `SALES`.
   - **Ad squad:** `product_properties: { product_set_id }` required (E2840 if missing) — must match creative's `dynamic_render_properties.product_set_id`. No `child_ad_type`, no `catalog_vertical` (E1001 — read-only fields Snapchat auto-sets). `pixel_id`, `optimization_goal: "PIXEL_PURCHASE"`, and `conversion_window: "SWIPE_7DAY"` ARE sent (same rule as regular pixel-tracked squads).
