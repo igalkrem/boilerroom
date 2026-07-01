@@ -119,6 +119,17 @@ export async function updateAdSquad(
   return item.adsquad;
 }
 
+export async function deleteAdSquad(
+  adSquadId: string,
+  expectedAdAccountId: string
+): Promise<void> {
+  const current = await getAdSquad(adSquadId);
+  if (current.ad_account_id && current.ad_account_id !== expectedAdAccountId) {
+    throw new Error("forbidden: ad squad does not belong to the specified ad account");
+  }
+  await snapFetch<unknown>(`/adsquads/${adSquadId}`, { method: "DELETE" });
+}
+
 export async function setAdSquadPlacement(
   squadId: string,
   placement: { config: string; platforms?: string[]; snapchat_positions?: string[] },

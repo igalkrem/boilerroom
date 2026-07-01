@@ -17,6 +17,8 @@ import { synthesizeCampaign } from "@/lib/synthesize-campaign";
 import { runSubmission } from "@/lib/submission-orchestrator";
 import { resolveCampaignName, generateUniqueId4 } from "@/lib/resolve-campaign-name";
 import type { CampaignBuildItem, SubmissionResults } from "@/types/wizard";
+import { appendSession } from "@/lib/build-log";
+import type { BuildLogSquad } from "@/types/build-log";
 
 type Mode = "canvas" | "review" | "done";
 
@@ -153,6 +155,35 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
       console.error("[wizard] handleLaunch threw:", err);
       setLaunchError(err instanceof Error ? err.message : String(err));
     } finally {
+      // Persist build log session
+      try {
+        const squads: BuildLogSquad[] = [];
+        for (let i = 0; i < collectedResults.length; i++) {
+          const result = collectedResults[i];
+          const item = items[i];
+          const campaign = result.campaigns[0];
+          const squad = result.adSquads[0];
+          if (campaign && squad) {
+            squads.push({
+              adAccountId: item.adAccountId,
+              campaignSnapId: campaign.snapId ?? "",
+              campaignName: campaign.name,
+              adSquadSnapId: squad.snapId ?? "",
+              adSquadName: squad.name,
+              status: "ACTIVE",
+              creativeCount: result.creatives.filter((c) => c.snapId && !c.error).length,
+              adCount: result.ads.filter((a) => a.snapId && !a.error).length,
+              error: squad.error ?? (campaign.error ? campaign.error : undefined),
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+        if (squads.length > 0) {
+          appendSession({ id: crypto.randomUUID(), timestamp: new Date().toISOString(), squads });
+        }
+      } catch (e) {
+        console.warn("[wizard] failed to persist build log:", e);
+      }
       setAllResults(collectedResults);
       setLaunching(false);
       setMode("done");

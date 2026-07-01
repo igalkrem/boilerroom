@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdSquads, getAdSquad, getAdSquadsForAccount, updateAdSquad, setAdSquadPlacement } from "@/lib/snapchat/adsquads";
+import { createAdSquads, deleteAdSquad, getAdSquad, getAdSquadsForAccount, updateAdSquad, setAdSquadPlacement } from "@/lib/snapchat/adsquads";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import type { SnapAdSquadPayload } from "@/types/snapchat";
 import { z } from "zod";
@@ -134,5 +134,44 @@ export async function PATCH(request: NextRequest) {
     }
     const clientMessage = raw.startsWith("Snapchat API error") ? "snapchat_request_failed" : raw;
     return NextResponse.json({ error: "update_failed", message: clientMessage }, { status: 502 });
+  }
+}
+
+const deleteSchema = z.object({
+  adAccountId: z.string().min(1),
+  squadId: z.string().min(1),
+});
+
+export async function DELETE(request: NextRequest) {
+  const session = await getSession();
+  if (!isSessionValid(session)) {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+  }
+  if (!isSnapchatConnected(session)) {
+    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
+  }
+
+  const body = await request.json().catch(() => null);
+  const parsed = deleteSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 400 });
+  }
+  const { adAccountId, squadId } = parsed.data;
+
+  if (!isAdAccountAllowed(session, adAccountId)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  try {
+    await deleteAdSquad(squadId, adAccountId);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("Delete ad squad error:", err);
+    const raw = err instanceof Error ? err.message : "internal_error";
+    if (raw.startsWith("forbidden:")) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    const clientMessage = raw.startsWith("Snapchat API error") ? "snapchat_request_failed" : raw;
+    return NextResponse.json({ error: "delete_failed", message: clientMessage }, { status: 502 });
   }
 }
