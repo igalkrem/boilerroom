@@ -26,10 +26,17 @@ import { loadArticles } from "@/lib/articles";
 import { loadPresets } from "@/lib/presets";
 import { loadAdAccountConfigs } from "@/lib/adAccounts";
 import { useAdAccounts } from "@/hooks/useAdAccounts";
+import { useMetaAdAccounts } from "@/hooks/useMetaAdAccounts";
 import type { FeedProvider } from "@/types/feed-provider";
 import type { Article } from "@/types/article";
 import type { CampaignPreset } from "@/types/preset";
 import type { AdAccountConfig } from "@/types/ad-account";
+
+interface CanvasAdAccount {
+  id: string;
+  name: string;
+  platform: "snap" | "meta";
+}
 import { computeAutoLayout, CanvasControls, ARTICLE_EXPANDED_H } from "./CanvasControls";
 import { CreativeGroupNode, CARD_W, CARD_GAP, DOCK_LEAD, DOCK_W, DOCK_TO_HANDLE } from "./nodes/CreativeGroupNode";
 import { ProviderNode } from "./nodes/ProviderNode";
@@ -74,7 +81,14 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [presets, setPresets] = useState<CampaignPreset[]>([]);
   const [adAccountConfigs, setAdAccountConfigs] = useState<AdAccountConfig[]>([]);
-  const { accounts: allAccounts } = useAdAccounts();
+  const { accounts: snapAccounts } = useAdAccounts();
+  const { accounts: metaAccounts } = useMetaAdAccounts();
+
+  const allAccounts: CanvasAdAccount[] = useMemo(() => {
+    const snap: CanvasAdAccount[] = snapAccounts.map((a) => ({ id: a.id, name: a.name, platform: "snap" }));
+    const meta: CanvasAdAccount[] = metaAccounts.map((a) => ({ id: a.id, name: a.name, platform: "meta" }));
+    return [...snap, ...meta];
+  }, [snapAccounts, metaAccounts]);
 
   useEffect(() => {
     setProviders(loadFeedProviders());
@@ -137,10 +151,15 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       if (!cfg || cfg.feedProviderIds.length === 0) return 999;
       return Math.min(...cfg.feedProviderIds.map((pid) => providerOrder.get(pid) ?? 999));
     };
+    const activeProviders = sortedByCreation.filter((p) => activeProviderIdsFromArticles.has(p.id));
+    const metaAllowedIds = new Set(activeProviders.flatMap((p) => p.metaConfig?.allowedAdAccountIds ?? []));
     return allAccounts
       .filter((a) => {
         const cfg = adAccountConfigs.find((c) => c.id === a.id);
         if (cfg?.hidden) return false;
+        if (a.platform === "meta") {
+          return metaAllowedIds.has(a.id);
+        }
         if (cfg && cfg.feedProviderIds.length > 0) {
           return [...activeProviderIdsFromArticles].some((pid) => cfg.feedProviderIds.includes(pid));
         }
@@ -300,6 +319,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         data: {
           accountId: account.id,
           name: account.name,
+          platform: account.platform,
           color,
           onDisconnectTarget: makeDisconnectTarget,
         },
@@ -497,6 +517,11 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         const presetId = target.replace(/^preset-/, "");
         const preset = presets.find((p) => p.id === presetId);
         if (preset && canSelectPresets) {
+          // Cross-platform block
+          const account = allAccounts.find((a) => a.id === accountId);
+          const presetPlatform = preset.trafficSource === "facebook" ? "meta" : "snap";
+          if (account && account.platform !== presetPlatform) return;
+
           const accountArticleIds = s.edges.articleToAdAccount
             .filter((ae) => ae.adAccountId === accountId)
             .map((ae) => ae.articleId);
@@ -508,7 +533,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         }
       }
     },
-    [presets, articles, adAccountConfigs, canSelectPresets]
+    [presets, articles, adAccountConfigs, canSelectPresets, allAccounts]
   );
 
   // Handle edge deletion (keyboard Delete/Backspace)
@@ -587,7 +612,16 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       if (srcType === "account" && tgtType === "preset") {
         const accountId = source.replace(/^account-/, "");
         const preset = presets.find((p) => p.id === target.replace(/^preset-/, ""));
-        if (!preset?.feedProviderId) return true;
+        if (!preset) return false;
+
+        // Cross-platform block: Meta account ↔ Snap preset (and vice versa)
+        const account = allAccounts.find((a) => a.id === accountId);
+        if (account) {
+          const presetPlatform = preset.trafficSource === "facebook" ? "meta" : "snap";
+          if (account.platform !== presetPlatform) return false;
+        }
+
+        if (!preset.feedProviderId) return true;
         // Static config check
         const cfg = adAccountConfigs.find((c) => c.id === accountId);
         if (cfg && cfg.feedProviderIds.length > 0) {
@@ -608,7 +642,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
 
       return true;
     },
-    [articles, adAccountConfigs, presets]
+    [articles, adAccountConfigs, presets, allAccounts]
   );
 
   // Drop connection on node body (not just on the tiny handle)

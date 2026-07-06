@@ -86,29 +86,33 @@ export interface CreativeFormData {
 export interface CreatedCampaign {
   clientId: string;
   snapId: string;
+  platformId?: string;
   name: string;
 }
 
 export interface CreatedAdSquad {
   clientId: string;
   snapId: string;
+  platformId?: string;
   name: string;
 }
 
 export interface CreatedCreative {
   clientId: string;
   snapId: string;
+  platformId?: string;
   name: string;
 }
 
 export interface CreatedAd {
   clientId: string;
   snapId: string;
+  platformId?: string;
   name: string;
 }
 
 export interface SubmissionResults {
-  uploadMedia: Array<{ clientId: string; snapId: string; name: string; error?: string }>;
+  uploadMedia: Array<{ clientId: string; snapId: string; platformId?: string; name: string; error?: string }>;
   campaigns: Array<CreatedCampaign & { error?: string }>;
   adSquads: Array<CreatedAdSquad & { error?: string }>;
   creatives: Array<CreatedCreative & { error?: string }>;
@@ -164,4 +168,5 @@ export interface CampaignBuildItem {
   headline: string;
   headlineRac: string;
   callToAction: string;
+  trafficSource: "snap" | "facebook";
 }

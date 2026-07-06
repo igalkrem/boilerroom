@@ -13,8 +13,9 @@ import { loadFeedProviders } from "@/lib/feed-providers";
 import { loadArticles } from "@/lib/articles";
 import { loadPresets } from "@/lib/presets";
 import { getAssetById, upsertAsset } from "@/lib/silo";
-import { synthesizeCampaign } from "@/lib/synthesize-campaign";
+import { synthesizeCampaign, synthesizeMetaCampaign } from "@/lib/synthesize-campaign";
 import { runSubmission } from "@/lib/submission-orchestrator";
+import { runMetaSubmission } from "@/lib/meta-submission-orchestrator";
 import { resolveCampaignName, generateUniqueId4 } from "@/lib/resolve-campaign-name";
 import type { CampaignBuildItem, SubmissionResults } from "@/types/wizard";
 import { appendSession } from "@/lib/build-log";
@@ -92,63 +93,74 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
           presetTag: preset.tag,
           uniqueId4: generateUniqueId4(),
         };
-        const campaignName = resolveCampaignName(nameTemplate, item, ctx, provider.snapConfig.campaignNamingTemplate);
 
-        const synthesis = synthesizeCampaign(item, campaignName, provider, article, preset, assets);
+        const isMeta = item.trafficSource === "facebook";
+        const namingTemplate = isMeta
+          ? provider.metaConfig?.campaignNamingTemplate
+          : provider.snapConfig.campaignNamingTemplate;
+        const campaignName = resolveCampaignName(nameTemplate, item, ctx, namingTemplate);
 
         const itemAccountId = item.adAccountId;
         const stageCallback = (stage: string) =>
           console.log(`[wizard] item ${i + 1}/${items.length} stage: ${stage}`);
 
-        const result = await runSubmission(
-          itemAccountId,
-          synthesis.campaigns,
-          synthesis.adSquads,
-          synthesis.creatives,
-          stageCallback,
-          provider
-        );
+        let result: SubmissionResults;
 
-        collectedResults.push(result);
+        if (isMeta) {
+          const metaSynthesis = synthesizeMetaCampaign(item, campaignName, provider, article, preset, assets);
+          result = await runMetaSubmission(itemAccountId, metaSynthesis, stageCallback, provider);
+        } else {
+          const synthesis = synthesizeCampaign(item, campaignName, provider, article, preset, assets);
+          result = await runSubmission(
+            itemAccountId,
+            synthesis.campaigns,
+            synthesis.adSquads,
+            synthesis.creatives,
+            stageCallback,
+            provider
+          );
 
-        // Cache new Snapchat mediaIds into Silo assets
-        result.uploadMedia.forEach((r) => {
-          if (r.error || !r.snapId) return;
-          const cr = synthesis.creatives.find((c) => c.id === r.clientId);
-          if (!cr?.siloAssetId) return;
-          const silo = getAssetById(cr.siloAssetId);
-          if (!silo) return;
-          const existing = silo.snapchatUploads.find((s) => s.adAccountId === itemAccountId);
-          const updatedUploads = existing
-            ? silo.snapchatUploads.map((s) =>
-                s.adAccountId === itemAccountId
-                  ? { ...s, stage: "ready" as const, snapMediaId: r.snapId, completedAt: new Date().toISOString() }
-                  : s
-              )
-            : [
-                ...silo.snapchatUploads,
+          // Cache new Snapchat mediaIds into Silo assets
+          result.uploadMedia.forEach((r) => {
+            if (r.error || !r.snapId) return;
+            const cr = synthesis.creatives.find((c) => c.id === r.clientId);
+            if (!cr?.siloAssetId) return;
+            const silo = getAssetById(cr.siloAssetId);
+            if (!silo) return;
+            const existing = silo.snapchatUploads.find((s) => s.adAccountId === itemAccountId);
+            const updatedUploads = existing
+              ? silo.snapchatUploads.map((s) =>
+                  s.adAccountId === itemAccountId
+                    ? { ...s, stage: "ready" as const, snapMediaId: r.snapId, completedAt: new Date().toISOString() }
+                    : s
+                )
+              : [
+                  ...silo.snapchatUploads,
+                  {
+                    adAccountId: itemAccountId,
+                    adAccountName: itemAccountId,
+                    stage: "ready" as const,
+                    snapMediaId: r.snapId,
+                    completedAt: new Date().toISOString(),
+                  },
+                ];
+            upsertAsset({
+              ...silo,
+              snapchatUploads: updatedUploads,
+              usageHistory: [
+                ...silo.usageHistory,
                 {
                   adAccountId: itemAccountId,
-                  adAccountName: itemAccountId,
-                  stage: "ready" as const,
-                  snapMediaId: r.snapId,
-                  completedAt: new Date().toISOString(),
+                  campaignName,
+                  creativeName: cr.name,
+                  usedAt: new Date().toISOString(),
                 },
-              ];
-          upsertAsset({
-            ...silo,
-            snapchatUploads: updatedUploads,
-            usageHistory: [
-              ...silo.usageHistory,
-              {
-                adAccountId: itemAccountId,
-                campaignName,
-                creativeName: cr.name,
-                usedAt: new Date().toISOString(),
-              },
-            ],
+              ],
+            });
           });
-        });
+        }
+
+        collectedResults.push(result);
       }
       setLaunchProgress(items.length);
     } catch (err) {
@@ -166,13 +178,13 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
           if (campaign && squad) {
             squads.push({
               adAccountId: item.adAccountId,
-              campaignSnapId: campaign.snapId ?? "",
+              campaignSnapId: campaign.platformId ?? campaign.snapId ?? "",
               campaignName: campaign.name,
-              adSquadSnapId: squad.snapId ?? "",
+              adSquadSnapId: squad.platformId ?? squad.snapId ?? "",
               adSquadName: squad.name,
               status: "ACTIVE",
-              creativeCount: result.creatives.filter((c) => c.snapId && !c.error).length,
-              adCount: result.ads.filter((a) => a.snapId && !a.error).length,
+              creativeCount: result.creatives.filter((c) => (c.snapId || c.platformId) && !c.error).length,
+              adCount: result.ads.filter((a) => (a.snapId || a.platformId) && !a.error).length,
               error: squad.error ?? (campaign.error ? campaign.error : undefined),
               timestamp: new Date().toISOString(),
             });
@@ -192,11 +204,11 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
 
   const totalSucceeded =
     mode === "done"
-      ? allResults.reduce((acc, r) => acc + (r.campaigns.filter((c) => c.snapId && !c.error).length), 0)
+      ? allResults.reduce((acc, r) => acc + (r.campaigns.filter((c) => (c.snapId || c.platformId) && !c.error).length), 0)
       : 0;
   const totalFailed =
     mode === "done"
-      ? allResults.reduce((acc, r) => acc + (r.campaigns.filter((c) => !c.snapId || c.error).length), 0)
+      ? allResults.reduce((acc, r) => acc + (r.campaigns.filter((c) => (!c.snapId && !c.platformId) || c.error).length), 0)
       : 0;
 
   // Collect sub-stage errors (adSquads/creatives/ads) that succeeded at campaign level but

@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import type { CanvasEdges, CampaignBuildItem, CreativeGroup, CreativeRow } from "@/types/wizard";
+import { loadPresets } from "@/lib/presets";
 
 // ─── Cascade helpers ──────────────────────────────────────────────────────────
 
@@ -362,6 +363,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   buildCampaignMatrix: (): CampaignBuildItem[] => {
     const { creativeRows, creativeGroups, edges } = get();
+    const presetMap = new Map(loadPresets().map((p) => [p.id, p]));
     const items: CampaignBuildItem[] = [];
 
     for (const { rowId, feedProviderId } of edges.rowToProvider) {
@@ -397,6 +399,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
                   headline,
                   headlineRac: headlineRac ?? "",
                   callToAction,
+                  trafficSource: presetMap.get(presetId)?.trafficSource ?? "snap",
                 });
               }
             }

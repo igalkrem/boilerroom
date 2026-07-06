@@ -10,6 +10,7 @@ import { SnapTab } from "./tabs/SnapTab";
 import { ChannelsTab } from "./tabs/ChannelsTab";
 import { DomainsTab } from "./tabs/DomainsTab";
 import { CombosTab } from "./tabs/CombosTab";
+import { MetaTab } from "./tabs/MetaTab";
 
 type Tab = "snap" | "channels" | "domains" | "combos" | "facebook";
 
@@ -138,9 +139,10 @@ export function FeedProviderModal({ provider, onClose, onSaved }: FeedProviderMo
             />
           )}
           {activeTab === "facebook" && (
-            <div className="flex items-center justify-center h-32 text-sm text-gray-400 italic">
-              Coming soon
-            </div>
+            <MetaTab
+              metaConfig={data.metaConfig ?? { allowedAdAccountIds: [], allowedPixelIds: [] }}
+              onChange={(metaConfig) => setData((d) => ({ ...d, metaConfig }))}
+            />
           )}
         </div>
 

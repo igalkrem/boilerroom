@@ -11,9 +11,10 @@ import { MultiSelect } from "@/components/ui/MultiSelect";
 import { upsertPreset } from "@/lib/presets";
 import { loadPixels } from "@/lib/pixels";
 import { loadFeedProviders } from "@/lib/feed-providers";
-import type { CampaignPreset } from "@/types/preset";
+import type { CampaignPreset, MetaAdSetPresetData } from "@/types/preset";
 import type { SavedPixel } from "@/types/pixel";
 import type { FeedProvider } from "@/types/feed-provider";
+import type { MetaOptimizationGoal, MetaBillingEvent, MetaPixelEvent } from "@/types/meta";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -21,10 +22,11 @@ const presetFormSchema = z
   .object({
     presetName: z.string().min(1, "Preset name is required"),
     geoCountryCodes: z.array(z.string().min(2)).min(1, "Select at least one country"),
+    trafficSource: z.enum(["snap", "facebook"]),
     optimizationGoal: z.enum([
       "PIXEL_PURCHASE", "PIXEL_SIGNUP", "PIXEL_ADD_TO_CART", "PIXEL_PAGE_VIEW", "LANDING_PAGE_VIEW",
-    ]),
-    bidStrategy: z.enum(["AUTO_BID", "LOWEST_COST_WITH_MAX_BID", "TARGET_COST"]),
+    ]).optional(),
+    bidStrategy: z.enum(["AUTO_BID", "LOWEST_COST_WITH_MAX_BID", "TARGET_COST"]).optional(),
     bidAmountUsd: z.number().optional(),
     dailyBudgetUsd: z.number().optional(),
     smartPlacement: z.boolean().optional(),
@@ -36,11 +38,19 @@ const presetFormSchema = z
     status: z.enum(["ACTIVE", "PAUSED"]),
   })
   .superRefine((data, ctx) => {
-    if (data.bidStrategy !== "AUTO_BID" && (!data.bidAmountUsd || data.bidAmountUsd <= 0)) {
-      ctx.addIssue({ code: "custom", path: ["bidAmountUsd"], message: "Bid amount required" });
-    }
-    if (!data.dailyBudgetUsd || data.dailyBudgetUsd < 5) {
-      ctx.addIssue({ code: "custom", path: ["dailyBudgetUsd"], message: "Minimum $5" });
+    if (data.trafficSource === "snap") {
+      if (!data.optimizationGoal) {
+        ctx.addIssue({ code: "custom", path: ["optimizationGoal"], message: "Required for Snap" });
+      }
+      if (!data.bidStrategy) {
+        ctx.addIssue({ code: "custom", path: ["bidStrategy"], message: "Required for Snap" });
+      }
+      if (data.bidStrategy && data.bidStrategy !== "AUTO_BID" && (!data.bidAmountUsd || data.bidAmountUsd <= 0)) {
+        ctx.addIssue({ code: "custom", path: ["bidAmountUsd"], message: "Bid amount required" });
+      }
+      if (!data.dailyBudgetUsd || data.dailyBudgetUsd < 5) {
+        ctx.addIssue({ code: "custom", path: ["dailyBudgetUsd"], message: "Minimum $5" });
+      }
     }
   });
 
@@ -203,6 +213,17 @@ export function PresetForm({ preset }: PresetFormProps) {
   const [pixels, setPixels] = useState<SavedPixel[]>([]);
   const [feedProviders, setFeedProviders] = useState<FeedProvider[]>([]);
 
+  // Meta-specific state
+  const existingMetaAdSet = preset?.metaAdSet;
+  const [metaOptGoal, setMetaOptGoal] = useState<MetaOptimizationGoal>(existingMetaAdSet?.optimizationGoal ?? "OFFSITE_CONVERSIONS");
+  const [metaBillingEvent, setMetaBillingEvent] = useState<MetaBillingEvent>(existingMetaAdSet?.billingEvent ?? "IMPRESSIONS");
+  const [metaPixelEvent, setMetaPixelEvent] = useState<MetaPixelEvent>(existingMetaAdSet?.pixelEvent ?? "PURCHASE");
+  const [metaDailyBudgetCents, setMetaDailyBudgetCents] = useState<number>(existingMetaAdSet?.dailyBudgetCents ?? 2000);
+  const [metaBidAmountCents, setMetaBidAmountCents] = useState<number | undefined>(existingMetaAdSet?.bidAmountCents);
+  const [metaPublisherPlatforms, setMetaPublisherPlatforms] = useState<("facebook" | "instagram" | "audience_network")[]>(
+    existingMetaAdSet?.publisherPlatforms ?? ["facebook", "instagram"]
+  );
+
   useEffect(() => {
     setPixels(loadPixels());
     setFeedProviders(loadFeedProviders());
@@ -225,6 +246,7 @@ export function PresetForm({ preset }: PresetFormProps) {
     defaultValues: sq0
       ? {
           presetName: preset!.name,
+          trafficSource: preset?.trafficSource ?? "snap",
           geoCountryCodes:
             (sq0 as unknown as { geoCountryCodes?: string[]; geoCountryCode?: string })
               .geoCountryCodes ??
@@ -246,6 +268,7 @@ export function PresetForm({ preset }: PresetFormProps) {
         }
       : {
           presetName: "",
+          trafficSource: "snap" as const,
           geoCountryCodes: ["US"],
           optimizationGoal: "PIXEL_PURCHASE",
           bidStrategy: "AUTO_BID",
@@ -274,12 +297,30 @@ export function PresetForm({ preset }: PresetFormProps) {
       alert("Product Set ID is required for Catalogue campaigns.");
       return;
     }
+    const isMeta = trafficSource === "facebook";
+
+    const metaAdSet: MetaAdSetPresetData | undefined = isMeta
+      ? {
+          geoCountryCodes: data.geoCountryCodes,
+          optimizationGoal: metaOptGoal,
+          billingEvent: metaBillingEvent,
+          bidAmountCents: metaBidAmountCents,
+          dailyBudgetCents: metaDailyBudgetCents,
+          status: data.status,
+          pixelId: data.pixelId || undefined,
+          pixelEvent: data.pixelId ? metaPixelEvent : undefined,
+          minAge: data.minAge ? Number(data.minAge) : undefined,
+          maxAge: data.maxAge ? Number(data.maxAge) : undefined,
+          publisherPlatforms: metaPublisherPlatforms,
+        }
+      : undefined;
+
     const saved: CampaignPreset = {
       id: preset?.id ?? uuid(),
       name: data.presetName,
       tag: tag || undefined,
       trafficSource,
-      isCatalogue,
+      isCatalogue: isMeta ? false : isCatalogue,
       feedProviderId,
       comboId: comboId || undefined,
       createdAt: preset?.createdAt ?? new Date().toISOString(),
@@ -290,30 +331,33 @@ export function PresetForm({ preset }: PresetFormProps) {
         startDate: undefined,
         endDate: undefined,
       },
-      adSquads: [
-        {
-          type: "SNAP_ADS",
-          geoCountryCodes: data.geoCountryCodes,
-          optimizationGoal: data.optimizationGoal,
-          bidStrategy: data.bidStrategy,
-          bidAmountUsd: data.bidAmountUsd,
-          spendCapType: "DAILY_BUDGET",
-          dailyBudgetUsd: data.dailyBudgetUsd,
-          status: data.status,
-          startDate: undefined,
-          endDate: undefined,
-          smartPlacement: data.smartPlacement,
-          targetingGender: undefined,
-          targetingDeviceType: data.targetingDeviceType,
-          targetingOsType: data.targetingOsType,
-          minAge: data.minAge || undefined,
-          maxAge: data.maxAge || undefined,
-          pixelId: data.pixelId || undefined,
-          catalogId: isCatalogue ? catalogId.trim() : undefined,
-          productSetId: isCatalogue ? productSetId.trim() : undefined,
-          dynamicTemplateId: isCatalogue && dynamicTemplateId.trim() ? dynamicTemplateId.trim() : undefined,
-        },
-      ],
+      adSquads: isMeta
+        ? []
+        : [
+            {
+              type: "SNAP_ADS",
+              geoCountryCodes: data.geoCountryCodes,
+              optimizationGoal: data.optimizationGoal ?? "PIXEL_PURCHASE",
+              bidStrategy: data.bidStrategy ?? "AUTO_BID",
+              bidAmountUsd: data.bidAmountUsd,
+              spendCapType: "DAILY_BUDGET",
+              dailyBudgetUsd: data.dailyBudgetUsd,
+              status: data.status,
+              startDate: undefined,
+              endDate: undefined,
+              smartPlacement: data.smartPlacement,
+              targetingGender: undefined,
+              targetingDeviceType: data.targetingDeviceType,
+              targetingOsType: data.targetingOsType,
+              minAge: data.minAge || undefined,
+              maxAge: data.maxAge || undefined,
+              pixelId: data.pixelId || undefined,
+              catalogId: isCatalogue ? catalogId.trim() : undefined,
+              productSetId: isCatalogue ? productSetId.trim() : undefined,
+              dynamicTemplateId: isCatalogue && dynamicTemplateId.trim() ? dynamicTemplateId.trim() : undefined,
+            },
+          ],
+      metaAdSet,
       creativeDefaults: {
         adStatus,
         callToAction: callToAction || undefined,
@@ -325,42 +369,44 @@ export function PresetForm({ preset }: PresetFormProps) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl space-y-8">
-      {/* Campaign Type */}
-      <div>
-        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Campaign Type</p>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setIsCatalogue(false)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-              !isCatalogue
-                ? "bg-yellow-400 border-yellow-400 text-gray-900"
-                : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400"
-            }`}
-          >
-            {!isCatalogue && <span className="mr-1">✓</span>}
-            Regular
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsCatalogue(true)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-              isCatalogue
-                ? "bg-violet-500 border-violet-500 text-white"
-                : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400"
-            }`}
-          >
-            {isCatalogue && <span className="mr-1">✓</span>}
-            Catalogue (DPA)
-          </button>
+      {/* Campaign Type — Snap only */}
+      {trafficSource === "snap" && (
+        <div>
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Campaign Type</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setIsCatalogue(false)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                !isCatalogue
+                  ? "bg-yellow-400 border-yellow-400 text-gray-900"
+                  : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400"
+              }`}
+            >
+              {!isCatalogue && <span className="mr-1">✓</span>}
+              Regular
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsCatalogue(true)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                isCatalogue
+                  ? "bg-violet-500 border-violet-500 text-white"
+                  : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400"
+              }`}
+            >
+              {isCatalogue && <span className="mr-1">✓</span>}
+              Catalogue (DPA)
+            </button>
+          </div>
+          {isCatalogue && (
+            <p className="text-xs text-violet-400 mt-2">
+              Collection ad: you still pick a hero image/video in the wizard — Snapchat adds a row of
+              dynamic product tiles from your catalogue beneath it.
+            </p>
+          )}
         </div>
-        {isCatalogue && (
-          <p className="text-xs text-violet-400 mt-2">
-            Collection ad: you still pick a hero image/video in the wizard — Snapchat adds a row of
-            dynamic product tiles from your catalogue beneath it.
-          </p>
-        )}
-      </div>
+      )}
 
       {/* Traffic Source */}
       <div>
@@ -368,7 +414,7 @@ export function PresetForm({ preset }: PresetFormProps) {
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => setTrafficSource("snap")}
+            onClick={() => { setTrafficSource("snap"); setValue("trafficSource", "snap"); }}
             className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
               trafficSource === "snap"
                 ? "bg-yellow-400 border-yellow-400 text-gray-900"
@@ -380,14 +426,15 @@ export function PresetForm({ preset }: PresetFormProps) {
           </button>
           <button
             type="button"
-            disabled
-            title="Coming soon"
-            className="px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 dark:border-gray-700 text-gray-400 cursor-not-allowed flex items-center gap-2"
+            onClick={() => { setTrafficSource("facebook"); setValue("trafficSource", "facebook"); }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+              trafficSource === "facebook"
+                ? "bg-blue-600 border-blue-600 text-white"
+                : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400"
+            }`}
           >
+            {trafficSource === "facebook" && <span>✓</span>}
             Facebook
-            <span className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded">
-              soon
-            </span>
           </button>
         </div>
       </div>
@@ -530,16 +577,20 @@ export function PresetForm({ preset }: PresetFormProps) {
           />
         </div>
 
-        <Select
-          label="Device"
-          options={DEVICE_OPTIONS}
-          {...register("targetingDeviceType", {
-            onChange: () => setValue("targetingOsType", undefined),
-          })}
-        />
+        {trafficSource === "snap" && (
+          <>
+            <Select
+              label="Device"
+              options={DEVICE_OPTIONS}
+              {...register("targetingDeviceType", {
+                onChange: () => setValue("targetingOsType", undefined),
+              })}
+            />
 
-        {deviceType === "MOBILE" && (
-          <Select label="OS" options={OS_OPTIONS} {...register("targetingOsType")} />
+            {deviceType === "MOBILE" && (
+              <Select label="OS" options={OS_OPTIONS} {...register("targetingOsType")} />
+            )}
+          </>
         )}
 
         <div>
@@ -560,17 +611,44 @@ export function PresetForm({ preset }: PresetFormProps) {
           </select>
         </div>
 
-        <div className="sm:col-span-2 rounded-lg border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-900/10 p-3">
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input type="checkbox" {...register("smartPlacement")} className="mt-0.5 accent-yellow-500" />
-            <span className="text-sm">
-              <span className="font-medium text-gray-800 dark:text-gray-200">Smart placement (let Snapchat auto-optimize where ads run)</span>
-              <span className="mt-1 block text-xs text-amber-700 dark:text-amber-400">
-                ⚠ Ad sets launched with Smart placement are locked by Snapchat — you must change their budget, bid, or pause them in Snapchat Ads Manager, not in this app. Leave this off to keep full in-app editing (uses Snapchat&apos;s default placement).
+        {trafficSource === "snap" && (
+          <div className="sm:col-span-2 rounded-lg border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-900/10 p-3">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input type="checkbox" {...register("smartPlacement")} className="mt-0.5 accent-yellow-500" />
+              <span className="text-sm">
+                <span className="font-medium text-gray-800 dark:text-gray-200">Smart placement (let Snapchat auto-optimize where ads run)</span>
+                <span className="mt-1 block text-xs text-amber-700 dark:text-amber-400">
+                  ⚠ Ad sets launched with Smart placement are locked by Snapchat — you must change their budget, bid, or pause them in Snapchat Ads Manager, not in this app. Leave this off to keep full in-app editing (uses Snapchat&apos;s default placement).
+                </span>
               </span>
-            </span>
-          </label>
-        </div>
+            </label>
+          </div>
+        )}
+
+        {trafficSource === "facebook" && (
+          <div className="sm:col-span-2 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Publisher Platforms</label>
+              <div className="flex gap-2">
+                {(["facebook", "instagram", "audience_network"] as const).map((p) => (
+                  <label key={p} className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={metaPublisherPlatforms.includes(p)}
+                      onChange={() =>
+                        setMetaPublisherPlatforms((prev) =>
+                          prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
+                        )
+                      }
+                      className="rounded border-gray-300"
+                    />
+                    {p === "audience_network" ? "Audience Network" : p.charAt(0).toUpperCase() + p.slice(1)}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <hr className="border-gray-100 dark:border-gray-700" />
@@ -589,42 +667,126 @@ export function PresetForm({ preset }: PresetFormProps) {
           </select>
         </div>
 
-        <Select
-          label="Optimization Goal"
-          options={OPTIMIZATION_GOAL_OPTIONS}
-          {...register("optimizationGoal")}
-          error={errors.optimizationGoal?.message}
-        />
-
-        <Select
-          label="Bid Strategy"
-          options={BID_STRATEGY_OPTIONS}
-          {...register("bidStrategy", {
-            onChange: () => setValue("bidAmountUsd", undefined),
-          })}
-          error={errors.bidStrategy?.message}
-        />
-
-        {bidStrategy !== "AUTO_BID" && (
-          <Input
-            label="Bid Amount (USD)"
-            type="number"
-            min={0.01}
-            step={0.01}
-            {...register("bidAmountUsd", { valueAsNumber: true })}
-            error={errors.bidAmountUsd?.message}
-          />
+        {trafficSource === "facebook" && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Pixel Event</label>
+            <select
+              value={metaPixelEvent}
+              onChange={(e) => setMetaPixelEvent(e.target.value as MetaPixelEvent)}
+              className={selectCls}
+            >
+              <option value="PURCHASE">Purchase</option>
+              <option value="ADD_TO_CART">Add to Cart</option>
+              <option value="INITIATED_CHECKOUT">Initiated Checkout</option>
+              <option value="VIEW_CONTENT">View Content</option>
+              <option value="LEAD">Lead</option>
+              <option value="COMPLETE_REGISTRATION">Complete Registration</option>
+            </select>
+          </div>
         )}
 
-        <Input
-          label="Daily Budget (USD)"
-          type="number"
-          min={5}
-          step={1}
-          placeholder="Min $5"
-          {...register("dailyBudgetUsd", { valueAsNumber: true })}
-          error={errors.dailyBudgetUsd?.message}
-        />
+        {trafficSource === "snap" ? (
+          <>
+            <Select
+              label="Optimization Goal"
+              options={OPTIMIZATION_GOAL_OPTIONS}
+              {...register("optimizationGoal")}
+              error={errors.optimizationGoal?.message}
+            />
+
+            <Select
+              label="Bid Strategy"
+              options={BID_STRATEGY_OPTIONS}
+              {...register("bidStrategy", {
+                onChange: () => setValue("bidAmountUsd", undefined),
+              })}
+              error={errors.bidStrategy?.message}
+            />
+
+            {bidStrategy !== "AUTO_BID" && (
+              <Input
+                label="Bid Amount (USD)"
+                type="number"
+                min={0.01}
+                step={0.01}
+                {...register("bidAmountUsd", { valueAsNumber: true })}
+                error={errors.bidAmountUsd?.message}
+              />
+            )}
+
+            <Input
+              label="Daily Budget (USD)"
+              type="number"
+              min={5}
+              step={1}
+              placeholder="Min $5"
+              {...register("dailyBudgetUsd", { valueAsNumber: true })}
+              error={errors.dailyBudgetUsd?.message}
+            />
+          </>
+        ) : (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Optimization Goal</label>
+              <select
+                value={metaOptGoal}
+                onChange={(e) => setMetaOptGoal(e.target.value as MetaOptimizationGoal)}
+                className={selectCls}
+              >
+                <option value="OFFSITE_CONVERSIONS">Offsite Conversions</option>
+                <option value="LINK_CLICKS">Link Clicks</option>
+                <option value="IMPRESSIONS">Impressions</option>
+                <option value="LANDING_PAGE_VIEWS">Landing Page Views</option>
+                <option value="REACH">Reach</option>
+                <option value="VALUE">Value</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Billing Event</label>
+              <select
+                value={metaBillingEvent}
+                onChange={(e) => setMetaBillingEvent(e.target.value as MetaBillingEvent)}
+                className={selectCls}
+              >
+                <option value="IMPRESSIONS">Impressions</option>
+                <option value="LINK_CLICKS">Link Clicks</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Daily Budget (cents)
+              </label>
+              <input
+                type="number"
+                min={100}
+                step={100}
+                value={metaDailyBudgetCents}
+                onChange={(e) => setMetaDailyBudgetCents(Number(e.target.value))}
+                className={selectCls}
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                In cents — e.g. 2000 = $20. Min 100 ($1).
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Bid Amount (cents, optional)
+              </label>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={metaBidAmountCents ?? ""}
+                onChange={(e) => setMetaBidAmountCents(e.target.value ? Number(e.target.value) : undefined)}
+                placeholder="Leave empty for auto"
+                className={selectCls}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       <hr className="border-gray-100 dark:border-gray-700" />

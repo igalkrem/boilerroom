@@ -96,3 +96,17 @@ CREATE TABLE IF NOT EXISTS user_meta_tokens (
   expires_at       BIGINT      NOT NULL DEFAULT 0,
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS meta_ad_set_stats (
+  ad_set_id            TEXT        NOT NULL,
+  ad_account_id        TEXT        NOT NULL,
+  stat_date            DATE        NOT NULL,
+  ad_set_name          TEXT        NOT NULL DEFAULT '',
+  impressions          BIGINT      NOT NULL DEFAULT 0,
+  clicks               BIGINT      NOT NULL DEFAULT 0,
+  spend_cents          BIGINT      NOT NULL DEFAULT 0,
+  purchases            BIGINT      NOT NULL DEFAULT 0,
+  purchase_value_cents BIGINT      NOT NULL DEFAULT 0,
+  fetched_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (ad_set_id, stat_date)
+);

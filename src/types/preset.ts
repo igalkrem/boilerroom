@@ -1,4 +1,5 @@
 import type { CampaignObjective, BidStrategy, OptimizationGoal } from "./snapchat";
+import type { MetaOptimizationGoal, MetaBillingEvent, MetaPixelEvent } from "./meta";
 
 export interface CampaignPresetData {
   objective: CampaignObjective;
@@ -40,6 +41,23 @@ export interface AdSquadPresetData {
   dynamicTemplateId?: string; // optional creative template; Snapchat default if absent
 }
 
+export interface MetaAdSetPresetData {
+  geoCountryCodes: string[];
+  optimizationGoal: MetaOptimizationGoal;
+  billingEvent: MetaBillingEvent;
+  bidAmountCents?: number;
+  dailyBudgetCents: number;
+  status: "ACTIVE" | "PAUSED";
+  pixelId?: string;
+  pixelEvent?: MetaPixelEvent;
+  targetingGender?: "ALL" | "MALE" | "FEMALE";
+  minAge?: number;
+  maxAge?: number;
+  publisherPlatforms?: ("facebook" | "instagram" | "audience_network")[];
+  startDate?: string;
+  endDate?: string;
+}
+
 export interface CreativePresetDefaults {
   adStatus: "ACTIVE" | "PAUSED";
   brandName?: string;
@@ -57,5 +75,6 @@ export interface CampaignPreset {
   isCatalogue?: boolean; // true = Dynamic Product Ads (no Silo media, uses product feed)
   campaign: CampaignPresetData;
   adSquads: AdSquadPresetData[];
+  metaAdSet?: MetaAdSetPresetData;
   creativeDefaults?: CreativePresetDefaults;
 }

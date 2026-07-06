@@ -38,6 +38,13 @@ export interface FeedProvider {
     campaignNamingTemplate?: NamingSegment[]; // Snap-specific naming template; segments joined by " | "
     revenueSource?: "kingsroad" | "predicto"; // used by cron to route sync windows (:15 vs :46)
   };
+  // Meta tab
+  metaConfig?: {
+    allowedAdAccountIds: string[];
+    allowedPixelIds: string[];
+    pageId?: string; // required for object_story_spec
+    campaignNamingTemplate?: NamingSegment[];
+  };
   // URL Parameters tab
   urlConfig: {
     baseUrl: string;
@@ -59,6 +66,7 @@ export function emptyFeedProvider(): Omit<FeedProvider, "id" | "createdAt"> {
   return {
     name: "",
     snapConfig: { allowedAdAccountIds: [], allowedPixelIds: [] },
+    metaConfig: { allowedAdAccountIds: [], allowedPixelIds: [] },
     urlConfig: { baseUrl: "", parameters: [] },
     channelConfig: { type: "parameter-based" },
     domains: [],

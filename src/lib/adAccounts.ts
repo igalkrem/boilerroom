@@ -10,6 +10,7 @@ const adAccountSchema = z.object({
   name: z.string(),
   hidden: z.boolean(),
   feedProviderIds: z.array(z.string()),
+  platform: z.enum(["snap", "meta"]).optional(),
   updatedAt: z.string(),
 });
 

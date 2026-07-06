@@ -1,17 +1,13 @@
+import type { MetaAdAccount } from "@/types/meta";
+
 const GRAPH_BASE = "https://graph.facebook.com/v19.0";
 
-export interface MetaAdAccount {
-  id: string;
-  name: string;
-  currency: string;
-  timezone_name: string;
-}
+export type { MetaAdAccount };
 
-// Fetches all Meta ad accounts accessible by the token, following pagination cursors.
 export async function getMetaAdAccounts(accessToken: string): Promise<MetaAdAccount[]> {
   const accounts: MetaAdAccount[] = [];
   let url: string | null =
-    `${GRAPH_BASE}/me/adaccounts?fields=id,name,currency,timezone_name&limit=100&access_token=${encodeURIComponent(accessToken)}`;
+    `${GRAPH_BASE}/me/adaccounts?fields=id,account_id,name,account_status,currency,timezone_name,business{id,name}&limit=100&access_token=${encodeURIComponent(accessToken)}`;
 
   while (url) {
     const res = await fetch(url);

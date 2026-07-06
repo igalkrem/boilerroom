@@ -5,6 +5,7 @@ import type { FeedProvider } from "@/types/feed-provider";
 import type { Article } from "@/types/article";
 import type { CampaignPreset } from "@/types/preset";
 import type { SiloAsset } from "@/types/silo";
+import type { MetaBillingEvent, MetaOptimizationGoal, MetaPixelEvent } from "@/types/meta";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -170,4 +171,118 @@ function buildUrlTemplate(provider: FeedProvider, article: Article, headline: st
   if (!params) return base;
   if (!base) return ""; // don't produce "?key=value" with no host — callers treat "" as missing URL
   return `${base}?${params}`;
+}
+
+// ─── Meta synthesis ─────────────────────────────────────────────────────────
+
+export interface MetaSynthesisResult {
+  campaign: {
+    name: string;
+    status: "ACTIVE" | "PAUSED";
+    dailyBudgetCents?: number;
+  };
+  adSet: {
+    name: string;
+    status: "ACTIVE" | "PAUSED";
+    geoCountryCodes: string[];
+    billingEvent: MetaBillingEvent;
+    optimizationGoal: MetaOptimizationGoal;
+    bidAmountCents?: number;
+    dailyBudgetCents: number;
+    pixelId?: string;
+    pixelEvent?: MetaPixelEvent;
+    targetingGender?: "ALL" | "MALE" | "FEMALE";
+    minAge?: number;
+    maxAge?: number;
+    publisherPlatforms?: ("facebook" | "instagram" | "audience_network")[];
+    startDate?: string;
+    endDate?: string;
+  };
+  creatives: Array<{
+    id: string;
+    name: string;
+    pageId: string;
+    webViewUrl: string;
+    headline?: string;
+    callToAction?: string;
+    adStatus: "ACTIVE" | "PAUSED";
+    siloAssetBlobUrl?: string;
+    siloAssetMediaType?: "VIDEO" | "IMAGE";
+    siloAssetOriginalFileName?: string;
+    siloAssetId?: string;
+  }>;
+  feedProviderId: string;
+  articleQuery: string;
+  articleSlug: string;
+  headline: string;
+}
+
+export function synthesizeMetaCampaign(
+  item: CampaignBuildItem,
+  campaignName: string,
+  provider: FeedProvider,
+  article: Article,
+  preset: CampaignPreset,
+  assets: SiloAsset[]
+): MetaSynthesisResult {
+  const metaAdSet = preset.metaAdSet;
+  if (!metaAdSet) {
+    throw new Error(`Preset "${preset.name}" has no Meta ad set configuration`);
+  }
+
+  const pageId = provider.metaConfig?.pageId;
+  if (!pageId) {
+    throw new Error(`Provider "${provider.name}" has no Meta Page ID configured`);
+  }
+
+  const urlTemplate = buildUrlTemplate(provider, article, item.headline, item.headlineRac, item.adAccountId);
+  if (!urlTemplate) {
+    throw new Error(
+      `Provider "${provider.name}" has no base URL and no parameters — configure a base URL on the domain or provider.`
+    );
+  }
+
+  const multiAsset = assets.length > 1;
+
+  return {
+    campaign: {
+      name: campaignName,
+      status: preset.campaign.status,
+      dailyBudgetCents: metaAdSet.dailyBudgetCents,
+    },
+    adSet: {
+      name: campaignName,
+      status: metaAdSet.status,
+      geoCountryCodes: metaAdSet.geoCountryCodes,
+      billingEvent: metaAdSet.billingEvent,
+      optimizationGoal: metaAdSet.optimizationGoal,
+      bidAmountCents: metaAdSet.bidAmountCents,
+      dailyBudgetCents: metaAdSet.dailyBudgetCents,
+      pixelId: metaAdSet.pixelId,
+      pixelEvent: metaAdSet.pixelEvent,
+      targetingGender: metaAdSet.targetingGender,
+      minAge: metaAdSet.minAge,
+      maxAge: metaAdSet.maxAge,
+      publisherPlatforms: metaAdSet.publisherPlatforms,
+      startDate: metaAdSet.startDate ? ensureFutureDate(metaAdSet.startDate) : undefined,
+      endDate: metaAdSet.endDate ? ensureFutureDate(metaAdSet.endDate) : undefined,
+    },
+    creatives: assets.map((asset, idx) => ({
+      id: uuid(),
+      name: multiAsset ? `${campaignName} [${idx + 1}]` : campaignName,
+      pageId,
+      webViewUrl: urlTemplate,
+      headline: item.headline,
+      callToAction: item.callToAction || preset.creativeDefaults?.callToAction,
+      adStatus: preset.creativeDefaults?.adStatus ?? "PAUSED",
+      siloAssetBlobUrl: asset.optimizedUrl ?? asset.originalUrl,
+      siloAssetMediaType: asset.mediaType,
+      siloAssetOriginalFileName: asset.originalFileName,
+      siloAssetId: asset.id,
+    })),
+    feedProviderId: provider.id,
+    articleQuery: article.query,
+    articleSlug: article.slug,
+    headline: item.headline,
+  };
 }
