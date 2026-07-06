@@ -21,6 +21,20 @@ interface ProbeReport {
   cleanup: { entity: string; id: string; ok: boolean; error: string | null }[];
   results: unknown;
 }
+interface AmCreateReport {
+  campaignId: string;
+  squadId: string;
+  squadName: string;
+  initialEditOk: boolean;
+  initialEditError: string | null;
+}
+interface AmRecheckReport {
+  editableAfterAdsManagerChange: boolean;
+  editError: string | null;
+  resolvedPlacementV2: unknown;
+  resolvedPlacementLegacy: unknown;
+  cleanup: { entity: string; id: string; ok: boolean; error: string | null }[];
+}
 
 export default function PlacementProbePage() {
   const { accounts, isLoading } = useAdAccounts();
@@ -60,6 +74,64 @@ export default function PlacementProbePage() {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setRunning(false);
+    }
+  };
+
+  // ── Two-phase "does editing placements in Ads Manager keep API control?" test ──
+  const [amRunning, setAmRunning] = useState(false);
+  const [amCreate, setAmCreate] = useState<AmCreateReport | null>(null);
+  const [amRecheck, setAmRecheck] = useState<AmRecheckReport | null>(null);
+  const [amErr, setAmErr] = useState<string | null>(null);
+
+  const amStep1 = async () => {
+    if (!adAccountId) {
+      setAmErr("Pick an ad account first (top of page).");
+      return;
+    }
+    setAmRunning(true);
+    setAmErr(null);
+    setAmCreate(null);
+    setAmRecheck(null);
+    try {
+      const res = await fetch("/api/debug/placement-probe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adAccountId, confirm: "RUN_PLACEMENT_PROBE", mode: "adsmanager-create" }),
+      });
+      const data = await res.json();
+      if (!res.ok) setAmErr(`${data.error ?? "failed"}${data.detail ? `: ${data.detail}` : ""}`);
+      else setAmCreate(data as AmCreateReport);
+    } catch (e) {
+      setAmErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAmRunning(false);
+    }
+  };
+
+  const amStep2 = async () => {
+    if (!amCreate) return;
+    setAmRunning(true);
+    setAmErr(null);
+    setAmRecheck(null);
+    try {
+      const res = await fetch("/api/debug/placement-probe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adAccountId,
+          confirm: "RUN_PLACEMENT_PROBE",
+          mode: "adsmanager-recheck",
+          squadId: amCreate.squadId,
+          campaignId: amCreate.campaignId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) setAmErr(`${data.error ?? "failed"}${data.detail ? `: ${data.detail}` : ""}`);
+      else setAmRecheck(data as AmRecheckReport);
+    } catch (e) {
+      setAmErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAmRunning(false);
     }
   };
 
@@ -156,6 +228,71 @@ export default function PlacementProbePage() {
           </details>
         </div>
       )}
+
+      {/* ── Two-phase Ads Manager test ─────────────────────────────────────── */}
+      <div className="mt-10 space-y-4 rounded-lg border border-sky-700/60 bg-sky-900/10 p-4">
+        <div>
+          <h2 className="text-lg font-semibold">Advanced: does editing placements in Ads Manager keep in-app control?</h2>
+          <p className="mt-1 text-sm text-gray-400">
+            Tests whether broadening placements in Snapchat Ads Manager (not via this app) leaves an ad set still
+            editable from here. Uses the ad account selected above. Creates one paused test ad set you edit in
+            Ads Manager, then deletes it.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={amStep1}
+            disabled={amRunning || !adAccountId}
+            className="rounded bg-sky-500 px-4 py-2 text-sm font-semibold text-black hover:bg-sky-400 disabled:opacity-50"
+          >
+            {amRunning && !amCreate ? "Creating…" : "Step 1 — create test ad set"}
+          </button>
+          <button
+            onClick={amStep2}
+            disabled={amRunning || !amCreate}
+            className="rounded bg-sky-500 px-4 py-2 text-sm font-semibold text-black hover:bg-sky-400 disabled:opacity-50"
+          >
+            {amRunning && amCreate ? "Re-checking…" : "Step 2 — re-check API control"}
+          </button>
+        </div>
+
+        {amErr && <p className="text-sm text-red-400">Error: {amErr}</p>}
+
+        {amCreate && (
+          <div className="rounded border border-gray-700 bg-[#111827] p-3 text-sm">
+            <p className="text-gray-200">
+              ✅ Test ad set created and confirmed editable ({amCreate.initialEditOk ? "budget edit succeeded" : `budget edit FAILED: ${amCreate.initialEditError}`}).
+            </p>
+            <p className="mt-2 text-gray-300">Now, in <span className="font-medium">Snapchat Ads Manager</span>:</p>
+            <ol className="ml-5 mt-1 list-decimal space-y-0.5 text-gray-400">
+              <li>Find the paused ad set named <code className="text-sky-300">{amCreate.squadName}</code></li>
+              <li>Open its <span className="font-medium">Placements</span> and add/change the placements you want, then <span className="font-medium">Save</span>.</li>
+              <li>Come back here and click <span className="font-medium">Step 2</span>.</li>
+            </ol>
+            <p className="mt-2 text-xs text-gray-500">Ad set ID: <code>{amCreate.squadId}</code></p>
+          </div>
+        )}
+
+        {amRecheck && (
+          <div className="rounded border border-gray-700 bg-[#111827] p-3 text-sm space-y-2">
+            <p className={amRecheck.editableAfterAdsManagerChange ? "text-green-400" : "text-amber-400"}>
+              {amRecheck.editableAfterAdsManagerChange
+                ? "✅ STILL EDITABLE — after changing placements in Ads Manager, the app could still edit the budget. This workflow is viable."
+                : `🔒 NOW LOCKED — after the Ads Manager change, the app can no longer edit it (${amRecheck.editError}). Ads-Manager edits do NOT preserve in-app control.`}
+            </p>
+            <p className="text-xs text-gray-400 font-mono">
+              resolved placement_v2: {fmt(amRecheck.resolvedPlacementV2)} · legacy: {fmt(amRecheck.resolvedPlacementLegacy)}
+            </p>
+            <p className="text-xs text-gray-500">
+              Cleanup:{" "}
+              {amRecheck.cleanup.every((c) => c.ok)
+                ? "✅ test ad set + campaign deleted"
+                : `⚠ check Ads Manager — ${amRecheck.cleanup.filter((c) => !c.ok).map((c) => `${c.entity} ${c.id}`).join(", ")}`}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

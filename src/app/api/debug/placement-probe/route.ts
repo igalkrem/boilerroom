@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
-import { createCampaigns, deleteCampaign } from "@/lib/snapchat/campaigns";
+import { createCampaigns, deleteCampaign, getCampaign } from "@/lib/snapchat/campaigns";
 import { createAdSquads, updateAdSquad, deleteAdSquad } from "@/lib/snapchat/adsquads";
 import { snapFetch } from "@/lib/snapchat/client";
 import type { SnapAdSquadPayload, OptimizationGoal } from "@/types/snapchat";
@@ -29,10 +29,21 @@ export const maxDuration = 120;
 
 const CONFIRM_TOKEN = "RUN_PLACEMENT_PROBE";
 
+// Name prefix for the two-phase "Ads Manager placement" test squads/campaigns.
+// The recheck phase refuses to edit/delete anything whose name lacks this prefix — a
+// backstop so a stale/wrong id can never mutate or delete a real campaign.
+const AM_PREFIX = "__PROBE_AM__";
+
 const bodySchema = z.object({
   adAccountId: z.string().min(1),
   pixelId: z.string().min(1).optional(),
   confirm: z.literal(CONFIRM_TOKEN),
+  // "full" (default) = the 5-variant placement matrix. The two "adsmanager-*" modes power
+  // the two-phase test: does editing placements in Snapchat Ads Manager (a manual UI action)
+  // keep a squad API-editable? create → user edits placements in Ads Manager → recheck.
+  mode: z.enum(["full", "adsmanager-create", "adsmanager-recheck"]).optional(),
+  squadId: z.string().min(1).optional(),   // required for adsmanager-recheck
+  campaignId: z.string().min(1).optional(), // required for adsmanager-recheck
 });
 
 type PlacementV2 = NonNullable<SnapAdSquadPayload["placement_v2"]>;
@@ -91,6 +102,18 @@ export async function POST(request: NextRequest) {
 
   if (!isAdAccountAllowed(session, adAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const mode = parsed.data.mode ?? "full";
+  if (mode === "adsmanager-create") {
+    return handleAmCreate(adAccountId);
+  }
+  if (mode === "adsmanager-recheck") {
+    const { squadId, campaignId } = parsed.data;
+    if (!squadId || !campaignId) {
+      return NextResponse.json({ error: "invalid_request", detail: "squadId and campaignId are required for recheck" }, { status: 400 });
+    }
+    return handleAmRecheck(adAccountId, squadId, campaignId);
   }
 
   const ts = Date.now();
@@ -247,5 +270,129 @@ export async function POST(request: NextRequest) {
   // HTTP response is lost. This is the primary evidence for the placement debugger.
   console.log("[placement-probe] REPORT:", JSON.stringify(report));
 
+  return NextResponse.json(report);
+}
+
+// ── Phase 1 of the Ads-Manager test ──────────────────────────────────────────
+// Create ONE editable squad (no placement_v2), confirm it's editable, and LEAVE it
+// running (paused) so the user can change its placements in Snapchat Ads Manager.
+async function handleAmCreate(adAccountId: string) {
+  const ts = Date.now();
+  const campRes = await createCampaigns(adAccountId, [
+    {
+      name: `${AM_PREFIX} campaign ${ts}`,
+      ad_account_id: adAccountId,
+      status: "PAUSED",
+      buy_model: "AUCTION",
+      start_time: new Date(ts + 60_000).toISOString(),
+      objective_v2_properties: { objective_v2_type: "SALES" },
+    },
+  ]);
+  const camp = campRes[0];
+  if (!camp?.id || camp.error) {
+    return NextResponse.json({ error: "probe_campaign_create_failed", detail: sanitizeSnapError(camp?.error ?? "no campaign id returned") }, { status: 502 });
+  }
+  const campaignId = camp.id;
+
+  const squadName = `${AM_PREFIX} editable ${ts}`;
+  const squad: SnapAdSquadPayload = {
+    campaign_id: campaignId,
+    name: squadName,
+    type: "SNAP_ADS",
+    status: "PAUSED",
+    targeting: { geos: [{ country_code: "us" }] },
+    delivery_constraint: "DAILY_BUDGET",
+    billing_event: "IMPRESSION",
+    optimization_goal: "LANDING_PAGE_VIEW",
+    bid_strategy: "AUTO_BID",
+    daily_budget_micro: 5_000_000,
+    pacing_type: "STANDARD",
+  };
+  const createRes = await createAdSquads(campaignId, [squad]);
+  const created = createRes[0];
+  if (!created?.id || created.error) {
+    try { await deleteCampaign(campaignId, adAccountId); } catch { /* best effort */ }
+    return NextResponse.json({ error: "probe_squad_create_failed", detail: sanitizeSnapError(created?.error ?? "no ad squad id returned") }, { status: 502 });
+  }
+  const squadId = created.id;
+
+  // Confirm the app CAN edit it right now (before any Ads Manager change).
+  let initialEditOk = false;
+  let initialEditError: string | null = null;
+  try {
+    await updateAdSquad(squadId, { daily_budget_micro: 6_000_000 }, adAccountId);
+    initialEditOk = true;
+  } catch (e) {
+    initialEditError = sanitizeSnapError(e);
+  }
+
+  const report = { mode: "adsmanager-create", ranAt: new Date(ts).toISOString(), adAccountId, campaignId, squadId, squadName, initialEditOk, initialEditError };
+  console.log("[placement-probe] AM-CREATE:", JSON.stringify(report));
+  return NextResponse.json(report);
+}
+
+// ── Phase 2 of the Ads-Manager test ──────────────────────────────────────────
+// After the user edits the squad's placements in Ads Manager, check whether the app
+// can STILL edit its budget via the API. Then delete the test squad + campaign.
+async function handleAmRecheck(adAccountId: string, squadId: string, campaignId: string) {
+  // Safety backstop: only ever touch squads THIS probe created. Verify the name prefix
+  // before editing or deleting, so a stale/wrong id can't mutate a real squad.
+  let squadName = "";
+  let resolvedPlacementV2: unknown = null;
+  let resolvedPlacementLegacy: unknown = null;
+  try {
+    const raw = await snapFetch<{ adsquads?: Array<{ adsquad?: Record<string, unknown> }> }>(`/adsquads/${squadId}`);
+    const a = raw.adsquads?.[0]?.adsquad ?? {};
+    squadName = String(a["name"] ?? "");
+    resolvedPlacementV2 = a["placement_v2"] ?? null;
+    resolvedPlacementLegacy = a["placement"] ?? null;
+  } catch (e) {
+    return NextResponse.json({ error: "squad_lookup_failed", detail: sanitizeSnapError(e) }, { status: 502 });
+  }
+  if (!squadName.startsWith(AM_PREFIX)) {
+    return NextResponse.json({ error: "not_a_probe_squad", detail: "Refusing to edit or delete a squad this probe did not create." }, { status: 400 });
+  }
+
+  // THE TEST: can the app still change budget after the Ads Manager placement edit?
+  let editableAfterAdsManagerChange = false;
+  let editError: string | null = null;
+  try {
+    await updateAdSquad(squadId, { daily_budget_micro: 7_000_000 }, adAccountId);
+    editableAfterAdsManagerChange = true;
+  } catch (e) {
+    editError = sanitizeSnapError(e);
+  }
+
+  // Clean up: delete the squad, then the campaign (campaign only if it's a probe campaign).
+  const cleanup: { entity: string; id: string; ok: boolean; error: string | null }[] = [];
+  try {
+    await deleteAdSquad(squadId, adAccountId);
+    cleanup.push({ entity: "adsquad", id: squadId, ok: true, error: null });
+  } catch (e) {
+    cleanup.push({ entity: "adsquad", id: squadId, ok: false, error: sanitizeSnapError(e) });
+  }
+  try {
+    const camp = await getCampaign(campaignId);
+    if (String(camp.name ?? "").startsWith(AM_PREFIX)) {
+      await deleteCampaign(campaignId, adAccountId);
+      cleanup.push({ entity: "campaign", id: campaignId, ok: true, error: null });
+    } else {
+      cleanup.push({ entity: "campaign", id: campaignId, ok: false, error: "not a probe campaign — not deleted" });
+    }
+  } catch (e) {
+    cleanup.push({ entity: "campaign", id: campaignId, ok: false, error: sanitizeSnapError(e) });
+  }
+
+  const report = {
+    mode: "adsmanager-recheck",
+    squadId,
+    campaignId,
+    resolvedPlacementV2,
+    resolvedPlacementLegacy,
+    editableAfterAdsManagerChange,
+    editError,
+    cleanup,
+  };
+  console.log("[placement-probe] AM-RECHECK:", JSON.stringify(report));
   return NextResponse.json(report);
 }
