@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "mcp__vercel__get_runtime_logs",
-      "mcp__vercel__get_deployment"
+      "mcp__vercel__get_deployment",
+      "mcp__vercel__get_runtime_errors",
+      "mcp__vercel__list_deployments"
     ]
   }
 }

@@ -21,6 +21,18 @@ export async function getCampaign(campaignId: string): Promise<SnapCampaign> {
   return item.campaign;
 }
 
+export async function deleteCampaign(
+  campaignId: string,
+  expectedAdAccountId: string
+): Promise<void> {
+  // IDOR guard — mirror deleteAdSquad/updateAdSquad: fetch first, assert ownership.
+  const campaign = await getCampaign(campaignId);
+  if (campaign.ad_account_id && campaign.ad_account_id !== expectedAdAccountId) {
+    throw new Error("forbidden: campaign does not belong to the specified ad account");
+  }
+  await snapFetch<unknown>(`/campaigns/${campaignId}`, { method: "DELETE" });
+}
+
 export async function createCampaigns(
   adAccountId: string,
   campaigns: SnapCampaignPayload[]

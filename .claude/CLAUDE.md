@@ -48,11 +48,15 @@ Do not skip any step. Do not ask for confirmation before running these commands.
 - **`code-reviewer`** — functional correctness: bugs, type safety, error handling, data flows. Run before any PR.
 - **`security-audit`** — auth, SSRF, access control, secrets, OWASP. Run before any deploy or when new API routes are added.
 - **`snapchat-api-auditor`** — Snapchat API spec compliance: payload field names vs live docs, forbidden fields, invalid enums. Run before any deploy or after a Snapchat API update.
+- **`snapchat-placement-debugger`** — ad-squad PLACEMENT problems: "Smart / Automatic placement" (`placement_v2`) and the E2025 "squad frozen against edits" lock. Works from LIVE evidence (Vercel logs + the `/api/debug/placement-probe` experiment), never docs. **TRIGGER** when a campaign won't launch on Smart Placements, a squad becomes uneditable after launch (E2025), `placement_v2` behaviour changes, or the DPA/CHAT_FEED constraint is in question. **SKIP** for generic field compliance (use `snapchat-api-auditor`), security, or wizard/canvas bugs.
 
 ## Reusable Prompts
 
 **Debug a Snapchat/Meta API error:**
 > Before changing any code, pull the live Vercel logs and the raw API request/response for this error. Show me the exact failing payload, then propose a fix based only on what the real response says — not on documentation.
+
+**Debug Smart Placements (placement_v2 / E2025 lock):**
+> Invoke the `snapchat-placement-debugger` agent. Do NOT change any placement code from docs or guesses. First have me run the Smart Placement Probe (dashboard → Smart Placement Probe page → pick a test account → Run), then pull the raw report from Vercel logs (`query: "placement-probe"`, newest deployment), build the truth table (Smart? × editable-after?), and only then recommend the fix — which must keep in-app budget/bid/pause editing working.
 
 **UI change (mockup-first):**
 > For this UI change, do NOT edit code yet. First show me a mockup/description of exactly where each element will go and how it will look. Wait for my approval before implementing.
@@ -129,6 +133,8 @@ src/
 │   ├── api/
 │   │   ├── auth/                      # logout, refresh, session; google/{login,callback}; snapchat/{connect,callback,disconnect}; meta/{connect,callback,disconnect}
 │   │   ├── data/                      # GET/POST — reads/writes user-scoped JSON blobs for persistent metadata
+│   │   ├── debug/
+│   │   │   └── placement-probe/       # POST {adAccountId, pixelId?, confirm:"RUN_PLACEMENT_PROBE"} — TEMPORARY diagnostic; creates throwaway PAUSED campaign + one squad per placement_v2 variant (omit/AUTOMATIC/CONTENT/CUSTOM/+PIXEL), reads resolved placement, tries a budget PUT (E2025 lock test), then deletes everything; logs "[placement-probe] REPORT:"; auth+own-account+confirm-token gated; maxDuration=120; DELETE after diagnosis
 │   │   ├── feed-providers/
 │   │   │   └── channels/              # GET/POST/PATCH/DELETE — list, bulk-insert, force status (PATCH {id, newStatus}), hard-delete channels
 │   │   │       ├── assign/            # POST — picks oldest available channel, marks in-use
@@ -168,6 +174,7 @@ src/
 │       ├── feed-providers/            # Feed Provider board UI (card grid + FeedProviderModal) — own top-nav tab
 │       ├── build-log/                 # Build session history — timeline feed; each launch session is a collapsible card with colored dot (green/amber/red); per-squad table: Time | Name | Status | Budget | Bid | Actions; inline Budget/Bid edit via PATCH /api/snapchat/adsquads; Pause/Activate toggle + Delete (calls DELETE /api/snapchat/adsquads, marks squad DELETED locally); persisted via localStorage + KV (br_build_log); WizardShell appends a session after each launch
 │       ├── performance/               # **Default landing page** — loads from DB immediately on mount; SyncStatusBar shows per-feed sync status with subtle icon-only Force Refresh; cron keeps DB fresh
+│       ├── placement-probe/           # TEMPORARY diagnostic UI — one-click "Smart Placement Probe": pick ad account (+optional pixel), POSTs /api/debug/placement-probe, renders truth table (created? / resolved placement / editable-after?) + cleanup status + raw JSON; delete alongside the route after diagnosis
 │       └── silo/                      # Media library
 │           ├── page.tsx               # Library grid with search/filter/delete; auto-fill grid (minmax 180–240px) keeps cards compact on wide screens
 │           ├── upload/                # Upload page with tag selector + SiloUploader
@@ -411,6 +418,8 @@ src/
 - **Content Security Policy (`next.config.mjs`):** `img-src` allows `'self' data: blob: https://*.public.blob.vercel-storage.com https://lh3.googleusercontent.com`. If you add images from a new external domain, update this list or they will be silently blocked. **`script-src`:** Dev includes `'unsafe-eval'` (webpack fast refresh); **production omits `'unsafe-eval'`** — only `'wasm-unsafe-eval'` (for ffmpeg.wasm WebAssembly compilation) and `'unsafe-inline'` are present. `worker-src 'self' blob:` — `'self'` covers the webpack-bundled ffmpeg worker chunk (`/_next/static/chunks/`); `blob:` is kept for safety. ffmpeg core is served same-origin so no external CDN entry is needed in `connect-src`.
 - **Auth rate limiting (`src/middleware.ts`):** Next.js Edge middleware rate-limits all `/api/auth/*` endpoints: 20 requests per IP per 60-second window. Returns 429 with `Retry-After` header when exceeded. Per-instance in-memory Map — not a hard distributed guarantee across multiple Vercel Edge instances, but effective against sustained single-IP abuse.
 - **Ad squad DELETE IDOR protection:** `deleteAdSquad` in `src/lib/snapchat/adsquads.ts` fetches the squad first and asserts `ad_account_id === expectedAdAccountId` before issuing the DELETE — same pattern as `updateAdSquad`. The `DELETE /api/snapchat/adsquads` route requires `isAdAccountAllowed` + maps `"forbidden:"` throws to 403.
+- **Campaign DELETE IDOR protection:** `deleteCampaign(campaignId, expectedAdAccountId)` in `src/lib/snapchat/campaigns.ts` fetches the campaign via `getCampaign` and asserts `ad_account_id === expectedAdAccountId` before DELETE — same pattern as `deleteAdSquad`. Never call it without the account id.
+- **`/api/debug/placement-probe` is a TEMPORARY diagnostic route:** gated by `isSessionValid` + `isSnapchatConnected` + `isAdAccountAllowed` (own account only) + a `confirm: "RUN_PLACEMENT_PROBE"` anti-accident token (NOT a security control — visible in the client bundle). Creates only PAUSED throwaway entities and self-cleans in a `finally`. Snapchat error bodies are sanitized before returning to the client via `sanitizeSnapError()` (`raw.startsWith("Snapchat API error") ? "snapchat_request_failed" : raw`) — the full raw report is only emitted to Vercel logs via `console.log("[placement-probe] REPORT:")`. Delete this route + `src/app/dashboard/placement-probe/page.tsx` once placement behaviour is confirmed. Not rate-limited — rely on prompt deletion.
 - **Ad squad IDOR protection:** `updateAdSquad` and `setAdSquadPlacement` in `src/lib/snapchat/adsquads.ts` both accept `expectedAdAccountId` (required). After fetching the current squad from Snapchat, they assert `current.ad_account_id === expectedAdAccountId` if the field is present — throwing `"forbidden: ..."` if the squad belongs to a different account. The PATCH route maps this to a 403 response.
 - **Creative PATCH IDOR protection:** `creatives/[id]/route.ts` fetches the existing creative from Snapchat and asserts `existing.ad_account_id === body.adAccountId` before applying URL updates — returning 403 if mismatched.
 - **`SESSION_COOKIE_NAME` must be set in production:** `src/lib/session.ts` throws at request time if `SESSION_COOKIE_NAME` is unset in the production environment. Set it in Vercel environment variables.
