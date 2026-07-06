@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAllUserTokens, upsertUserToken, sql } from "@/lib/db";
+import { getAllUserTokens, upsertUserToken, getAllUserMetaTokens, sql } from "@/lib/db";
 import { refreshAccessToken } from "@/lib/snapchat/auth";
-import { syncAccount } from "@/lib/reporting/sync-logic";
+import { syncAccount, syncMetaAccount } from "@/lib/reporting/sync-logic";
 import { verifyCronSecret } from "@/lib/db/token-crypto";
 import { syncChannelPausedStatus } from "@/lib/channel-status-sync";
 import { getProviderNetworkMap } from "@/lib/reporting/provider-network";
@@ -120,6 +120,28 @@ export async function GET(request: NextRequest) {
     })
   );
 
-  console.log(`[cron-sync] done — users: ${totalUsers}, accounts: ${totalAccounts}`);
-  return NextResponse.json({ synced_users: totalUsers, synced_accounts: totalAccounts });
+  // ── Meta account sync ──────────────────────────────────────────────────────
+  let totalMetaAccounts = 0;
+  const metaTokens = await getAllUserMetaTokens();
+  await Promise.allSettled(
+    metaTokens.map(async (user) => {
+      if (Date.now() > user.expires_at) {
+        console.log(`[cron-sync] skipping Meta user ${user.google_user_id} — token expired`);
+        return;
+      }
+      await Promise.allSettled(
+        user.ad_account_ids.map(async ({ id }) => {
+          try {
+            await syncMetaAccount(id, startDate, today, user.access_token, true);
+            totalMetaAccounts++;
+          } catch (err) {
+            console.error(`[cron-sync] Meta sync failed for account ${id}:`, err);
+          }
+        })
+      );
+    })
+  );
+
+  console.log(`[cron-sync] done — users: ${totalUsers}, snap: ${totalAccounts}, meta: ${totalMetaAccounts}`);
+  return NextResponse.json({ synced_users: totalUsers, synced_accounts: totalAccounts, synced_meta_accounts: totalMetaAccounts });
 }

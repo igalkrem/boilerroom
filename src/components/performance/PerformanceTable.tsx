@@ -20,6 +20,17 @@ function SnapchatLogo({ className }: { className?: string }) {
   );
 }
 
+function PlatformIcon({ platform, className }: { platform: "snap" | "meta"; className?: string }) {
+  if (platform === "meta") {
+    return (
+      <span className={`inline-flex items-center justify-center rounded bg-blue-600 text-white font-bold leading-none ${className ?? "w-3.5 h-3.5 text-[8px]"}`}>
+        f
+      </span>
+    );
+  }
+  return <SnapchatLogo className={className ?? "w-3.5 h-3.5 text-yellow-400"} />;
+}
+
 export interface SquadDetail {
   daily_budget_micro: number;
   bid_micro: number;
@@ -140,6 +151,7 @@ export interface AggrRow {
   snap_results: number;
   snap_purchase_value_usd: number;
   snap_cost_per_result: number | null;
+  platform: "snap" | "meta";
 }
 
 interface MetricColDef {
@@ -433,6 +445,7 @@ export function PerformanceTable({
           ad_account_id: r.ad_account_id,
           snap_results: r.snap_results,
           snap_purchase_value_usd: r.snap_purchase_value_usd,
+          platform: r.platform ?? "snap",
           roi_pct: null,
           roi_1d: null,
           roi_2d: null,
@@ -570,7 +583,7 @@ export function PerformanceTable({
     });
     return {
       ad_squad_id: "__totals__", ad_squad_name: "", domain_name: "",
-      feed_provider_id: "", ad_account_id: "",
+      feed_provider_id: "", ad_account_id: "", platform: "snap" as const,
       ...s,
       profit:               s.revenue_usd - s.spend_usd,
       roi_pct:              s.spend_usd > 0 ? (s.revenue_usd / s.spend_usd) * 100 : null,
@@ -645,21 +658,32 @@ export function PerformanceTable({
     return raw;
   }
 
+  function getPlatform(squadId: string): "snap" | "meta" {
+    return filtered.find(r => r.ad_squad_id === squadId)?.platform ?? "snap";
+  }
+
   async function saveBudget(squadId: string) {
     const dollars = parseFloat(budgetDraft);
     if (isNaN(dollars) || dollars <= 0) { setInlineError("Budget must be > $0"); return; }
     const detail = squadDetails.get(squadId);
     if (!detail) return;
+    const platform = getPlatform(squadId);
     const oldValue = `$${microToDollar(detail.daily_budget_micro).toFixed(2)}`;
     setSavingInline(squadId + "_budget");
     setInlineError(null);
     const newMicro = dollarToMicro(dollars);
     try {
-      const res = await fetch("/api/snapchat/adsquads", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adAccountId: detail.ad_account_id, squadId, daily_budget_micro: newMicro }),
-      });
+      const res = platform === "meta"
+        ? await fetch("/api/meta/adsets", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ adAccountId: detail.ad_account_id, adSetId: squadId, updates: { daily_budget: Math.round(dollars * 100) } }),
+          })
+        : await fetch("/api/snapchat/adsquads", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ adAccountId: detail.ad_account_id, squadId, daily_budget_micro: newMicro }),
+          });
       if (!res.ok) throw new Error(await readPatchError(res));
       onSquadPatched?.(squadId, { daily_budget_micro: newMicro });
       addChangeEntry({ squadId, field: "budget", oldValue, newValue: `$${dollars.toFixed(2)}`, timestamp: new Date().toISOString() });
@@ -676,16 +700,23 @@ export function PerformanceTable({
     if (isNaN(dollars) || dollars < 0.01) { setInlineError("Min bid $0.01"); return; }
     const detail = squadDetails.get(squadId);
     if (!detail) return;
+    const platform = getPlatform(squadId);
     const oldValue = `$${microToDollar(detail.bid_micro).toFixed(2)}`;
     setSavingInline(squadId + "_bid");
     setInlineError(null);
     const newMicro = dollarToMicro(dollars);
     try {
-      const res = await fetch("/api/snapchat/adsquads", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adAccountId: detail.ad_account_id, squadId, bid_micro: newMicro }),
-      });
+      const res = platform === "meta"
+        ? await fetch("/api/meta/adsets", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ adAccountId: detail.ad_account_id, adSetId: squadId, updates: { bid_amount: Math.round(dollars * 100) } }),
+          })
+        : await fetch("/api/snapchat/adsquads", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ adAccountId: detail.ad_account_id, squadId, bid_micro: newMicro }),
+          });
       if (!res.ok) throw new Error(await readPatchError(res));
       onSquadPatched?.(squadId, { bid_micro: newMicro });
       addChangeEntry({ squadId, field: "bid", oldValue, newValue: `$${dollars.toFixed(2)}`, timestamp: new Date().toISOString() });
@@ -700,14 +731,21 @@ export function PerformanceTable({
   async function toggleStatus(squadId: string) {
     const detail = squadDetails.get(squadId);
     if (!detail) return;
+    const platform = getPlatform(squadId);
     const oldStatus = detail.status;
     const newStatus = oldStatus === "ACTIVE" ? "PAUSED" : "ACTIVE";
     try {
-      const res = await fetch("/api/snapchat/adsquads", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adAccountId: detail.ad_account_id, squadId, status: newStatus }),
-      });
+      const res = platform === "meta"
+        ? await fetch("/api/meta/adsets", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ adAccountId: detail.ad_account_id, adSetId: squadId, updates: { status: newStatus } }),
+          })
+        : await fetch("/api/snapchat/adsquads", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ adAccountId: detail.ad_account_id, squadId, status: newStatus }),
+          });
       if (!res.ok) throw new Error(await readPatchError(res));
       onSquadPatched?.(squadId, { status: newStatus });
       addChangeEntry({ squadId, field: "status", oldValue: oldStatus, newValue: newStatus, timestamp: new Date().toISOString() });
@@ -788,12 +826,26 @@ export function PerformanceTable({
           newValue = patch.status;
         }
 
-        const body: Record<string, unknown> = { adAccountId: detail.ad_account_id, squadId, ...patch };
-        const res = await fetch("/api/snapchat/adsquads", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
+        const platform = getPlatform(squadId);
+        let res: Response;
+        if (platform === "meta") {
+          const updates: Record<string, unknown> = {};
+          if (patch.daily_budget_micro !== undefined) updates.daily_budget = Math.round(patch.daily_budget_micro / 10_000);
+          if (patch.bid_micro !== undefined) updates.bid_amount = Math.round(patch.bid_micro / 10_000);
+          if (patch.status) updates.status = patch.status;
+          res = await fetch("/api/meta/adsets", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ adAccountId: detail.ad_account_id, adSetId: squadId, updates }),
+          });
+        } else {
+          const body: Record<string, unknown> = { adAccountId: detail.ad_account_id, squadId, ...patch };
+          res = await fetch("/api/snapchat/adsquads", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+        }
         if (!res.ok) throw new Error(await readPatchError(res));
         return { squadId, patch, changeField: field, oldValue, newValue };
       })
@@ -1519,7 +1571,7 @@ export function PerformanceTable({
                       style={{ width: nameColWidth, minWidth: nameColWidth, maxWidth: nameColWidth }}
                     >
                       <div className="group/name flex items-center gap-1.5 min-w-0">
-                        <SnapchatLogo className="w-3.5 h-3.5 flex-shrink-0 text-yellow-400" />
+                        <PlatformIcon platform={r.platform} className="w-3.5 h-3.5 flex-shrink-0 text-yellow-400" />
                         <button
                           onClick={() => setDrilldown({
                             id: r.ad_squad_id,

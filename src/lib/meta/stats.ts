@@ -32,7 +32,7 @@ export async function getAccountInsights(
   token?: string
 ): Promise<MetaInsightsRow[]> {
   const params = new URLSearchParams({
-    fields: "impressions,clicks,spend,actions",
+    fields: "impressions,clicks,spend,actions,action_values,adset_id,adset_name",
     time_range: JSON.stringify({
       since: startDate,
       until: endDate,

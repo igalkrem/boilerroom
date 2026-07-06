@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
+import { getSession, isSessionValid, isAdAccountAllowed, isMetaAdAccountAllowed } from "@/lib/session";
 import { runMigrations, sql } from "@/lib/db";
 import { getEurToUsd } from "@/lib/fx-rate";
 
@@ -29,6 +29,7 @@ export interface CombinedRow {
   feed_provider_id: string;
   snap_results: number;
   snap_purchase_value_usd: number;
+  platform: "snap" | "meta";
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -51,15 +52,16 @@ export async function GET(request: NextRequest) {
   if (diffDays < 0 || diffDays > 366) {
     return NextResponse.json({ error: "date_range_too_large" }, { status: 400 });
   }
-  if (!isAdAccountAllowed(session, adAccountId)) {
+  const isSnap = isAdAccountAllowed(session, adAccountId);
+  const isMeta = isMetaAdAccountAllowed(session, adAccountId);
+  if (!isSnap && !isMeta) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   await runMigrations();
 
-  const [eurToUsd, { rows }] = await Promise.all([
-    getEurToUsd(),
-    sql`
+  const snapQuery = isSnap
+    ? sql`
       SELECT
         s.ad_squad_id,
         s.ad_account_id,
@@ -147,17 +149,43 @@ export async function GET(request: NextRequest) {
         AND s.stat_date BETWEEN ${startDate} AND ${endDate}
         AND (s.impressions > 0 OR s.spend_micro > 0)
       ORDER BY s.stat_date DESC, s.spend_micro DESC
-    `,
+    `
+    : Promise.resolve({ rows: [] });
+
+  const metaQuery = isMeta
+    ? sql`
+      SELECT
+        ad_set_id,
+        ad_account_id,
+        COALESCE(NULLIF(ad_set_name, ''), ad_set_id) AS ad_set_name,
+        stat_date::text AS stat_date,
+        impressions::bigint AS impressions,
+        clicks::bigint AS clicks,
+        spend_cents::bigint AS spend_cents,
+        purchases::bigint AS purchases,
+        purchase_value_cents::bigint AS purchase_value_cents
+      FROM meta_ad_set_stats
+      WHERE ad_account_id = ${adAccountId}
+        AND stat_date BETWEEN ${startDate} AND ${endDate}
+        AND (impressions > 0 OR spend_cents > 0)
+      ORDER BY stat_date DESC, spend_cents DESC
+    `
+    : Promise.resolve({ rows: [] });
+
+  const [eurToUsd, snapResult, metaResult] = await Promise.all([
+    getEurToUsd(),
+    snapQuery,
+    metaQuery,
   ]);
 
-  const combined: CombinedRow[] = rows.map((r) => {
+  const combined: CombinedRow[] = [];
+
+  for (const r of snapResult.rows) {
     const spendUsd = Number(r.spend_micro) / 1_000_000;
     const revenueEur = Number(r.earnings_eur);
-    // KingsRoad revenue is EUR → convert to USD; Predicto is already USD.
-    // Campaigns are mutually exclusive per provider so both values add safely.
     const revenueUsd = revenueEur * eurToUsd + Number(r.predicto_revenue_usd);
     const roiPct = spendUsd > 0 ? (revenueUsd / spendUsd) * 100 : null;
-    return {
+    combined.push({
       ad_squad_id: r.ad_squad_id as string,
       ad_account_id: r.ad_account_id as string,
       ad_squad_name: r.ad_squad_name as string,
@@ -183,7 +211,48 @@ export async function GET(request: NextRequest) {
       feed_provider_id: r.feed_provider_id as string,
       snap_results: Number(r.conversion_purchases),
       snap_purchase_value_usd: Number(r.conversion_purchase_value) / 1_000_000,
-    };
+      platform: "snap",
+    });
+  }
+
+  for (const r of metaResult.rows) {
+    const spendUsd = Number(r.spend_cents) / 100;
+    const purchaseValueUsd = Number(r.purchase_value_cents) / 100;
+    const roiPct = spendUsd > 0 ? (purchaseValueUsd / spendUsd) * 100 : null;
+    combined.push({
+      ad_squad_id: r.ad_set_id as string,
+      ad_account_id: r.ad_account_id as string,
+      ad_squad_name: r.ad_set_name as string,
+      stat_date: r.stat_date as string,
+      country_code: "",
+      impressions: Number(r.impressions),
+      swipes: 0,
+      spend_usd: spendUsd,
+      video_views: 0,
+      clicks: Number(r.clicks),
+      revenue_eur: 0,
+      revenue_usd: purchaseValueUsd,
+      roi_pct: roiPct,
+      page_views: 0,
+      ad_requests: 0,
+      matched_ad_requests: 0,
+      requests: 0,
+      feed_impressions: 0,
+      funnel_clicks: 0,
+      funnel_impressions: 0,
+      funnel_requests: 0,
+      domain_name: "",
+      feed_provider_id: "",
+      snap_results: Number(r.purchases),
+      snap_purchase_value_usd: purchaseValueUsd,
+      platform: "meta",
+    });
+  }
+
+  combined.sort((a, b) => {
+    const dateCmp = b.stat_date.localeCompare(a.stat_date);
+    if (dateCmp !== 0) return dateCmp;
+    return b.spend_usd - a.spend_usd;
   });
 
   return NextResponse.json({ rows: combined, eur_to_usd: eurToUsd });

@@ -155,6 +155,9 @@ export interface MetaInsightsRow {
   clicks: string;
   spend: string; // in account currency, decimal string
   actions?: Array<{ action_type: string; value: string }>;
+  action_values?: Array<{ action_type: string; value: string }>;
+  adset_id?: string; // present when level=adset
+  adset_name?: string;
 }
 
 // ─── API error shape ────────────────────────────────────────────────────────

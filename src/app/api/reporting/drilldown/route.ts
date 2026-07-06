@@ -144,6 +144,7 @@ export async function GET(request: NextRequest) {
       feed_provider_id: r.feed_provider_id as string,
       snap_results: Number(r.conversion_purchases),
       snap_purchase_value_usd: Number(r.conversion_purchase_value) / 1_000_000,
+      platform: "snap" as const,
     };
   });
 

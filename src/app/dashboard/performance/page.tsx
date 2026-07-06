@@ -13,6 +13,7 @@ import { SyncStatusBar } from "@/components/performance/SyncStatusBar";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import type { SquadDetail, AggrRow } from "@/components/performance/PerformanceTable";
 import type { SnapAdAccount } from "@/types/snapchat";
+import { useMetaAdAccounts } from "@/hooks/useMetaAdAccounts";
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 
@@ -24,6 +25,7 @@ function dateMinus(dateStr: string, days: number) {
 
 export default function PerformancePage() {
   const { accounts } = useAdAccounts();
+  const { accounts: metaAccounts } = useMetaAdAccounts();
   const [adAccountConfigs] = useState(() => loadAdAccountConfigs());
 
   const activeAccounts = useMemo(() => {
@@ -62,20 +64,24 @@ export default function PerformancePage() {
 
   // ── Load from DB only (fast — no sync) ────────────────────────────────────
   const loadFromDb = useCallback(async (accts: SnapAdAccount[], start: string, end: string) => {
-    if (accts.length === 0) return;
+    const allIds = [
+      ...accts.map((a) => a.id),
+      ...metaAccounts.map((a) => a.id),
+    ];
+    if (allIds.length === 0) return;
     setLoading(true);
     setError(null);
 
     const [currentResults, histResults] = await Promise.all([
       Promise.allSettled(
-        accts.map((a) =>
-          fetch(`/api/reporting/combined?adAccountId=${a.id}&startDate=${start}&endDate=${end}`)
+        allIds.map((id) =>
+          fetch(`/api/reporting/combined?adAccountId=${id}&startDate=${start}&endDate=${end}`)
             .then((r) => r.json() as Promise<{ rows: CombinedRow[]; eur_to_usd: number }>)
         )
       ),
       Promise.allSettled(
-        accts.map((a) =>
-          fetch(`/api/reporting/combined?adAccountId=${a.id}&startDate=${dateMinus(start, 3)}&endDate=${dateMinus(start, 1)}`)
+        allIds.map((id) =>
+          fetch(`/api/reporting/combined?adAccountId=${id}&startDate=${dateMinus(start, 3)}&endDate=${dateMinus(start, 1)}`)
             .then((r) => r.json() as Promise<{ rows: CombinedRow[] }>)
         )
       ),
@@ -89,30 +95,29 @@ export default function PerformancePage() {
     setLastLoaded(new Date());
     setLoading(false);
     return allRows.length;
-  }, []);
+  }, [metaAccounts]);
 
   // ── Last-30-days fetch for By Date summary table (ignores date picker) ──────
   const loadLast30Days = useCallback(async (accts: SnapAdAccount[]) => {
-    if (accts.length === 0) return;
+    const allIds = [...accts.map((a) => a.id), ...metaAccounts.map((a) => a.id)];
+    if (allIds.length === 0) return;
     const end = todayStr();
     const start = dateMinus(end, 29);
     const results = await Promise.allSettled(
-      accts.map((a) =>
-        fetch(`/api/reporting/combined?adAccountId=${a.id}&startDate=${start}&endDate=${end}`)
+      allIds.map((id) =>
+        fetch(`/api/reporting/combined?adAccountId=${id}&startDate=${start}&endDate=${end}`)
           .then((r) => r.json() as Promise<{ rows: CombinedRow[] }>)
       )
     );
     setLast30Rows(results.flatMap((r) => r.status === "fulfilled" ? (r.value.rows ?? []) : []));
-  }, []);
+  }, [metaAccounts]);
 
-  // ── Sync then reload (slow — hits Snapchat + KingsRoad APIs) ──────────────
+  // ── Sync then reload (slow — hits Snapchat + KingsRoad + Meta APIs) ──────
   const syncAndReload = useCallback(async (accts: SnapAdAccount[], start: string, end: string, force = true, includeHistorical = true) => {
-    if (accts.length === 0 || isRefreshing.current) return;
+    if ((accts.length === 0 && metaAccounts.length === 0) || isRefreshing.current) return;
     isRefreshing.current = true;
     setError(null);
 
-    // Show whatever is already in the DB immediately — don't make the user wait
-    // for the full sync before seeing any data.
     await loadFromDb(accts, start, end);
 
     setSyncing(true);
@@ -120,37 +125,55 @@ export default function PerformancePage() {
     const histStart = dateMinus(start, 3);
     const histEnd = dateMinus(start, 1);
 
-    await Promise.allSettled(
-      accts.flatMap((a) => {
-        const calls: Promise<Response>[] = [
+    const snapSyncs = accts.flatMap((a) => {
+      const calls: Promise<Response>[] = [
+        fetch("/api/reporting/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ adAccountId: a.id, startDate: start, endDate: end, timezone: a.timezone, force }),
+        }),
+      ];
+      if (includeHistorical) {
+        calls.push(
           fetch("/api/reporting/sync", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ adAccountId: a.id, startDate: start, endDate: end, timezone: a.timezone, force }),
-          }),
-        ];
-        if (includeHistorical) {
-          calls.push(
-            fetch("/api/reporting/sync", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ adAccountId: a.id, startDate: histStart, endDate: histEnd, timezone: a.timezone, force }),
-            })
-          );
-        }
-        return calls;
-      })
-    );
+            body: JSON.stringify({ adAccountId: a.id, startDate: histStart, endDate: histEnd, timezone: a.timezone, force }),
+          })
+        );
+      }
+      return calls;
+    });
+
+    const metaSyncs = metaAccounts.flatMap((a) => {
+      const calls: Promise<Response>[] = [
+        fetch("/api/reporting/meta-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ adAccountId: a.id, startDate: start, endDate: end, force }),
+        }),
+      ];
+      if (includeHistorical) {
+        calls.push(
+          fetch("/api/reporting/meta-sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ adAccountId: a.id, startDate: histStart, endDate: histEnd, force }),
+          })
+        );
+      }
+      return calls;
+    });
+
+    await Promise.allSettled([...snapSyncs, ...metaSyncs]);
 
     setSyncing(false);
     await loadFromDb(accts, start, end);
     setSyncRefreshTrigger((n) => n + 1);
     isRefreshing.current = false;
-  }, [loadFromDb]);
+  }, [loadFromDb, metaAccounts]);
 
   const loadSquadDetails = useCallback(async (accts: SnapAdAccount[]) => {
-    if (accts.length === 0) return;
-
     type AccountSquads = {
       accountId: string;
       squads: Array<{
@@ -161,12 +184,12 @@ export default function PerformancePage() {
       }>;
     };
 
-    async function fetchOne(a: SnapAdAccount, attempt = 0): Promise<AccountSquads> {
+    async function fetchSnapOne(a: SnapAdAccount, attempt = 0): Promise<AccountSquads> {
       const r = await fetch(`/api/snapchat/adsquads?adAccountId=${a.id}`);
       if (!r.ok) {
         if (attempt < 2) {
           await new Promise((res) => setTimeout(res, 1000 * (attempt + 1)));
-          return fetchOne(a, attempt + 1);
+          return fetchSnapOne(a, attempt + 1);
         }
         throw new Error(`HTTP ${r.status}`);
       }
@@ -174,40 +197,92 @@ export default function PerformancePage() {
       return { accountId: a.id, squads: d.adsquads ?? [] };
     }
 
-    const results = await Promise.allSettled(accts.map((a) => fetchOne(a)));
+    async function fetchMetaOne(accountId: string, attempt = 0): Promise<AccountSquads> {
+      const r = await fetch(`/api/meta/adsets?adAccountId=${accountId}`);
+      if (!r.ok) {
+        if (attempt < 2) {
+          await new Promise((res) => setTimeout(res, 1000 * (attempt + 1)));
+          return fetchMetaOne(accountId, attempt + 1);
+        }
+        throw new Error(`HTTP ${r.status}`);
+      }
+      const d = await r.json();
+      const adSets: Array<{ id: string; daily_budget?: number; bid_amount?: number; status?: string }> = d.adSets ?? [];
+      return {
+        accountId,
+        squads: adSets.map((s) => ({
+          id: s.id,
+          daily_budget_micro: (s.daily_budget ?? 0) * 10_000,
+          bid_micro: (s.bid_amount ?? 0) * 10_000,
+          status: (s.status === "ACTIVE" ? "ACTIVE" : "PAUSED") as "ACTIVE" | "PAUSED",
+        })),
+      };
+    }
+
     const failedIds: string[] = [];
 
-    setSquadDetails((prev) => {
-      const next = new Map(prev);
-      for (let i = 0; i < results.length; i++) {
-        const r = results[i];
-        const a = accts[i];
-        if (r.status === "fulfilled") {
-          for (const [squadId, d] of next) {
-            if (d.ad_account_id === a.id) next.delete(squadId);
+    if (accts.length > 0) {
+      const snapResults = await Promise.allSettled(accts.map((a) => fetchSnapOne(a)));
+      setSquadDetails((prev) => {
+        const next = new Map(prev);
+        for (let i = 0; i < snapResults.length; i++) {
+          const r = snapResults[i];
+          const a = accts[i];
+          if (r.status === "fulfilled") {
+            for (const [squadId, d] of next) {
+              if (d.ad_account_id === a.id) next.delete(squadId);
+            }
+            for (const s of r.value.squads) {
+              next.set(s.id, {
+                daily_budget_micro: s.daily_budget_micro ?? 0,
+                bid_micro: s.bid_micro ?? 0,
+                ad_account_id: r.value.accountId,
+                status: s.status ?? "ACTIVE",
+              });
+            }
+          } else {
+            failedIds.push(a.id);
+            console.error(`[performance] squad details fetch failed for ${a.id}:`, r.reason);
           }
-          for (const s of r.value.squads) {
-            next.set(s.id, {
-              daily_budget_micro: s.daily_budget_micro ?? 0,
-              bid_micro: s.bid_micro ?? 0,
-              ad_account_id: r.value.accountId,
-              status: s.status ?? "ACTIVE",
-            });
-          }
-        } else {
-          failedIds.push(a.id);
-          console.error(`[performance] squad details fetch failed for ${a.id}:`, r.reason);
         }
-      }
-      return next;
-    });
+        return next;
+      });
+    }
+
+    if (metaAccounts.length > 0) {
+      const metaResults = await Promise.allSettled(metaAccounts.map((a) => fetchMetaOne(a.id)));
+      setSquadDetails((prev) => {
+        const next = new Map(prev);
+        for (let i = 0; i < metaResults.length; i++) {
+          const r = metaResults[i];
+          const a = metaAccounts[i];
+          if (r.status === "fulfilled") {
+            for (const [squadId, d] of next) {
+              if (d.ad_account_id === a.id) next.delete(squadId);
+            }
+            for (const s of r.value.squads) {
+              next.set(s.id, {
+                daily_budget_micro: s.daily_budget_micro ?? 0,
+                bid_micro: s.bid_micro ?? 0,
+                ad_account_id: r.value.accountId,
+                status: s.status ?? "ACTIVE",
+              });
+            }
+          } else {
+            failedIds.push(a.id);
+            console.error(`[performance] Meta ad set details fetch failed for ${a.id}:`, r.reason);
+          }
+        }
+        return next;
+      });
+    }
 
     setSquadDetailsError(
       failedIds.length > 0
         ? `Could not load campaign settings for ${failedIds.length} ad account${failedIds.length === 1 ? "" : "s"} — refresh to retry.`
         : null
     );
-  }, []);
+  }, [metaAccounts]);
 
   const updateSquadDetail = useCallback((squadId: string, patch: Partial<SquadDetail>) => {
     setSquadDetails((prev) => {
@@ -275,7 +350,7 @@ export default function PerformancePage() {
     <div>
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Performance</h1>
       <p className="text-sm text-gray-500 mb-4">
-        Full-funnel metrics — Snapchat spend joined with KingsRoad revenue.
+        Full-funnel metrics — Snapchat &amp; Meta spend joined with KingsRoad revenue.
       </p>
 
       <SyncStatusBar

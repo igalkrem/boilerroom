@@ -3,6 +3,8 @@ import { fetchKingsRoadReport } from "@/lib/kingsroad";
 import { fetchPredictoReport } from "@/lib/predicto";
 import { getAdSquadsByAccount } from "@/lib/snapchat/adsquads";
 import { getAdSquadStats } from "@/lib/snapchat/stats";
+import { getAdSetsByAccount } from "@/lib/meta/adsets";
+import { getAccountInsights } from "@/lib/meta/stats";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -345,4 +347,119 @@ export async function syncAccount(
       dates_attempted: snapDatesToFetch,
     },
   };
+}
+
+// ── Meta sync ─────────────────────────────────────────────────────────────
+
+export interface MetaSyncResult {
+  synced: number;
+  skipped: number;
+  error: string | null;
+  ad_sets_found: number;
+}
+
+export async function syncMetaAccount(
+  adAccountId: string,
+  startDate: string,
+  endDate: string,
+  accessToken: string,
+  force = false
+): Promise<MetaSyncResult> {
+  await runMigrations();
+
+  const dates = dateRange(startDate, endDate);
+  let synced = 0;
+  let skipped = 0;
+
+  const datesToFetch: string[] = [];
+  for (const date of dates) {
+    if (!force && await shouldSkip("meta", date, adAccountId)) {
+      skipped++;
+    } else {
+      datesToFetch.push(date);
+    }
+  }
+
+  if (datesToFetch.length === 0) {
+    return { synced: 0, skipped, error: null, ad_sets_found: 0 };
+  }
+
+  try {
+    const adSets = await getAdSetsByAccount(adAccountId, accessToken);
+
+    // Backfill names for existing rows
+    await Promise.allSettled(
+      adSets.map((adSet) =>
+        sql`UPDATE meta_ad_set_stats
+            SET ad_set_name = ${adSet.name}
+            WHERE ad_set_id = ${adSet.id} AND ad_account_id = ${adAccountId} AND ad_set_name = ''`
+      )
+    );
+
+    const fetchStart = datesToFetch[0];
+    const fetchEnd = datesToFetch[datesToFetch.length - 1];
+
+    // Meta Insights API returns data at account level with ad set breakdown
+    const rows = await getAccountInsights(adAccountId, fetchStart, fetchEnd, accessToken);
+
+    const adSetNameMap = new Map(adSets.map((s) => [s.id, s.name]));
+
+    for (const row of rows) {
+      if (!row.adset_id) continue;
+      const adSetId = row.adset_id;
+
+      const statDate = row.date_start;
+      const impressions = Number(row.impressions) || 0;
+      const clicks = Number(row.clicks) || 0;
+      const spendCents = Math.round((Number(row.spend) || 0) * 100);
+
+      let purchases = 0;
+      let purchaseValueCents = 0;
+      if (row.actions) {
+        for (const action of row.actions) {
+          if (action.action_type === "purchase" || action.action_type === "offsite_conversion.fb_pixel_purchase") {
+            purchases += Number(action.value) || 0;
+          }
+        }
+      }
+      if (row.action_values) {
+        for (const av of row.action_values) {
+          if (av.action_type === "purchase" || av.action_type === "offsite_conversion.fb_pixel_purchase") {
+            purchaseValueCents += Math.round((Number(av.value) || 0) * 100);
+          }
+        }
+      }
+
+      const name = adSetNameMap.get(adSetId) ?? "";
+
+      await sql`
+        INSERT INTO meta_ad_set_stats
+          (ad_set_id, ad_account_id, stat_date, ad_set_name,
+           impressions, clicks, spend_cents, purchases, purchase_value_cents, fetched_at)
+        VALUES
+          (${adSetId}, ${adAccountId}, ${statDate}, ${name},
+           ${impressions}, ${clicks}, ${spendCents}, ${purchases}, ${purchaseValueCents}, NOW())
+        ON CONFLICT (ad_set_id, stat_date)
+        DO UPDATE SET
+          ad_set_name = EXCLUDED.ad_set_name,
+          impressions = EXCLUDED.impressions,
+          clicks = EXCLUDED.clicks,
+          spend_cents = EXCLUDED.spend_cents,
+          purchases = EXCLUDED.purchases,
+          purchase_value_cents = EXCLUDED.purchase_value_cents,
+          fetched_at = NOW()
+      `;
+    }
+
+    for (const date of datesToFetch) {
+      await markSynced("meta", date, adAccountId);
+      synced++;
+    }
+
+    return { synced, skipped, error: null, ad_sets_found: adSets.length };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[reporting/sync] Meta sync error:", msg);
+    return { synced, skipped, error: msg, ad_sets_found: 0 };
+  }
 }
