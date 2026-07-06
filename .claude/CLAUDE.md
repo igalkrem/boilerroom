@@ -4,7 +4,7 @@ Codebase instructions for Claude Code. Read this before making changes.
 
 ## What This Is
 
-SnapAds Manager: a bulk Snapchat ad campaign creation platform. Users connect via Snapchat OAuth2 and create Campaigns, Ad Sets, and Ads in bulk through a visual canvas wizard.
+SnapAds Manager: a bulk ad campaign creation platform supporting Snapchat and Meta (Facebook) Ads. Users connect via Snapchat and/or Meta OAuth2 and create Campaigns, Ad Sets, and Ads in bulk through a visual canvas wizard. Both platforms share the same feed provider, article, and channel systems.
 
 **Live:** https://boilerroom-two.vercel.app  
 **Deploy:** Vercel — `npx vercel --prod` (GitHub auto-deploy is unreliable; trigger manually after pushing).
@@ -151,7 +151,13 @@ src/
 │   │   │   ├── transcode/             # POST {blobUrl, fileName} — server-side H.264 transcode via @ffmpeg-installer/ffmpeg; downloads raw video from Blob → FFmpeg → re-uploads MP4 → returns {optimizedUrl}; maxDuration=300
 │   │   │   └── delete/                # DELETE handler — removes blobs by URL array
 │   │   ├── meta/
-│   │   │   └── ad-accounts/           # GET — lists Meta ad accounts; caches IDs in session.metaAllowedAdAccountIds + DB
+│   │   │   ├── ad-accounts/           # GET — lists Meta ad accounts; caches IDs in session.metaAllowedAdAccountIds + DB
+│   │   │   ├── campaigns/             # GET (list) + POST (create) — Zod validation, auth + IDOR checks
+│   │   │   ├── adsets/                # GET + POST + PATCH — full IDOR protection
+│   │   │   ├── ads/                   # POST + PATCH — with IDOR guards
+│   │   │   ├── creatives/             # POST — object_story_spec validation
+│   │   │   ├── media/                 # POST — SSRF guard (.vercel-storage.com), discriminated IMAGE/VIDEO
+│   │   │   └── pages/                 # GET — list user's Facebook pages for object_story_spec
 │   │   └── snapchat/
 │   │       ├── campaigns/
 │   │       ├── adsquads/
@@ -203,7 +209,8 @@ src/
 │   │       ├── UrlParametersTab.tsx   # Parameter rows, always-visible filtered macro chips (two groups: Snapchat Native / BoilerRoom), live preview; hideBaseUrl prop
 │   │       ├── ChannelsTab.tsx        # CSV upload + manual textarea entry (one per line); both paths deduplicate client-side against loaded channels before POSTing; status table, lifecycle controls
 │   │       ├── DomainsTab.tsx         # Domain rows (baseDomain + baseUrl + traffic source checkboxes)
-│   │       └── CombosTab.tsx          # Named combos (pixel + domain + channel config)
+│   │       ├── CombosTab.tsx          # Named combos (pixel + domain + channel config)
+│   │       └── MetaTab.tsx           # Meta config: assigned ad accounts, Facebook page selector (API + manual fallback), campaign naming template (blue theme, same NAMING_MACROS as Snap)
 │   ├── silo/
 │   │   ├── SiloUploader.tsx           # Batch uploader: hash → optimize → Blob upload (3 concurrent)
 │   │   ├── SiloBrowser.tsx            # Picker modal for canvas wizard integration
@@ -225,15 +232,17 @@ src/
 │   ├── ui/
 │   │   └── MultiSelect.tsx            # Controlled multi-select dropdown with checkboxes (react-hook-form Controller)
 │   ├── pixels/                        # PixelForm component
-│   ├── presets/                       # PresetForm — flat single-column form; Traffic Source selector (Snap active, Facebook coming soon); no Campaign Defaults section
+│   ├── presets/                       # PresetForm — flat single-column form; Traffic Source selector (Snap/Facebook); Meta shows optimization goal, billing event, pixel event, daily budget (cents), publisher platforms; Snap-specific fields hidden for Meta
 │   └── articles/                      # ArticleForm component
 ├── hooks/
 │   ├── useCanvasStore.ts              # Zustand store for canvas wizard graph state + buildCampaignMatrix()
 │   └── useWizardStore.ts              # Legacy Zustand store (still used by LoadPresetBanner + preset/use page)
 ├── lib/
 │   ├── snapchat/                      # Server-side API client (campaigns, adsquads, creatives, collection, media, profiles, auth, stats); collection.ts = createCreativeElements + createInteractionZones (Collection Ads)
-│   ├── submission-orchestrator.ts     # Sequences: uploadMedia → channel assign → campaigns → adSquads → URL resolve → creatives → ads → patchCreatives
-│   ├── synthesize-campaign.ts         # Converts CampaignBuildItem + resolved entities → {campaigns, adSquads, creatives}; throws if preset has no adSquads or provider URL is empty
+│   ├── meta/                          # Meta Graph API v19.0 client library: client.ts (metaFetch, Bearer auth, no token refresh), campaigns.ts, adsets.ts, creatives.ts (uploadImage/uploadVideo/pollVideoStatus), ads.ts, stats.ts (Insights API), pages.ts (getPages), adaccounts.ts — all with IDOR guards on mutations
+│   ├── submission-orchestrator.ts     # Snapchat: uploadMedia → channel assign → campaigns → adSquads → URL resolve → creatives → ads → patchCreatives
+│   ├── meta-submission-orchestrator.ts # Meta: uploadMedia (2-concurrent) → channelAssign → campaigns → adSets → creatives+ads (individual creates, no batch)
+│   ├── synthesize-campaign.ts         # Converts CampaignBuildItem → platform-specific shape; synthesizeCampaign() for Snap, synthesizeMetaCampaign() for Meta
 │   ├── resolve-campaign-name.ts       # resolveCampaignName(fallbackTemplate, item, ctx, providerTemplate?) — uses provider's NamingSegment[] template if present, else string-replace fallback; also exports generateUniqueId4()
 │   ├── uploadMediaToSnapchat.ts       # Client-side upload pipeline + uploadBlobToSnapchat (server-side path for Silo uploads)
 │   ├── silo.ts                        # Silo asset CRUD (localStorage + KV sync, key: boilerroom_silo_v1)
@@ -252,19 +261,21 @@ src/
 │   ├── db/
 │   │   ├── index.ts                   # sql helper + runMigrations() + channel CRUD: normalizeChannelStatuses(), assignChannel(), releaseChannel(), forceChannelStatus(), bulkForceChannelStatus(feedProviderId, googleUserId, newStatus) — moves all in-use channels for a provider in one UPDATE, listChannels(), bulkInsertChannels(), deleteChannels(), getInUseChannelsByUser(), getInUseChannelsWithoutSquadId() — returns in-use channels with campaign_snap_id but no ad_squad_snap_id (used by backfill), updateChannelPausedStatus(), updateChannelAdSquadId() + Snap token CRUD: upsertUserToken(), updateAdAccountIds(), getAllUserTokens(), deleteUserToken() + Meta token CRUD stubs: upsertUserMetaToken(), updateMetaAdAccountIds(), getAllUserMetaTokens(), deleteUserMetaToken() (ready for future Meta OAuth routes)
 │   │   ├── token-crypto.ts            # AES-256-GCM encrypt/decrypt for Snapchat refresh tokens (SESSION_SECRET as key) + verifyCronSecret() using timingSafeEqual
-│   │   └── migrations.sql             # CREATE TABLE IF NOT EXISTS for all 6 tables (3 reporting + feed_provider_channels + user_snapchat_tokens + user_meta_tokens)
+│   │   └── migrations.sql             # CREATE TABLE IF NOT EXISTS for all 7 tables (3 reporting + feed_provider_channels + user_snapchat_tokens + user_meta_tokens + meta_ad_set_stats)
 │   ├── country-map.ts                 # countryNameToCode / countryCodeToName — normalises KingsRoad country_name ↔ Snapchat ISO-2
 │   ├── fx-rate.ts                     # getEurToUsd() — fetches frankfurter.app, cached 1h in module memory
 │   ├── kingsroad.ts                   # fetchKingsRoadReport(startDate, endDate) — paginated KingsRoad /report/ client
 │   ├── predicto.ts                    # fetchPredictoReport(startDate, endDate) — Predicto general reporting (flat, USD, skips gracefully if PREDICTO_API_TOKEN unset); API returns revenue as `estimated_revenue` and metrics as strings — both coerced in the mapper
-│   ├── session.ts                     # iron-session helpers & auth validation; isMetaConnected(), isMetaAdAccountAllowed() stubbed for future use
+│   ├── session.ts                     # iron-session helpers & auth validation; isMetaConnected(), isMetaAdAccountAllowed() used by all Meta API routes
 │   └── rate-limiter.ts                # rateLimitedCall (token bucket, max 10 req/s) + rateLimitedFetch (wraps rateLimitedCall + 429 retry w/ exponential backoff: 2s/4s/8s/16s, 4 retries). All direct Snapchat API calls (including upload-from-blob) use rateLimitedFetch for automatic 429 retry.
 └── types/
     ├── wizard.ts                      # CampaignFormData, AdSquadFormData, CreativeFormData, SubmissionResults, CreativeGroup, CanvasEdges, CampaignBuildItem
     ├── feed-provider.ts               # FeedProvider (full type with snapConfig, urlConfig, channelConfig, domains, combos, metaConfig), UrlParameter, FeedProviderDomain, FeedProviderCombo, ChannelSetupType
     ├── article.ts                     # Article (id, feedProviderId, slug, query, allowedHeadlines, createdAt)
-    ├── preset.ts                      # CampaignPreset (includes trafficSource, feedProviderId, comboId, creativeDefaults)
+    ├── preset.ts                      # CampaignPreset (includes trafficSource, feedProviderId, comboId, creativeDefaults, metaAdSet?)
     ├── snapchat.ts                    # API payload types (SnapCampaignPayload, etc.)
+    ├── meta.ts                        # Meta Graph API types: MetaCampaignPayload, MetaAdSetPayload, MetaAdCreativePayload, MetaAdPayload, MetaTargeting, MetaObjectStorySpec, MetaInsightsRow, MetaAdAccount, enums (MetaOptimizationGoal, MetaBillingEvent, MetaPixelEvent, etc.)
+    ├── ad-account.ts                  # AdAccountConfig (id, name, hidden, feedProviderIds, platform?: "snap" | "meta")
     ├── silo.ts                        # SiloAsset, SiloTag, SnapchatUploadStatus, SnapchatUploadStage
     ├── pixel.ts                       # SavedPixel type
     └── session.ts
@@ -301,9 +312,9 @@ src/
   - **Provider colors** — assigned from `PROVIDER_COLORS` array indexed by sort-order of `createdAt` (stable; not array position). Colors propagate to node borders, indicator dots, and SVG edges.
   - **Vivid Flow node backgrounds** — connected nodes (`ArticleNode`, `AdAccountNode`, `PresetNode`) use `background: linear-gradient(135deg, {color}18 0%, #111827 65%)` with `boxShadow: 0 4px 24px {color}25` for a colored drop-shadow. `ProviderNode` uses a slightly stronger gradient (`{color}22 → #111827 70%`) plus an inset color ring via `boxShadow: 0 4px 24px {color}20, inset 0 0 0 1px {color}20`. Disconnected nodes fall back to the standard `dark:bg-[#111827]` solid surface.
   - **CreativeGroupNode (row node)** — horizontal flex row of portrait cards (`160×285px` each, `9/16` aspect). Left accent stripe per card shows connected provider color(s). Node outer div has `style: { background: "transparent", border: "none", padding: 0 }` to override the React Flow node wrapper background. `groupIds` is rendered without reversal; `groupIds[0]` (newest) is leftmost, `groupIds[last]` (oldest) is rightmost. Each prepend subtracts `ROW_CARD_STEP = 172` from the node's stored x so the rightmost card stays anchored. `nodeWidth = rowWidth + DOCK_LEAD + DOCK_W + DOCK_TO_HANDLE` — wider than the cards area to fit the side dock; handle sits at the new right edge past the dock. Single-asset slots show a frosted white name pill; multi-asset slots show stacked coloured pills indexed into `CREATIVE_NAME_COLORS` (blue→indigo→violet…).
-  - **Ad account NodeCard** — connected state derived from `articleToAdAccount` edges (not from `selectedAdAccountIds`). Shows 2-letter initials avatar.
+  - **Ad account NodeCard** — connected state derived from `articleToAdAccount` edges (not from `selectedAdAccountIds`). Shows 2-letter initials avatar + platform badge (yellow Snap ghost / blue Meta "f"). `CampaignCanvas` merges `useAdAccounts()` (Snap) and `useMetaAdAccounts()` (Meta) into a unified `CanvasAdAccount[]` array with `platform: "snap" | "meta"`. Cross-platform wiring blocked in `isValidConnection`: Meta accounts can only connect to `trafficSource: "facebook"` presets and vice versa.
   - **Preset gate** — `disabled` until `articleToAdAccount.length > 0`.
-  - **`visibleAccounts`** — filtered by `activeProviderIdsFromArticles` and sorted by minimum provider index from `adAccountConfigs.feedProviderIds`; visible once any article is connected.
+  - **`visibleAccounts`** — Snap accounts filtered by `activeProviderIdsFromArticles` via `adAccountConfigs.feedProviderIds`; Meta accounts filtered by `provider.metaConfig.allowedAdAccountIds` of active providers. Sorted by minimum provider index; visible once any article is connected.
   - **`visiblePresets`** — filtered by `activeProviderIdsFromArticles` and sorted by provider index. Returns `[]` (nodes hidden) when `canSelectPresets` is false (no `articleToAdAccount` edge exists yet).
   - **Dark mode** — `<ReactFlow>` is rendered with `colorMode="dark"` and inline `style={{ background: "#1f2937" }}`; the `<Background>` component uses `color="#374151"` for the dot grid. Permanent dark mode is enforced via Tailwind `darkMode: 'class'` and `<html class="dark">`; all wizard components have `dark:` variants alongside their light classes.
 
@@ -349,13 +360,13 @@ src/
 
 - **Feed Providers (v3):** Full sell-side provider management. `FeedProvider` type lives in `src/types/feed-provider.ts` (not `article.ts`). Key fields:
   - `snapConfig` — `organizationId?` (resolves `{{organization_id}}` in URL templates at synthesis time), `allowedAdAccountIds[]`, `allowedPixelIds[]`, `campaignNamingTemplate?: NamingSegment[]` (Snap-specific), `revenueSource?: "kingsroad" | "predicto"` — pill selector in Snap tab; used by `getProviderNetworkMap()` (`src/lib/reporting/provider-network.ts`) to classify ad accounts for source-coupled cron windows (:15 vs :46) without needing DB join data; cron and sync-status fetch the KV blob once per run then fall back to DB joins for unset providers
-  - `metaConfig` — `allowedAdAccountIds[]` (Meta ad account IDs; upcast to `{ allowedAdAccountIds: [] }` for legacy records without the field)
+  - `metaConfig` — `allowedAdAccountIds[]`, `allowedPixelIds[]`, `pageId?` (required for `object_story_spec`), `campaignNamingTemplate?: NamingSegment[]`; upcast to `{ allowedAdAccountIds: [], allowedPixelIds: [] }` for legacy records
   - `urlConfig` — `parameters: UrlParameter[]` (key/value/encode with macro support). `UrlParameter.encode?: boolean` — when true, `encodeURIComponent` is applied to the fully resolved value in `buildUrlTemplate()`; old records without the field default to `undefined` (falsy, no change). `baseUrl` is retained in the stored shape as a backward-compat fallback but is no longer shown in the UI — base URLs are now per-domain.
   - `channelConfig` — `type: "provider-supplied" | "parameter-based"`, `channelParamKey?`
   - `domains[]` — `FeedProviderDomain` (`id`, `baseDomain`, `baseUrl?`, `trafficSources[]`). Each domain carries its own `baseUrl`. `buildUrlTemplate()` resolves base URL as `domain.baseUrl ?? provider.urlConfig.baseUrl ?? ""` (latter is the fallback for old records).
   - `combos[]` — `FeedProviderCombo` (named preset of pixel + domain + channel settings)
 
-  **Modal tabs:** Snap | Channels | Domains | Combos | Facebook. The "URL Parameters" standalone tab was removed — URL parameter configuration now lives at the bottom of the Snap tab (rendered via `UrlParametersTab` with `hideBaseUrl`). Below URL Parameters, a violet **Campaign Naming Template** card (`NamingTemplateEditor`) lets users build segment-based names (literal text chips + macro chips joined by " | "). Macros: `{{preset.tag}}`, `{{article.name}}`, `{{date_ddmm}}`, `{{unique_id_4}}`, `{{creative.vname}}`, `{{channel.id}}`. Live preview resolves against example values (`{{channel.id}}` shows as literal `{{channel.id}}` — resolved at launch time). Facebook tab is a placeholder (coming soon).
+  **Modal tabs:** Snap | Channels | Domains | Combos | Facebook. The "URL Parameters" standalone tab was removed — URL parameter configuration now lives at the bottom of the Snap tab (rendered via `UrlParametersTab` with `hideBaseUrl`). Below URL Parameters, a violet **Campaign Naming Template** card (`NamingTemplateEditor`) lets users build segment-based names (literal text chips + macro chips joined by " | "). Macros: `{{preset.tag}}`, `{{article.name}}`, `{{date_ddmm}}`, `{{unique_id_4}}`, `{{creative.vname}}`, `{{channel.id}}`. Live preview resolves against example values (`{{channel.id}}` shows as literal `{{channel.id}}` — resolved at launch time). Facebook tab (`MetaTab`) shows assigned Meta ad accounts, Facebook page selector (API-fetched with manual ID fallback), and a campaign naming template editor (blue theme, same NAMING_MACROS as Snap).
 
   **`UrlParametersTab` behaviour:** macro chips are always visible above the preview URL (not a focus-gated popup). Chips are filtered to only show macros not already present in any parameter value. Clicking a chip inserts into the last-focused value input (tracked via `lastActiveIndexRef`). Chips are split into two labeled groups: **Snapchat Native** (yellow — `{{campaign.id}}`, `{{adset.id}}`, `{{ad.id}}` — substituted by Snapchat at click time) and **BoilerRoom** (blue — all others — resolved before sending to Snapchat). Each parameter row has a compact **"enc" checkbox** (`accent-violet-500`); when checked it sets `UrlParameter.encode = true`, turns the label violet, and causes the preview URL to show the encoded value via `encodeURIComponent(p.value)`. Preview URL uses a structured renderer (not a flat split): base URL, parameter keys, `?`, `&`, and `=` are regular weight; hardcoded literal parameter values are **bold**; macros are highlighted yellow (Snapchat native) or blue (BoilerRoom). The `source` field on each MACROS entry (`"snap"` | `"br"`) drives both the chip style and the preview highlight color.
 
@@ -399,6 +410,7 @@ src/
 ## Security Notes
 
 - **`isAdAccountAllowed` denies by default:** When `session.allowedAdAccountIds` is empty (fresh session before dashboard loads), the function returns `false`. It is populated by `/api/snapchat/ad-accounts` — all Snapchat API routes that accept an `adAccountId` must call this check. Do NOT revert the default to `true`. The four Snapchat GET proxy routes (`campaigns`, `adsquads`, `creatives`, `ads`) require `?adAccountId=` and call `isAdAccountAllowed` before fetching. When a single entity ID is provided, each route also performs an IDOR ownership check — fetches the entity from Snapchat and asserts `entity.ad_account_id === adAccountId` — returning 403 if the entity belongs to a different account.
+- **Meta API routes auth pattern:** All Meta routes (`/api/meta/campaigns`, `/api/meta/adsets`, `/api/meta/ads`, `/api/meta/creatives`, `/api/meta/media`, `/api/meta/pages`) check `isSessionValid()` → `isMetaConnected()` → `isMetaAdAccountAllowed()` (where applicable). Mutation endpoints perform IDOR protection: fetch entity from Meta, assert `account_id` matches. `/api/meta/media` has SSRF guard — `blobUrl` must end with `.vercel-storage.com`. Meta Graph API base URL (`https://graph.facebook.com/v19.0`) is hardcoded in `src/lib/meta/client.ts`. All Meta API calls are server-side only via `metaFetch()` with Bearer auth and shared rate limiter.
 - **`/api/data` is user-scoped:** Blob paths are `metadata/{googleUserId}/{key}.json`. Blobs use `access: "public"` (store constraint — `boilerroom-silo` is a public store). Paths are non-guessable (contain internal Google user ID) but not secret. Never use a shared path. Valid keys are whitelisted: `br_silo_assets`, `br_silo_tags`, `br_pixels`, `br_presets`, `br_feed_providers`, `br_articles`, `br_ad_accounts_v1`, `br_campaign_changelog`, `br_build_log`.
 - **`/api/feed-providers/channels/*` is user-scoped:** GET/POST/DELETE/PATCH pass `session.googleUserId` to all DB functions; queries filter by `google_user_id` so users can only access their own channels. `assignChannel`, `releaseChannel`, `normalizeChannelStatuses`, `updateChannelAdSquadId`, `getInUseChannelsByUser`, `getInUseChannelsWithoutSquadId`, `bulkForceChannelStatus`, and `updateChannelPausedStatus` all require `googleUserId` — never call them without it.
 - **`/api/silo/delete` is user-scoped:** Before calling `del()`, the route fetches `metadata/{googleUserId}/br_silo_assets.json` from the blob store and verifies every URL to be deleted is present in the user's asset list. Fails safe (500) if the KV fetch fails.
