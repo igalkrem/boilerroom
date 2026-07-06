@@ -83,7 +83,7 @@ export function synthesizeCampaign(
     status: squadTemplate.status,
     startDate: squadTemplate.startDate ? ensureFutureDate(squadTemplate.startDate) : undefined,
     endDate: squadTemplate.endDate ? ensureFutureDate(squadTemplate.endDate) : undefined,
-    placementConfig: squadTemplate.placementConfig,
+    smartPlacement: squadTemplate.smartPlacement,
     targetingGender: squadTemplate.targetingGender,
     targetingDeviceType: squadTemplate.targetingDeviceType,
     targetingOsType: squadTemplate.targetingOsType,

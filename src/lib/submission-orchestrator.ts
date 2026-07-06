@@ -307,6 +307,14 @@ export async function runSubmission(
         // Catalogue: product_set_id on squad must match creative's dynamic_render_properties.product_set_id (E2840).
         // Do NOT send child_ad_type or catalog_vertical — Snapchat auto-sets them (E1001 if sent explicitly).
         product_properties: sq.productSetId ? { product_set_id: sq.productSetId } : undefined,
+        // Smart placement (opt-in per preset). Confirmed via live probe (2026-07-06): sending
+        // placement_v2 { config: AUTOMATIC } creates the squad on Snapchat's auto-optimized placement
+        // but LOCKS it against all API edits (E2025 "AdSquad was created with placement v2, please
+        // update the placement in Ads Manager"). So we send it ONLY when the user explicitly opts in;
+        // omitting it (the default) yields Snapchat's default placement and keeps the squad editable
+        // in-app. CUSTOM/CONTENT are NOT offered: CONTENT is rejected (E39400) and CUSTOM requires
+        // CHAT_FEED (E21011) while still locking the squad.
+        placement_v2: sq.smartPlacement ? { config: "AUTOMATIC" as const } : undefined,
       }));
 
       const sqRes = await fetch("/api/snapchat/adsquads", {

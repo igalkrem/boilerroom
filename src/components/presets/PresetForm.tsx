@@ -27,7 +27,7 @@ const presetFormSchema = z
     bidStrategy: z.enum(["AUTO_BID", "LOWEST_COST_WITH_MAX_BID", "TARGET_COST"]),
     bidAmountUsd: z.number().optional(),
     dailyBudgetUsd: z.number().optional(),
-    placementConfig: z.enum(["AUTOMATIC", "CONTENT"]),
+    smartPlacement: z.boolean().optional(),
     targetingDeviceType: z.enum(["WEB", "MOBILE", "ALL"]).optional(),
     targetingOsType: z.enum(["iOS", "ANDROID"]).optional(),
     pixelId: z.string().optional(),
@@ -135,11 +135,6 @@ const BID_STRATEGY_OPTIONS = [
   { value: "TARGET_COST", label: "Target Cost" },
 ];
 
-const PLACEMENT_OPTIONS = [
-  { value: "AUTOMATIC", label: "Automatic" },
-  { value: "CONTENT", label: "Content" },
-];
-
 const DEVICE_OPTIONS = [
   { value: "ALL", label: "All Devices" },
   { value: "MOBILE", label: "Mobile" },
@@ -241,7 +236,7 @@ export function PresetForm({ preset }: PresetFormProps) {
           bidStrategy: sq0.bidStrategy,
           bidAmountUsd: sq0.bidAmountUsd,
           dailyBudgetUsd: sq0.dailyBudgetUsd,
-          placementConfig: sq0.placementConfig,
+          smartPlacement: sq0.smartPlacement ?? false,
           targetingDeviceType: sq0.targetingDeviceType,
           targetingOsType: sq0.targetingOsType,
           minAge: sq0.minAge,
@@ -255,7 +250,7 @@ export function PresetForm({ preset }: PresetFormProps) {
           optimizationGoal: "PIXEL_PURCHASE",
           bidStrategy: "AUTO_BID",
           dailyBudgetUsd: 20,
-          placementConfig: "AUTOMATIC",
+          smartPlacement: false,
           targetingDeviceType: "ALL",
           status: "PAUSED",
         },
@@ -307,7 +302,7 @@ export function PresetForm({ preset }: PresetFormProps) {
           status: data.status,
           startDate: undefined,
           endDate: undefined,
-          placementConfig: data.placementConfig,
+          smartPlacement: data.smartPlacement,
           targetingGender: undefined,
           targetingDeviceType: data.targetingDeviceType,
           targetingOsType: data.targetingOsType,
@@ -565,7 +560,17 @@ export function PresetForm({ preset }: PresetFormProps) {
           </select>
         </div>
 
-        <Select label="Placements" options={PLACEMENT_OPTIONS} {...register("placementConfig")} />
+        <div className="sm:col-span-2 rounded-lg border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-900/10 p-3">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" {...register("smartPlacement")} className="mt-0.5 accent-yellow-500" />
+            <span className="text-sm">
+              <span className="font-medium text-gray-800 dark:text-gray-200">Smart placement (let Snapchat auto-optimize where ads run)</span>
+              <span className="mt-1 block text-xs text-amber-700 dark:text-amber-400">
+                ⚠ Ad sets launched with Smart placement are locked by Snapchat — you must change their budget, bid, or pause them in Snapchat Ads Manager, not in this app. Leave this off to keep full in-app editing (uses Snapchat&apos;s default placement).
+              </span>
+            </span>
+          </label>
+        </div>
       </div>
 
       <hr className="border-gray-100 dark:border-gray-700" />

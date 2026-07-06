@@ -148,10 +148,12 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
       status: sq.status,
       startDate: sq.startDate ? ensureFutureDate(sq.startDate) : undefined,
       endDate: sq.endDate ? ensureFutureDate(sq.endDate) : undefined,
-      placementConfig: sq.placementConfig,
+      smartPlacement: sq.smartPlacement,
       targetingGender: sq.targetingGender,
       targetingDeviceType: sq.targetingDeviceType,
       targetingOsType: sq.targetingOsType,
+      minAge: sq.minAge,
+      maxAge: sq.maxAge,
       pixelId: sq.pixelId || undefined,
     }));
 

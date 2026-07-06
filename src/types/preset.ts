@@ -22,7 +22,12 @@ export interface AdSquadPresetData {
   status: "ACTIVE" | "PAUSED";
   startDate?: string;
   endDate?: string;
-  placementConfig: "AUTOMATIC" | "CONTENT";
+  // Smart placement opt-in. When true, the squad is created with placement_v2 { config: AUTOMATIC }
+  // (Snapchat auto-optimizes placements) — BUT Snapchat then locks the squad against API edits (E2025),
+  // so budget/bid/status must be managed in Snapchat Ads Manager. Default (false/undefined) = omit
+  // placement_v2 → Snapchat default placement, fully editable in-app. Replaces the old dead
+  // placementConfig field ("CONTENT" was rejected by the API with E39400).
+  smartPlacement?: boolean;
   targetingGender?: "ALL" | "MALE" | "FEMALE";
   targetingDeviceType?: "WEB" | "MOBILE" | "ALL";
   targetingOsType?: "iOS" | "ANDROID";

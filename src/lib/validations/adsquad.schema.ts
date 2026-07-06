@@ -27,8 +27,8 @@ export const adSquadSchema = z
     // Ad-set-level scheduling
     startDate: z.string().optional(),
     endDate: z.string().optional(),
-    // Delivery
-    placementConfig: z.enum(["AUTOMATIC", "CONTENT"]),
+    // Delivery — Smart placement opt-in (placement_v2 AUTOMATIC; locks the squad against API edits, E2025).
+    smartPlacement: z.boolean().optional(),
     // Targeting
     targetingGender: z.enum(["ALL", "MALE", "FEMALE"]).optional(),
     targetingDeviceType: z.enum(["WEB", "MOBILE", "ALL"]).optional(),

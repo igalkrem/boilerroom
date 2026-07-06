@@ -89,9 +89,13 @@ export interface SnapAdSquadPayload {
     }>;
   };
   placement_v2?: {
-    // "CONTENT" (Stories/Publisher Stories) is not in the public spec but is accepted by the API.
-    // Omit this field for AUTOMATIC placement — sending it (even with config: "AUTOMATIC") causes
-    // Snapchat to lock the squad so budget/bid/status cannot be updated via API (E2025).
+    // Smart placement opt-in: the orchestrator sends { config: "AUTOMATIC" } ONLY when a preset has
+    // smartPlacement=true. This is INTENTIONAL even though it locks the squad against API edits (E2025,
+    // confirmed via /api/debug/placement-probe 2026-07-06) — users acknowledge the trade-off via the
+    // Smart-placement toggle in PresetForm. Omit this field entirely (the default) to keep squads
+    // editable in-app (resolved placement "SNAP_ADS"). "CONTENT" is rejected by the API (E39400) and
+    // CUSTOM requires CHAT_FEED (E21011) while still locking — neither is used. Do NOT "fix" the
+    // orchestrator by removing the AUTOMATIC send; that IS the feature.
     config: "AUTOMATIC" | "CONTENT" | "CUSTOM";
     platforms?: string[];
     snapchat_positions?: string[];

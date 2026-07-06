@@ -32,8 +32,8 @@ export interface AdSquadFormData {
   // Ad-set-level scheduling
   startDate?: string;
   endDate?: string;
-  // Delivery
-  placementConfig: "AUTOMATIC" | "CONTENT";
+  // Delivery — Smart placement opt-in (placement_v2 AUTOMATIC; locks the squad against API edits, E2025).
+  smartPlacement?: boolean;
   // Targeting
   targetingGender?: "ALL" | "MALE" | "FEMALE";
   targetingDeviceType?: "WEB" | "MOBILE" | "ALL";
