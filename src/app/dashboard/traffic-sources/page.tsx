@@ -387,6 +387,12 @@ export default function TrafficSourcesPage() {
                       </div>
                       <p className="text-xs text-gray-400 font-mono mt-0.5">{account.id}</p>
                       <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 flex-wrap">
+                        {account.business?.name && (
+                          <span title="Business Manager">{account.business.name}</span>
+                        )}
+                        {account.business?.name && (account.timezone_name || account.currency) && (
+                          <span className="text-gray-300">·</span>
+                        )}
                         {account.timezone_name && <span>{account.timezone_name}</span>}
                         {account.timezone_name && account.currency && (
                           <span className="text-gray-300">·</span>

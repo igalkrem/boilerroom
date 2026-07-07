@@ -10,7 +10,7 @@ export function buildMetaAuthUrl(state: string): string {
     client_id: process.env.META_APP_ID!,
     redirect_uri: process.env.META_REDIRECT_URI!,
     state,
-    scope: "ads_management,ads_read",
+    scope: "ads_management,ads_read,business_management",
     response_type: "code",
   });
   return `${OAUTH_DIALOG}?${params.toString()}`;
