@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Fragment, useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSnapchatAuth } from "@/hooks/useSnapchatAuth";
 import { useAdAccounts } from "@/hooks/useAdAccounts";
@@ -23,6 +23,44 @@ function SnapchatLogo({ className }: { className?: string }) {
   );
 }
 
+function MetaLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+    </svg>
+  );
+}
+
+// Small platform badge used in the unified ad accounts table.
+function PlatformIcon({ platform }: { platform: "snap" | "meta" }) {
+  if (platform === "snap") {
+    return (
+      <div className="w-6 h-6 rounded-md bg-yellow-400 flex items-center justify-center shrink-0" title="Snapchat">
+        <SnapchatLogo className="w-3.5 h-3.5 text-gray-950" />
+      </div>
+    );
+  }
+  return (
+    <div className="w-6 h-6 rounded-md bg-blue-600 flex items-center justify-center shrink-0" title="Meta">
+      <MetaLogo className="w-3.5 h-3.5 text-white" />
+    </div>
+  );
+}
+
+type UnifiedAccount = {
+  key: string;
+  id: string;
+  platform: "snap" | "meta";
+  name: string;
+  org?: string;
+  timezone?: string;
+  currency?: string;
+};
+
+const thClass =
+  "px-3 py-2 text-left text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap";
+const tdClass = "px-3 py-2 text-sm text-gray-700 dark:text-gray-300 align-middle";
+
 export default function TrafficSourcesPage() {
   const router = useRouter();
   const { snapConnected, metaConnected, metaExpiresAt, isLoading: authLoading } = useSnapchatAuth();
@@ -34,6 +72,12 @@ export default function TrafficSourcesPage() {
   const [metaPixels, setMetaPixels] = useState<SavedMetaPixel[]>([]);
   const [disconnecting, setDisconnecting] = useState(false);
   const [metaDisconnecting, setMetaDisconnecting] = useState(false);
+
+  // Compact-table-specific UI state (search / filter / inline expand / hidden toggle).
+  const [accountSearch, setAccountSearch] = useState("");
+  const [platformFilter, setPlatformFilter] = useState<"all" | "snap" | "meta">("all");
+  const [expandedAccountKey, setExpandedAccountKey] = useState<string | null>(null);
+  const [showHidden, setShowHidden] = useState(false);
 
   const reloadLocal = useCallback(() => {
     setAdAccountConfigs(loadAdAccountConfigs());
@@ -166,409 +210,630 @@ export default function TrafficSourcesPage() {
     setMetaPixels(loadMetaPixels());
   };
 
+  // Merge Snap + Meta ad accounts into one unified list for the compact table.
+  const unifiedAccounts = useMemo<UnifiedAccount[]>(() => {
+    const snap: UnifiedAccount[] = snapAccounts.map((a) => ({
+      key: `snap:${a.id}`,
+      id: a.id,
+      platform: "snap",
+      name: a.name,
+      org: a.organization_name,
+      timezone: a.timezone,
+      currency: a.currency,
+    }));
+    const meta: UnifiedAccount[] = metaAccounts.map((a) => ({
+      key: `meta:${a.id}`,
+      id: a.id,
+      platform: "meta",
+      name: a.name,
+      org: a.business?.name,
+      timezone: a.timezone_name,
+      currency: a.currency,
+    }));
+    return [...snap, ...meta];
+  }, [snapAccounts, metaAccounts]);
+
+  const filteredAccounts = useMemo(() => {
+    const q = accountSearch.trim().toLowerCase();
+    return unifiedAccounts.filter((a) => {
+      if (platformFilter !== "all" && a.platform !== platformFilter) return false;
+      if (q && !a.name.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [unifiedAccounts, accountSearch, platformFilter]);
+
+  // Hidden status lives in adAccountConfigs (keyed by account id).
+  const isAccountHidden = useCallback(
+    (accountId: string) => adAccountConfigs.find((c) => c.id === accountId)?.hidden ?? false,
+    [adAccountConfigs]
+  );
+
+  // Active accounts fill the main table; hidden accounts live in a collapsed table below.
+  const activeAccounts = useMemo(
+    () => filteredAccounts.filter((a) => !isAccountHidden(a.id)),
+    [filteredAccounts, isAccountHidden]
+  );
+  const hiddenAccounts = useMemo(
+    () => filteredAccounts.filter((a) => isAccountHidden(a.id)),
+    [filteredAccounts, isAccountHidden]
+  );
+  // Total hidden count across ALL accounts (ignores search/filter) — for the collapsed header badge.
+  const hiddenTotal = useMemo(
+    () => unifiedAccounts.filter((a) => isAccountHidden(a.id)).length,
+    [unifiedAccounts, isAccountHidden]
+  );
+
+  const accountsSectionVisible = snapConnected || metaConnected;
+  const accountsSectionLoading =
+    (snapConnected && accountsLoading) || (metaConnected && metaAccountsLoading);
+
+  const toggleExpanded = (key: string) => {
+    setExpandedAccountKey((prev) => (prev === key ? null : key));
+  };
+
+  // Shared table renderer — used for both the active table and the collapsed hidden table.
+  const renderAccountsTable = (list: UnifiedAccount[]) => (
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+            <tr>
+              <th className={`${thClass} w-8`}></th>
+              <th className={thClass}>Account</th>
+              <th className={thClass}>Org</th>
+              <th className={thClass}>Timezone · Currency</th>
+              <th className={thClass}>Feed Providers</th>
+              <th className={thClass}>Status</th>
+              <th className={`${thClass} w-8`}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((a, i) => {
+              const config = getConfig(a.id, a.platform);
+              const isExpanded = expandedAccountKey === a.key;
+              const assignedProviders = feedProviders.filter((fp) =>
+                config.feedProviderIds.includes(fp.id)
+              );
+
+              return (
+                <Fragment key={a.key}>
+                  <tr
+                    className={`border-b border-gray-100 dark:border-gray-700 transition-colors ${
+                      i % 2 === 0 ? "" : "bg-gray-50/40 dark:bg-gray-800/20"
+                    } ${isExpanded ? "border-b-0" : "last:border-0"} hover:bg-gray-50 dark:hover:bg-gray-800/60`}
+                  >
+                    {/* Platform icon */}
+                    <td className={tdClass}>
+                      <PlatformIcon platform={a.platform} />
+                    </td>
+
+                    {/* Account name + id */}
+                    <td className={tdClass}>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate max-w-[220px]">
+                          {a.name}
+                        </span>
+                        <span className="text-[11px] text-gray-400 dark:text-gray-500 font-mono truncate max-w-[220px]">
+                          {a.id}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Org */}
+                    <td className={tdClass}>
+                      <span className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-[140px] block">
+                        {a.org || <span className="text-gray-300 dark:text-gray-600">—</span>}
+                      </span>
+                    </td>
+
+                    {/* Timezone · Currency */}
+                    <td className={tdClass}>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                        {[a.timezone, a.currency].filter(Boolean).join(" · ") || (
+                          <span className="text-gray-300 dark:text-gray-600">—</span>
+                        )}
+                      </span>
+                    </td>
+
+                    {/* Feed provider chips — click to expand assignment checklist */}
+                    <td className={tdClass}>
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(a.key)}
+                        className="flex items-center gap-1 flex-wrap max-w-[220px] text-left group"
+                      >
+                        {assignedProviders.length === 0 ? (
+                          <span className="text-xs text-gray-400 dark:text-gray-500 italic group-hover:text-cyan-600 dark:group-hover:text-cyan-400">
+                            Assign…
+                          </span>
+                        ) : (
+                          assignedProviders.map((fp) => (
+                            <span
+                              key={fp.id}
+                              className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-700 truncate max-w-[100px]"
+                            >
+                              {fp.name}
+                            </span>
+                          ))
+                        )}
+                        <span className="text-gray-300 dark:text-gray-600 text-[10px]">
+                          {isExpanded ? "▲" : "▼"}
+                        </span>
+                      </button>
+                    </td>
+
+                    {/* Status toggle */}
+                    <td className={tdClass}>
+                      <button
+                        type="button"
+                        onClick={() => toggleHidden(a.id, a.platform)}
+                        className="flex items-center gap-2"
+                      >
+                        <span
+                          role="switch"
+                          aria-checked={config.hidden}
+                          className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                            config.hidden ? "bg-gray-300 dark:bg-gray-600" : "bg-cyan-500"
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
+                              config.hidden ? "translate-x-0.5" : "translate-x-3.5"
+                            }`}
+                          />
+                        </span>
+                        <span
+                          className={`text-xs font-medium ${
+                            config.hidden
+                              ? "text-gray-400 dark:text-gray-500"
+                              : "text-cyan-600 dark:text-cyan-400"
+                          }`}
+                        >
+                          {config.hidden ? "Hidden" : "Active"}
+                        </span>
+                      </button>
+                    </td>
+
+                    {/* Actions affordance */}
+                    <td className={tdClass}>
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(a.key)}
+                        className="px-1.5 py-0.5 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 rounded transition-colors"
+                        title="Assign feed providers"
+                      >
+                        ⋯
+                      </button>
+                    </td>
+                  </tr>
+
+                  {/* Inline expand: feed provider checklist */}
+                  {isExpanded && (
+                    <tr className="bg-gray-50/80 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                      <td colSpan={7} className="px-4 py-3">
+                        {feedProviders.length === 0 ? (
+                          <p className="text-xs text-gray-400 dark:text-gray-500 italic">
+                            No feed providers yet.
+                          </p>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                            <span className="text-[11px] text-gray-500 dark:text-gray-400 uppercase tracking-wide font-semibold">
+                              Assign to:
+                            </span>
+                            {feedProviders.map((fp) => (
+                              <label
+                                key={fp.id}
+                                className="flex items-center gap-1.5 text-xs cursor-pointer text-gray-700 dark:text-gray-300"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={config.feedProviderIds.includes(fp.id)}
+                                  onChange={() => toggleFeedProvider(a.id, fp.id, a.platform)}
+                                  className="w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 text-cyan-500 focus:ring-cyan-500"
+                                />
+                                <span className="truncate max-w-[140px]">{fp.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="space-y-8 max-w-4xl">
+    <div className="space-y-8 max-w-6xl">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Traffic Sources</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Traffic Sources</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Manage traffic source connections and ad account settings.
         </p>
       </div>
 
-      {/* Section 1: Connected Sources */}
+      {/* Section 1: Connected Sources — compact horizontal cards */}
       <section>
-        <h2 className="text-base font-semibold text-gray-800 mb-3">Connected Sources</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-3">Connected Sources</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* Snapchat Card */}
-          <Card className="flex flex-col gap-4">
+          <Card className="p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-yellow-400 flex items-center justify-center shrink-0">
-                <SnapchatLogo className="w-6 h-6 text-gray-950" />
+              <div className="w-9 h-9 rounded-lg bg-yellow-400 flex items-center justify-center shrink-0">
+                <SnapchatLogo className="w-5 h-5 text-gray-950" />
               </div>
-              <div className="min-w-0">
-                <h3 className="font-semibold text-gray-900 text-sm">Snapchat</h3>
-                {authLoading ? (
-                  <p className="text-xs text-gray-400">Checking…</p>
-                ) : snapConnected ? (
-                  <Badge variant="green">Connected</Badge>
-                ) : (
-                  <Badge variant="gray">Not connected</Badge>
-                )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Snapchat</h3>
+                  {authLoading ? (
+                    <span className="text-xs text-gray-400 dark:text-gray-500">Checking…</span>
+                  ) : snapConnected ? (
+                    <Badge variant="green">Connected</Badge>
+                  ) : (
+                    <Badge variant="gray">Not connected</Badge>
+                  )}
+                </div>
               </div>
+              {!authLoading && (
+                <div className="shrink-0">
+                  {snapConnected ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+                      onClick={handleDisconnectSnap}
+                      disabled={disconnecting}
+                    >
+                      {disconnecting ? "Disconnecting…" : "Disconnect"}
+                    </Button>
+                  ) : (
+                    <a
+                      href="/api/auth/snapchat/connect"
+                      className="inline-flex items-center justify-center py-1.5 px-3 bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-semibold rounded-lg transition-colors text-sm"
+                    >
+                      Connect
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
-            {!authLoading && (
-              snapConnected ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-red-500 hover:text-red-600 mt-auto"
-                  onClick={handleDisconnectSnap}
-                  disabled={disconnecting}
-                >
-                  {disconnecting ? "Disconnecting…" : "Disconnect"}
-                </Button>
-              ) : (
-                <a
-                  href="/api/auth/snapchat/connect"
-                  className="block w-full text-center py-1.5 px-3 bg-yellow-400 hover:bg-yellow-300 text-gray-950 font-semibold rounded-lg transition-colors text-sm mt-auto"
-                >
-                  Connect Snapchat
-                </a>
-              )
-            )}
           </Card>
 
           {/* Meta (Facebook) Card */}
-          <Card className="flex flex-col gap-4">
+          <Card className="p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
-                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="currentColor">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                </svg>
+              <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+                <MetaLogo className="w-5 h-5 text-white" />
               </div>
-              <div className="min-w-0">
-                <h3 className="font-semibold text-gray-900 text-sm">Meta</h3>
-                {authLoading ? (
-                  <p className="text-xs text-gray-400">Checking…</p>
-                ) : metaConnected ? (
-                  <Badge variant="green">Connected</Badge>
-                ) : (
-                  <Badge variant="gray">Not connected</Badge>
-                )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Meta</h3>
+                  {authLoading ? (
+                    <span className="text-xs text-gray-400 dark:text-gray-500">Checking…</span>
+                  ) : metaConnected ? (
+                    <Badge variant="green">Connected</Badge>
+                  ) : (
+                    <Badge variant="gray">Not connected</Badge>
+                  )}
+                </div>
               </div>
+              {!authLoading && (
+                <div className="shrink-0">
+                  {metaConnected ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+                      onClick={handleDisconnectMeta}
+                      disabled={metaDisconnecting}
+                    >
+                      {metaDisconnecting ? "Disconnecting…" : "Disconnect"}
+                    </Button>
+                  ) : (
+                    <a
+                      href="/api/auth/meta/connect"
+                      className="inline-flex items-center justify-center py-1.5 px-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors text-sm"
+                    >
+                      Connect
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Token expiry warning — Meta tokens last ~60 days with no refresh */}
             {metaConnected && metaTokenDaysLeft !== null && metaTokenDaysLeft <= 7 && (
-              <p className={`text-xs px-2 py-1 rounded ${metaTokenDaysLeft <= 0 ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-700"}`}>
+              <p
+                className={`text-xs px-2 py-1 rounded mt-3 ${
+                  metaTokenDaysLeft <= 0
+                    ? "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400"
+                    : "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400"
+                }`}
+              >
                 {metaTokenDaysLeft <= 0
                   ? "Token expired — reconnect to restore access."
                   : `Token expires in ${metaTokenDaysLeft} day${metaTokenDaysLeft === 1 ? "" : "s"} — reconnect soon.`}
               </p>
             )}
-
-            {!authLoading && (
-              metaConnected ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-red-500 hover:text-red-600 mt-auto"
-                  onClick={handleDisconnectMeta}
-                  disabled={metaDisconnecting}
-                >
-                  {metaDisconnecting ? "Disconnecting…" : "Disconnect"}
-                </Button>
-              ) : (
-                <a
-                  href="/api/auth/meta/connect"
-                  className="block w-full text-center py-1.5 px-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors text-sm mt-auto"
-                >
-                  Connect Meta
-                </a>
-              )
-            )}
           </Card>
         </div>
       </section>
 
-      {/* Section 2: Ad Accounts */}
-      {snapConnected && (
+      {/* Section 2: Unified Ad Accounts table (Snap + Meta) — active only, hidden collapsed below */}
+      {accountsSectionVisible && (
         <section>
-          <h2 className="text-base font-semibold text-gray-800 mb-3">Ad Accounts</h2>
-          {accountsLoading ? (
-            <div className="flex items-center gap-2 text-gray-500 text-sm">
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">Ad Accounts</h2>
+            <div className="flex items-center gap-2">
+              <input
+                type="search"
+                placeholder="Search accounts…"
+                value={accountSearch}
+                onChange={(e) => setAccountSearch(e.target.value)}
+                className="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              />
+              <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5">
+                {(["all", "snap", "meta"] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPlatformFilter(p)}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                      platformFilter === p
+                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm"
+                        : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                    }`}
+                  >
+                    {p === "all" ? "All" : p === "snap" ? "Snap" : "Meta"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {accountsSectionLoading ? (
+            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
               <Spinner /> Loading accounts…
             </div>
-          ) : snapAccounts.length === 0 ? (
-            <p className="text-sm text-gray-500">
-              No Snapchat ad accounts found. Make sure your account has Business Manager access.
+          ) : unifiedAccounts.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              No ad accounts found. Make sure your account has Business Manager access.
             </p>
           ) : (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
-              {snapAccounts.map((account) => {
-                const config = getConfig(account.id);
-                return (
-                  <div key={account.id} className="p-4 flex flex-col sm:flex-row sm:items-start gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-gray-900 text-sm">{account.name}</span>
-                        {config.hidden && (
-                          <Badge variant="gray">Hidden</Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-400 font-mono mt-0.5">{account.id}</p>
-                      <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 flex-wrap">
-                        {account.organization_name && (
-                          <span title="Business Manager">{account.organization_name}</span>
-                        )}
-                        {account.organization_name && (account.timezone || account.currency) && (
-                          <span className="text-gray-300">·</span>
-                        )}
-                        {account.timezone && <span>{account.timezone}</span>}
-                        {account.timezone && account.currency && (
-                          <span className="text-gray-300">·</span>
-                        )}
-                        {account.currency && <span>{account.currency}</span>}
-                      </div>
-                    </div>
+            <>
+              {activeAccounts.length === 0 ? (
+                <div className="bg-white dark:bg-gray-900 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 text-center">
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">
+                    {filteredAccounts.length === 0
+                      ? "No accounts match your search."
+                      : "No active accounts — all matching accounts are hidden."}
+                  </p>
+                </div>
+              ) : (
+                renderAccountsTable(activeAccounts)
+              )}
 
-                    <div className="flex flex-col gap-3 sm:w-64 shrink-0">
-                      {/* Hide toggle */}
-                      <label className="flex items-center justify-between gap-3 text-sm cursor-pointer">
-                        <span className="text-gray-600">Hide from campaigns</span>
-                        <button
-                          role="switch"
-                          aria-checked={config.hidden}
-                          onClick={() => toggleHidden(account.id)}
-                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
-                            config.hidden ? "bg-gray-400" : "bg-cyan-500"
-                          }`}
-                        >
-                          <span
-                            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                              config.hidden ? "translate-x-1" : "translate-x-5"
-                            }`}
-                          />
-                        </button>
-                      </label>
+              {/* Hidden accounts — collapsed by default */}
+              {hiddenTotal > 0 && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowHidden((v) => !v)}
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-left"
+                  >
+                    <span className="text-gray-400 dark:text-gray-500 text-xs">{showHidden ? "▼" : "▶"}</span>
+                    <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Hidden accounts</span>
+                    <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                      {hiddenTotal}
+                    </span>
+                    <span className="ml-auto text-[11px] text-gray-400 dark:text-gray-500">
+                      {showHidden ? "Hide" : "Show"}
+                    </span>
+                  </button>
 
-                      {/* Feed provider assignment */}
-                      {feedProviders.length > 0 && (
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1.5">Assign to feed providers:</p>
-                          <div className="space-y-1">
-                            {feedProviders.map((fp) => (
-                              <label key={fp.id} className="flex items-center gap-2 text-xs cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={config.feedProviderIds.includes(fp.id)}
-                                  onChange={() => toggleFeedProvider(account.id, fp.id)}
-                                  className="w-3.5 h-3.5 rounded border-gray-300 text-cyan-500 focus:ring-cyan-500"
-                                />
-                                <span className="text-gray-700 truncate">{fp.name}</span>
-                              </label>
-                            ))}
-                          </div>
+                  {showHidden && (
+                    <div className="mt-2 opacity-80">
+                      {hiddenAccounts.length === 0 ? (
+                        <div className="bg-white dark:bg-gray-900 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-4 text-center">
+                          <p className="text-xs text-gray-400 dark:text-gray-500">
+                            No hidden accounts match your search.
+                          </p>
                         </div>
+                      ) : (
+                        renderAccountsTable(hiddenAccounts)
                       )}
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </section>
       )}
 
-      {/* Section: Meta Ad Accounts */}
-      {metaConnected && (
-        <section>
-          <h2 className="text-base font-semibold text-gray-800 mb-3">Meta Ad Accounts</h2>
-          {metaAccountsLoading ? (
-            <div className="flex items-center gap-2 text-gray-500 text-sm">
-              <Spinner /> Loading accounts…
-            </div>
-          ) : metaAccounts.length === 0 ? (
-            <p className="text-sm text-gray-500">
-              No Meta ad accounts found. Make sure your Meta Business account has ad account access.
-            </p>
-          ) : (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
-              {metaAccounts.map((account) => {
-                const config = getConfig(account.id, "meta");
-                return (
-                  <div key={account.id} className="p-4 flex flex-col sm:flex-row sm:items-start gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-gray-900 text-sm">{account.name}</span>
-                        {config.hidden && (
-                          <Badge variant="gray">Hidden</Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-400 font-mono mt-0.5">{account.id}</p>
-                      <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 flex-wrap">
-                        {account.business?.name && (
-                          <span title="Business Manager">{account.business.name}</span>
-                        )}
-                        {account.business?.name && (account.timezone_name || account.currency) && (
-                          <span className="text-gray-300">·</span>
-                        )}
-                        {account.timezone_name && <span>{account.timezone_name}</span>}
-                        {account.timezone_name && account.currency && (
-                          <span className="text-gray-300">·</span>
-                        )}
-                        {account.currency && <span>{account.currency}</span>}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-3 sm:w-64 shrink-0">
-                      <label className="flex items-center justify-between gap-3 text-sm cursor-pointer">
-                        <span className="text-gray-600">Hide from campaigns</span>
-                        <button
-                          role="switch"
-                          aria-checked={config.hidden}
-                          onClick={() => toggleHidden(account.id, "meta")}
-                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
-                            config.hidden ? "bg-gray-400" : "bg-cyan-500"
-                          }`}
-                        >
-                          <span
-                            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                              config.hidden ? "translate-x-1" : "translate-x-5"
-                            }`}
-                          />
-                        </button>
-                      </label>
-
-                      {feedProviders.length > 0 && (
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1.5">Assign to feed providers:</p>
-                          <div className="space-y-1">
-                            {feedProviders.map((fp) => (
-                              <label key={fp.id} className="flex items-center gap-2 text-xs cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={config.feedProviderIds.includes(fp.id)}
-                                  onChange={() => toggleFeedProvider(account.id, fp.id, "meta")}
-                                  className="w-3.5 h-3.5 rounded border-gray-300 text-cyan-500 focus:ring-cyan-500"
-                                />
-                                <span className="text-gray-700 truncate">{fp.name}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* Section 3: Pixels */}
+      {/* Section 3: Snap Pixels — compact table */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-semibold text-gray-800">Snap Pixels</h2>
+          <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">Snap Pixels</h2>
           <Button size="sm" onClick={() => router.push("/dashboard/pixels/new")}>
             + Add Pixel
           </Button>
         </div>
 
         {pixels.length === 0 ? (
-          <div className="bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center">
-            <p className="text-gray-500 text-sm mb-3">No pixels saved yet.</p>
+          <div className="bg-white dark:bg-gray-900 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-8 text-center">
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-3">No pixels saved yet.</p>
             <Button variant="secondary" size="sm" onClick={() => router.push("/dashboard/pixels/new")}>
               Add your first pixel
             </Button>
           </div>
         ) : (
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
-            {pixels.map((pixel) => {
-              const assignedProviders = feedProviders.filter((fp) =>
-                fp.snapConfig?.allowedPixelIds?.includes(pixel.id)
-              );
-              return (
-              <div key={pixel.id} className="px-4 py-3 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="font-medium text-gray-900 text-sm">{pixel.name}</p>
-                  <p className="text-xs text-gray-400 font-mono mt-0.5 truncate">{pixel.pixelId}</p>
-                  {assignedProviders.length > 0 && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Used by:{" "}
-                      {assignedProviders.map((fp, i) => (
-                        <span key={fp.id}>
-                          <span className="font-medium text-gray-700">{fp.name}</span>
-                          {i < assignedProviders.length - 1 && ", "}
-                        </span>
-                      ))}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => router.push(`/dashboard/pixels/${pixel.id}/edit`)}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-red-500 hover:text-red-600"
-                    onClick={() => handleDeletePixel(pixel.id, pixel.name)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </div>
-              );
-            })}
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                  <tr>
+                    <th className={thClass}>Name</th>
+                    <th className={thClass}>Pixel ID</th>
+                    <th className={thClass}>Used By</th>
+                    <th className={`${thClass} text-right`}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pixels.map((pixel, i) => {
+                    const assignedProviders = feedProviders.filter((fp) =>
+                      fp.snapConfig?.allowedPixelIds?.includes(pixel.id)
+                    );
+                    return (
+                      <tr
+                        key={pixel.id}
+                        className={`border-b border-gray-100 dark:border-gray-700 last:border-0 ${
+                          i % 2 === 0 ? "" : "bg-gray-50/40 dark:bg-gray-800/20"
+                        } hover:bg-gray-50 dark:hover:bg-gray-800/60`}
+                      >
+                        <td className={tdClass}>
+                          <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{pixel.name}</span>
+                        </td>
+                        <td className={tdClass}>
+                          <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">{pixel.pixelId}</span>
+                        </td>
+                        <td className={tdClass}>
+                          {assignedProviders.length === 0 ? (
+                            <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {assignedProviders.map((fp) => (
+                                <span
+                                  key={fp.id}
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                >
+                                  {fp.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className={tdClass}>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => router.push(`/dashboard/pixels/${pixel.id}/edit`)}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+                              onClick={() => handleDeletePixel(pixel.id, pixel.name)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </section>
 
-      {/* Section 4: Meta Pixels */}
+      {/* Section 4: Meta Pixels — compact table */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-semibold text-gray-800">Meta Pixels</h2>
+          <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">Meta Pixels</h2>
           <Button size="sm" onClick={() => router.push("/dashboard/meta-pixels/new")}>
             + Add Pixel
           </Button>
         </div>
 
         {metaPixels.length === 0 ? (
-          <div className="bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center">
-            <p className="text-gray-500 text-sm mb-3">No Meta pixels saved yet.</p>
+          <div className="bg-white dark:bg-gray-900 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-8 text-center">
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-3">No Meta pixels saved yet.</p>
             <Button variant="secondary" size="sm" onClick={() => router.push("/dashboard/meta-pixels/new")}>
               Add your first Meta pixel
             </Button>
           </div>
         ) : (
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
-            {metaPixels.map((pixel) => {
-              const assignedProviders = feedProviders.filter((fp) =>
-                fp.metaConfig?.allowedPixelIds?.includes(pixel.id)
-              );
-              return (
-              <div key={pixel.id} className="px-4 py-3 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="font-medium text-gray-900 text-sm">{pixel.name}</p>
-                  <p className="text-xs text-gray-400 font-mono mt-0.5 truncate">{pixel.pixelId}</p>
-                  {assignedProviders.length > 0 && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Used by:{" "}
-                      {assignedProviders.map((fp, i) => (
-                        <span key={fp.id}>
-                          <span className="font-medium text-gray-700">{fp.name}</span>
-                          {i < assignedProviders.length - 1 && ", "}
-                        </span>
-                      ))}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => router.push(`/dashboard/meta-pixels/${pixel.id}/edit`)}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-red-500 hover:text-red-600"
-                    onClick={() => handleDeleteMetaPixel(pixel.id, pixel.name)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </div>
-              );
-            })}
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                  <tr>
+                    <th className={thClass}>Name</th>
+                    <th className={thClass}>Pixel ID</th>
+                    <th className={thClass}>Used By</th>
+                    <th className={`${thClass} text-right`}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metaPixels.map((pixel, i) => {
+                    const assignedProviders = feedProviders.filter((fp) =>
+                      fp.metaConfig?.allowedPixelIds?.includes(pixel.id)
+                    );
+                    return (
+                      <tr
+                        key={pixel.id}
+                        className={`border-b border-gray-100 dark:border-gray-700 last:border-0 ${
+                          i % 2 === 0 ? "" : "bg-gray-50/40 dark:bg-gray-800/20"
+                        } hover:bg-gray-50 dark:hover:bg-gray-800/60`}
+                      >
+                        <td className={tdClass}>
+                          <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{pixel.name}</span>
+                        </td>
+                        <td className={tdClass}>
+                          <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">{pixel.pixelId}</span>
+                        </td>
+                        <td className={tdClass}>
+                          {assignedProviders.length === 0 ? (
+                            <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {assignedProviders.map((fp) => (
+                                <span
+                                  key={fp.id}
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                >
+                                  {fp.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className={tdClass}>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => router.push(`/dashboard/meta-pixels/${pixel.id}/edit`)}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+                              onClick={() => handleDeleteMetaPixel(pixel.id, pixel.name)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </section>
