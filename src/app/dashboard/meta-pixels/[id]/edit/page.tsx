@@ -1,0 +1,49 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { getMetaPixelById } from "@/lib/meta-pixels";
+import { MetaPixelForm } from "@/components/pixels/MetaPixelForm";
+import type { SavedMetaPixel } from "@/types/meta-pixel";
+
+export default function EditMetaPixelPage() {
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const [pixel, setPixel] = useState<SavedMetaPixel | null>(null);
+  const [notFound, setNotFound] = useState(false);
+
+  useEffect(() => {
+    const found = getMetaPixelById(params.id);
+    if (!found) {
+      setNotFound(true);
+    } else {
+      setPixel(found);
+    }
+  }, [params.id]);
+
+  if (notFound) {
+    return (
+      <div className="text-center py-12 space-y-3">
+        <p className="text-gray-500">Pixel not found.</p>
+        <button
+          onClick={() => router.push("/dashboard/traffic-sources")}
+          className="text-cyan-600 underline text-sm"
+        >
+          Back to Traffic Sources
+        </button>
+      </div>
+    );
+  }
+
+  if (!pixel) return null;
+
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Edit Meta Pixel</h1>
+        <p className="text-sm text-gray-500 mt-1">Update your pixel label or ID.</p>
+      </div>
+      <MetaPixelForm pixel={pixel} />
+    </div>
+  );
+}

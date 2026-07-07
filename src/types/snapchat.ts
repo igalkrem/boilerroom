@@ -16,6 +16,7 @@ export interface SnapAdAccount {
   currency: string;
   timezone: string;
   organization_id: string;
+  organization_name?: string;
 }
 
 export interface SnapAdAccountsResponse {

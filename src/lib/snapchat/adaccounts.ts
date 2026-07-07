@@ -23,7 +23,10 @@ export async function getAdAccounts(): Promise<SnapAdAccount[]> {
       adaccounts: Array<{ adaccount: SnapAdAccount }>;
     }>(`/organizations/${org.id}/adaccounts`);
 
-    const accounts = (data.adaccounts ?? []).map((item) => item.adaccount);
+    const accounts = (data.adaccounts ?? []).map((item) => ({
+      ...item.adaccount,
+      organization_name: org.name,
+    }));
     allAccounts.push(...accounts);
   }
 

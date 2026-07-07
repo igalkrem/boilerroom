@@ -8,10 +8,12 @@ import { useMetaAdAccounts } from "@/hooks/useMetaAdAccounts";
 import { loadAdAccountConfigs, upsertAdAccountConfig } from "@/lib/adAccounts";
 import { loadFeedProviders, upsertFeedProvider } from "@/lib/feed-providers";
 import { loadPixels, deletePixel } from "@/lib/pixels";
+import { loadMetaPixels, deleteMetaPixel } from "@/lib/meta-pixels";
 import { Button, Card, Badge, Spinner } from "@/components/ui";
 import type { AdAccountConfig } from "@/types/ad-account";
 import type { FeedProvider } from "@/types/feed-provider";
 import type { SavedPixel } from "@/types/pixel";
+import type { SavedMetaPixel } from "@/types/meta-pixel";
 
 function SnapchatLogo({ className }: { className?: string }) {
   return (
@@ -29,6 +31,7 @@ export default function TrafficSourcesPage() {
   const [adAccountConfigs, setAdAccountConfigs] = useState<AdAccountConfig[]>([]);
   const [feedProviders, setFeedProviders] = useState<FeedProvider[]>([]);
   const [pixels, setPixels] = useState<SavedPixel[]>([]);
+  const [metaPixels, setMetaPixels] = useState<SavedMetaPixel[]>([]);
   const [disconnecting, setDisconnecting] = useState(false);
   const [metaDisconnecting, setMetaDisconnecting] = useState(false);
 
@@ -36,6 +39,7 @@ export default function TrafficSourcesPage() {
     setAdAccountConfigs(loadAdAccountConfigs());
     setFeedProviders(loadFeedProviders());
     setPixels(loadPixels());
+    setMetaPixels(loadMetaPixels());
   }, []);
 
   useEffect(() => {
@@ -69,62 +73,82 @@ export default function TrafficSourcesPage() {
     ? Math.ceil((metaExpiresAt - Date.now()) / (1000 * 60 * 60 * 24))
     : null;
 
-  const getConfig = (accountId: string): AdAccountConfig => {
+  const getConfig = (accountId: string, platform: "snap" | "meta" = "snap"): AdAccountConfig => {
     const existing = adAccountConfigs.find((c) => c.id === accountId);
-    const account = snapAccounts.find((a) => a.id === accountId);
-    return (
-      existing ?? {
-        id: accountId,
-        name: account?.name ?? accountId,
-        hidden: false,
-        feedProviderIds: [],
-        updatedAt: new Date().toISOString(),
-      }
-    );
+    if (existing) return existing;
+    const account =
+      platform === "meta"
+        ? metaAccounts.find((a) => a.id === accountId)
+        : snapAccounts.find((a) => a.id === accountId);
+    return {
+      id: accountId,
+      name: account?.name ?? accountId,
+      hidden: false,
+      feedProviderIds: [],
+      platform,
+      updatedAt: new Date().toISOString(),
+    };
   };
 
-  const toggleHidden = (accountId: string) => {
-    const config = getConfig(accountId);
-    const updated = { ...config, hidden: !config.hidden, updatedAt: new Date().toISOString() };
+  const toggleHidden = (accountId: string, platform: "snap" | "meta" = "snap") => {
+    const config = getConfig(accountId, platform);
+    const updated = { ...config, hidden: !config.hidden, platform, updatedAt: new Date().toISOString() };
     upsertAdAccountConfig(updated);
     setAdAccountConfigs(loadAdAccountConfigs());
-    // Update feed providers whose allowedAdAccountIds reference this account
-    syncFeedProviderAssignments(accountId, updated.feedProviderIds, !config.hidden);
+    syncFeedProviderAssignments(accountId, updated.feedProviderIds, !config.hidden, platform);
   };
 
-  const toggleFeedProvider = (accountId: string, providerId: string) => {
-    const config = getConfig(accountId);
+  const toggleFeedProvider = (accountId: string, providerId: string, platform: "snap" | "meta" = "snap") => {
+    const config = getConfig(accountId, platform);
     const alreadyAssigned = config.feedProviderIds.includes(providerId);
     const newProviderIds = alreadyAssigned
       ? config.feedProviderIds.filter((id) => id !== providerId)
       : [...config.feedProviderIds, providerId];
-    const updated = { ...config, feedProviderIds: newProviderIds, updatedAt: new Date().toISOString() };
+    const updated = { ...config, feedProviderIds: newProviderIds, platform, updatedAt: new Date().toISOString() };
     upsertAdAccountConfig(updated);
     setAdAccountConfigs(loadAdAccountConfigs());
-    syncFeedProviderAssignments(accountId, newProviderIds, config.hidden);
+    syncFeedProviderAssignments(accountId, newProviderIds, config.hidden, platform);
   };
 
-  // Sync FeedProvider.snapConfig.allowedAdAccountIds from AdAccountConfig assignments
   const syncFeedProviderAssignments = (
     accountId: string,
     newProviderIds: string[],
-    isHidden: boolean
+    isHidden: boolean,
+    platform: "snap" | "meta" = "snap"
   ) => {
     const allProviders = loadFeedProviders();
     for (const provider of allProviders) {
-      const wasAssigned = provider.snapConfig.allowedAdAccountIds.includes(accountId);
-      const shouldBeAssigned = !isHidden && newProviderIds.includes(provider.id);
-      if (wasAssigned !== shouldBeAssigned) {
-        const updated: FeedProvider = {
-          ...provider,
-          snapConfig: {
-            ...provider.snapConfig,
-            allowedAdAccountIds: shouldBeAssigned
-              ? [...provider.snapConfig.allowedAdAccountIds, accountId]
-              : provider.snapConfig.allowedAdAccountIds.filter((id) => id !== accountId),
-          },
-        };
-        upsertFeedProvider(updated);
+      if (platform === "meta") {
+        const metaCfg = provider.metaConfig ?? { allowedAdAccountIds: [], allowedPixelIds: [] };
+        const wasAssigned = metaCfg.allowedAdAccountIds.includes(accountId);
+        const shouldBeAssigned = !isHidden && newProviderIds.includes(provider.id);
+        if (wasAssigned !== shouldBeAssigned) {
+          const updated: FeedProvider = {
+            ...provider,
+            metaConfig: {
+              ...metaCfg,
+              allowedAdAccountIds: shouldBeAssigned
+                ? [...metaCfg.allowedAdAccountIds, accountId]
+                : metaCfg.allowedAdAccountIds.filter((id) => id !== accountId),
+            },
+          };
+          upsertFeedProvider(updated);
+        }
+      } else {
+        const wasAssigned = provider.snapConfig.allowedAdAccountIds.includes(accountId);
+        const shouldBeAssigned = !isHidden && newProviderIds.includes(provider.id);
+        if (wasAssigned !== shouldBeAssigned) {
+          const updated: FeedProvider = {
+            ...provider,
+            snapConfig: {
+              ...provider.snapConfig,
+              allowedAdAccountIds: shouldBeAssigned
+                ? [...provider.snapConfig.allowedAdAccountIds, accountId]
+                : provider.snapConfig.allowedAdAccountIds.filter((id) => id !== accountId),
+            },
+          };
+          upsertFeedProvider(updated);
+        }
       }
     }
     setFeedProviders(loadFeedProviders());
@@ -134,6 +158,12 @@ export default function TrafficSourcesPage() {
     if (!confirm(`Delete pixel "${name}"? This cannot be undone.`)) return;
     deletePixel(id);
     setPixels(loadPixels());
+  };
+
+  const handleDeleteMetaPixel = (id: string, name: string) => {
+    if (!confirm(`Delete pixel "${name}"? This cannot be undone.`)) return;
+    deleteMetaPixel(id);
+    setMetaPixels(loadMetaPixels());
   };
 
   return (
@@ -267,6 +297,19 @@ export default function TrafficSourcesPage() {
                         )}
                       </div>
                       <p className="text-xs text-gray-400 font-mono mt-0.5">{account.id}</p>
+                      <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 flex-wrap">
+                        {account.organization_name && (
+                          <span title="Business Manager">{account.organization_name}</span>
+                        )}
+                        {account.organization_name && (account.timezone || account.currency) && (
+                          <span className="text-gray-300">·</span>
+                        )}
+                        {account.timezone && <span>{account.timezone}</span>}
+                        {account.timezone && account.currency && (
+                          <span className="text-gray-300">·</span>
+                        )}
+                        {account.currency && <span>{account.currency}</span>}
+                      </div>
                     </div>
 
                     <div className="flex flex-col gap-3 sm:w-64 shrink-0">
@@ -331,19 +374,68 @@ export default function TrafficSourcesPage() {
             </p>
           ) : (
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
-              {metaAccounts.map((account) => (
-                <div key={account.id} className="px-4 py-3 flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="font-medium text-gray-900 text-sm">{account.name}</p>
-                    <p className="text-xs text-gray-400 font-mono mt-0.5">{account.id}</p>
+              {metaAccounts.map((account) => {
+                const config = getConfig(account.id, "meta");
+                return (
+                  <div key={account.id} className="p-4 flex flex-col sm:flex-row sm:items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-gray-900 text-sm">{account.name}</span>
+                        {config.hidden && (
+                          <Badge variant="gray">Hidden</Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-400 font-mono mt-0.5">{account.id}</p>
+                      <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 flex-wrap">
+                        {account.timezone_name && <span>{account.timezone_name}</span>}
+                        {account.timezone_name && account.currency && (
+                          <span className="text-gray-300">·</span>
+                        )}
+                        {account.currency && <span>{account.currency}</span>}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3 sm:w-64 shrink-0">
+                      <label className="flex items-center justify-between gap-3 text-sm cursor-pointer">
+                        <span className="text-gray-600">Hide from campaigns</span>
+                        <button
+                          role="switch"
+                          aria-checked={config.hidden}
+                          onClick={() => toggleHidden(account.id, "meta")}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
+                            config.hidden ? "bg-gray-400" : "bg-cyan-500"
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                              config.hidden ? "translate-x-1" : "translate-x-5"
+                            }`}
+                          />
+                        </button>
+                      </label>
+
+                      {feedProviders.length > 0 && (
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1.5">Assign to feed providers:</p>
+                          <div className="space-y-1">
+                            {feedProviders.map((fp) => (
+                              <label key={fp.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={config.feedProviderIds.includes(fp.id)}
+                                  onChange={() => toggleFeedProvider(account.id, fp.id, "meta")}
+                                  className="w-3.5 h-3.5 rounded border-gray-300 text-cyan-500 focus:ring-cyan-500"
+                                />
+                                <span className="text-gray-700 truncate">{fp.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0 text-xs text-gray-500">
-                    <span>{account.currency}</span>
-                    <span className="text-gray-300">·</span>
-                    <span>{account.timezone_name}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
@@ -401,6 +493,69 @@ export default function TrafficSourcesPage() {
                     variant="ghost"
                     className="text-red-500 hover:text-red-600"
                     onClick={() => handleDeletePixel(pixel.id, pixel.name)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Section 4: Meta Pixels */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base font-semibold text-gray-800">Meta Pixels</h2>
+          <Button size="sm" onClick={() => router.push("/dashboard/meta-pixels/new")}>
+            + Add Pixel
+          </Button>
+        </div>
+
+        {metaPixels.length === 0 ? (
+          <div className="bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center">
+            <p className="text-gray-500 text-sm mb-3">No Meta pixels saved yet.</p>
+            <Button variant="secondary" size="sm" onClick={() => router.push("/dashboard/meta-pixels/new")}>
+              Add your first Meta pixel
+            </Button>
+          </div>
+        ) : (
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
+            {metaPixels.map((pixel) => {
+              const assignedProviders = feedProviders.filter((fp) =>
+                fp.metaConfig?.allowedPixelIds?.includes(pixel.id)
+              );
+              return (
+              <div key={pixel.id} className="px-4 py-3 flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-900 text-sm">{pixel.name}</p>
+                  <p className="text-xs text-gray-400 font-mono mt-0.5 truncate">{pixel.pixelId}</p>
+                  {assignedProviders.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Used by:{" "}
+                      {assignedProviders.map((fp, i) => (
+                        <span key={fp.id}>
+                          <span className="font-medium text-gray-700">{fp.name}</span>
+                          {i < assignedProviders.length - 1 && ", "}
+                        </span>
+                      ))}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => router.push(`/dashboard/meta-pixels/${pixel.id}/edit`)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-red-500 hover:text-red-600"
+                    onClick={() => handleDeleteMetaPixel(pixel.id, pixel.name)}
                   >
                     Delete
                   </Button>
