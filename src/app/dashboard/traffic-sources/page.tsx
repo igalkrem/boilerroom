@@ -248,13 +248,6 @@ export default function TrafficSourcesPage() {
     syncProviderPageAssignments(pageId, newProviderIds, cfg.hidden);
   };
 
-  const setPageAdLimit = (pageId: string, limit: number | undefined) => {
-    const cfg = getPageCfg(pageId);
-    const updated = { ...cfg, adLimit: limit, updatedAt: new Date().toISOString() };
-    upsertPageConfig(updated);
-    setPageConfigs(loadPageConfigs());
-  };
-
   // Keep each provider's metaConfig.allowedPageIds in sync with page assignments,
   // and keep the legacy single pageId = first assigned page (used at ad launch as
   // a fallback; the launch path prefers the most-ads-remaining page).
@@ -362,10 +355,10 @@ export default function TrafficSourcesPage() {
   const pageStats = useCallback(
     (pageId: string) => {
       const running = runningByPage[pageId] ?? 0;
-      const limit = pageCfgById.get(pageId)?.adLimit ?? DEFAULT_PAGE_AD_LIMIT;
+      const limit = DEFAULT_PAGE_AD_LIMIT; // Facebook's page ad limit is a fixed 250.
       return { running, limit, remaining: Math.max(0, limit - running) };
     },
-    [runningByPage, pageCfgById]
+    [runningByPage]
   );
 
   const filteredPages = useMemo(() => {
@@ -588,9 +581,7 @@ export default function TrafficSourcesPage() {
             <tr>
               <th className={`${thClass} w-8`}></th>
               <th className={thClass}>Page</th>
-              <th className={thClass}>Ads Remaining</th>
-              <th className={thClass}>Running / In Review</th>
-              <th className={thClass}>Ad Limit</th>
+              <th className={thClass}>Ads</th>
               <th className={thClass}>Feed Providers</th>
               <th className={thClass}>Status</th>
               <th className={`${thClass} w-8`}></th>
@@ -628,42 +619,21 @@ export default function TrafficSourcesPage() {
                       </div>
                     </td>
 
-                    {/* Ads remaining pill (matches Business Manager) */}
+                    {/* Ads usage bar (running / limit) — matches Business Manager */}
                     <td className={tdClass}>
-                      <span
-                        className={`inline-flex items-center gap-1.5 text-xs font-medium ${
-                          remaining > 0
-                            ? "text-green-600 dark:text-green-400"
-                            : "text-red-600 dark:text-red-400"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block w-1.5 h-1.5 rounded-full ${
-                            remaining > 0 ? "bg-green-500" : "bg-red-500"
-                          }`}
-                        />
-                        {remaining} remaining
-                      </span>
-                    </td>
-
-                    {/* Running / in review */}
-                    <td className={tdClass}>
-                      <span className="text-sm text-gray-700 dark:text-gray-300">{running}</span>
-                    </td>
-
-                    {/* Ad limit (editable per-page override; default 250) */}
-                    <td className={tdClass}>
-                      <input
-                        type="number"
-                        min={1}
-                        value={limit}
-                        onChange={(e) => {
-                          const v = parseInt(e.target.value, 10);
-                          setPageAdLimit(p.id, Number.isFinite(v) && v > 0 ? v : undefined);
-                        }}
-                        className="w-16 border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
-                        title="Ad limit (Facebook does not expose this via API — default 250, editable)"
-                      />
+                      <div className="flex flex-col gap-1 min-w-[150px] max-w-[220px]">
+                        <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${
+                              remaining > 0 ? "bg-green-500" : "bg-red-500"
+                            }`}
+                            style={{ width: `${Math.min(100, (running / limit) * 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400 text-center tabular-nums">
+                          {running} / {limit}
+                        </span>
+                      </div>
                     </td>
 
                     {/* Feed provider chips — click to expand assignment checklist */}
@@ -741,7 +711,7 @@ export default function TrafficSourcesPage() {
                   {/* Inline expand: feed provider checklist */}
                   {isExpanded && (
                     <tr className="bg-gray-50/80 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                      <td colSpan={8} className="px-4 py-3">
+                      <td colSpan={6} className="px-4 py-3">
                         {feedProviders.length === 0 ? (
                           <p className="text-xs text-gray-400 dark:text-gray-500 italic">
                             No feed providers yet.

@@ -18,8 +18,18 @@ async function resolvePageNames(pageIds: string[]): Promise<Record<string, strin
       for (const [id, node] of Object.entries(res)) {
         if (node?.name) names[id] = node.name;
       }
-    } catch (e) {
-      console.error("[meta/ad-limits] name resolution failed for a chunk:", e);
+    } catch {
+      // The batch `?ids=` call fails atomically if ANY id in the chunk is
+      // inaccessible — fall back to resolving each id individually so one bad
+      // page doesn't blank every name.
+      for (const id of chunk) {
+        try {
+          const node = await metaFetch<{ id: string; name?: string }>(`/${id}?fields=name`);
+          if (node?.name) names[id] = node.name;
+        } catch {
+          /* leave unresolved — the UI falls back to the page id */
+        }
+      }
     }
   }
   return names;
