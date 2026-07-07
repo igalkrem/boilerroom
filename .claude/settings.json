@@ -4,7 +4,10 @@
       "mcp__vercel__get_runtime_logs",
       "mcp__vercel__get_deployment",
       "mcp__vercel__get_runtime_errors",
-      "mcp__vercel__list_deployments"
+      "mcp__vercel__list_deployments",
+      "Bash(source ~/.nvm/nvm.sh)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx vercel logs *)"
     ]
   }
 }
