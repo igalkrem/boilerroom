@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useSnapchatAuth } from "@/hooks/useSnapchatAuth";
 import { useAdAccounts } from "@/hooks/useAdAccounts";
 import { useMetaAdAccounts } from "@/hooks/useMetaAdAccounts";
-import { useMetaPages } from "@/hooks/useMetaPages";
 import { useMetaAdLimits } from "@/hooks/useMetaAdLimits";
 import { loadAdAccountConfigs, upsertAdAccountConfig } from "@/lib/adAccounts";
 import { loadPageConfigs, upsertPageConfig } from "@/lib/pageConfigs";
@@ -69,8 +68,13 @@ export default function TrafficSourcesPage() {
   const { snapConnected, metaConnected, metaExpiresAt, isLoading: authLoading } = useSnapchatAuth();
   const { accounts: snapAccounts, isLoading: accountsLoading } = useAdAccounts();
   const { accounts: metaAccounts, isLoading: metaAccountsLoading } = useMetaAdAccounts();
-  const { pages: metaPages, isLoading: pagesLoading } = useMetaPages();
-  const { runningByPage } = useMetaAdLimits();
+  // Facebook Pages come from the ads_volume feed (the /me/accounts pages edge is
+  // often empty), which also carries each page's running/in-review count.
+  const { pages: adLimitPages, runningByPage, isLoading: pagesLoading } = useMetaAdLimits();
+  const metaPages = useMemo(
+    () => adLimitPages.map((p) => ({ id: p.pageId, name: p.name })),
+    [adLimitPages]
+  );
   const [adAccountConfigs, setAdAccountConfigs] = useState<AdAccountConfig[]>([]);
   const [pageConfigs, setPageConfigs] = useState<PageConfig[]>([]);
   const [feedProviders, setFeedProviders] = useState<FeedProvider[]>([]);

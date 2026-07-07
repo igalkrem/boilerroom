@@ -9,17 +9,15 @@ import { upsertFeedProvider } from "@/lib/feed-providers";
 import { SnapTab } from "./tabs/SnapTab";
 import { ChannelsTab } from "./tabs/ChannelsTab";
 import { DomainsTab } from "./tabs/DomainsTab";
-import { CombosTab } from "./tabs/CombosTab";
 import { MetaTab } from "./tabs/MetaTab";
 
-type Tab = "snap" | "channels" | "domains" | "combos" | "facebook";
+type Tab = "snap" | "facebook" | "channels" | "domains";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "snap",     label: "Snap" },
+  { id: "facebook", label: "Facebook" },
   { id: "channels", label: "Channels" },
   { id: "domains",  label: "Domains" },
-  { id: "combos",   label: "Combos" },
-  { id: "facebook", label: "Facebook" },
 ];
 
 interface FeedProviderModalProps {
@@ -128,14 +126,6 @@ export function FeedProviderModal({ provider, onClose, onSaved }: FeedProviderMo
             <DomainsTab
               domains={data.domains}
               onChange={(domains) => setData((d) => ({ ...d, domains }))}
-            />
-          )}
-          {activeTab === "combos" && (
-            <CombosTab
-              combos={data.combos}
-              snapConfig={data.snapConfig}
-              domains={data.domains}
-              onChange={(combos) => setData((d) => ({ ...d, combos }))}
             />
           )}
           {activeTab === "facebook" && (

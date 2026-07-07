@@ -1,8 +1,29 @@
 import { NextResponse } from "next/server";
 import { getSession, isSessionValid, isMetaConnected } from "@/lib/session";
-import { getValidMetaToken } from "@/lib/meta/client";
+import { getValidMetaToken, metaFetch } from "@/lib/meta/client";
 import { getMetaAdAccounts } from "@/lib/meta/adaccounts";
 import { getAdsVolume } from "@/lib/meta/ad-volume";
+
+// Resolve page names for actor ids via the batch `?ids=` node (50 max per call).
+// The page list comes from ads_volume (the /me/accounts pages edge is often empty
+// unless pages_show_list is granted), so names must be looked up separately.
+async function resolvePageNames(pageIds: string[]): Promise<Record<string, string>> {
+  const names: Record<string, string> = {};
+  for (let i = 0; i < pageIds.length; i += 50) {
+    const chunk = pageIds.slice(i, i + 50);
+    try {
+      const res = await metaFetch<Record<string, { id: string; name?: string }>>(
+        `/?ids=${encodeURIComponent(chunk.join(","))}&fields=name`
+      );
+      for (const [id, node] of Object.entries(res)) {
+        if (node?.name) names[id] = node.name;
+      }
+    } catch (e) {
+      console.error("[meta/ad-limits] name resolution failed for a chunk:", e);
+    }
+  }
+  return names;
+}
 
 // GET /api/meta/ad-limits
 // Returns each Facebook Page's PAGE-LEVEL running/in-review ad count, merged
@@ -46,9 +67,13 @@ export async function GET() {
       }
     }
 
-    const pages = Array.from(runningByPage.entries()).map(([pageId, running]) => ({
+    const pageIds = Array.from(runningByPage.keys());
+    const names = await resolvePageNames(pageIds);
+
+    const pages = pageIds.map((pageId) => ({
       pageId,
-      running,
+      name: names[pageId] ?? pageId,
+      running: runningByPage.get(pageId) ?? 0,
     }));
 
     return NextResponse.json({ pages });
