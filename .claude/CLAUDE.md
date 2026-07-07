@@ -208,13 +208,12 @@ src/
 │   │   ├── SubmissionProgress.tsx
 │   │   └── LoadPresetBanner.tsx
 │   ├── feed-providers/
-│   │   ├── FeedProviderModal.tsx      # Large modal (max-w-3xl) with 5 tabs: Snap | Channels | Domains | Combos | Facebook
+│   │   ├── FeedProviderModal.tsx      # Large modal (max-w-3xl) with 4 tabs: Snap | Facebook | Channels | Domains
 │   │   └── tabs/
 │   │       ├── SnapTab.tsx            # Org ID, ad accounts, pixels + URL Parameters + Campaign Naming Template section (violet card; NamingTemplateEditor with segment pills + live preview)
 │   │       ├── UrlParametersTab.tsx   # Parameter rows, always-visible filtered macro chips (two groups: Snapchat Native / BoilerRoom), live preview; hideBaseUrl prop
 │   │       ├── ChannelsTab.tsx        # CSV upload + manual textarea entry (one per line); both paths deduplicate client-side against loaded channels before POSTing; status table, lifecycle controls
 │   │       ├── DomainsTab.tsx         # Domain rows (baseDomain + baseUrl + traffic source checkboxes)
-│   │       ├── CombosTab.tsx          # Named combos (pixel + domain + channel config)
 │   │       └── MetaTab.tsx           # Meta config: assigned ad accounts, Facebook page selector (API + manual fallback), campaign naming template (blue theme, same NAMING_MACROS as Snap)
 │   ├── silo/
 │   │   ├── SiloUploader.tsx           # Batch uploader: hash → optimize → Blob upload (3 concurrent)
@@ -377,7 +376,7 @@ src/
   - `domains[]` — `FeedProviderDomain` (`id`, `baseDomain`, `baseUrl?`, `trafficSources[]`). Each domain carries its own `baseUrl`. `buildUrlTemplate()` resolves base URL as `domain.baseUrl ?? provider.urlConfig.baseUrl ?? ""` (latter is the fallback for old records).
   - `combos[]` — `FeedProviderCombo` (named preset of pixel + domain + channel settings)
 
-  **Modal tabs:** Snap | Channels | Domains | Combos | Facebook. The "URL Parameters" standalone tab was removed — URL parameter configuration now lives at the bottom of the Snap tab (rendered via `UrlParametersTab` with `hideBaseUrl`). Below URL Parameters, a violet **Campaign Naming Template** card (`NamingTemplateEditor`) lets users build segment-based names (literal text chips + macro chips joined by " | "). Macros: `{{preset.tag}}`, `{{article.name}}`, `{{date_ddmm}}`, `{{unique_id_4}}`, `{{creative.vname}}`, `{{channel.id}}`. Live preview resolves against example values (`{{channel.id}}` shows as literal `{{channel.id}}` — resolved at launch time). Facebook tab (`MetaTab`) shows assigned Meta ad accounts, Facebook page selector (API-fetched with manual ID fallback), and a campaign naming template editor (blue theme, same NAMING_MACROS as Snap).
+  **Modal tabs:** Snap | Facebook | Channels | Domains. The "URL Parameters" standalone tab was removed — URL parameter configuration now lives at the bottom of the Snap tab (rendered via `UrlParametersTab` with `hideBaseUrl`). Below URL Parameters, a violet **Campaign Naming Template** card (`NamingTemplateEditor`) lets users build segment-based names (literal text chips + macro chips joined by " | "). Macros: `{{preset.tag}}`, `{{article.name}}`, `{{date_ddmm}}`, `{{unique_id_4}}`, `{{creative.vname}}`, `{{channel.id}}`. Live preview resolves against example values (`{{channel.id}}` shows as literal `{{channel.id}}` — resolved at launch time). Facebook tab (`MetaTab`) shows assigned Meta ad accounts, Facebook page selector (API-fetched with manual ID fallback), and a campaign naming template editor (blue theme, same NAMING_MACROS as Snap).
 
   **`UrlParametersTab` behaviour:** macro chips are always visible above the preview URL (not a focus-gated popup). Chips are filtered to only show macros not already present in any parameter value. Clicking a chip inserts into the last-focused value input (tracked via `lastActiveIndexRef`). Chips are split into two labeled groups: **Snapchat Native** (yellow — `{{campaign.id}}`, `{{adset.id}}`, `{{ad.id}}` — substituted by Snapchat at click time) and **BoilerRoom** (blue — all others — resolved before sending to Snapchat). Each parameter row has a compact **"enc" checkbox** (`accent-violet-500`); when checked it sets `UrlParameter.encode = true`, turns the label violet, and causes the preview URL to show the encoded value via `encodeURIComponent(p.value)`. Preview URL uses a structured renderer (not a flat split): base URL, parameter keys, `?`, `&`, and `=` are regular weight; hardcoded literal parameter values are **bold**; macros are highlighted yellow (Snapchat native) or blue (BoilerRoom). The `source` field on each MACROS entry (`"snap"` | `"br"`) drives both the chip style and the preview highlight color.
 
