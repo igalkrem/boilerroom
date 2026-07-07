@@ -70,7 +70,8 @@ export default function TrafficSourcesPage() {
   const { accounts: metaAccounts, isLoading: metaAccountsLoading } = useMetaAdAccounts();
   // Facebook Pages come from the ads_volume feed (the /me/accounts pages edge is
   // often empty), which also carries each page's running/in-review count.
-  const { pages: adLimitPages, runningByPage, isLoading: pagesLoading } = useMetaAdLimits();
+  const { pages: adLimitPages, runningByPage, isLoading: pagesLoading, refresh: refreshAdLimits } =
+    useMetaAdLimits();
   const metaPages = useMemo(
     () => adLimitPages.map((p) => ({ id: p.pageId, name: p.name, businessName: p.businessName })),
     [adLimitPages]
@@ -93,6 +94,16 @@ export default function TrafficSourcesPage() {
   const [pageSearch, setPageSearch] = useState("");
   const [expandedPageId, setExpandedPageId] = useState<string | null>(null);
   const [showHiddenPages, setShowHiddenPages] = useState(false);
+  const [refreshingPages, setRefreshingPages] = useState(false);
+
+  const handleRefreshPages = async () => {
+    setRefreshingPages(true);
+    try {
+      await refreshAdLimits();
+    } finally {
+      setRefreshingPages(false);
+    }
+  };
 
   const reloadLocal = useCallback(() => {
     setAdAccountConfigs(loadAdAccountConfigs());
@@ -976,16 +987,27 @@ export default function TrafficSourcesPage() {
             <div>
               <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">Facebook Pages</h2>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                Ads publish from the assigned page with the most ads remaining.
+                Ads publish from the assigned page with the most ads remaining. Counts cached ~10 min.
               </p>
             </div>
-            <input
-              type="search"
-              placeholder="Search pages…"
-              value={pageSearch}
-              onChange={(e) => setPageSearch(e.target.value)}
-              className="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-cyan-400"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="search"
+                placeholder="Search pages…"
+                value={pageSearch}
+                onChange={(e) => setPageSearch(e.target.value)}
+                className="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              />
+              <button
+                type="button"
+                onClick={handleRefreshPages}
+                disabled={refreshingPages}
+                title="Fetch the latest ad counts from Meta (bypasses the 10-min cache)"
+                className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
+              >
+                {refreshingPages ? "Refreshing…" : "↻ Refresh"}
+              </button>
+            </div>
           </div>
 
           {pagesLoading ? (

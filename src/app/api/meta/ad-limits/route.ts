@@ -4,6 +4,12 @@ import { getValidMetaToken, metaFetch } from "@/lib/meta/client";
 import { getMetaAdAccounts } from "@/lib/meta/adaccounts";
 import { getAdsVolume } from "@/lib/meta/ad-volume";
 import { getBusinessPages } from "@/lib/meta/business-pages";
+import {
+  readAdLimitsCache,
+  writeAdLimitsCache,
+  AD_LIMITS_TTL_MS,
+  type AdLimitPageRow,
+} from "@/lib/meta/ad-limits-cache";
 
 // Resolve page names for ids not covered by the Business Manager page list, via
 // the batch `?ids=` node (50 max per call). Only used as a fallback for pages
@@ -42,13 +48,22 @@ async function resolvePageNames(pageIds: string[]): Promise<Record<string, strin
 // are included, matching business.facebook.com/latest/ad_limits); running counts
 // come from ads_volume merged across all Meta ad accounts. Facebook does not
 // expose the numeric ad limit via the API — the client applies the 250 default.
-export async function GET() {
+export async function GET(req: Request) {
   const session = await getSession();
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
   if (!isMetaConnected(session)) {
     return NextResponse.json({ error: "meta_not_connected" }, { status: 403 });
+  }
+
+  const userId = session.googleUserId;
+  const force = new URL(req.url).searchParams.get("refresh") === "1";
+
+  // Serve from cache unless it's stale or a refresh was explicitly requested.
+  const cache = userId ? await readAdLimitsCache(userId) : null;
+  if (cache && !force && Date.now() - cache.cachedAt < AD_LIMITS_TTL_MS) {
+    return NextResponse.json({ pages: cache.pages, cachedAt: cache.cachedAt, cached: true });
   }
 
   try {
@@ -92,16 +107,40 @@ export async function GET() {
     const missingName = [...allIds].filter((id) => !bizPages[id]?.name);
     const resolved = missingName.length ? await resolvePageNames(missingName) : {};
 
-    const pages = [...allIds].map((pageId) => ({
+    const pages: AdLimitPageRow[] = [...allIds].map((pageId) => ({
       pageId,
       name: bizPages[pageId]?.name ?? resolved[pageId] ?? pageId,
       businessName: bizPages[pageId]?.businessName ?? null,
       running: runningByPage.get(pageId) ?? 0,
     }));
 
-    return NextResponse.json({ pages });
+    // If the fresh fetch came back empty (e.g. a transient rate limit blanked
+    // every call) but we have a prior cache, serve the stale cache rather than
+    // an empty table.
+    if (pages.length === 0 && cache) {
+      return NextResponse.json({
+        pages: cache.pages,
+        cachedAt: cache.cachedAt,
+        cached: true,
+        stale: true,
+      });
+    }
+
+    const cachedAt = Date.now();
+    if (userId) await writeAdLimitsCache(userId, pages, cachedAt);
+
+    return NextResponse.json({ pages, cachedAt, cached: false });
   } catch (err) {
     console.error("[meta/ad-limits] GET error:", err);
+    // On unexpected failure, fall back to any cache we have.
+    if (cache) {
+      return NextResponse.json({
+        pages: cache.pages,
+        cachedAt: cache.cachedAt,
+        cached: true,
+        stale: true,
+      });
+    }
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
