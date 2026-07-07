@@ -18,15 +18,6 @@ export interface FeedProviderDomain {
   trafficSources: string[]; // e.g. ["Snap"]
 }
 
-export interface FeedProviderCombo {
-  id: string;
-  name: string;
-  pixelId?: string;
-  adAccountIds?: string[];
-  urlConfig?: { baseUrl: string; parameters: UrlParameter[] };
-  domainId?: string;
-}
-
 export interface FeedProvider {
   id: string;
   name: string;
@@ -58,8 +49,6 @@ export interface FeedProvider {
   };
   // Domains tab
   domains: FeedProviderDomain[];
-  // Combos tab
-  combos: FeedProviderCombo[];
   createdAt: string;
 }
 
@@ -71,6 +60,5 @@ export function emptyFeedProvider(): Omit<FeedProvider, "id" | "createdAt"> {
     urlConfig: { baseUrl: "", parameters: [] },
     channelConfig: { type: "parameter-based" },
     domains: [],
-    combos: [],
   };
 }

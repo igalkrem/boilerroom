@@ -71,10 +71,6 @@ function ProviderCard({
           label="Domains"
           value={provider.domains.length || "—"}
         />
-        <DataRow
-          label="Combos"
-          value={provider.combos.length || "—"}
-        />
         {displayUrl && (
           <DataRow label="Base URL" value={displayUrl} />
         )}
@@ -125,7 +121,7 @@ export default function FeedProvidersPage() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Feed Providers</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Configure sell-side providers — pixels, URL templates, channels, domains, and combos.
+            Configure sell-side providers — pixels, URL templates, channels, and domains.
           </p>
         </div>
         <Button onClick={() => setModalProvider("new")}>+ New Feed Provider</Button>

@@ -202,7 +202,6 @@ export function PresetForm({ preset }: PresetFormProps) {
   const [productSetId, setProductSetId] = useState<string>(preset?.adSquads?.[0]?.productSetId ?? "");
   const [dynamicTemplateId, setDynamicTemplateId] = useState<string>(preset?.adSquads?.[0]?.dynamicTemplateId ?? "");
   const [feedProviderId, setFeedProviderId] = useState<string>(preset?.feedProviderId ?? "");
-  const [comboId, setComboId] = useState<string>(preset?.comboId ?? "");
   const [tag, setTag] = useState<string>(preset?.tag ?? "");
   const [adStatus, setAdStatus] = useState<"ACTIVE" | "PAUSED">(
     preset?.creativeDefaults?.adStatus ?? "PAUSED"
@@ -229,8 +228,6 @@ export function PresetForm({ preset }: PresetFormProps) {
     setFeedProviders(loadFeedProviders());
   }, []);
 
-  const selectedProvider = feedProviders.find((p) => p.id === feedProviderId);
-  const comboOptions = selectedProvider?.combos ?? [];
   const pixelOptions = pixels.map((p) => ({ value: p.pixelId, label: p.name }));
 
   const sq0 = preset?.adSquads?.[0];
@@ -322,7 +319,6 @@ export function PresetForm({ preset }: PresetFormProps) {
       trafficSource,
       isCatalogue: isMeta ? false : isCatalogue,
       feedProviderId,
-      comboId: comboId || undefined,
       createdAt: preset?.createdAt ?? new Date().toISOString(),
       campaign: {
         objective: "SALES",
@@ -469,7 +465,6 @@ export function PresetForm({ preset }: PresetFormProps) {
             value={feedProviderId}
             onChange={(e) => {
               setFeedProviderId(e.target.value);
-              setComboId("");
             }}
             className={selectCls}
           >
@@ -486,26 +481,6 @@ export function PresetForm({ preset }: PresetFormProps) {
             </p>
           )}
         </div>
-
-        {comboOptions.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Combo (optional)
-            </label>
-            <select
-              value={comboId}
-              onChange={(e) => setComboId(e.target.value)}
-              className={selectCls}
-            >
-              <option value="">— None —</option>
-              {comboOptions.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
 
       {/* Catalogue fields */}

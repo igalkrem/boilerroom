@@ -70,7 +70,6 @@ export interface CampaignPreset {
   tag?: string; // resolves {{preset.tag}} in campaign naming templates
   trafficSource?: "snap" | "facebook";
   feedProviderId: string; // required — preset belongs to one provider ("" for legacy presets)
-  comboId?: string; // optional: references a FeedProviderCombo.id from the provider
   createdAt: string; // ISO timestamp
   isCatalogue?: boolean; // true = Dynamic Product Ads (no Silo media, uses product feed)
   campaign: CampaignPresetData;

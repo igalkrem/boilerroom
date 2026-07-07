@@ -39,7 +39,6 @@ function upcast(raw: Record<string, unknown>): FeedProvider {
       type: "parameter-based",
     },
     domains: (raw.domains as FeedProvider["domains"]) ?? [],
-    combos: (raw.combos as FeedProvider["combos"]) ?? [],
   };
 }
 
