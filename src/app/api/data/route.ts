@@ -6,6 +6,7 @@ const VALID_KEYS = [
   "br_silo_assets",
   "br_silo_tags",
   "br_pixels",
+  "br_meta_pixels",
   "br_presets",
   "br_feed_providers",
   "br_articles",

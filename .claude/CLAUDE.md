@@ -174,7 +174,8 @@ src/
 │       ├── page.tsx                   # Campaign builder (WizardShell) — default landing page
 │       ├── [adAccountId]/create/      # Campaign builder with pre-selected ad account
 │       ├── create/                    # Campaign builder (no pre-selected account)
-│       ├── pixels/                    # Pixel CRUD UI (new/[id]/edit)
+│       ├── pixels/                    # Snap Pixel CRUD UI (new/[id]/edit)
+│       ├── meta-pixels/               # Meta Pixel CRUD UI (new/[id]/edit)
 │       ├── presets/                   # Campaign preset CRUD UI (new/[id]/edit); card grid shows feed/geo/pixel/bid/budget/device + Duplicate action; no "Load in Wizard"
 │       ├── catalogue/                 # Image hosting for Snap product catalogue — upload images (JPEG/PNG/WebP/GIF, 20 MB max), table shows thumbnail + public URL (copy) + delete; data: localStorage + KV (boilerroom_catalogue_v1 / br_catalogue_v1); upload endpoint: /api/catalogue/upload (images only); delete endpoint: /api/catalogue/delete (ownership-verified against KV); sidebar nav item between Silo and Articles
 │       ├── articles/                  # Article CRUD UI (new/[id]/edit)
@@ -182,10 +183,11 @@ src/
 │       ├── build-log/                 # Build session history — timeline feed; each launch session is a collapsible card with colored dot (green/amber/red); per-squad table: Time | Name | Status | Budget | Bid | Actions; inline Budget/Bid edit via PATCH /api/snapchat/adsquads; Pause/Activate toggle + Delete (calls DELETE /api/snapchat/adsquads, marks squad DELETED locally); persisted via localStorage + KV (br_build_log); WizardShell appends a session after each launch
 │       ├── performance/               # **Default landing page** — loads Snap + Meta rows from DB immediately on mount; syncAndReload fires both /api/reporting/sync (Snap) and /api/reporting/meta-sync (Meta) in parallel; SyncStatusBar shows per-feed sync status with subtle icon-only Force Refresh; loadSquadDetails fetches from both /api/snapchat/adsquads and /api/meta/adsets, converts Meta cents→micro for unified SquadDetail map; cron keeps DB fresh
 │       ├── placement-probe/           # TEMPORARY diagnostic UI — "Smart Placement Probe": pick ad account (+optional pixel), POSTs /api/debug/placement-probe, renders truth table (created? / resolved placement / editable-after?) + cleanup + raw JSON. Also a two-phase "Ads Manager placement" test (Step 1 create editable test squad → user edits placements in Ads Manager → Step 2 re-check API control). Delete alongside the route after diagnosis
-│       └── silo/                      # Media library
+│       ├── silo/                      # Media library
 │           ├── page.tsx               # Library grid with search/filter/delete; auto-fill grid (minmax 180–240px) keeps cards compact on wide screens
 │           ├── upload/                # Upload page with tag selector + SiloUploader
 │           └── tags/                  # Tag CRUD (create, edit, delete)
+│   └── privacy/                       # Privacy policy page (required by Meta app review)
 ├── components/
 │   ├── wizard/
 │   │   ├── CampaignCanvas.tsx         # React Flow free-form canvas; grey bg; fitView maxZoom 0.75
@@ -232,7 +234,7 @@ src/
 │   │   └── ColumnSelector.tsx         # Dropdown checklist to show/hide metric columns; 30 columns (raw + computed + snap_results/snap_cost_per_result/snap_purchase_value_usd + last_change); persists to localStorage (br_perf_cols); loadSavedColumns() auto-adds any DEFAULT_VISIBLE_COLUMNS key absent from the saved order (uses saved order as "known at save time" baseline — new default columns appear for existing users without overriding deliberate hide choices); accepts optional columns/storageKey/orderStorageKey props to reuse in other contexts (e.g. DrilldownModal uses br_drilldown_cols)
 │   ├── ui/
 │   │   └── MultiSelect.tsx            # Controlled multi-select dropdown with checkboxes (react-hook-form Controller)
-│   ├── pixels/                        # PixelForm component
+│   ├── pixels/                        # PixelForm + MetaPixelForm components
 │   ├── presets/                       # PresetForm — flat single-column form; Traffic Source selector (Snap/Facebook); Meta shows optimization goal, billing event, pixel event, daily budget (cents), publisher platforms; Snap-specific fields hidden for Meta
 │   └── articles/                      # ArticleForm component
 ├── hooks/
@@ -250,7 +252,8 @@ src/
 │   ├── silo-tags.ts                   # Tag CRUD + auto-naming (localStorage + KV sync, key: boilerroom_silo_tags_v1)
 │   ├── silo-utils.ts                  # Browser utils: hash, optimizeImage, generateThumbnail, getVideoDuration
 │   ├── presets.ts                     # Preset CRUD (localStorage + KV sync, key: boilerroom_presets_v1) — loadPresets() defaults trafficSource="snap"; duplicatePreset(id) copies with new id/name
-│   ├── pixels.ts                      # Pixel CRUD (localStorage + KV sync, key: boilerroom_pixels_v1)
+│   ├── pixels.ts                      # Snap Pixel CRUD (localStorage + KV sync, key: boilerroom_pixels_v1)
+│   ├── meta-pixels.ts                 # Meta Pixel CRUD (localStorage + KV sync, key: boilerroom_meta_pixels_v1 / br_meta_pixels)
 │   ├── feed-providers.ts              # FeedProvider CRUD (localStorage + KV sync, key: boilerroom_feed_providers_v1) — upcast() normalises legacy records
 │   ├── articles.ts                    # Article CRUD (localStorage + KV sync, key: boilerroom_articles_v1) — upcast() defaults query: "" for old records
 │   ├── campaign-changelog.ts          # Change log for inline budget/bid/status edits (localStorage + KV sync, key: br_campaign_changelog, max 500 entries); ChangeLogEntry: { id, squadId, field, oldValue, newValue, timestamp }; addChangeEntry() prepends + trims; getEntriesForSquad(squadId) filters newest-first; called by PerformanceTable and DrilldownModal save handlers
@@ -279,6 +282,7 @@ src/
     ├── ad-account.ts                  # AdAccountConfig (id, name, hidden, feedProviderIds, platform?: "snap" | "meta")
     ├── silo.ts                        # SiloAsset, SiloTag, SnapchatUploadStatus, SnapchatUploadStage
     ├── pixel.ts                       # SavedPixel type
+    ├── meta-pixel.ts                  # SavedMetaPixel type
     └── session.ts
 ```
 
@@ -412,7 +416,7 @@ src/
 
 - **`isAdAccountAllowed` denies by default:** When `session.allowedAdAccountIds` is empty (fresh session before dashboard loads), the function returns `false`. It is populated by `/api/snapchat/ad-accounts` — all Snapchat API routes that accept an `adAccountId` must call this check. Do NOT revert the default to `true`. The four Snapchat GET proxy routes (`campaigns`, `adsquads`, `creatives`, `ads`) require `?adAccountId=` and call `isAdAccountAllowed` before fetching. When a single entity ID is provided, each route also performs an IDOR ownership check — fetches the entity from Snapchat and asserts `entity.ad_account_id === adAccountId` — returning 403 if the entity belongs to a different account.
 - **Meta API routes auth pattern:** All Meta routes (`/api/meta/campaigns`, `/api/meta/adsets`, `/api/meta/ads`, `/api/meta/creatives`, `/api/meta/media`, `/api/meta/pages`) check `isSessionValid()` → `isMetaConnected()` → `isMetaAdAccountAllowed()` (where applicable). Mutation endpoints perform IDOR protection: fetch entity from Meta, assert `account_id` matches. `/api/meta/media` has SSRF guard — `blobUrl` must end with `.vercel-storage.com`. Meta Graph API base URL (`https://graph.facebook.com/v19.0`) is hardcoded in `src/lib/meta/client.ts`. All Meta API calls are server-side only via `metaFetch()` with Bearer auth and shared rate limiter.
-- **`/api/data` is user-scoped:** Blob paths are `metadata/{googleUserId}/{key}.json`. Blobs use `access: "public"` (store constraint — `boilerroom-silo` is a public store). Paths are non-guessable (contain internal Google user ID) but not secret. Never use a shared path. Valid keys are whitelisted: `br_silo_assets`, `br_silo_tags`, `br_pixels`, `br_presets`, `br_feed_providers`, `br_articles`, `br_ad_accounts_v1`, `br_campaign_changelog`, `br_build_log`.
+- **`/api/data` is user-scoped:** Blob paths are `metadata/{googleUserId}/{key}.json`. Blobs use `access: "public"` (store constraint — `boilerroom-silo` is a public store). Paths are non-guessable (contain internal Google user ID) but not secret. Never use a shared path. Valid keys are whitelisted: `br_silo_assets`, `br_silo_tags`, `br_pixels`, `br_meta_pixels`, `br_presets`, `br_feed_providers`, `br_articles`, `br_ad_accounts_v1`, `br_campaign_changelog`, `br_build_log`.
 - **`/api/feed-providers/channels/*` is user-scoped:** GET/POST/DELETE/PATCH pass `session.googleUserId` to all DB functions; queries filter by `google_user_id` so users can only access their own channels. `assignChannel`, `releaseChannel`, `normalizeChannelStatuses`, `updateChannelAdSquadId`, `getInUseChannelsByUser`, `getInUseChannelsWithoutSquadId`, `bulkForceChannelStatus`, and `updateChannelPausedStatus` all require `googleUserId` — never call them without it.
 - **`/api/silo/delete` is user-scoped:** Before calling `del()`, the route fetches `metadata/{googleUserId}/br_silo_assets.json` from the blob store and verifies every URL to be deleted is present in the user's asset list. Fails safe (500) if the KV fetch fails.
 - **`/api/silo/transcode` SSRF guard:** `blobUrl` is validated via Zod `.refine()` to require a hostname ending in `.vercel-storage.com` before the server fetches it — same pattern as `media/upload-from-blob`. Auth: `getSession()` + `isSessionValid()` (no ad account check needed — transcoding is user-scoped to their own Silo assets).
