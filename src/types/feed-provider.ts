@@ -42,7 +42,8 @@ export interface FeedProvider {
   metaConfig?: {
     allowedAdAccountIds: string[];
     allowedPixelIds: string[];
-    pageId?: string; // required for object_story_spec
+    pageId?: string; // legacy single page; kept in sync = first assigned page (allowedPageIds[0])
+    allowedPageIds?: string[]; // Facebook Pages assigned to this provider (managed in Traffic Sources)
     campaignNamingTemplate?: NamingSegment[];
   };
   // URL Parameters tab
@@ -66,7 +67,7 @@ export function emptyFeedProvider(): Omit<FeedProvider, "id" | "createdAt"> {
   return {
     name: "",
     snapConfig: { allowedAdAccountIds: [], allowedPixelIds: [] },
-    metaConfig: { allowedAdAccountIds: [], allowedPixelIds: [] },
+    metaConfig: { allowedAdAccountIds: [], allowedPixelIds: [], allowedPageIds: [] },
     urlConfig: { baseUrl: "", parameters: [] },
     channelConfig: { type: "parameter-based" },
     domains: [],

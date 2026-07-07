@@ -5,12 +5,17 @@ import { useRouter } from "next/navigation";
 import { useSnapchatAuth } from "@/hooks/useSnapchatAuth";
 import { useAdAccounts } from "@/hooks/useAdAccounts";
 import { useMetaAdAccounts } from "@/hooks/useMetaAdAccounts";
+import { useMetaPages } from "@/hooks/useMetaPages";
+import { useMetaAdLimits } from "@/hooks/useMetaAdLimits";
 import { loadAdAccountConfigs, upsertAdAccountConfig } from "@/lib/adAccounts";
+import { loadPageConfigs, upsertPageConfig } from "@/lib/pageConfigs";
 import { loadFeedProviders, upsertFeedProvider } from "@/lib/feed-providers";
 import { loadPixels, deletePixel } from "@/lib/pixels";
 import { loadMetaPixels, deleteMetaPixel } from "@/lib/meta-pixels";
 import { Button, Card, Badge, Spinner } from "@/components/ui";
 import type { AdAccountConfig } from "@/types/ad-account";
+import type { PageConfig } from "@/types/page-config";
+import { DEFAULT_PAGE_AD_LIMIT } from "@/types/page-config";
 import type { FeedProvider } from "@/types/feed-provider";
 import type { SavedPixel } from "@/types/pixel";
 import type { SavedMetaPixel } from "@/types/meta-pixel";
@@ -64,7 +69,10 @@ export default function TrafficSourcesPage() {
   const { snapConnected, metaConnected, metaExpiresAt, isLoading: authLoading } = useSnapchatAuth();
   const { accounts: snapAccounts, isLoading: accountsLoading } = useAdAccounts();
   const { accounts: metaAccounts, isLoading: metaAccountsLoading } = useMetaAdAccounts();
+  const { pages: metaPages, isLoading: pagesLoading } = useMetaPages();
+  const { runningByPage } = useMetaAdLimits();
   const [adAccountConfigs, setAdAccountConfigs] = useState<AdAccountConfig[]>([]);
+  const [pageConfigs, setPageConfigs] = useState<PageConfig[]>([]);
   const [feedProviders, setFeedProviders] = useState<FeedProvider[]>([]);
   const [pixels, setPixels] = useState<SavedPixel[]>([]);
   const [metaPixels, setMetaPixels] = useState<SavedMetaPixel[]>([]);
@@ -77,8 +85,14 @@ export default function TrafficSourcesPage() {
   const [expandedAccountKey, setExpandedAccountKey] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
 
+  // Facebook Pages table UI state.
+  const [pageSearch, setPageSearch] = useState("");
+  const [expandedPageId, setExpandedPageId] = useState<string | null>(null);
+  const [showHiddenPages, setShowHiddenPages] = useState(false);
+
   const reloadLocal = useCallback(() => {
     setAdAccountConfigs(loadAdAccountConfigs());
+    setPageConfigs(loadPageConfigs());
     setFeedProviders(loadFeedProviders());
     setPixels(loadPixels());
     setMetaPixels(loadMetaPixels());
@@ -196,6 +210,79 @@ export default function TrafficSourcesPage() {
     setFeedProviders(loadFeedProviders());
   };
 
+  // ---- Facebook Pages: config (hidden + provider assignment + ad-limit override) ----
+  const getPageCfg = (pageId: string): PageConfig => {
+    const existing = pageConfigs.find((c) => c.id === pageId);
+    if (existing) return existing;
+    const page = metaPages.find((p) => p.id === pageId);
+    return {
+      id: pageId,
+      name: page?.name ?? pageId,
+      hidden: false,
+      feedProviderIds: [],
+      updatedAt: new Date().toISOString(),
+    };
+  };
+
+  const togglePageHidden = (pageId: string) => {
+    const cfg = getPageCfg(pageId);
+    const updated = { ...cfg, hidden: !cfg.hidden, updatedAt: new Date().toISOString() };
+    upsertPageConfig(updated);
+    setPageConfigs(loadPageConfigs());
+    syncProviderPageAssignments(pageId, updated.feedProviderIds, !cfg.hidden);
+  };
+
+  const togglePageFeedProvider = (pageId: string, providerId: string) => {
+    const cfg = getPageCfg(pageId);
+    const alreadyAssigned = cfg.feedProviderIds.includes(providerId);
+    const newProviderIds = alreadyAssigned
+      ? cfg.feedProviderIds.filter((id) => id !== providerId)
+      : [...cfg.feedProviderIds, providerId];
+    const updated = { ...cfg, feedProviderIds: newProviderIds, updatedAt: new Date().toISOString() };
+    upsertPageConfig(updated);
+    setPageConfigs(loadPageConfigs());
+    syncProviderPageAssignments(pageId, newProviderIds, cfg.hidden);
+  };
+
+  const setPageAdLimit = (pageId: string, limit: number | undefined) => {
+    const cfg = getPageCfg(pageId);
+    const updated = { ...cfg, adLimit: limit, updatedAt: new Date().toISOString() };
+    upsertPageConfig(updated);
+    setPageConfigs(loadPageConfigs());
+  };
+
+  // Keep each provider's metaConfig.allowedPageIds in sync with page assignments,
+  // and keep the legacy single pageId = first assigned page (used at ad launch as
+  // a fallback; the launch path prefers the most-ads-remaining page).
+  const syncProviderPageAssignments = (
+    pageId: string,
+    newProviderIds: string[],
+    isHidden: boolean
+  ) => {
+    const allProviders = loadFeedProviders();
+    for (const provider of allProviders) {
+      const metaCfg = provider.metaConfig ?? { allowedAdAccountIds: [], allowedPixelIds: [] };
+      const current = metaCfg.allowedPageIds ?? [];
+      const wasAssigned = current.includes(pageId);
+      const shouldBeAssigned = !isHidden && newProviderIds.includes(provider.id);
+      if (wasAssigned !== shouldBeAssigned) {
+        const nextPageIds = shouldBeAssigned
+          ? [...current, pageId]
+          : current.filter((id) => id !== pageId);
+        const updated: FeedProvider = {
+          ...provider,
+          metaConfig: {
+            ...metaCfg,
+            allowedPageIds: nextPageIds,
+            pageId: nextPageIds[0], // first assigned page (undefined when none)
+          },
+        };
+        upsertFeedProvider(updated);
+      }
+    }
+    setFeedProviders(loadFeedProviders());
+  };
+
   const handleDeletePixel = (id: string, name: string) => {
     if (!confirm(`Delete pixel "${name}"? This cannot be undone.`)) return;
     deletePixel(id);
@@ -260,6 +347,48 @@ export default function TrafficSourcesPage() {
     () => unifiedAccounts.filter((a) => isAccountHidden(a.id)).length,
     [unifiedAccounts, isAccountHidden]
   );
+
+  // ---- Facebook Pages derived state ----
+  const pageCfgById = useMemo(() => {
+    const m = new Map<string, PageConfig>();
+    for (const c of pageConfigs) m.set(c.id, c);
+    return m;
+  }, [pageConfigs]);
+
+  const pageStats = useCallback(
+    (pageId: string) => {
+      const running = runningByPage[pageId] ?? 0;
+      const limit = pageCfgById.get(pageId)?.adLimit ?? DEFAULT_PAGE_AD_LIMIT;
+      return { running, limit, remaining: Math.max(0, limit - running) };
+    },
+    [runningByPage, pageCfgById]
+  );
+
+  const filteredPages = useMemo(() => {
+    const q = pageSearch.trim().toLowerCase();
+    return metaPages
+      .filter((p) => !q || p.name.toLowerCase().includes(q) || p.id.includes(q))
+      .slice()
+      // Match the Business Manager screen: most ads remaining first.
+      .sort((a, b) => pageStats(b.id).remaining - pageStats(a.id).remaining);
+  }, [metaPages, pageSearch, pageStats]);
+
+  const activePages = useMemo(
+    () => filteredPages.filter((p) => !pageCfgById.get(p.id)?.hidden),
+    [filteredPages, pageCfgById]
+  );
+  const hiddenPages = useMemo(
+    () => filteredPages.filter((p) => pageCfgById.get(p.id)?.hidden),
+    [filteredPages, pageCfgById]
+  );
+  const hiddenPagesTotal = useMemo(
+    () => metaPages.filter((p) => pageCfgById.get(p.id)?.hidden).length,
+    [metaPages, pageCfgById]
+  );
+
+  const togglePageExpanded = (pageId: string) => {
+    setExpandedPageId((prev) => (prev === pageId ? null : pageId));
+  };
 
   const accountsSectionVisible = snapConnected || metaConnected;
   const accountsSectionLoading =
@@ -427,6 +556,206 @@ export default function TrafficSourcesPage() {
                                   type="checkbox"
                                   checked={config.feedProviderIds.includes(fp.id)}
                                   onChange={() => toggleFeedProvider(a.id, fp.id, a.platform)}
+                                  className="w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 text-cyan-500 focus:ring-cyan-500"
+                                />
+                                <span className="truncate max-w-[140px]">{fp.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  // Shared renderer for the Facebook Pages tables (active + collapsed hidden).
+  const renderPagesTable = (list: typeof metaPages) => (
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+            <tr>
+              <th className={`${thClass} w-8`}></th>
+              <th className={thClass}>Page</th>
+              <th className={thClass}>Ads Remaining</th>
+              <th className={thClass}>Running / In Review</th>
+              <th className={thClass}>Ad Limit</th>
+              <th className={thClass}>Feed Providers</th>
+              <th className={thClass}>Status</th>
+              <th className={`${thClass} w-8`}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((p, i) => {
+              const cfg = getPageCfg(p.id);
+              const { running, limit, remaining } = pageStats(p.id);
+              const isExpanded = expandedPageId === p.id;
+              const assignedProviders = feedProviders.filter((fp) =>
+                cfg.feedProviderIds.includes(fp.id)
+              );
+
+              return (
+                <Fragment key={p.id}>
+                  <tr
+                    className={`border-b border-gray-100 dark:border-gray-700 transition-colors ${
+                      i % 2 === 0 ? "" : "bg-gray-50/40 dark:bg-gray-800/20"
+                    } ${isExpanded ? "border-b-0" : "last:border-0"} hover:bg-gray-50 dark:hover:bg-gray-800/60`}
+                  >
+                    <td className={tdClass}>
+                      <PlatformIcon platform="meta" />
+                    </td>
+
+                    {/* Page name + id */}
+                    <td className={tdClass}>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate max-w-[220px]">
+                          {p.name}
+                        </span>
+                        <span className="text-[11px] text-gray-400 dark:text-gray-500 font-mono truncate max-w-[220px]">
+                          {p.id}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Ads remaining pill (matches Business Manager) */}
+                    <td className={tdClass}>
+                      <span
+                        className={`inline-flex items-center gap-1.5 text-xs font-medium ${
+                          remaining > 0
+                            ? "text-green-600 dark:text-green-400"
+                            : "text-red-600 dark:text-red-400"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block w-1.5 h-1.5 rounded-full ${
+                            remaining > 0 ? "bg-green-500" : "bg-red-500"
+                          }`}
+                        />
+                        {remaining} remaining
+                      </span>
+                    </td>
+
+                    {/* Running / in review */}
+                    <td className={tdClass}>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{running}</span>
+                    </td>
+
+                    {/* Ad limit (editable per-page override; default 250) */}
+                    <td className={tdClass}>
+                      <input
+                        type="number"
+                        min={1}
+                        value={limit}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          setPageAdLimit(p.id, Number.isFinite(v) && v > 0 ? v : undefined);
+                        }}
+                        className="w-16 border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                        title="Ad limit (Facebook does not expose this via API — default 250, editable)"
+                      />
+                    </td>
+
+                    {/* Feed provider chips — click to expand assignment checklist */}
+                    <td className={tdClass}>
+                      <button
+                        type="button"
+                        onClick={() => togglePageExpanded(p.id)}
+                        className="flex items-center gap-1 flex-wrap max-w-[220px] text-left group"
+                      >
+                        {assignedProviders.length === 0 ? (
+                          <span className="text-xs text-gray-400 dark:text-gray-500 italic group-hover:text-cyan-600 dark:group-hover:text-cyan-400">
+                            Assign…
+                          </span>
+                        ) : (
+                          assignedProviders.map((fp) => (
+                            <span
+                              key={fp.id}
+                              className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-700 truncate max-w-[100px]"
+                            >
+                              {fp.name}
+                            </span>
+                          ))
+                        )}
+                        <span className="text-gray-300 dark:text-gray-600 text-[10px]">
+                          {isExpanded ? "▲" : "▼"}
+                        </span>
+                      </button>
+                    </td>
+
+                    {/* Active / Hidden toggle */}
+                    <td className={tdClass}>
+                      <button
+                        type="button"
+                        onClick={() => togglePageHidden(p.id)}
+                        className="flex items-center gap-2"
+                      >
+                        <span
+                          role="switch"
+                          aria-checked={cfg.hidden}
+                          className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                            cfg.hidden ? "bg-gray-300 dark:bg-gray-600" : "bg-cyan-500"
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
+                              cfg.hidden ? "translate-x-0.5" : "translate-x-3.5"
+                            }`}
+                          />
+                        </span>
+                        <span
+                          className={`text-xs font-medium ${
+                            cfg.hidden
+                              ? "text-gray-400 dark:text-gray-500"
+                              : "text-cyan-600 dark:text-cyan-400"
+                          }`}
+                        >
+                          {cfg.hidden ? "Hidden" : "Active"}
+                        </span>
+                      </button>
+                    </td>
+
+                    {/* Actions affordance */}
+                    <td className={tdClass}>
+                      <button
+                        type="button"
+                        onClick={() => togglePageExpanded(p.id)}
+                        className="px-1.5 py-0.5 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 rounded transition-colors"
+                        title="Assign feed providers"
+                      >
+                        ⋯
+                      </button>
+                    </td>
+                  </tr>
+
+                  {/* Inline expand: feed provider checklist */}
+                  {isExpanded && (
+                    <tr className="bg-gray-50/80 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                      <td colSpan={8} className="px-4 py-3">
+                        {feedProviders.length === 0 ? (
+                          <p className="text-xs text-gray-400 dark:text-gray-500 italic">
+                            No feed providers yet.
+                          </p>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                            <span className="text-[11px] text-gray-500 dark:text-gray-400 uppercase tracking-wide font-semibold">
+                              Assign to:
+                            </span>
+                            {feedProviders.map((fp) => (
+                              <label
+                                key={fp.id}
+                                className="flex items-center gap-1.5 text-xs cursor-pointer text-gray-700 dark:text-gray-300"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={cfg.feedProviderIds.includes(fp.id)}
+                                  onChange={() => togglePageFeedProvider(p.id, fp.id)}
                                   className="w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 text-cyan-500 focus:ring-cyan-500"
                                 />
                                 <span className="truncate max-w-[140px]">{fp.name}</span>
@@ -642,6 +971,85 @@ export default function TrafficSourcesPage() {
                         </div>
                       ) : (
                         renderAccountsTable(hiddenAccounts)
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      {/* Section: Facebook Pages (ad-limit aware) */}
+      {metaConnected && (
+        <section>
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">Facebook Pages</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Ads publish from the assigned page with the most ads remaining.
+              </p>
+            </div>
+            <input
+              type="search"
+              placeholder="Search pages…"
+              value={pageSearch}
+              onChange={(e) => setPageSearch(e.target.value)}
+              className="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+            />
+          </div>
+
+          {pagesLoading ? (
+            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
+              <Spinner /> Loading pages…
+            </div>
+          ) : metaPages.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              No Facebook Pages found. Make sure your Meta account manages at least one Page.
+            </p>
+          ) : (
+            <>
+              {activePages.length === 0 ? (
+                <div className="bg-white dark:bg-gray-900 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 text-center">
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">
+                    {filteredPages.length === 0
+                      ? "No pages match your search."
+                      : "No active pages — all matching pages are hidden."}
+                  </p>
+                </div>
+              ) : (
+                renderPagesTable(activePages)
+              )}
+
+              {/* Hidden pages — collapsed by default */}
+              {hiddenPagesTotal > 0 && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowHiddenPages((v) => !v)}
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-left"
+                  >
+                    <span className="text-gray-400 dark:text-gray-500 text-xs">{showHiddenPages ? "▼" : "▶"}</span>
+                    <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Hidden pages</span>
+                    <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                      {hiddenPagesTotal}
+                    </span>
+                    <span className="ml-auto text-[11px] text-gray-400 dark:text-gray-500">
+                      {showHiddenPages ? "Hide" : "Show"}
+                    </span>
+                  </button>
+
+                  {showHiddenPages && (
+                    <div className="mt-2 opacity-80">
+                      {hiddenPages.length === 0 ? (
+                        <div className="bg-white dark:bg-gray-900 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-4 text-center">
+                          <p className="text-xs text-gray-400 dark:text-gray-500">
+                            No hidden pages match your search.
+                          </p>
+                        </div>
+                      ) : (
+                        renderPagesTable(hiddenPages)
                       )}
                     </div>
                   )}

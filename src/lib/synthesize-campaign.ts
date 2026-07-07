@@ -6,6 +6,7 @@ import type { Article } from "@/types/article";
 import type { CampaignPreset } from "@/types/preset";
 import type { SiloAsset } from "@/types/silo";
 import type { MetaBillingEvent, MetaOptimizationGoal, MetaPixelEvent } from "@/types/meta";
+import { DEFAULT_PAGE_AD_LIMIT } from "@/types/page-config";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -217,22 +218,51 @@ export interface MetaSynthesisResult {
   headline: string;
 }
 
+/**
+ * Among a provider's assigned Facebook Pages, pick the one with the most ads
+ * remaining (ad limit − running/in-review count). Ties resolve to the earliest
+ * page in `allowedPageIds`. Returns undefined when no pages are assigned.
+ */
+export function pickBestPage(
+  allowedPageIds: string[] | undefined,
+  runningByPage: Record<string, number>,
+  adLimitByPage?: Record<string, number>
+): string | undefined {
+  if (!allowedPageIds || allowedPageIds.length === 0) return undefined;
+  let best: string | undefined;
+  let bestRemaining = -Infinity;
+  for (const pid of allowedPageIds) {
+    const running = runningByPage[pid] ?? 0;
+    const limit = adLimitByPage?.[pid] ?? DEFAULT_PAGE_AD_LIMIT;
+    const remaining = limit - running;
+    if (remaining > bestRemaining) {
+      bestRemaining = remaining;
+      best = pid;
+    }
+  }
+  return best;
+}
+
 export function synthesizeMetaCampaign(
   item: CampaignBuildItem,
   campaignName: string,
   provider: FeedProvider,
   article: Article,
   preset: CampaignPreset,
-  assets: SiloAsset[]
+  assets: SiloAsset[],
+  resolvedPageId?: string
 ): MetaSynthesisResult {
   const metaAdSet = preset.metaAdSet;
   if (!metaAdSet) {
     throw new Error(`Preset "${preset.name}" has no Meta ad set configuration`);
   }
 
-  const pageId = provider.metaConfig?.pageId;
+  // Prefer the page resolved at launch (most ads remaining among assigned pages);
+  // fall back to the provider's stored page for backward compatibility.
+  const pageId =
+    resolvedPageId ?? provider.metaConfig?.pageId ?? provider.metaConfig?.allowedPageIds?.[0];
   if (!pageId) {
-    throw new Error(`Provider "${provider.name}" has no Meta Page ID configured`);
+    throw new Error(`Provider "${provider.name}" has no Facebook Page assigned`);
   }
 
   const urlTemplate = buildUrlTemplate(provider, article, item.headline, item.headlineRac, item.adAccountId);

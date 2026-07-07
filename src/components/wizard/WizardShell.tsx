@@ -13,7 +13,8 @@ import { loadFeedProviders } from "@/lib/feed-providers";
 import { loadArticles } from "@/lib/articles";
 import { loadPresets } from "@/lib/presets";
 import { getAssetById, upsertAsset } from "@/lib/silo";
-import { synthesizeCampaign, synthesizeMetaCampaign } from "@/lib/synthesize-campaign";
+import { synthesizeCampaign, synthesizeMetaCampaign, pickBestPage } from "@/lib/synthesize-campaign";
+import { loadPageConfigs } from "@/lib/pageConfigs";
 import { runSubmission } from "@/lib/submission-orchestrator";
 import { runMetaSubmission } from "@/lib/meta-submission-orchestrator";
 import { resolveCampaignName, generateUniqueId4 } from "@/lib/resolve-campaign-name";
@@ -43,6 +44,25 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
     const providers = loadFeedProviders();
     const articles = loadArticles();
     const presets = loadPresets();
+
+    // For Meta launches, fetch fresh per-page ad volume once so we can publish
+    // each ad from the assigned page with the most ads remaining.
+    const runningByPage: Record<string, number> = {};
+    const adLimitByPage: Record<string, number> = {};
+    if (items.some((it) => it.trafficSource === "facebook")) {
+      try {
+        const res = await fetch("/api/meta/ad-limits");
+        if (res.ok) {
+          const data = (await res.json()) as { pages?: { pageId: string; running: number }[] };
+          for (const row of data.pages ?? []) runningByPage[row.pageId] = row.running;
+        }
+      } catch (e) {
+        console.warn("[wizard] ad-limits fetch failed; falling back to stored page:", e);
+      }
+      for (const cfg of loadPageConfigs()) {
+        if (typeof cfg.adLimit === "number") adLimitByPage[cfg.id] = cfg.adLimit;
+      }
+    }
 
     const collectedResults: SubmissionResults[] = [];
 
@@ -107,7 +127,20 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
         let result: SubmissionResults;
 
         if (isMeta) {
-          const metaSynthesis = synthesizeMetaCampaign(item, campaignName, provider, article, preset, assets);
+          const resolvedPageId = pickBestPage(
+            provider.metaConfig?.allowedPageIds,
+            runningByPage,
+            adLimitByPage
+          );
+          const metaSynthesis = synthesizeMetaCampaign(
+            item,
+            campaignName,
+            provider,
+            article,
+            preset,
+            assets,
+            resolvedPageId
+          );
           result = await runMetaSubmission(itemAccountId, metaSynthesis, stageCallback, provider);
         } else {
           const synthesis = synthesizeCampaign(item, campaignName, provider, article, preset, assets);

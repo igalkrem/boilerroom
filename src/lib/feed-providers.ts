@@ -20,10 +20,17 @@ function upcast(raw: Record<string, unknown>): FeedProvider {
       allowedAdAccountIds: [],
       allowedPixelIds: [],
     },
-    metaConfig: (raw.metaConfig as FeedProvider["metaConfig"]) ?? {
-      allowedAdAccountIds: [],
-      allowedPixelIds: [],
-    },
+    metaConfig: raw.metaConfig
+      ? {
+          ...(raw.metaConfig as NonNullable<FeedProvider["metaConfig"]>),
+          allowedPageIds:
+            (raw.metaConfig as NonNullable<FeedProvider["metaConfig"]>).allowedPageIds ?? [],
+        }
+      : {
+          allowedAdAccountIds: [],
+          allowedPixelIds: [],
+          allowedPageIds: [],
+        },
     urlConfig: (raw.urlConfig as FeedProvider["urlConfig"]) ?? {
       baseUrl: (raw.baseUrl as string) ?? "",
       parameters: [],

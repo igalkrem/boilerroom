@@ -45,7 +45,6 @@ interface MetaTabProps {
 export function MetaTab({ metaConfig, onChange }: MetaTabProps) {
   const [assignedAccountNames, setAssignedAccountNames] = useState<Array<{ id: string; name: string }>>([]);
   const [pages, setPages] = useState<Array<{ id: string; name: string }>>([]);
-  const [loadingPages, setLoadingPages] = useState(false);
 
   useEffect(() => {
     const configs = loadAdAccountConfigs();
@@ -60,12 +59,10 @@ export function MetaTab({ metaConfig, onChange }: MetaTabProps) {
   }, [metaConfig.allowedAdAccountIds]);
 
   useEffect(() => {
-    setLoadingPages(true);
     fetch("/api/meta/pages")
       .then((r) => (r.ok ? r.json() : { pages: [] }))
       .then((data) => setPages(data.pages ?? []))
-      .catch(() => setPages([]))
-      .finally(() => setLoadingPages(false));
+      .catch(() => setPages([]));
   }, []);
 
   const namingTemplate = metaConfig.campaignNamingTemplate ?? [];
@@ -103,39 +100,53 @@ export function MetaTab({ metaConfig, onChange }: MetaTabProps) {
         )}
       </div>
 
-      {/* Page ID */}
+      {/* Facebook Pages — assigned + ad-limit-driven in Traffic Sources */}
       <div>
-        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Facebook Page</p>
-        <p className="text-xs text-gray-400 mb-2">
-          Required for Meta ad creatives. The page appears as the ad&apos;s publisher.
-        </p>
-        {loadingPages ? (
-          <p className="text-xs text-gray-400 italic">Loading pages…</p>
-        ) : pages.length === 0 ? (
-          <div className="space-y-1">
-            <p className="text-xs text-gray-400">No pages found. Make sure your Meta account has page access.</p>
-            <input
-              type="text"
-              placeholder="Or enter Page ID manually"
-              value={metaConfig.pageId ?? ""}
-              onChange={(e) => onChange({ ...metaConfig, pageId: e.target.value || undefined })}
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            />
-          </div>
-        ) : (
-          <select
-            value={metaConfig.pageId ?? ""}
-            onChange={(e) => onChange({ ...metaConfig, pageId: e.target.value || undefined })}
-            className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Facebook Pages</p>
+          <Link
+            href="/dashboard/traffic-sources"
+            className="text-xs text-blue-600 hover:text-blue-700 underline"
           >
-            <option value="">Select a page…</option>
-            {pages.map((page) => (
-              <option key={page.id} value={page.id}>
-                {page.name} ({page.id})
-              </option>
-            ))}
-          </select>
-        )}
+            Manage in Traffic Sources →
+          </Link>
+        </div>
+        <p className="text-xs text-gray-400 mb-2">
+          Ads publish from the assigned page with the most ads remaining. Assign pages and view ad
+          limits in Traffic Sources.
+        </p>
+        {(() => {
+          const assignedIds =
+            metaConfig.allowedPageIds && metaConfig.allowedPageIds.length > 0
+              ? metaConfig.allowedPageIds
+              : metaConfig.pageId
+              ? [metaConfig.pageId]
+              : [];
+          if (assignedIds.length === 0) {
+            return (
+              <p className="text-xs text-gray-400">
+                No pages assigned yet.{" "}
+                <Link href="/dashboard/traffic-sources" className="text-blue-600 hover:underline">
+                  Assign pages in Traffic Sources.
+                </Link>
+              </p>
+            );
+          }
+          return (
+            <div className="space-y-1 border border-gray-200 dark:border-gray-700 rounded-lg p-2 bg-gray-50 dark:bg-gray-800">
+              {assignedIds.map((pid) => {
+                const name = pages.find((p) => p.id === pid)?.name ?? pid;
+                return (
+                  <div key={pid} className="flex items-center gap-2 px-1.5 py-1">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                    <span className="text-sm text-gray-800 dark:text-gray-200">{name}</span>
+                    <span className="text-xs text-gray-400 font-mono ml-auto">{pid}</span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
 
       <hr className="border-gray-100 dark:border-gray-700" />
