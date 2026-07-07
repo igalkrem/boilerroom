@@ -3,10 +3,11 @@ import { getSession, isSessionValid, isMetaConnected } from "@/lib/session";
 import { getValidMetaToken, metaFetch } from "@/lib/meta/client";
 import { getMetaAdAccounts } from "@/lib/meta/adaccounts";
 import { getAdsVolume } from "@/lib/meta/ad-volume";
+import { getBusinessPages } from "@/lib/meta/business-pages";
 
-// Resolve page names for actor ids via the batch `?ids=` node (50 max per call).
-// The page list comes from ads_volume (the /me/accounts pages edge is often empty
-// unless pages_show_list is granted), so names must be looked up separately.
+// Resolve page names for ids not covered by the Business Manager page list, via
+// the batch `?ids=` node (50 max per call). Only used as a fallback for pages
+// that surface in ads_volume but aren't owned/client pages of any business.
 async function resolvePageNames(pageIds: string[]): Promise<Record<string, string>> {
   const names: Record<string, string> = {};
   for (let i = 0; i < pageIds.length; i += 50) {
@@ -20,8 +21,7 @@ async function resolvePageNames(pageIds: string[]): Promise<Record<string, strin
       }
     } catch {
       // The batch `?ids=` call fails atomically if ANY id in the chunk is
-      // inaccessible — fall back to resolving each id individually so one bad
-      // page doesn't blank every name.
+      // inaccessible — resolve individually so one bad page doesn't blank the rest.
       for (const id of chunk) {
         try {
           const node = await metaFetch<{ id: string; name?: string }>(`/${id}?fields=name`);
@@ -36,11 +36,12 @@ async function resolvePageNames(pageIds: string[]): Promise<Record<string, strin
 }
 
 // GET /api/meta/ad-limits
-// Returns each Facebook Page's PAGE-LEVEL running/in-review ad count, merged
-// across every Meta ad account (the `ads_volume` breakdown reports the same
-// page-level total from each account that can advertise for the page). Facebook
-// does not expose the numeric ad limit via the API — the client applies the
-// default (250) or a per-page override to compute "ads remaining".
+// Returns every Facebook Page across the user's Business Managers with its name,
+// owning Business Manager name, and PAGE-LEVEL running/in-review ad count. The
+// page list comes from the business owned/client pages (so pages with zero ads
+// are included, matching business.facebook.com/latest/ad_limits); running counts
+// come from ads_volume merged across all Meta ad accounts. Facebook does not
+// expose the numeric ad limit via the API — the client applies the 250 default.
 export async function GET() {
   const session = await getSession();
   if (!isSessionValid(session)) {
@@ -51,6 +52,15 @@ export async function GET() {
   }
 
   try {
+    // 1) Full page list (+ names + Business Manager) from the businesses.
+    let bizPages: Record<string, { name?: string; businessName?: string }> = {};
+    try {
+      bizPages = await getBusinessPages();
+    } catch (e) {
+      console.error("[meta/ad-limits] business page list failed:", e);
+    }
+
+    // 2) Page-level running/in-review counts from ads_volume across all accounts.
     let accountIds = session.metaAllowedAdAccountIds ?? [];
     if (accountIds.length === 0) {
       const token = await getValidMetaToken();
@@ -58,8 +68,6 @@ export async function GET() {
       accountIds = accounts.map((a) => a.id);
     }
 
-    // pageId -> highest page-level running count seen (values agree across
-    // accounts; max guards against an account omitting the field).
     const runningByPage = new Map<string, number>();
     for (const acct of accountIds) {
       try {
@@ -77,12 +85,17 @@ export async function GET() {
       }
     }
 
-    const pageIds = Array.from(runningByPage.keys());
-    const names = await resolvePageNames(pageIds);
+    // 3) Union of business pages + any ads_volume-only pages.
+    const allIds = new Set<string>([...Object.keys(bizPages), ...runningByPage.keys()]);
 
-    const pages = pageIds.map((pageId) => ({
+    // Names only needed for pages the business list didn't cover.
+    const missingName = [...allIds].filter((id) => !bizPages[id]?.name);
+    const resolved = missingName.length ? await resolvePageNames(missingName) : {};
+
+    const pages = [...allIds].map((pageId) => ({
       pageId,
-      name: names[pageId] ?? pageId,
+      name: bizPages[pageId]?.name ?? resolved[pageId] ?? pageId,
+      businessName: bizPages[pageId]?.businessName ?? null,
       running: runningByPage.get(pageId) ?? 0,
     }));
 

@@ -7,6 +7,7 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 export interface AdLimitPage {
   pageId: string;
   name: string;
+  businessName: string | null;
   running: number;
 }
 

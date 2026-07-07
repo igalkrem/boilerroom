@@ -72,7 +72,7 @@ export default function TrafficSourcesPage() {
   // often empty), which also carries each page's running/in-review count.
   const { pages: adLimitPages, runningByPage, isLoading: pagesLoading } = useMetaAdLimits();
   const metaPages = useMemo(
-    () => adLimitPages.map((p) => ({ id: p.pageId, name: p.name })),
+    () => adLimitPages.map((p) => ({ id: p.pageId, name: p.name, businessName: p.businessName })),
     [adLimitPages]
   );
   const [adAccountConfigs, setAdAccountConfigs] = useState<AdAccountConfig[]>([]);
@@ -364,10 +364,16 @@ export default function TrafficSourcesPage() {
   const filteredPages = useMemo(() => {
     const q = pageSearch.trim().toLowerCase();
     return metaPages
-      .filter((p) => !q || p.name.toLowerCase().includes(q) || p.id.includes(q))
+      .filter(
+        (p) =>
+          !q ||
+          p.name.toLowerCase().includes(q) ||
+          p.id.includes(q) ||
+          (p.businessName ?? "").toLowerCase().includes(q)
+      )
       .slice()
-      // Match the Business Manager screen: most ads remaining first.
-      .sort((a, b) => pageStats(b.id).remaining - pageStats(a.id).remaining);
+      // Most occupied first (most running / in-review ads), like the BM screen.
+      .sort((a, b) => pageStats(b.id).running - pageStats(a.id).running);
   }, [metaPages, pageSearch, pageStats]);
 
   const activePages = useMemo(
@@ -581,6 +587,7 @@ export default function TrafficSourcesPage() {
             <tr>
               <th className={`${thClass} w-8`}></th>
               <th className={thClass}>Page</th>
+              <th className={thClass}>Business</th>
               <th className={thClass}>Ads</th>
               <th className={thClass}>Feed Providers</th>
               <th className={thClass}>Status</th>
@@ -617,6 +624,13 @@ export default function TrafficSourcesPage() {
                           {p.id}
                         </span>
                       </div>
+                    </td>
+
+                    {/* Business Manager */}
+                    <td className={tdClass}>
+                      <span className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-[160px] block">
+                        {p.businessName || <span className="text-gray-300 dark:text-gray-600">—</span>}
+                      </span>
                     </td>
 
                     {/* Ads usage bar (running / limit) — matches Business Manager */}
@@ -711,7 +725,7 @@ export default function TrafficSourcesPage() {
                   {/* Inline expand: feed provider checklist */}
                   {isExpanded && (
                     <tr className="bg-gray-50/80 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                      <td colSpan={6} className="px-4 py-3">
+                      <td colSpan={7} className="px-4 py-3">
                         {feedProviders.length === 0 ? (
                           <p className="text-xs text-gray-400 dark:text-gray-500 italic">
                             No feed providers yet.
