@@ -7,6 +7,5 @@ export interface PageConfig {
   name: string;              // Display name (cached from the Meta pages API)
   hidden: boolean;           // Hide from campaign creation flows
   feedProviderIds: string[]; // Feed providers this page is assigned to
-  adLimit?: number;          // Per-page ad limit override; defaults to 250 when unset
   updatedAt: string;         // ISO timestamp
 }

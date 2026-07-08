@@ -10,7 +10,6 @@ const pageConfigSchema = z.object({
   name: z.string(),
   hidden: z.boolean(),
   feedProviderIds: z.array(z.string()),
-  adLimit: z.number().optional(),
   updatedAt: z.string(),
 });
 

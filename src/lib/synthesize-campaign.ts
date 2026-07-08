@@ -225,16 +225,16 @@ export interface MetaSynthesisResult {
  */
 export function pickBestPage(
   allowedPageIds: string[] | undefined,
-  runningByPage: Record<string, number>,
-  adLimitByPage?: Record<string, number>
+  runningByPage: Record<string, number>
 ): string | undefined {
   if (!allowedPageIds || allowedPageIds.length === 0) return undefined;
+  // Every page has the same fixed 250 ad limit, so "most remaining" is simply
+  // "fewest running ads". Ties resolve to the first-listed page.
   let best: string | undefined;
   let bestRemaining = -Infinity;
   for (const pid of allowedPageIds) {
     const running = runningByPage[pid] ?? 0;
-    const limit = adLimitByPage?.[pid] ?? DEFAULT_PAGE_AD_LIMIT;
-    const remaining = limit - running;
+    const remaining = DEFAULT_PAGE_AD_LIMIT - running;
     if (remaining > bestRemaining) {
       bestRemaining = remaining;
       best = pid;
