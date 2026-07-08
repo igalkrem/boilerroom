@@ -50,17 +50,25 @@ export function WizardShell({ adAccountId }: { adAccountId?: string }) {
     const runningByPage: Record<string, number> = {};
     if (items.some((it) => it.trafficSource === "facebook")) {
       const neededPageIds = new Set<string>();
+      const neededAccountIds = new Set<string>();
       for (const it of items) {
         if (it.trafficSource !== "facebook") continue;
         const prov = providers.find((p) => p.id === it.feedProviderId);
         for (const pid of prov?.metaConfig?.allowedPageIds ?? []) neededPageIds.add(pid);
+        // Each page is assigned to exactly one feed provider (enforced in Traffic
+        // Sources), so that provider's ad accounts are guaranteed to cover every
+        // account the page's ads could have run through — safe to scope the sweep.
+        for (const aid of prov?.metaConfig?.allowedAdAccountIds ?? []) neededAccountIds.add(aid);
       }
       if (neededPageIds.size > 0) {
         try {
           const res = await fetch("/api/meta/page-ad-counts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pageIds: [...neededPageIds] }),
+            body: JSON.stringify({
+              pageIds: [...neededPageIds],
+              accountIds: [...neededAccountIds],
+            }),
           });
           if (res.ok) {
             const data = (await res.json()) as { counts?: Record<string, number> };

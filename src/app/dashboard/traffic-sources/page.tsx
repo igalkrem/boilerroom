@@ -247,12 +247,14 @@ export default function TrafficSourcesPage() {
     syncProviderPageAssignments(pageId, updated.feedProviderIds, !cfg.hidden);
   };
 
-  const togglePageFeedProvider = (pageId: string, providerId: string) => {
+  // A page can be assigned to at most ONE feed provider — its running-ad count
+  // is a single global number, so splitting a page across providers would make
+  // "most ads remaining" unreliable (see pickBestPage / page-ad-counts route).
+  // Clicking the already-assigned provider clears the assignment.
+  const setPageFeedProvider = (pageId: string, providerId: string) => {
     const cfg = getPageCfg(pageId);
-    const alreadyAssigned = cfg.feedProviderIds.includes(providerId);
-    const newProviderIds = alreadyAssigned
-      ? cfg.feedProviderIds.filter((id) => id !== providerId)
-      : [...cfg.feedProviderIds, providerId];
+    const isCurrentlyAssigned = cfg.feedProviderIds.includes(providerId);
+    const newProviderIds = isCurrentlyAssigned ? [] : [providerId];
     const updated = { ...cfg, feedProviderIds: newProviderIds, updatedAt: new Date().toISOString() };
     upsertPageConfig(updated);
     setPageConfigs(loadPageConfigs());
@@ -742,24 +744,28 @@ export default function TrafficSourcesPage() {
                             No feed providers yet.
                           </p>
                         ) : (
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                            <span className="text-[11px] text-gray-500 dark:text-gray-400 uppercase tracking-wide font-semibold">
-                              Assign to:
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                            <span className="text-[11px] text-gray-500 dark:text-gray-400 uppercase tracking-wide font-semibold mr-1">
+                              Assign to (one only):
                             </span>
-                            {feedProviders.map((fp) => (
-                              <label
-                                key={fp.id}
-                                className="flex items-center gap-1.5 text-xs cursor-pointer text-gray-700 dark:text-gray-300"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={cfg.feedProviderIds.includes(fp.id)}
-                                  onChange={() => togglePageFeedProvider(p.id, fp.id)}
-                                  className="w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 text-cyan-500 focus:ring-cyan-500"
-                                />
-                                <span className="truncate max-w-[140px]">{fp.name}</span>
-                              </label>
-                            ))}
+                            {feedProviders.map((fp) => {
+                              const selected = cfg.feedProviderIds.includes(fp.id);
+                              return (
+                                <button
+                                  key={fp.id}
+                                  type="button"
+                                  onClick={() => setPageFeedProvider(p.id, fp.id)}
+                                  className={`px-2 py-1 rounded-full text-xs truncate max-w-[160px] border transition-colors ${
+                                    selected
+                                      ? "bg-cyan-500 border-cyan-500 text-white"
+                                      : "bg-transparent border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-cyan-400"
+                                  }`}
+                                  title={selected ? "Click to unassign" : `Assign to ${fp.name}`}
+                                >
+                                  {fp.name}
+                                </button>
+                              );
+                            })}
                           </div>
                         )}
                       </td>
