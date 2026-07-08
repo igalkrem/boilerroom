@@ -3,6 +3,21 @@ import type { FeedProvider } from "@/types/feed-provider";
 import { syncToKV } from "@/lib/kv-sync";
 
 const STORAGE_KEY = "boilerroom_feed_providers_v1";
+
+// Per-provider chip color, keyed by provider name (case-insensitive). Unknown
+// providers fall back to cyan so new providers still render sensibly.
+const PROVIDER_BADGE_COLORS: Record<string, string> = {
+  vizymo:
+    "bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-700",
+  predicto:
+    "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-700",
+};
+const PROVIDER_BADGE_FALLBACK =
+  "bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 border-cyan-200 dark:border-cyan-700";
+
+export function getFeedProviderBadgeClasses(providerName: string): string {
+  return PROVIDER_BADGE_COLORS[providerName.trim().toLowerCase()] ?? PROVIDER_BADGE_FALLBACK;
+}
 const KV_KEY = "br_feed_providers";
 
 const legacySchema = z.object({

@@ -8,7 +8,7 @@ import { useMetaAdAccounts } from "@/hooks/useMetaAdAccounts";
 import { useMetaAdLimits } from "@/hooks/useMetaAdLimits";
 import { loadAdAccountConfigs, upsertAdAccountConfig } from "@/lib/adAccounts";
 import { loadPageConfigs, upsertPageConfig } from "@/lib/pageConfigs";
-import { loadFeedProviders, upsertFeedProvider } from "@/lib/feed-providers";
+import { loadFeedProviders, upsertFeedProvider, getFeedProviderBadgeClasses } from "@/lib/feed-providers";
 import { loadPixels, deletePixel } from "@/lib/pixels";
 import { loadMetaPixels, deleteMetaPixel } from "@/lib/meta-pixels";
 import { Button, Card, Badge, Spinner } from "@/components/ui";
@@ -491,7 +491,7 @@ export default function TrafficSourcesPage() {
                           assignedProviders.map((fp) => (
                             <span
                               key={fp.id}
-                              className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-700 truncate max-w-[100px]"
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium border truncate max-w-[100px] ${getFeedProviderBadgeClasses(fp.name)}`}
                             >
                               {fp.name}
                             </span>
@@ -676,7 +676,7 @@ export default function TrafficSourcesPage() {
                           assignedProviders.map((fp) => (
                             <span
                               key={fp.id}
-                              className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-700 truncate max-w-[100px]"
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium border truncate max-w-[100px] ${getFeedProviderBadgeClasses(fp.name)}`}
                             >
                               {fp.name}
                             </span>
@@ -1124,7 +1124,7 @@ export default function TrafficSourcesPage() {
                               {assignedProviders.map((fp) => (
                                 <span
                                   key={fp.id}
-                                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                  className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium border ${getFeedProviderBadgeClasses(fp.name)}`}
                                 >
                                   {fp.name}
                                 </span>
@@ -1215,7 +1215,7 @@ export default function TrafficSourcesPage() {
                               {assignedProviders.map((fp) => (
                                 <span
                                   key={fp.id}
-                                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                  className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium border ${getFeedProviderBadgeClasses(fp.name)}`}
                                 >
                                   {fp.name}
                                 </span>
