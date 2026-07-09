@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Input } from "@/components/ui";
 import { loadAdAccountConfigs } from "@/lib/adAccounts";
 import type { FeedProvider, NamingSegment } from "@/types/feed-provider";
 import { loadPixels } from "@/lib/pixels";
@@ -191,19 +190,6 @@ export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: 
 
   return (
     <div className="space-y-6">
-      <div>
-        <Input
-          label="Snapchat Organization ID"
-          placeholder="e.g. 0a1b2c3d-..."
-          value={snapConfig.organizationId ?? ""}
-          onChange={(e) => onChange({ ...snapConfig, organizationId: e.target.value })}
-        />
-        <p className="text-xs text-gray-400 mt-1">
-          Found in Snapchat Business Manager → Organization Settings. Resolves{" "}
-          <code className="bg-gray-100 px-1 rounded">{"{{organization_id}}"}</code> in URL templates.
-        </p>
-      </div>
-
       <div>
         <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Revenue Source</p>
         <div className="flex gap-2">
