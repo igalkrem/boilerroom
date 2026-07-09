@@ -211,7 +211,7 @@ src/
 │   ├── feed-providers/
 │   │   ├── FeedProviderModal.tsx      # Large modal (max-w-3xl) with 4 tabs: Snap | Facebook | Channels | Domains
 │   │   └── tabs/
-│   │       ├── SnapTab.tsx            # Org ID, ad accounts, pixels + URL Parameters + Campaign Naming Template section (violet card; NamingTemplateEditor with segment pills + live preview)
+│   │       ├── SnapTab.tsx            # Ad accounts, pixels, revenue source + URL Parameters + Campaign Naming Template section (violet card; NamingTemplateEditor with segment pills + live preview) — no Organization ID field (removed; use URL Parameters directly for org-scoped values)
 │   │       ├── UrlParametersTab.tsx   # Parameter rows, always-visible filtered macro chips (two groups: Snapchat Native / BoilerRoom), live preview; hideBaseUrl prop
 │   │       ├── ChannelsTab.tsx        # CSV upload + manual textarea entry (one per line); both paths deduplicate client-side against loaded channels before POSTing; status table, lifecycle controls
 │   │       ├── DomainsTab.tsx         # Domain rows (baseDomain + baseUrl + traffic source checkboxes)
@@ -347,12 +347,13 @@ src/
   | `{{article.query}}` | `article.query` | synthesis time |
   | `{{creative.headline}}` | canvas headline input | synthesis time |
   | `{{creative.rac}}` | `rac` field of the selected headline | synthesis time |
-  | `{{organization_id}}` | `provider.snapConfig.organizationId` | synthesis time |
   | `{{ad_account.id}}` | canvas ad account ID (`item.adAccountId`) | synthesis time |
   | `{{channel.id}}` | assigned channel from Postgres | orchestrator (after channel assignment) |
   | `{{campaign.id}}` | Snapchat campaign ID | Snapchat native — substituted at click time |
   | `{{adset.id}}` | Snapchat ad squad ID | Snapchat native — substituted at click time |
   | `{{ad.id}}` | Snapchat ad ID | Snapchat native — substituted at click time |
+
+  `{{organization_id}}` was removed from this table and from the URL Parameters macro chips — the Snap tab no longer exposes a field to set `snapConfig.organizationId`. `buildUrlTemplate()`'s resolution logic for it is untouched (backward-compat only): providers that already had a value stored still resolve it correctly if `{{organization_id}}` is typed manually into a parameter value, but there is no discoverable way to set it for new providers. If org-scoped URL params are needed going forward, put the literal ID directly into a URL Parameters value instead.
 
 - **Campaign naming macros** (used in `NamingSegment[]` provider templates only — not in URL templates):
 
@@ -370,7 +371,7 @@ src/
   `resolveCampaignName(fallback, item, ctx, providerTemplate?)` — if `providerTemplate` is non-empty, resolves segments and joins with `" | "`; otherwise falls back to the old string-replace logic using `fallback`.
 
 - **Feed Providers (v3):** Full sell-side provider management. `FeedProvider` type lives in `src/types/feed-provider.ts` (not `article.ts`). Key fields:
-  - `snapConfig` — `organizationId?` (resolves `{{organization_id}}` in URL templates at synthesis time), `allowedAdAccountIds[]`, `allowedPixelIds[]`, `campaignNamingTemplate?: NamingSegment[]` (Snap-specific), `revenueSource?: "kingsroad" | "predicto"` — pill selector in Snap tab; used by `getProviderNetworkMap()` (`src/lib/reporting/provider-network.ts`) to classify ad accounts for source-coupled cron windows (:15 vs :46) without needing DB join data; cron and sync-status fetch the KV blob once per run then fall back to DB joins for unset providers
+  - `snapConfig` — `organizationId?` (legacy field; no longer editable in the Snap tab UI — removed per user request, org-scoped URL values now go directly into URL Parameters), `allowedAdAccountIds[]`, `allowedPixelIds[]`, `campaignNamingTemplate?: NamingSegment[]` (Snap-specific), `revenueSource?: "kingsroad" | "predicto"` — pill selector in Snap tab; used by `getProviderNetworkMap()` (`src/lib/reporting/provider-network.ts`) to classify ad accounts for source-coupled cron windows (:15 vs :46) without needing DB join data; cron and sync-status fetch the KV blob once per run then fall back to DB joins for unset providers
   - `metaConfig` — `allowedAdAccountIds[]`, `allowedPixelIds[]`, `allowedPageIds[]` (Facebook Pages assigned to this provider — managed in Traffic Sources; **each page belongs to exactly one provider**, enforced by single-select assignment there), `pageId?` (legacy single page for `object_story_spec`; kept in sync = `allowedPageIds[0]`), `campaignNamingTemplate?: NamingSegment[]`; upcast defaults `allowedPageIds: []`. At Meta launch, `pickBestPage()` selects the assigned page with the most ads remaining (running counts fetched via POST /api/meta/page-ad-counts, scoped to the batch's allowed pages AND the batch's allowedAdAccountIds — narrowing the account sweep is safe only because of the one-page-one-provider invariant), falling back to `pageId`/`allowedPageIds[0]`
   - `urlConfig` — `parameters: UrlParameter[]` (key/value/encode with macro support). `UrlParameter.encode?: boolean` — when true, `encodeURIComponent` is applied to the fully resolved value in `buildUrlTemplate()`; old records without the field default to `undefined` (falsy, no change). `baseUrl` is retained in the stored shape as a backward-compat fallback but is no longer shown in the UI — base URLs are now per-domain.
   - `channelConfig` — `type: "provider-supplied" | "parameter-based"`, `channelParamKey?`
