@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { sql, runMigrations } from "@/lib/db";
 import { getSession, isSessionValid } from "@/lib/session";
 import { getProviderNetworkMap } from "@/lib/reporting/provider-network";
 
@@ -46,6 +46,11 @@ export async function GET() {
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
+
+  // Ensures visymo_report exists (idempotent rename from kingsroad_report) before
+  // the direct queries below — this route doesn't go through syncAccount()/
+  // syncMetaAccount(), which are the usual triggers for runMigrations().
+  await runMigrations();
 
   const accountIds: string[] = session.allowedAdAccountIds ?? [];
 

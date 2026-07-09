@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAllUserTokens, upsertUserToken, getAllUserMetaTokens, sql } from "@/lib/db";
+import { getAllUserTokens, upsertUserToken, getAllUserMetaTokens, sql, runMigrations } from "@/lib/db";
 import { refreshAccessToken } from "@/lib/snapchat/auth";
 import { syncAccount, syncMetaAccount } from "@/lib/reporting/sync-logic";
 import { verifyCronSecret } from "@/lib/db/token-crypto";
@@ -44,6 +44,11 @@ export async function GET(request: NextRequest) {
   if (!verifyCronSecret(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  // Ensures visymo_report exists (idempotent rename from kingsroad_report) before
+  // getAccountNetwork()'s direct query below — this runs before syncAccount()/
+  // syncMetaAccount() in the loop, which are the usual triggers for runMigrations().
+  await runMigrations();
 
   const userTokens = await getAllUserTokens();
   if (userTokens.length === 0) {
