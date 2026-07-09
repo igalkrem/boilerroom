@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
           SUM(funnel_impressions)::bigint         AS funnel_impressions,
           SUM(funnel_requests)::bigint            AS funnel_requests,
           MIN(NULLIF(domain_name, ''))            AS domain_name
-        FROM kingsroad_report
+        FROM visymo_report
         GROUP BY custom_channel_name, record_date
       ) k
         ON  s.ad_squad_id  = k.custom_channel_name

@@ -27,13 +27,21 @@ const legacySchema = z.object({
 });
 
 function upcast(raw: Record<string, unknown>): FeedProvider {
+  const snapConfig: FeedProvider["snapConfig"] = (raw.snapConfig as FeedProvider["snapConfig"]) ?? {
+    allowedAdAccountIds: [],
+    allowedPixelIds: [],
+  };
   return {
     id: raw.id as string,
     name: raw.name as string,
     createdAt: (raw.createdAt as string) ?? new Date().toISOString(),
-    snapConfig: (raw.snapConfig as FeedProvider["snapConfig"]) ?? {
-      allowedAdAccountIds: [],
-      allowedPixelIds: [],
+    snapConfig: {
+      ...snapConfig,
+      // Legacy stored value "kingsroad" → "visymo" (transparent self-heal on load).
+      revenueSource:
+        (snapConfig.revenueSource as unknown as string) === "kingsroad"
+          ? "visymo"
+          : snapConfig.revenueSource,
     },
     metaConfig: raw.metaConfig
       ? {

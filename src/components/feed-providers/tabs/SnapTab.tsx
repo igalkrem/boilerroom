@@ -193,10 +193,10 @@ export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: 
       <div>
         <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Revenue Source</p>
         <div className="flex gap-2">
-          {(["kingsroad", "predicto", "none"] as const).map((val) => {
+          {(["visymo", "predicto", "none"] as const).map((val) => {
             const typed = val === "none" ? undefined : val;
             const isSelected = (snapConfig.revenueSource ?? "none") === val;
-            const label = val === "kingsroad" ? "KingsRoad" : val === "predicto" ? "Predicto" : "Not set";
+            const label = val === "visymo" ? "Visymo" : val === "predicto" ? "Predicto" : "Not set";
             return (
               <button
                 key={val}
@@ -214,7 +214,7 @@ export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: 
           })}
         </div>
         <p className="text-xs text-gray-400 mt-1">
-          Routes hourly syncs — KingsRoad accounts sync at :15, Predicto at :46.
+          Routes hourly syncs — Visymo accounts sync at :15, Predicto at :46.
         </p>
       </div>
 

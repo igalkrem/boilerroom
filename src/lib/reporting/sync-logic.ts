@@ -1,5 +1,5 @@
 import { runMigrations, sql } from "@/lib/db";
-import { fetchKingsRoadReport } from "@/lib/kingsroad";
+import { fetchVisymoReport } from "@/lib/visymo";
 import { fetchPredictoReport } from "@/lib/predicto";
 import { getAdSquadsByAccount } from "@/lib/snapchat/adsquads";
 import { getAdSquadStats } from "@/lib/snapchat/stats";
@@ -37,9 +37,9 @@ function lastUpdateWindowTime(updateMinute: number): number {
   return t.getTime();
 }
 
-// Feed-source skip check (KingsRoad / Predicto). Bypassable by `force` for manual
+// Feed-source skip check (Visymo / Predicto). Bypassable by `force` for manual
 // recovery of historical dates (e.g. Force Refresh from the dashboard).
-async function shouldSkipFeed(source: "kingsroad" | "predicto", date: string, updateMinute: number, force = false): Promise<boolean> {
+async function shouldSkipFeed(source: "visymo" | "predicto", date: string, updateMinute: number, force = false): Promise<boolean> {
   const { rows } = await sql`
     SELECT last_synced FROM report_sync_log
     WHERE source = ${source} AND sync_date = ${date} AND ad_account_id = ''
@@ -122,7 +122,7 @@ export function buildRanges(dates: string[]): Array<[string, string]> {
 
 export interface SyncResult {
   snapchat: { synced: number; skipped: number; error: string | null };
-  kingsroad: { synced: number; skipped: number };
+  visymo: { synced: number; skipped: number };
   predicto: { synced: number; skipped: number };
   debug: {
     squads_found: number;
@@ -146,29 +146,29 @@ export async function syncAccount(
   const dates = dateRange(startDate, endDate);
   let snapchatSynced = 0;
   let snapchatSkipped = 0;
-  let kingsroadSynced = 0;
-  let kingsroadSkipped = 0;
+  let visymoSynced = 0;
+  let visymoSkipped = 0;
   let predictoSynced = 0;
   let predictoSkipped = 0;
 
-  // ── KingsRoad ─────────────────────────────────────────────────────────────
-  const kingsroadDatesToFetch: string[] = [];
+  // ── Visymo ────────────────────────────────────────────────────────────────
+  const visymoDatesToFetch: string[] = [];
   for (const date of dates) {
-    if (await shouldSkipFeed("kingsroad", date, 15, force)) {
-      kingsroadSkipped++;
+    if (await shouldSkipFeed("visymo", date, 15, force)) {
+      visymoSkipped++;
     } else {
-      kingsroadDatesToFetch.push(date);
+      visymoDatesToFetch.push(date);
     }
   }
 
-  if (kingsroadDatesToFetch.length > 0) {
-    const ranges = buildRanges(kingsroadDatesToFetch);
+  if (visymoDatesToFetch.length > 0) {
+    const ranges = buildRanges(visymoDatesToFetch);
     try {
       for (const [krStart, krEnd] of ranges) {
-        const rows = await fetchKingsRoadReport(krStart, krEnd);
+        const rows = await fetchVisymoReport(krStart, krEnd);
         for (const r of rows) {
           await sql`
-            INSERT INTO kingsroad_report
+            INSERT INTO visymo_report
               (record_date, custom_channel_name, country_code, domain_name,
                ad_requests, clicks, earnings_eur, page_views,
                individual_ad_impressions, matched_ad_requests,
@@ -193,12 +193,12 @@ export async function syncAccount(
           `;
         }
       }
-      for (const date of kingsroadDatesToFetch) {
-        await markSynced("kingsroad", date, "");
-        kingsroadSynced++;
+      for (const date of visymoDatesToFetch) {
+        await markSynced("visymo", date, "");
+        visymoSynced++;
       }
     } catch (err) {
-      console.error("[reporting/sync] KingsRoad fetch error:", err);
+      console.error("[reporting/sync] Visymo fetch error:", err);
     }
   }
 
@@ -337,7 +337,7 @@ export async function syncAccount(
 
   return {
     snapchat: { synced: snapchatSynced, skipped: snapchatSkipped, error: snapchatError },
-    kingsroad: { synced: kingsroadSynced, skipped: kingsroadSkipped },
+    visymo: { synced: visymoSynced, skipped: visymoSkipped },
     predicto: { synced: predictoSynced, skipped: predictoSkipped },
     debug: {
       squads_found: debugSquads.length,

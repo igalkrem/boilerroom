@@ -27,7 +27,7 @@ export interface FeedProvider {
     allowedAdAccountIds: string[];
     allowedPixelIds: string[];
     campaignNamingTemplate?: NamingSegment[]; // Snap-specific naming template; segments joined by " | "
-    revenueSource?: "kingsroad" | "predicto"; // used by cron to route sync windows (:15 vs :46)
+    revenueSource?: "visymo" | "predicto"; // used by cron to route sync windows (:15 vs :46)
   };
   // Meta tab
   metaConfig?: {

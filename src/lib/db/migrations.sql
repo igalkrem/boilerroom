@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS snapchat_ad_squad_stats (
   PRIMARY KEY (ad_squad_id, stat_date, country_code)
 );
 
-CREATE TABLE IF NOT EXISTS kingsroad_report (
+CREATE TABLE IF NOT EXISTS visymo_report (
   record_date               DATE           NOT NULL,
   custom_channel_name       TEXT           NOT NULL,
   country_code              TEXT           NOT NULL DEFAULT '',
@@ -53,7 +53,7 @@ ALTER TABLE feed_provider_channels ADD COLUMN IF NOT EXISTS google_user_id TEXT 
 CREATE INDEX IF NOT EXISTS fpc_fp_status ON feed_provider_channels(feed_provider_id, status);
 CREATE INDEX IF NOT EXISTS fpc_user ON feed_provider_channels(google_user_id);
 
-ALTER TABLE kingsroad_report ADD COLUMN IF NOT EXISTS funnel_requests BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE visymo_report ADD COLUMN IF NOT EXISTS funnel_requests BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE snapchat_ad_squad_stats ADD COLUMN IF NOT EXISTS ad_squad_name TEXT NOT NULL DEFAULT '';
 ALTER TABLE snapchat_ad_squad_stats ADD COLUMN IF NOT EXISTS conversion_purchases BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE snapchat_ad_squad_stats ADD COLUMN IF NOT EXISTS conversion_purchase_value BIGINT NOT NULL DEFAULT 0;

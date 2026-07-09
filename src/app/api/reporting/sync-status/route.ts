@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 
 async function getNetworkForAccount(
   id: string,
-  providerMap: Map<string, "kingsroad" | "predicto">
-): Promise<"kingsroad" | "predicto" | "unknown"> {
+  providerMap: Map<string, "visymo" | "predicto">
+): Promise<"visymo" | "predicto" | "unknown"> {
   // 1. Explicit provider config (authoritative)
   const fromProvider = providerMap.get(id);
   if (fromProvider) return fromProvider;
@@ -16,13 +16,13 @@ async function getNetworkForAccount(
   // 2. DB join fallback
   const [kr, pred] = await Promise.all([
     sql`SELECT 1 FROM snapchat_ad_squad_stats sas
-        INNER JOIN kingsroad_report kr ON kr.custom_channel_name = sas.ad_squad_id
+        INNER JOIN visymo_report kr ON kr.custom_channel_name = sas.ad_squad_id
         WHERE sas.ad_account_id = ${id} LIMIT 1`,
     sql`SELECT 1 FROM snapchat_ad_squad_stats sas
         INNER JOIN feed_provider_channels fpc ON fpc.ad_squad_snap_id = sas.ad_squad_id
         WHERE sas.ad_account_id = ${id} LIMIT 1`,
   ]);
-  if (kr.rows.length > 0) return "kingsroad";
+  if (kr.rows.length > 0) return "visymo";
   if (pred.rows.length > 0) return "predicto";
   return "unknown";
 }
@@ -51,12 +51,12 @@ export async function GET() {
 
   const [krFeed, predFeed] = await Promise.all([
     sql`SELECT MAX(last_synced) as ts FROM report_sync_log
-        WHERE source = 'kingsroad' AND sync_date >= CURRENT_DATE - 1`,
+        WHERE source = 'visymo' AND sync_date >= CURRENT_DATE - 1`,
     sql`SELECT MAX(last_synced) as ts FROM report_sync_log
         WHERE source = 'predicto' AND sync_date >= CURRENT_DATE - 1`,
   ]);
 
-  const kingsroadFeedTs: string | null = krFeed.rows[0]?.ts
+  const visymoFeedTs: string | null = krFeed.rows[0]?.ts
     ? new Date(krFeed.rows[0].ts as string).toISOString()
     : null;
   const predictoFeedTs: string | null = predFeed.rows[0]?.ts
@@ -65,7 +65,7 @@ export async function GET() {
 
   const providerMap = await getProviderNetworkMap(session.googleUserId ?? "");
   const networkMap = await Promise.all(accountIds.map((id) => getNetworkForAccount(id, providerMap).then((n) => ({ id, n }))));
-  const krAccountIds = networkMap.filter((x) => x.n === "kingsroad").map((x) => x.id);
+  const krAccountIds = networkMap.filter((x) => x.n === "visymo").map((x) => x.id);
   const predAccountIds = networkMap.filter((x) => x.n === "predicto").map((x) => x.id);
   // Accounts not yet classified by DB data — include in both groups so they show some status
   const unknownIds = networkMap.filter((x) => x.n === "unknown").map((x) => x.id);
@@ -81,10 +81,10 @@ export async function GET() {
   }
 
   return NextResponse.json({
-    kingsroad: {
-      feedLastSynced: kingsroadFeedTs,
+    visymo: {
+      feedLastSynced: visymoFeedTs,
       snapLastSynced: krSnapTs,
-      inSync: inSync(kingsroadFeedTs, krSnapTs),
+      inSync: inSync(visymoFeedTs, krSnapTs),
     },
     predicto: {
       feedLastSynced: predictoFeedTs,

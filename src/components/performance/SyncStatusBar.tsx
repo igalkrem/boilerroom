@@ -9,7 +9,7 @@ interface FeedStatus {
 }
 
 interface SyncStatusData {
-  kingsroad: FeedStatus;
+  visymo: FeedStatus;
   predicto: FeedStatus;
 }
 
@@ -18,7 +18,7 @@ function minutesAgo(ts: string | null): number | null {
   return Math.floor((Date.now() - new Date(ts).getTime()) / 60_000);
 }
 
-// Feeds sync every ~60 min (cron :17). Older than 75 min = a cron cycle was missed.
+// Feeds sync every ~60 min (cron :15). Older than 75 min = a cron cycle was missed.
 const FEED_OVERDUE_MINUTES = 75;
 
 function StatusPill({
@@ -112,7 +112,7 @@ export function SyncStatusBar({
       <div className="flex items-center gap-4 text-xs">
         {status ? (
           <>
-            <FeedRow name="KingsRoad" status={status.kingsroad} />
+            <FeedRow name="Visymo" status={status.visymo} />
             <span className="text-gray-700">|</span>
             <FeedRow name="Predicto" status={status.predicto} />
           </>

@@ -112,7 +112,7 @@ export default function PerformancePage() {
     setLast30Rows(results.flatMap((r) => r.status === "fulfilled" ? (r.value.rows ?? []) : []));
   }, [metaAccounts]);
 
-  // ── Sync then reload (slow — hits Snapchat + KingsRoad + Meta APIs) ──────
+  // ── Sync then reload (slow — hits Snapchat + Visymo + Meta APIs) ──────
   const syncAndReload = useCallback(async (accts: SnapAdAccount[], start: string, end: string, force = true, includeHistorical = true) => {
     if ((accts.length === 0 && metaAccounts.length === 0) || isRefreshing.current) return;
     isRefreshing.current = true;
@@ -307,10 +307,10 @@ export default function PerformancePage() {
           // Cron-miss safety net: auto-heal if any feed is overdue (>75 min).
           void fetch("/api/reporting/sync-status")
             .then((r) => r.json())
-            .then((s: { kingsroad: { feedLastSynced: string | null }; predicto: { feedLastSynced: string | null } }) => {
+            .then((s: { visymo: { feedLastSynced: string | null }; predicto: { feedLastSynced: string | null } }) => {
               const overdue = (ts: string | null) =>
                 ts !== null && (Date.now() - new Date(ts).getTime()) / 60_000 > 75;
-              if (overdue(s.kingsroad.feedLastSynced) || overdue(s.predicto.feedLastSynced)) {
+              if (overdue(s.visymo.feedLastSynced) || overdue(s.predicto.feedLastSynced)) {
                 void syncAndReload(activeAccounts, startDate, endDate, true);
               }
             })
@@ -350,7 +350,7 @@ export default function PerformancePage() {
     <div>
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Performance</h1>
       <p className="text-sm text-gray-500 mb-4">
-        Full-funnel metrics — Snapchat &amp; Meta spend joined with KingsRoad revenue.
+        Full-funnel metrics — Snapchat &amp; Meta spend joined with Visymo revenue.
       </p>
 
       <SyncStatusBar

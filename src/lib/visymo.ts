@@ -8,7 +8,7 @@ function token(): string {
   return t;
 }
 
-export interface KingsRoadRow {
+export interface VisymoRow {
   record_date: string;
   country_name: string;
   country_code: string;
@@ -47,8 +47,8 @@ interface PageResponse {
   results: ApiRow[];
 }
 
-export async function fetchKingsRoadReport(startDate: string, endDate: string): Promise<KingsRoadRow[]> {
-  const rows: KingsRoadRow[] = [];
+export async function fetchVisymoReport(startDate: string, endDate: string): Promise<VisymoRow[]> {
+  const rows: VisymoRow[] = [];
   let url: string | null =
     `${BASE_URL}/report/?start_date=${startDate}&end_date=${endDate}&page_size=2000&page=1`;
 
@@ -59,7 +59,7 @@ export async function fetchKingsRoadReport(startDate: string, endDate: string): 
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`KingsRoad API error ${res.status}: ${body}`);
+      throw new Error(`Visymo API error ${res.status}: ${body}`);
     }
     const page = await res.json() as PageResponse;
     for (const r of page.results) {
@@ -85,12 +85,12 @@ export async function fetchKingsRoadReport(startDate: string, endDate: string): 
       try {
         const parsed = new URL(nextUrl);
         if (parsed.origin !== "https://partnerhub-api.kingsroad.io") {
-          console.error("[kingsroad] unexpected pagination origin — aborting:", parsed.origin);
+          console.error("[visymo] unexpected pagination origin — aborting:", parsed.origin);
           break;
         }
         url = nextUrl;
       } catch {
-        console.error("[kingsroad] invalid next URL — aborting:", nextUrl);
+        console.error("[visymo] invalid next URL — aborting:", nextUrl);
         break;
       }
     } else {

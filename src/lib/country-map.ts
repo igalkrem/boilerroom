@@ -1,4 +1,4 @@
-// Maps uppercase country names (as returned by KingsRoad) to ISO-2 codes.
+// Maps uppercase country names (as returned by Visymo) to ISO-2 codes.
 // Snapchat stats use ISO-2 codes for the country breakdown dimension.
 const NAME_TO_CODE: Record<string, string> = {
   "AFGHANISTAN": "AF", "ALBANIA": "AL", "ALGERIA": "DZ", "ANDORRA": "AD",

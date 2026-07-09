@@ -42,5 +42,5 @@ export async function POST(request: NextRequest) {
 
   // Pass undefined for accessToken so snapFetch uses the session (with its refresh logic).
   const result = await syncAccount(adAccountId, startDate, endDate, timezone, undefined, force);
-  return NextResponse.json({ snapchat: result.snapchat, kingsroad: result.kingsroad, predicto: result.predicto });
+  return NextResponse.json({ snapchat: result.snapchat, visymo: result.visymo, predicto: result.predicto });
 }

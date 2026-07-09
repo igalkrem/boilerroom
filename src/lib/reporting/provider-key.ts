@@ -8,7 +8,7 @@ interface ProviderKeyRow {
 
 // Three-tier provider resolution used by both PerformanceTable and PerformanceSummaryTables.
 // Tier 1: feed_provider_id from DB (set via feed_provider_channels LATERAL JOIN)
-// Tier 2: domain_name matched against provider.domains[].baseDomain (KingsRoad campaigns)
+// Tier 2: domain_name matched against provider.domains[].baseDomain (Visymo campaigns)
 // Tier 3: ad_account_id matched against provider.snapConfig.allowedAdAccountIds (all others)
 export function resolveProviderKey(r: ProviderKeyRow, providers: FeedProvider[]): string {
   if (r.feed_provider_id) return r.feed_provider_id;

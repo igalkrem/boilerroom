@@ -9,6 +9,21 @@ let migrated = false;
 
 export async function runMigrations(): Promise<void> {
   if (migrated) return;
+
+  // Idempotent kingsroad_report → visymo_report rename. MUST run before the
+  // statement loop below — migrations.sql's `CREATE TABLE IF NOT EXISTS
+  // visymo_report` would otherwise pre-create an empty table and make the
+  // ALTER TABLE ... RENAME fail with "relation already exists".
+  const { rows: renameCheck } = await sql`
+    SELECT table_name FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name IN ('kingsroad_report', 'visymo_report')
+  `;
+  const hasOldReportTable = renameCheck.some((r) => r.table_name === "kingsroad_report");
+  const hasNewReportTable = renameCheck.some((r) => r.table_name === "visymo_report");
+  if (hasOldReportTable && !hasNewReportTable) {
+    await sql`ALTER TABLE IF EXISTS kingsroad_report RENAME TO visymo_report`;
+  }
+
   const migrationsPath = path.join(process.cwd(), "src/lib/db/migrations.sql");
   const ddl = readFileSync(migrationsPath, "utf8");
   const statements = ddl

@@ -8,8 +8,8 @@ import { getProviderNetworkMap } from "@/lib/reporting/provider-network";
 
 async function getAccountNetwork(
   adAccountId: string,
-  providerMap: Map<string, "kingsroad" | "predicto">
-): Promise<"kingsroad" | "predicto" | "unknown"> {
+  providerMap: Map<string, "visymo" | "predicto">
+): Promise<"visymo" | "predicto" | "unknown"> {
   // 1. Explicit provider config (authoritative — no DB data required)
   const fromProvider = providerMap.get(adAccountId);
   if (fromProvider) return fromProvider;
@@ -17,13 +17,13 @@ async function getAccountNetwork(
   // 2. DB join fallback for accounts not yet configured with revenueSource
   const [kr, pred] = await Promise.all([
     sql`SELECT 1 FROM snapchat_ad_squad_stats sas
-        INNER JOIN kingsroad_report kr ON kr.custom_channel_name = sas.ad_squad_id
+        INNER JOIN visymo_report kr ON kr.custom_channel_name = sas.ad_squad_id
         WHERE sas.ad_account_id = ${adAccountId} LIMIT 1`,
     sql`SELECT 1 FROM snapchat_ad_squad_stats sas
         INNER JOIN feed_provider_channels fpc ON fpc.ad_squad_snap_id = sas.ad_squad_id
         WHERE sas.ad_account_id = ${adAccountId} LIMIT 1`,
   ]);
-  if (kr.rows.length > 0) return "kingsroad";
+  if (kr.rows.length > 0) return "visymo";
   if (pred.rows.length > 0) return "predicto";
   return "unknown";
 }
@@ -53,9 +53,9 @@ export async function GET(request: NextRequest) {
   const today = todayStr();
   const startDate = nDaysAgoStr(1); // today + yesterday
 
-  // :17 run = KingsRoad window (sync KingsRoad feed + KingsRoad Snap accounts)
-  // :47 run = Predicto window  (sync Predicto feed + Predicto Snap accounts)
-  const isKingsRoadRun = new Date().getUTCMinutes() < 30;
+  // :15 run = Visymo window (sync Visymo feed + Visymo Snap accounts)
+  // :46 run = Predicto window  (sync Predicto feed + Predicto Snap accounts)
+  const isVisymoRun = new Date().getUTCMinutes() < 30;
 
   let totalUsers = 0;
   let totalAccounts = 0;
@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
 
       const accountsToSync = classified.filter(({ network }) =>
         network === "unknown" ||
-        (isKingsRoadRun ? network === "kingsroad" : network === "predicto")
+        (isVisymoRun ? network === "visymo" : network === "predicto")
       );
 
       await Promise.allSettled(
