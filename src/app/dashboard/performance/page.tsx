@@ -181,6 +181,7 @@ export default function PerformancePage() {
         daily_budget_micro?: number;
         bid_micro?: number;
         status?: "ACTIVE" | "PAUSED";
+        campaign_id?: string;
       }>;
     };
 
@@ -207,7 +208,7 @@ export default function PerformancePage() {
         throw new Error(`HTTP ${r.status}`);
       }
       const d = await r.json();
-      const adSets: Array<{ id: string; daily_budget?: number; bid_amount?: number; status?: string }> = d.adSets ?? [];
+      const adSets: Array<{ id: string; daily_budget?: number; bid_amount?: number; status?: string; campaign_id?: string }> = d.adSets ?? [];
       return {
         accountId,
         squads: adSets.map((s) => ({
@@ -215,6 +216,7 @@ export default function PerformancePage() {
           daily_budget_micro: (s.daily_budget ?? 0) * 10_000,
           bid_micro: (s.bid_amount ?? 0) * 10_000,
           status: (s.status === "ACTIVE" ? "ACTIVE" : "PAUSED") as "ACTIVE" | "PAUSED",
+          campaign_id: s.campaign_id,
         })),
       };
     }
@@ -266,6 +268,8 @@ export default function PerformancePage() {
                 bid_micro: s.bid_micro ?? 0,
                 ad_account_id: r.value.accountId,
                 status: s.status ?? "ACTIVE",
+                campaign_id: s.campaign_id,
+                business_id: a.business?.id,
               });
             }
           } else {

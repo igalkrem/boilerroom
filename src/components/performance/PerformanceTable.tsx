@@ -38,12 +38,17 @@ function PlatformIcon({ platform, className }: { platform: "snap" | "meta"; clas
 // an opaque manageViewId the UI generates, not derivable from the ad squad id).
 // Meta opens the Ad Sets tab filtered to the ad set. Returns null when the row
 // can't produce a valid URL (totals row / missing account id) → non-clickable.
-function buildTrafficSourceUrl(row: AggrRow): string | null {
+function buildTrafficSourceUrl(row: AggrRow, detail?: SquadDetail): string | null {
   if (row.ad_squad_id === "__totals__") return null;
   if (row.platform === "meta") {
-    const acct = row.ad_account_id?.replace(/^act_/, "");
+    const acct = (detail?.ad_account_id ?? row.ad_account_id)?.replace(/^act_/, "");
     if (!acct || !row.ad_squad_id) return null;
-    return `https://adsmanager.facebook.com/adsmanager/manage/adsets?act=${acct}&selected_adset_ids=${row.ad_squad_id}`;
+    const params = new URLSearchParams({ act: acct });
+    if (detail?.business_id) params.set("business_id", detail.business_id);
+    if (detail?.campaign_id) params.set("selected_campaign_ids", detail.campaign_id);
+    params.set("selected_adset_ids", row.ad_squad_id);
+    params.set("nav_source", "no_referrer");
+    return `https://adsmanager.facebook.com/adsmanager/manage/adsets?${params.toString()}`;
   }
   if (!row.ad_account_id) return null;
   return `https://ads.snapchat.com/${row.ad_account_id}/manage`;
@@ -54,6 +59,8 @@ export interface SquadDetail {
   bid_micro: number;
   ad_account_id: string;
   status: "ACTIVE" | "PAUSED";
+  campaign_id?: string;   // Meta only — parent campaign id, for Ads Manager deep-link
+  business_id?: string;   // Meta only — Business Manager id, for Ads Manager deep-link
 }
 
 interface Props {
@@ -1543,7 +1550,7 @@ export function PerformanceTable({
                 const isSelected = selectedIds.has(r.ad_squad_id);
                 const isActive = detail ? detail.status === "ACTIVE" : false;
                 const isHidden = hiddenSquadIds.has(r.ad_squad_id);
-                const trafficUrl = buildTrafficSourceUrl(r);
+                const trafficUrl = buildTrafficSourceUrl(r, detail);
 
                 const stripeColor = providerColorMap[resolveProviderKey(r, providers)] ?? "transparent";
 
