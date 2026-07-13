@@ -28,10 +28,21 @@ export default function PerformancePage() {
   const { accounts: metaAccounts } = useMetaAdAccounts();
   const [adAccountConfigs] = useState(() => loadAdAccountConfigs());
 
+  // Only fall back to "show all" for a fresh user who has never configured any
+  // account. Once configs exist, respect the hidden flag exactly — including the
+  // case where every account is hidden (show nothing), so hidden accounts from
+  // Traffic Sources never leak back onto the dashboard.
   const activeAccounts = useMemo(() => {
-    const visible = accounts.filter((a) => !adAccountConfigs.find((c) => c.id === a.id)?.hidden);
-    return visible.length > 0 ? visible : accounts;
+    if (adAccountConfigs.length === 0) return accounts;
+    return accounts.filter((a) => !adAccountConfigs.find((c) => c.id === a.id)?.hidden);
   }, [accounts, adAccountConfigs]);
+
+  // Same hidden-filter applied to Meta accounts (previously the dashboard used the
+  // raw metaAccounts hook output, so hidden Meta accounts still showed all campaigns).
+  const activeMetaAccounts = useMemo(() => {
+    if (adAccountConfigs.length === 0) return metaAccounts;
+    return metaAccounts.filter((a) => !adAccountConfigs.find((c) => c.id === a.id)?.hidden);
+  }, [metaAccounts, adAccountConfigs]);
 
   const today = todayStr();
   const [startDate, setStartDate] = useState(today);
@@ -66,7 +77,7 @@ export default function PerformancePage() {
   const loadFromDb = useCallback(async (accts: SnapAdAccount[], start: string, end: string) => {
     const allIds = [
       ...accts.map((a) => a.id),
-      ...metaAccounts.map((a) => a.id),
+      ...activeMetaAccounts.map((a) => a.id),
     ];
     if (allIds.length === 0) return;
     setLoading(true);
@@ -95,11 +106,11 @@ export default function PerformancePage() {
     setLastLoaded(new Date());
     setLoading(false);
     return allRows.length;
-  }, [metaAccounts]);
+  }, [activeMetaAccounts]);
 
   // ── Last-30-days fetch for By Date summary table (ignores date picker) ──────
   const loadLast30Days = useCallback(async (accts: SnapAdAccount[]) => {
-    const allIds = [...accts.map((a) => a.id), ...metaAccounts.map((a) => a.id)];
+    const allIds = [...accts.map((a) => a.id), ...activeMetaAccounts.map((a) => a.id)];
     if (allIds.length === 0) return;
     const end = todayStr();
     const start = dateMinus(end, 29);
@@ -110,11 +121,11 @@ export default function PerformancePage() {
       )
     );
     setLast30Rows(results.flatMap((r) => r.status === "fulfilled" ? (r.value.rows ?? []) : []));
-  }, [metaAccounts]);
+  }, [activeMetaAccounts]);
 
   // ── Sync then reload (slow — hits Snapchat + Visymo + Meta APIs) ──────
   const syncAndReload = useCallback(async (accts: SnapAdAccount[], start: string, end: string, force = true, includeHistorical = true) => {
-    if ((accts.length === 0 && metaAccounts.length === 0) || isRefreshing.current) return;
+    if ((accts.length === 0 && activeMetaAccounts.length === 0) || isRefreshing.current) return;
     isRefreshing.current = true;
     setError(null);
 
@@ -145,7 +156,7 @@ export default function PerformancePage() {
       return calls;
     });
 
-    const metaSyncs = metaAccounts.flatMap((a) => {
+    const metaSyncs = activeMetaAccounts.flatMap((a) => {
       const calls: Promise<Response>[] = [
         fetch("/api/reporting/meta-sync", {
           method: "POST",
@@ -171,7 +182,7 @@ export default function PerformancePage() {
     await loadFromDb(accts, start, end);
     setSyncRefreshTrigger((n) => n + 1);
     isRefreshing.current = false;
-  }, [loadFromDb, metaAccounts]);
+  }, [loadFromDb, activeMetaAccounts]);
 
   const loadSquadDetails = useCallback(async (accts: SnapAdAccount[]) => {
     type AccountSquads = {
@@ -251,13 +262,13 @@ export default function PerformancePage() {
       });
     }
 
-    if (metaAccounts.length > 0) {
-      const metaResults = await Promise.allSettled(metaAccounts.map((a) => fetchMetaOne(a.id)));
+    if (activeMetaAccounts.length > 0) {
+      const metaResults = await Promise.allSettled(activeMetaAccounts.map((a) => fetchMetaOne(a.id)));
       setSquadDetails((prev) => {
         const next = new Map(prev);
         for (let i = 0; i < metaResults.length; i++) {
           const r = metaResults[i];
-          const a = metaAccounts[i];
+          const a = activeMetaAccounts[i];
           if (r.status === "fulfilled") {
             for (const [squadId, d] of next) {
               if (d.ad_account_id === a.id) next.delete(squadId);
@@ -286,7 +297,7 @@ export default function PerformancePage() {
         ? `Could not load campaign settings for ${failedIds.length} ad account${failedIds.length === 1 ? "" : "s"} — refresh to retry.`
         : null
     );
-  }, [metaAccounts]);
+  }, [activeMetaAccounts]);
 
   const updateSquadDetail = useCallback((squadId: string, patch: Partial<SquadDetail>) => {
     setSquadDetails((prev) => {
@@ -301,7 +312,7 @@ export default function PerformancePage() {
   // ── On mount: load from DB immediately (cron keeps it fresh) ──────────────
   const didLoad = useRef(false);
   useEffect(() => {
-    if (activeAccounts.length > 0 && !didLoad.current) {
+    if ((activeAccounts.length > 0 || activeMetaAccounts.length > 0) && !didLoad.current) {
       didLoad.current = true;
       void loadFromDb(activeAccounts, startDate, endDate).then((count) => {
         if (count === 0) {
@@ -324,14 +335,14 @@ export default function PerformancePage() {
       void loadLast30Days(activeAccounts);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAccounts]);
+  }, [activeAccounts, activeMetaAccounts]);
 
   // ── Load squad details after rows populate ─────────────────────────────────
   useEffect(() => {
-    if (rows.length > 0 && activeAccounts.length > 0) {
+    if (rows.length > 0 && (activeAccounts.length > 0 || activeMetaAccounts.length > 0)) {
       void loadSquadDetails(activeAccounts);
     }
-  }, [rows, activeAccounts, loadSquadDetails]);
+  }, [rows, activeAccounts, activeMetaAccounts, loadSquadDetails]);
 
 
   function handleDateChange(start: string, end: string) {
