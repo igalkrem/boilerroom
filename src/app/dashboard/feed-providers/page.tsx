@@ -34,8 +34,13 @@ function ProviderCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const firstDomain = provider.domains[0]?.baseDomain ?? provider.urlConfig.baseUrl ?? "";
+  const firstDomain =
+    provider.domains[0]?.baseDomain ??
+    provider.snapConfig.urlConfig?.baseUrl ??
+    provider.urlConfig?.baseUrl ??
+    "";
   const displayUrl = firstDomain.replace(/^https?:\/\//, "");
+  const channelType = provider.snapConfig.channelConfig?.type ?? provider.channelConfig?.type;
 
   return (
     <div
@@ -52,12 +57,12 @@ function ProviderCard({
         </div>
         <span
           className={`shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full border ${
-            provider.channelConfig.type === "provider-supplied"
+            channelType === "provider-supplied"
               ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800"
               : "bg-gray-50 text-gray-500 border-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600"
           }`}
         >
-          {provider.channelConfig.type === "provider-supplied" ? "Channel list" : "Param-based"}
+          {channelType === "provider-supplied" ? "Channel list" : "Param-based"}
         </span>
       </div>
 

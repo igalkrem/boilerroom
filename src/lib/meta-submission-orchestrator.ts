@@ -74,7 +74,8 @@ export async function runMetaSubmission(
 
   // ── Stage 2: Channel assignment ──────────────────────────────────────────
   let channelId = "";
-  if (provider?.channelConfig.type === "provider-supplied") {
+  const metaChannelType = provider?.metaConfig?.channelConfig?.type ?? provider?.channelConfig?.type;
+  if (metaChannelType === "provider-supplied") {
     try {
       const res = await fetch("/api/feed-providers/channels/assign", {
         method: "POST",

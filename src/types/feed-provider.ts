@@ -15,7 +15,19 @@ export interface FeedProviderDomain {
   id: string;
   baseDomain: string;
   baseUrl?: string; // per-domain base URL for URL template building
-  trafficSources: string[]; // e.g. ["Snap"]
+  trafficSources: string[]; // which traffic sources may use this domain: "Snap" | "Meta"
+}
+
+// URL parameters + base URL. Now lives per traffic source (snapConfig / metaConfig).
+export interface UrlConfig {
+  baseUrl: string;
+  parameters: UrlParameter[];
+}
+
+// Channel pool setup. Now lives per traffic source (snapConfig / metaConfig).
+export interface ChannelConfig {
+  type: ChannelSetupType;
+  channelParamKey?: string; // parameter-based: e.g. "asid"
 }
 
 export interface FeedProvider {
@@ -23,42 +35,50 @@ export interface FeedProvider {
   name: string;
   // Snap tab
   snapConfig: {
-    organizationId?: string; // resolves {{organization_id}} macro in URL templates
+    organizationId?: string; // legacy; resolves {{organization_id}} macro in URL templates
     allowedAdAccountIds: string[];
     allowedPixelIds: string[];
     campaignNamingTemplate?: NamingSegment[]; // Snap-specific naming template; segments joined by " | "
     revenueSource?: "visymo" | "predicto"; // used by cron to route sync windows (:15 vs :46)
+    urlConfig?: UrlConfig; // per-source URL parameters
+    channelConfig?: ChannelConfig; // per-source channel pool setup
   };
-  // Meta tab
+  // Meta / Facebook tab
   metaConfig?: {
     allowedAdAccountIds: string[];
     allowedPixelIds: string[];
     pageId?: string; // legacy single page; kept in sync = first assigned page (allowedPageIds[0])
     allowedPageIds?: string[]; // Facebook Pages assigned to this provider (managed in Traffic Sources)
     campaignNamingTemplate?: NamingSegment[];
+    revenueSource?: "predicto_fb"; // Facebook-traffic revenue source (informational — Meta syncs every cron run)
+    urlConfig?: UrlConfig; // per-source URL parameters
+    channelConfig?: ChannelConfig; // per-source channel pool setup
   };
-  // URL Parameters tab
-  urlConfig: {
-    baseUrl: string;
-    parameters: UrlParameter[];
-  };
-  // Channels tab
-  channelConfig: {
-    type: ChannelSetupType;
-    channelParamKey?: string; // parameter-based: e.g. "asid"
-  };
-  // Domains tab
+  // Domains — one shared list, each domain tagged with the traffic sources allowed to use it
   domains: FeedProviderDomain[];
+  // DEPRECATED provider-level fields — kept for back-compat reads; upcast() migrates
+  // them into snapConfig. Do not write to these going forward.
+  urlConfig?: UrlConfig;
+  channelConfig?: ChannelConfig;
   createdAt: string;
 }
 
 export function emptyFeedProvider(): Omit<FeedProvider, "id" | "createdAt"> {
   return {
     name: "",
-    snapConfig: { allowedAdAccountIds: [], allowedPixelIds: [] },
-    metaConfig: { allowedAdAccountIds: [], allowedPixelIds: [], allowedPageIds: [] },
-    urlConfig: { baseUrl: "", parameters: [] },
-    channelConfig: { type: "parameter-based" },
+    snapConfig: {
+      allowedAdAccountIds: [],
+      allowedPixelIds: [],
+      urlConfig: { baseUrl: "", parameters: [] },
+      channelConfig: { type: "parameter-based" },
+    },
+    metaConfig: {
+      allowedAdAccountIds: [],
+      allowedPixelIds: [],
+      allowedPageIds: [],
+      urlConfig: { baseUrl: "", parameters: [] },
+      channelConfig: { type: "parameter-based" },
+    },
     domains: [],
   };
 }

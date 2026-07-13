@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { FeedProvider } from "@/types/feed-provider";
+import type { ChannelConfig } from "@/types/feed-provider";
 import type { ChannelRow } from "@/lib/db";
 
 interface ChannelGroup {
@@ -12,11 +12,12 @@ interface ChannelGroup {
 
 interface ChannelsTabProps {
   feedProviderId: string | null; // null when creating new provider (not yet saved)
-  channelConfig: FeedProvider["channelConfig"];
-  onChange: (config: FeedProvider["channelConfig"]) => void;
+  channelConfig: ChannelConfig;
+  onChange: (config: ChannelConfig) => void;
+  trafficSource?: "Snap" | "Meta"; // channel pool is scoped per traffic source
 }
 
-export function ChannelsTab({ feedProviderId, channelConfig, onChange }: ChannelsTabProps) {
+export function ChannelsTab({ feedProviderId, channelConfig, onChange, trafficSource = "Snap" }: ChannelsTabProps) {
   const [channels, setChannels] = useState<ChannelGroup | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -32,24 +33,28 @@ export function ChannelsTab({ feedProviderId, channelConfig, onChange }: Channel
     if (!feedProviderId) return;
     setLoading(true);
     try {
-      const r = await fetch(`/api/feed-providers/channels?feedProviderId=${feedProviderId}`);
+      const r = await fetch(
+        `/api/feed-providers/channels?feedProviderId=${feedProviderId}&trafficSource=${trafficSource}`
+      );
       if (r.ok) setChannels(await r.json());
     } finally {
       setLoading(false);
     }
-  }, [feedProviderId]);
+  }, [feedProviderId, trafficSource]);
 
   useEffect(() => {
     if (channelConfig.type === "provider-supplied") loadChannels();
   }, [channelConfig.type, loadChannels]);
 
+  // Every uploaded channel is tagged with this tab's traffic source (the source
+  // is implied by which tab you're in, not a per-row column).
   function parseLines(text: string) {
     return text
       .split(/\r?\n/)
       .filter(Boolean)
       .map((line) => {
         const parts = line.split(",");
-        return { channelId: parts[0]?.trim() ?? "", trafficSource: parts[1]?.trim() ?? "Snap" };
+        return { channelId: parts[0]?.trim() ?? "", trafficSource };
       })
       .filter((r) => r.channelId);
   }

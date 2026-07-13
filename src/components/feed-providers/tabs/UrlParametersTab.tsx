@@ -2,7 +2,7 @@
 
 import React, { useRef } from "react";
 import { Input } from "@/components/ui";
-import type { FeedProvider, UrlParameter } from "@/types/feed-provider";
+import type { UrlConfig, UrlParameter } from "@/types/feed-provider";
 
 const MACROS: Array<{ label: string; title: string; source: "snap" | "br" }> = [
   { label: "{{campaign.id}}",      title: "Substituted by Snapchat at click time", source: "snap" },
@@ -17,12 +17,16 @@ const MACROS: Array<{ label: string; title: string; source: "snap" | "br" }> = [
 ];
 
 interface UrlParametersTabProps {
-  urlConfig: FeedProvider["urlConfig"];
-  onChange: (config: FeedProvider["urlConfig"]) => void;
+  urlConfig: UrlConfig;
+  onChange: (config: UrlConfig) => void;
   hideBaseUrl?: boolean;
+  platform?: "snap" | "meta";
 }
 
-export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParametersTabProps) {
+export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl, platform = "snap" }: UrlParametersTabProps) {
+  const nativeLabel = platform === "meta" ? "Meta Native" : "Snapchat Native";
+  const nativeHelp = platform === "meta" ? "resolved when the ad is created" : "substituted at click time";
+  const brHelp = platform === "meta" ? "resolved before sending to Meta" : "resolved before sending to Snapchat";
   const lastActiveIndexRef = useRef<number | null>(null);
   const valueRefs = useRef<Array<HTMLInputElement | null>>([]);
 
@@ -198,7 +202,7 @@ export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParame
         <div className="space-y-2">
           {snapMacros.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-gray-500 mb-1.5">Snapchat Native <span className="font-normal text-gray-400">(substituted at click time)</span></p>
+              <p className="text-xs font-medium text-gray-500 mb-1.5">{nativeLabel} <span className="font-normal text-gray-400">({nativeHelp})</span></p>
               <div className="flex flex-wrap gap-1.5">
                 {snapMacros.map((m) => (
                   <button
@@ -216,7 +220,7 @@ export function UrlParametersTab({ urlConfig, onChange, hideBaseUrl }: UrlParame
           )}
           {brMacros.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-gray-500 mb-1.5">BoilerRoom <span className="font-normal text-gray-400">(resolved before sending to Snapchat)</span></p>
+              <p className="text-xs font-medium text-gray-500 mb-1.5">BoilerRoom <span className="font-normal text-gray-400">({brHelp})</span></p>
               <div className="flex flex-wrap gap-1.5">
                 {brMacros.map((m) => (
                   <button

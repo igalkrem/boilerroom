@@ -86,6 +86,9 @@ ALTER TABLE feed_provider_channels ADD COLUMN IF NOT EXISTS paused_since TIMESTA
 CREATE INDEX IF NOT EXISTS fpc_ad_squad ON feed_provider_channels(ad_squad_snap_id)
   WHERE ad_squad_snap_id IS NOT NULL;
 
+-- Per-traffic-source available-pool selection (assignChannel filters by source).
+CREATE INDEX IF NOT EXISTS fpc_fp_status_source ON feed_provider_channels(feed_provider_id, status, traffic_source);
+
 -- Meta (Facebook) token storage — long-lived tokens (~60 days), no refresh token.
 -- access_token_enc is AES-256-GCM encrypted using SESSION_SECRET, same as Snapchat tokens.
 CREATE TABLE IF NOT EXISTS user_meta_tokens (

@@ -31,6 +31,24 @@ function upcast(raw: Record<string, unknown>): FeedProvider {
     allowedAdAccountIds: [],
     allowedPixelIds: [],
   };
+  const metaConfigRaw = raw.metaConfig as NonNullable<FeedProvider["metaConfig"]> | undefined;
+
+  // Legacy provider-level url/channel config → migrate into snapConfig (they were
+  // Snap-only in practice). Kept on the top-level fields too for back-compat reads.
+  const legacyUrlConfig = (raw.urlConfig as FeedProvider["urlConfig"]) ?? {
+    baseUrl: (raw.baseUrl as string) ?? "",
+    parameters: [],
+  };
+  const legacyChannelConfig = (raw.channelConfig as FeedProvider["channelConfig"]) ?? {
+    type: "parameter-based" as const,
+  };
+
+  // Legacy domains may lack trafficSources — default them to ["Snap"].
+  const domains = ((raw.domains as FeedProvider["domains"]) ?? []).map((d) => ({
+    ...d,
+    trafficSources: d.trafficSources && d.trafficSources.length > 0 ? d.trafficSources : ["Snap"],
+  }));
+
   return {
     id: raw.id as string,
     name: raw.name as string,
@@ -42,26 +60,22 @@ function upcast(raw: Record<string, unknown>): FeedProvider {
         (snapConfig.revenueSource as unknown as string) === "kingsroad"
           ? "visymo"
           : snapConfig.revenueSource,
+      urlConfig: snapConfig.urlConfig ?? legacyUrlConfig,
+      channelConfig: snapConfig.channelConfig ?? legacyChannelConfig,
     },
-    metaConfig: raw.metaConfig
-      ? {
-          ...(raw.metaConfig as NonNullable<FeedProvider["metaConfig"]>),
-          allowedPageIds:
-            (raw.metaConfig as NonNullable<FeedProvider["metaConfig"]>).allowedPageIds ?? [],
-        }
-      : {
-          allowedAdAccountIds: [],
-          allowedPixelIds: [],
-          allowedPageIds: [],
-        },
-    urlConfig: (raw.urlConfig as FeedProvider["urlConfig"]) ?? {
-      baseUrl: (raw.baseUrl as string) ?? "",
-      parameters: [],
+    metaConfig: {
+      allowedAdAccountIds: metaConfigRaw?.allowedAdAccountIds ?? [],
+      allowedPixelIds: metaConfigRaw?.allowedPixelIds ?? [],
+      allowedPageIds: metaConfigRaw?.allowedPageIds ?? [],
+      pageId: metaConfigRaw?.pageId,
+      campaignNamingTemplate: metaConfigRaw?.campaignNamingTemplate,
+      revenueSource: metaConfigRaw?.revenueSource,
+      urlConfig: metaConfigRaw?.urlConfig ?? { baseUrl: "", parameters: [] },
+      channelConfig: metaConfigRaw?.channelConfig ?? { type: "parameter-based" },
     },
-    channelConfig: (raw.channelConfig as FeedProvider["channelConfig"]) ?? {
-      type: "parameter-based",
-    },
-    domains: (raw.domains as FeedProvider["domains"]) ?? [],
+    domains,
+    urlConfig: legacyUrlConfig,
+    channelConfig: legacyChannelConfig,
   };
 }
 

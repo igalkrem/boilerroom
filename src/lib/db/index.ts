@@ -36,17 +36,22 @@ export async function runMigrations(): Promise<void> {
 
   // Dedup + unique constraint — cannot use DO $$ ... $$ in the SQL file because
   // the semicolon-splitter above would break it. Run conditionally here instead.
-  const { rows: existing } = await sql`
-    SELECT 1 FROM pg_constraint WHERE conname = 'feed_provider_channels_unique_channel'
+  // v2 includes traffic_source so the same channel_id can exist under both Snap
+  // and Meta (channels are per-traffic-source). Supersedes the old 3-column
+  // constraint `feed_provider_channels_unique_channel`.
+  const { rows: existingV2 } = await sql`
+    SELECT 1 FROM pg_constraint WHERE conname = 'feed_provider_channels_unique_channel_v2'
   `;
-  if (existing.length === 0) {
-    // Keep highest-priority status (in-use > cooldown > available); among equals keep oldest row.
+  if (existingV2.length === 0) {
+    // Dedup by the 4-tuple. Keep highest-priority status (in-use > cooldown > available);
+    // among equals keep oldest row.
     await sql`
       DELETE FROM feed_provider_channels a
       USING feed_provider_channels b
       WHERE a.channel_id       = b.channel_id
         AND a.feed_provider_id = b.feed_provider_id
         AND a.google_user_id   = b.google_user_id
+        AND a.traffic_source   = b.traffic_source
         AND a.id <> b.id
         AND (
           CASE b.status WHEN 'in-use' THEN 2 WHEN 'cooldown' THEN 1 ELSE 0 END
@@ -58,10 +63,11 @@ export async function runMigrations(): Promise<void> {
           )
         )
     `;
+    await sql`ALTER TABLE feed_provider_channels DROP CONSTRAINT IF EXISTS feed_provider_channels_unique_channel`;
     await sql`
       ALTER TABLE feed_provider_channels
-        ADD CONSTRAINT feed_provider_channels_unique_channel
-        UNIQUE (channel_id, feed_provider_id, google_user_id)
+        ADD CONSTRAINT feed_provider_channels_unique_channel_v2
+        UNIQUE (channel_id, feed_provider_id, google_user_id, traffic_source)
     `;
   }
 
@@ -114,8 +120,21 @@ export async function normalizeChannelStatuses(feedProviderId: string, googleUse
 
 // ─── Channel queries ───────────────────────────────────────────────────────
 
-export async function listChannels(feedProviderId: string, googleUserId: string): Promise<ChannelRow[]> {
+export async function listChannels(
+  feedProviderId: string,
+  googleUserId: string,
+  trafficSource?: string
+): Promise<ChannelRow[]> {
   await normalizeChannelStatuses(feedProviderId, googleUserId);
+  if (trafficSource) {
+    const { rows } = await sql<ChannelRow>`
+      SELECT * FROM feed_provider_channels
+      WHERE feed_provider_id = ${feedProviderId} AND google_user_id = ${googleUserId}
+        AND traffic_source = ${trafficSource}
+      ORDER BY created_at ASC
+    `;
+    return rows;
+  }
   const { rows } = await sql<ChannelRow>`
     SELECT * FROM feed_provider_channels
     WHERE feed_provider_id = ${feedProviderId} AND google_user_id = ${googleUserId}
@@ -134,7 +153,7 @@ export async function bulkInsertChannels(
     await sql`
       INSERT INTO feed_provider_channels (id, feed_provider_id, channel_id, traffic_source, google_user_id)
       VALUES (${id}, ${feedProviderId}, ${row.channelId}, ${row.trafficSource}, ${googleUserId})
-      ON CONFLICT (channel_id, feed_provider_id, google_user_id) DO NOTHING
+      ON CONFLICT (channel_id, feed_provider_id, google_user_id, traffic_source) DO NOTHING
     `;
   }
 }
@@ -189,13 +208,15 @@ export async function updateChannelPausedStatus(
 export async function assignChannel(
   feedProviderId: string,
   campaignSnapId: string,
-  googleUserId: string
+  googleUserId: string,
+  trafficSource: string = "Snap"
 ): Promise<string | null> {
   await normalizeChannelStatuses(feedProviderId, googleUserId);
   const { rows } = await sql<ChannelRow>`
     SELECT * FROM feed_provider_channels
     WHERE feed_provider_id = ${feedProviderId}
       AND google_user_id = ${googleUserId}
+      AND traffic_source = ${trafficSource}
       AND status = 'available'
     ORDER BY created_at ASC
     LIMIT 1

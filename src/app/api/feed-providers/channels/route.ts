@@ -9,11 +9,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
   await runMigrations();
   const feedProviderId = req.nextUrl.searchParams.get("feedProviderId");
+  const trafficSource = req.nextUrl.searchParams.get("trafficSource") ?? undefined;
   if (!feedProviderId) {
     return NextResponse.json({ error: "feedProviderId required" }, { status: 400 });
   }
   try {
-    const rows = await listChannels(feedProviderId, session.googleUserId);
+    const rows = await listChannels(feedProviderId, session.googleUserId, trafficSource);
     const grouped = {
       available: rows.filter((r) => r.status === "available"),
       inUse: rows.filter((r) => r.status === "in-use"),

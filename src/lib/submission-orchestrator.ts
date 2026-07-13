@@ -163,12 +163,13 @@ export async function runSubmission(
 
   // ── Channel Assignment (provider-supplied channels only) ──────────────────
   let channelId: string | null = null;
-  if (provider?.channelConfig.type === "provider-supplied") {
+  const snapChannelType = provider?.snapConfig?.channelConfig?.type ?? provider?.channelConfig?.type;
+  if (snapChannelType === "provider-supplied") {
     try {
       const assignRes = await fetch("/api/feed-providers/channels/assign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feedProviderId: provider.id, campaignSnapId: "", adAccountId }),
+        body: JSON.stringify({ feedProviderId: provider!.id, campaignSnapId: "", adAccountId, trafficSource: "Snap" }),
       });
       if (assignRes.ok) {
         const assignData = await assignRes.json() as { channelId?: string | null };

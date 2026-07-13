@@ -2,51 +2,31 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { FeedProvider, NamingSegment } from "@/types/feed-provider";
+import type { FeedProvider, FeedProviderDomain, UrlConfig, ChannelConfig } from "@/types/feed-provider";
 import { loadAdAccountConfigs } from "@/lib/adAccounts";
-
-const NAMING_MACROS = [
-  { key: "preset.tag",     label: "Preset Tag",       description: "Value from the preset's Tag field" },
-  { key: "article.name",   label: "Article Name",     description: "Article slug / keyword" },
-  { key: "date_ddmm",      label: "Date (DDMM)",      description: "e.g. 3004 for 30 April" },
-  { key: "unique_id_4",    label: "Unique ID",        description: "Random 4-char alphanumeric" },
-  { key: "creative.vname", label: "Creative Version", description: "Version label from asset tag" },
-  { key: "channel.id",     label: "Channel ID",       description: "Assigned channel ID" },
-];
-
-function resolvePreview(segments: NamingSegment[]): string {
-  const today = new Date();
-  const dd = String(today.getDate()).padStart(2, "0");
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  return segments
-    .map((seg) => {
-      if (seg.type === "literal") return seg.value || "…";
-      switch (seg.value) {
-        case "preset.tag":      return "T1";
-        case "article.name":    return "demo-article";
-        case "date_ddmm":       return `${dd}${mm}`;
-        case "unique_id_4":     return "A3X9";
-        case "creative.vname":  return "V1";
-        case "channel.id":      return "{{channel.id}}";
-        default:                return seg.value;
-      }
-    })
-    .filter(Boolean)
-    .join(" | ");
-}
+import { loadMetaPixels } from "@/lib/meta-pixels";
+import { UrlParametersTab } from "./UrlParametersTab";
+import { ChannelsTab } from "./ChannelsTab";
+import { DomainsTab } from "./DomainsTab";
+import { NamingTemplateEditor } from "../NamingTemplateEditor";
 
 type MetaConfig = NonNullable<FeedProvider["metaConfig"]>;
 
 interface MetaTabProps {
   metaConfig: MetaConfig;
   onChange: (config: MetaConfig) => void;
+  domains: FeedProviderDomain[];
+  onDomainsChange: (domains: FeedProviderDomain[]) => void;
+  feedProviderId: string | null;
 }
 
-export function MetaTab({ metaConfig, onChange }: MetaTabProps) {
+export function MetaTab({ metaConfig, onChange, domains, onDomainsChange, feedProviderId }: MetaTabProps) {
   const [assignedAccountNames, setAssignedAccountNames] = useState<Array<{ id: string; name: string }>>([]);
-  const [pages, setPages] = useState<Array<{ id: string; name: string }>>([]);
+  const [pageNames, setPageNames] = useState<Record<string, string>>({});
+  const [pixelOptions, setPixelOptions] = useState<Array<{ id: string; name: string; pixelId: string }>>([]);
 
   useEffect(() => {
+    setPixelOptions(loadMetaPixels().map((p) => ({ id: p.id, name: p.name, pixelId: p.pixelId })));
     const configs = loadAdAccountConfigs();
     const assigned = configs
       .filter((c) => metaConfig.allowedAdAccountIds.includes(c.id))
@@ -58,25 +38,71 @@ export function MetaTab({ metaConfig, onChange }: MetaTabProps) {
     setAssignedAccountNames([...assigned, ...unknownIds]);
   }, [metaConfig.allowedAdAccountIds]);
 
+  // Resolve page IDs → names via the ad-limits feed (same source as Traffic Sources).
   useEffect(() => {
-    fetch("/api/meta/pages")
+    fetch("/api/meta/ad-limits")
       .then((r) => (r.ok ? r.json() : { pages: [] }))
-      .then((data) => setPages(data.pages ?? []))
-      .catch(() => setPages([]));
+      .then((data: { pages?: Array<{ pageId: string; name: string }> }) => {
+        const map: Record<string, string> = {};
+        for (const p of data.pages ?? []) map[p.pageId] = p.name;
+        setPageNames(map);
+      })
+      .catch(() => setPageNames({}));
   }, []);
 
+  function togglePixel(id: string) {
+    const current = metaConfig.allowedPixelIds;
+    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+    onChange({ ...metaConfig, allowedPixelIds: next });
+  }
+
   const namingTemplate = metaConfig.campaignNamingTemplate ?? [];
+  const urlConfig: UrlConfig = metaConfig.urlConfig ?? { baseUrl: "", parameters: [] };
+  const channelConfig: ChannelConfig = metaConfig.channelConfig ?? { type: "parameter-based" };
+
+  const assignedPageIds =
+    metaConfig.allowedPageIds && metaConfig.allowedPageIds.length > 0
+      ? metaConfig.allowedPageIds
+      : metaConfig.pageId
+      ? [metaConfig.pageId]
+      : [];
 
   return (
     <div className="space-y-6">
+      {/* Revenue Source */}
+      <div>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Revenue Source</p>
+        <div className="flex gap-2">
+          {(["predicto_fb", "none"] as const).map((val) => {
+            const typed = val === "none" ? undefined : val;
+            const isSelected = (metaConfig.revenueSource ?? "none") === val;
+            const label = val === "predicto_fb" ? "Predicto FB" : "Not set";
+            return (
+              <button
+                key={val}
+                type="button"
+                onClick={() => onChange({ ...metaConfig, revenueSource: typed })}
+                className={`px-3 py-1.5 text-xs rounded-full border font-medium transition-colors ${
+                  isSelected
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "bg-transparent border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-blue-400 dark:hover:border-blue-500"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-gray-400 mt-1">
+          Predicto FB provides sell-side revenue for Facebook traffic (joined to Meta ad sets by channel).
+        </p>
+      </div>
+
       {/* Assigned Ad Accounts */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Assigned Meta Ad Accounts</p>
-          <Link
-            href="/dashboard/traffic-sources"
-            className="text-xs text-blue-600 hover:text-blue-700 underline"
-          >
+          <Link href="/dashboard/traffic-sources" className="text-xs text-blue-600 hover:text-blue-700 underline">
             Manage in Traffic Sources →
           </Link>
         </div>
@@ -100,53 +126,75 @@ export function MetaTab({ metaConfig, onChange }: MetaTabProps) {
         )}
       </div>
 
-      {/* Facebook Pages — assigned + ad-limit-driven in Traffic Sources */}
+      {/* Allowed Pixels (Meta) */}
+      <div>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Allowed Pixels</p>
+        {pixelOptions.length === 0 ? (
+          <p className="text-xs text-gray-400">
+            No Meta pixels saved.{" "}
+            <Link href="/dashboard/traffic-sources" className="text-blue-500 hover:underline">
+              Add Meta pixels in Traffic Sources.
+            </Link>
+          </p>
+        ) : (
+          <div className="space-y-1 border border-gray-200 dark:border-gray-700 rounded-lg p-2">
+            {pixelOptions.map((px) => (
+              <label key={px.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={metaConfig.allowedPixelIds.includes(px.id)}
+                  onChange={() => togglePixel(px.id)}
+                  className="rounded border-gray-300"
+                />
+                <span className="text-sm text-gray-800 dark:text-gray-200">{px.name}</span>
+                <span className="text-xs text-gray-400 font-mono ml-auto">{px.pixelId.slice(0, 12)}…</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Facebook Pages (assigned in Traffic Sources) */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Facebook Pages</p>
-          <Link
-            href="/dashboard/traffic-sources"
-            className="text-xs text-blue-600 hover:text-blue-700 underline"
-          >
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Associated Facebook Pages</p>
+          <Link href="/dashboard/traffic-sources" className="text-xs text-blue-600 hover:text-blue-700 underline">
             Manage in Traffic Sources →
           </Link>
         </div>
         <p className="text-xs text-gray-400 mb-2">
-          Ads publish from the assigned page with the most ads remaining. Assign pages and view ad
-          limits in Traffic Sources.
+          Ads publish from the assigned page with the most ads remaining.
         </p>
-        {(() => {
-          const assignedIds =
-            metaConfig.allowedPageIds && metaConfig.allowedPageIds.length > 0
-              ? metaConfig.allowedPageIds
-              : metaConfig.pageId
-              ? [metaConfig.pageId]
-              : [];
-          if (assignedIds.length === 0) {
-            return (
-              <p className="text-xs text-gray-400">
-                No pages assigned yet.{" "}
-                <Link href="/dashboard/traffic-sources" className="text-blue-600 hover:underline">
-                  Assign pages in Traffic Sources.
-                </Link>
-              </p>
-            );
-          }
-          return (
-            <div className="space-y-1 border border-gray-200 dark:border-gray-700 rounded-lg p-2 bg-gray-50 dark:bg-gray-800">
-              {assignedIds.map((pid) => {
-                const name = pages.find((p) => p.id === pid)?.name ?? pid;
-                return (
-                  <div key={pid} className="flex items-center gap-2 px-1.5 py-1">
-                    <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-                    <span className="text-sm text-gray-800 dark:text-gray-200">{name}</span>
-                    <span className="text-xs text-gray-400 font-mono ml-auto">{pid}</span>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
+        {assignedPageIds.length === 0 ? (
+          <p className="text-xs text-gray-400">
+            No pages assigned yet.{" "}
+            <Link href="/dashboard/traffic-sources" className="text-blue-600 hover:underline">
+              Assign pages in Traffic Sources.
+            </Link>
+          </p>
+        ) : (
+          <div className="space-y-1 border border-gray-200 dark:border-gray-700 rounded-lg p-2 bg-gray-50 dark:bg-gray-800">
+            {assignedPageIds.map((pid) => (
+              <div key={pid} className="flex items-center gap-2 px-1.5 py-1">
+                <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                <span className="text-sm text-gray-800 dark:text-gray-200">{pageNames[pid] ?? pid}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <hr className="border-gray-100 dark:border-gray-700" />
+
+      {/* URL Parameters */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">URL Parameters</h3>
+        <UrlParametersTab
+          urlConfig={urlConfig}
+          onChange={(c) => onChange({ ...metaConfig, urlConfig: c })}
+          hideBaseUrl
+          platform="meta"
+        />
       </div>
 
       <hr className="border-gray-100 dark:border-gray-700" />
@@ -165,82 +213,32 @@ export function MetaTab({ metaConfig, onChange }: MetaTabProps) {
           Segments are joined with{" "}
           <code className="bg-white px-1 rounded border border-blue-100 font-mono"> | </code>.
         </p>
-        <div className="space-y-3">
-          {/* Segment row */}
-          <div className="flex flex-wrap items-center gap-1.5 min-h-[36px]">
-            {namingTemplate.length === 0 && (
-              <span className="text-xs text-blue-400 italic">
-                No segments yet — add a text literal or a macro below
-              </span>
-            )}
-            {namingTemplate.map((seg, idx) => (
-              <div key={idx} className="flex items-center gap-1">
-                {idx > 0 && <span className="text-xs text-blue-300 select-none px-0.5">|</span>}
-                {seg.type === "literal" ? (
-                  <div className="flex items-center gap-1 bg-white dark:bg-gray-800 border border-blue-200 rounded-lg px-2 py-1">
-                    <input
-                      type="text"
-                      value={seg.value}
-                      onChange={(e) => {
-                        const updated = namingTemplate.map((s, i) => (i === idx ? { ...s, value: e.target.value } : s));
-                        onChange({ ...metaConfig, campaignNamingTemplate: updated });
-                      }}
-                      placeholder="text…"
-                      className="text-xs text-gray-700 dark:text-gray-300 outline-none bg-transparent"
-                      style={{ width: `${Math.max(48, (seg.value.length + 3) * 7)}px` }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => onChange({ ...metaConfig, campaignNamingTemplate: namingTemplate.filter((_, i) => i !== idx) })}
-                      className="text-blue-300 hover:text-blue-600 text-xs leading-none ml-0.5"
-                    >×</button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1 bg-blue-100 border border-blue-200 rounded-lg px-2 py-1">
-                    <span className="text-xs font-medium text-blue-700">
-                      {NAMING_MACROS.find((m) => m.key === seg.value)?.label ?? seg.value}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => onChange({ ...metaConfig, campaignNamingTemplate: namingTemplate.filter((_, i) => i !== idx) })}
-                      className="text-blue-300 hover:text-blue-600 text-xs leading-none ml-0.5"
-                    >×</button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          {/* Add controls */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-blue-500 font-medium">+ Add:</span>
-            <button
-              type="button"
-              onClick={() => onChange({ ...metaConfig, campaignNamingTemplate: [...namingTemplate, { type: "literal", value: "" }] })}
-              className="px-2 py-1 text-xs bg-white dark:bg-gray-800 border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 font-medium"
-            >
-              Text
-            </button>
-            {NAMING_MACROS.map((m) => (
-              <button
-                key={m.key}
-                type="button"
-                title={m.description}
-                onClick={() => onChange({ ...metaConfig, campaignNamingTemplate: [...namingTemplate, { type: "macro", value: m.key }] })}
-                className="px-2 py-1 text-xs bg-blue-100 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-200 font-medium"
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-          {namingTemplate.length > 0 && (
-            <div className="flex items-center gap-2 pt-1">
-              <span className="text-xs text-blue-500 font-medium shrink-0">Preview:</span>
-              <span className="font-mono text-xs bg-white dark:bg-gray-800 rounded-lg px-3 py-1.5 border border-blue-100 text-blue-700 dark:text-blue-400 truncate">
-                {resolvePreview(namingTemplate)}
-              </span>
-            </div>
-          )}
-        </div>
+        <NamingTemplateEditor
+          segments={namingTemplate}
+          onChange={(t) => onChange({ ...metaConfig, campaignNamingTemplate: t })}
+          theme="blue"
+        />
+      </div>
+
+      <hr className="border-gray-100 dark:border-gray-700" />
+
+      {/* Channels (Meta pool) */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Channels</h3>
+        <ChannelsTab
+          feedProviderId={feedProviderId}
+          channelConfig={channelConfig}
+          onChange={(c) => onChange({ ...metaConfig, channelConfig: c })}
+          trafficSource="Meta"
+        />
+      </div>
+
+      <hr className="border-gray-100 dark:border-gray-700" />
+
+      {/* Domains (Meta-tagged) */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Domains</h3>
+        <DomainsTab domains={domains} onChange={onDomainsChange} trafficSource="Meta" />
       </div>
     </div>
   );

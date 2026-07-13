@@ -7,17 +7,13 @@ import type { FeedProvider } from "@/types/feed-provider";
 import { emptyFeedProvider } from "@/types/feed-provider";
 import { upsertFeedProvider } from "@/lib/feed-providers";
 import { SnapTab } from "./tabs/SnapTab";
-import { ChannelsTab } from "./tabs/ChannelsTab";
-import { DomainsTab } from "./tabs/DomainsTab";
 import { MetaTab } from "./tabs/MetaTab";
 
-type Tab = "snap" | "facebook" | "channels" | "domains";
+type Tab = "snap" | "facebook";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "snap",     label: "Snap" },
   { id: "facebook", label: "Facebook" },
-  { id: "channels", label: "Channels" },
-  { id: "domains",  label: "Domains" },
 ];
 
 interface FeedProviderModalProps {
@@ -111,27 +107,18 @@ export function FeedProviderModal({ provider, onClose, onSaved }: FeedProviderMo
             <SnapTab
               snapConfig={data.snapConfig}
               onChange={(snapConfig) => setData((d) => ({ ...d, snapConfig }))}
-              urlConfig={data.urlConfig}
-              onUrlConfigChange={(urlConfig) => setData((d) => ({ ...d, urlConfig }))}
-            />
-          )}
-          {activeTab === "channels" && (
-            <ChannelsTab
-              feedProviderId={savedId}
-              channelConfig={data.channelConfig}
-              onChange={(channelConfig) => setData((d) => ({ ...d, channelConfig }))}
-            />
-          )}
-          {activeTab === "domains" && (
-            <DomainsTab
               domains={data.domains}
-              onChange={(domains) => setData((d) => ({ ...d, domains }))}
+              onDomainsChange={(domains) => setData((d) => ({ ...d, domains }))}
+              feedProviderId={savedId}
             />
           )}
           {activeTab === "facebook" && (
             <MetaTab
-              metaConfig={data.metaConfig ?? { allowedAdAccountIds: [], allowedPixelIds: [] }}
+              metaConfig={data.metaConfig ?? { allowedAdAccountIds: [], allowedPixelIds: [], allowedPageIds: [] }}
               onChange={(metaConfig) => setData((d) => ({ ...d, metaConfig }))}
+              domains={data.domains}
+              onDomainsChange={(domains) => setData((d) => ({ ...d, domains }))}
+              feedProviderId={savedId}
             />
           )}
         </div>

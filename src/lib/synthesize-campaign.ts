@@ -143,12 +143,25 @@ export function synthesizeCampaign(
   };
 }
 
-function buildUrlTemplate(provider: FeedProvider, article: Article, headline: string, rac: string, adAccountId: string): string {
+function buildUrlTemplate(
+  provider: FeedProvider,
+  article: Article,
+  headline: string,
+  rac: string,
+  adAccountId: string,
+  trafficSource: "Snap" | "Meta" = "Snap"
+): string {
   // Build the URL with macros still in place for dynamic ones (campaign.id, adSet.id, ad.id)
   // Static ones (article.name, article.query, creative.headline, creative.rac) are substituted now.
-  const domain = provider.domains.find((d) => d.baseDomain === article.domain);
-  const base = (domain?.baseUrl ?? provider.urlConfig.baseUrl ?? "").replace(/\/$/, "");
-  const params = provider.urlConfig.parameters
+  // Per-source config: use the launching platform's urlConfig (fallback to legacy top-level),
+  // and match the article's domain only among domains tagged for this traffic source.
+  const platformConfig = trafficSource === "Meta" ? provider.metaConfig : provider.snapConfig;
+  const urlConfig = platformConfig?.urlConfig ?? provider.urlConfig ?? { baseUrl: "", parameters: [] };
+  const domain = provider.domains.find(
+    (d) => d.baseDomain === article.domain && (d.trafficSources ?? ["Snap"]).includes(trafficSource)
+  );
+  const base = (domain?.baseUrl ?? urlConfig.baseUrl ?? "").replace(/\/$/, "");
+  const params = urlConfig.parameters
     .map((p) => {
       let resolved = p.value
         .replace(/\{\{article\.name\}\}/gi, encodeURIComponent(article.slug))
@@ -265,7 +278,7 @@ export function synthesizeMetaCampaign(
     throw new Error(`Provider "${provider.name}" has no Facebook Page assigned`);
   }
 
-  const urlTemplate = buildUrlTemplate(provider, article, item.headline, item.headlineRac, item.adAccountId);
+  const urlTemplate = buildUrlTemplate(provider, article, item.headline, item.headlineRac, item.adAccountId, "Meta");
   if (!urlTemplate) {
     throw new Error(
       `Provider "${provider.name}" has no base URL and no parameters — configure a base URL on the domain or provider.`

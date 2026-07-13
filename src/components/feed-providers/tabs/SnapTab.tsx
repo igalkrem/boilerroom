@@ -3,176 +3,32 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { loadAdAccountConfigs } from "@/lib/adAccounts";
-import type { FeedProvider, NamingSegment } from "@/types/feed-provider";
+import type { FeedProvider, FeedProviderDomain, UrlConfig, ChannelConfig } from "@/types/feed-provider";
 import { loadPixels } from "@/lib/pixels";
 import { UrlParametersTab } from "./UrlParametersTab";
-
-// ─── Naming template ──────────────────────────────────────────────────────────
-
-const NAMING_MACROS = [
-  { key: "preset.tag",      label: "Preset Tag",       description: "Value from the preset's Tag field" },
-  { key: "article.name",    label: "Article Name",     description: "Article slug / keyword" },
-  { key: "date_ddmm",       label: "Date (DDMM)",      description: "e.g. 3004 for 30 April" },
-  { key: "unique_id_4",     label: "Unique ID",        description: "Random 4-char alphanumeric, generated per campaign" },
-  { key: "creative.vname",  label: "Creative Version", description: "Version label from asset tag (e.g. V1, V2)" },
-  { key: "channel.id",      label: "Channel ID",       description: "Assigned channel ID for this campaign" },
-];
-
-function resolvePreview(segments: NamingSegment[]): string {
-  const today = new Date();
-  const dd = String(today.getDate()).padStart(2, "0");
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  return segments
-    .map((seg) => {
-      if (seg.type === "literal") return seg.value || "…";
-      switch (seg.value) {
-        case "preset.tag":   return "T1";
-        case "article.name": return "demo-article";
-        case "date_ddmm":    return `${dd}${mm}`;
-        case "unique_id_4":     return "A3X9";
-        case "creative.vname":  return "V1";
-        case "channel.id":      return "{{channel.id}}";
-        case "preset.name":  return "My Preset";
-        case "index":        return "1";
-        default:             return seg.value;
-      }
-    })
-    .filter(Boolean)
-    .join(" | ");
-}
-
-interface NamingTemplateEditorProps {
-  segments: NamingSegment[];
-  onChange: (segments: NamingSegment[]) => void;
-}
-
-function NamingTemplateEditor({ segments, onChange }: NamingTemplateEditorProps) {
-  function addMacro(key: string) {
-    onChange([...segments, { type: "macro", value: key }]);
-  }
-
-  function addLiteral() {
-    onChange([...segments, { type: "literal", value: "" }]);
-  }
-
-  function removeSegment(idx: number) {
-    onChange(segments.filter((_, i) => i !== idx));
-  }
-
-  function updateLiteral(idx: number, value: string) {
-    onChange(segments.map((seg, i) => (i === idx ? { ...seg, value } : seg)));
-  }
-
-  const preview = resolvePreview(segments);
-
-  return (
-    <div className="space-y-3">
-      {/* Segment row */}
-      <div className="flex flex-wrap items-center gap-1.5 min-h-[36px]">
-        {segments.length === 0 && (
-          <span className="text-xs text-violet-400 italic">
-            No segments yet — add a text literal or a macro below
-          </span>
-        )}
-        {segments.map((seg, idx) => (
-          <div key={idx} className="flex items-center gap-1">
-            {idx > 0 && (
-              <span className="text-xs text-violet-300 select-none px-0.5">|</span>
-            )}
-            {seg.type === "literal" ? (
-              <div className="flex items-center gap-1 bg-white dark:bg-gray-800 border border-violet-200 rounded-lg px-2 py-1">
-                <input
-                  type="text"
-                  value={seg.value}
-                  onChange={(e) => updateLiteral(idx, e.target.value)}
-                  placeholder="text…"
-                  className="text-xs text-gray-700 dark:text-gray-300 outline-none bg-transparent"
-                  style={{ width: `${Math.max(48, (seg.value.length + 3) * 7)}px` }}
-                />
-                <button
-                  type="button"
-                  onClick={() => removeSegment(idx)}
-                  className="text-violet-300 hover:text-violet-600 text-xs leading-none ml-0.5"
-                >
-                  ×
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1 bg-violet-100 border border-violet-200 rounded-lg px-2 py-1">
-                <span className="text-xs font-medium text-violet-700">
-                  {NAMING_MACROS.find((m) => m.key === seg.value)?.label ?? seg.value}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeSegment(idx)}
-                  className="text-violet-300 hover:text-violet-600 text-xs leading-none ml-0.5"
-                >
-                  ×
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Add controls */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-violet-500 font-medium">+ Add:</span>
-        <button
-          type="button"
-          onClick={addLiteral}
-          className="px-2 py-1 text-xs bg-white dark:bg-gray-800 border border-violet-200 text-violet-600 rounded-lg hover:bg-violet-50 font-medium"
-        >
-          Text
-        </button>
-        {NAMING_MACROS.map((m) => (
-          <button
-            key={m.key}
-            type="button"
-            title={m.description}
-            onClick={() => addMacro(m.key)}
-            className="px-2 py-1 text-xs bg-violet-100 border border-violet-200 text-violet-700 rounded-lg hover:bg-violet-200 font-medium"
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Live preview */}
-      {segments.length > 0 && (
-        <div className="flex items-center gap-2 pt-1">
-          <span className="text-xs text-violet-500 font-medium shrink-0">Preview:</span>
-          <span className="font-mono text-xs bg-white dark:bg-gray-800 rounded-lg px-3 py-1.5 border border-violet-100 text-violet-700 dark:text-violet-400 truncate">
-            {preview}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── SnapTab ──────────────────────────────────────────────────────────────────
+import { ChannelsTab } from "./ChannelsTab";
+import { DomainsTab } from "./DomainsTab";
+import { NamingTemplateEditor } from "../NamingTemplateEditor";
 
 interface SnapTabProps {
   snapConfig: FeedProvider["snapConfig"];
   onChange: (config: FeedProvider["snapConfig"]) => void;
-  urlConfig: FeedProvider["urlConfig"];
-  onUrlConfigChange: (config: FeedProvider["urlConfig"]) => void;
+  domains: FeedProviderDomain[];
+  onDomainsChange: (domains: FeedProviderDomain[]) => void;
+  feedProviderId: string | null;
 }
 
-export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: SnapTabProps) {
+export function SnapTab({ snapConfig, onChange, domains, onDomainsChange, feedProviderId }: SnapTabProps) {
   const [assignedAccountNames, setAssignedAccountNames] = useState<Array<{ id: string; name: string }>>([]);
   const [pixelOptions, setPixelOptions] = useState<Array<{ id: string; name: string; pixelId: string }>>([]);
 
   useEffect(() => {
     setPixelOptions(loadPixels().map((p) => ({ id: p.id, name: p.name, pixelId: p.pixelId })));
 
-    // Show accounts assigned to this provider (managed from Traffic Sources)
     const configs = loadAdAccountConfigs();
     const assigned = configs
       .filter((c) => snapConfig.allowedAdAccountIds.includes(c.id))
       .map((c) => ({ id: c.id, name: c.name }));
-    // Also show IDs that don't have a config entry yet (fallback)
     const configIds = new Set(configs.map((c) => c.id));
     const unknownIds = snapConfig.allowedAdAccountIds
       .filter((id) => !configIds.has(id))
@@ -187,6 +43,8 @@ export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: 
   }
 
   const namingTemplate = snapConfig.campaignNamingTemplate ?? [];
+  const urlConfig: UrlConfig = snapConfig.urlConfig ?? { baseUrl: "", parameters: [] };
+  const channelConfig: ChannelConfig = snapConfig.channelConfig ?? { type: "parameter-based" };
 
   return (
     <div className="space-y-6">
@@ -221,10 +79,7 @@ export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: 
       <div>
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Assigned Ad Accounts</p>
-          <Link
-            href="/dashboard/traffic-sources"
-            className="text-xs text-cyan-600 hover:text-cyan-700 underline"
-          >
+          <Link href="/dashboard/traffic-sources" className="text-xs text-cyan-600 hover:text-cyan-700 underline">
             Manage in Traffic Sources →
           </Link>
         </div>
@@ -281,8 +136,9 @@ export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: 
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">URL Parameters</h3>
         <UrlParametersTab
           urlConfig={urlConfig}
-          onChange={onUrlConfigChange}
+          onChange={(c) => onChange({ ...snapConfig, urlConfig: c })}
           hideBaseUrl
+          platform="snap"
         />
       </div>
 
@@ -306,7 +162,27 @@ export function SnapTab({ snapConfig, onChange, urlConfig, onUrlConfigChange }: 
         <NamingTemplateEditor
           segments={namingTemplate}
           onChange={(t) => onChange({ ...snapConfig, campaignNamingTemplate: t })}
+          theme="violet"
         />
+      </div>
+
+      <hr className="border-gray-100 dark:border-gray-700" />
+
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Channels</h3>
+        <ChannelsTab
+          feedProviderId={feedProviderId}
+          channelConfig={channelConfig}
+          onChange={(c) => onChange({ ...snapConfig, channelConfig: c })}
+          trafficSource="Snap"
+        />
+      </div>
+
+      <hr className="border-gray-100 dark:border-gray-700" />
+
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Domains</h3>
+        <DomainsTab domains={domains} onChange={onDomainsChange} trafficSource="Snap" />
       </div>
     </div>
   );
