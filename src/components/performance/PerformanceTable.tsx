@@ -33,6 +33,22 @@ function PlatformIcon({ platform, className }: { platform: "snap" | "meta"; clas
   return <SnapchatLogo className={className ?? "w-3.5 h-3.5 text-yellow-400"} />;
 }
 
+// Deep-link from a campaign row into the traffic source's own Ads Manager UI.
+// Snapchat lands at the account-scoped /manage view (a squad-specific link needs
+// an opaque manageViewId the UI generates, not derivable from the ad squad id).
+// Meta opens the Ad Sets tab filtered to the ad set. Returns null when the row
+// can't produce a valid URL (totals row / missing account id) → non-clickable.
+function buildTrafficSourceUrl(row: AggrRow): string | null {
+  if (row.ad_squad_id === "__totals__") return null;
+  if (row.platform === "meta") {
+    const acct = row.ad_account_id?.replace(/^act_/, "");
+    if (!acct || !row.ad_squad_id) return null;
+    return `https://adsmanager.facebook.com/adsmanager/manage/adsets?act=${acct}&selected_adset_ids=${row.ad_squad_id}`;
+  }
+  if (!row.ad_account_id) return null;
+  return `https://ads.snapchat.com/${row.ad_account_id}/manage`;
+}
+
 export interface SquadDetail {
   daily_budget_micro: number;
   bid_micro: number;
@@ -1527,6 +1543,7 @@ export function PerformanceTable({
                 const isSelected = selectedIds.has(r.ad_squad_id);
                 const isActive = detail ? detail.status === "ACTIVE" : false;
                 const isHidden = hiddenSquadIds.has(r.ad_squad_id);
+                const trafficUrl = buildTrafficSourceUrl(r);
 
                 const stripeColor = providerColorMap[resolveProviderKey(r, providers)] ?? "transparent";
 
@@ -1573,7 +1590,22 @@ export function PerformanceTable({
                       style={{ width: nameColWidth, minWidth: nameColWidth, maxWidth: nameColWidth }}
                     >
                       <div className="group/name flex items-center gap-1.5 min-w-0">
-                        <PlatformIcon platform={r.platform} className="w-3.5 h-3.5 flex-shrink-0 text-yellow-400" />
+                        {trafficUrl ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(trafficUrl, "_blank", "noopener,noreferrer");
+                            }}
+                            title={r.platform === "meta" ? "Open ad set in Meta Ads Manager" : "Open in Snapchat Ads Manager"}
+                            aria-label={r.platform === "meta" ? "Open ad set in Meta Ads Manager" : "Open in Snapchat Ads Manager"}
+                            className="flex-shrink-0 cursor-pointer hover:opacity-70 transition-opacity"
+                          >
+                            <PlatformIcon platform={r.platform} className="w-3.5 h-3.5 flex-shrink-0 text-yellow-400" />
+                          </button>
+                        ) : (
+                          <PlatformIcon platform={r.platform} className="w-3.5 h-3.5 flex-shrink-0 text-yellow-400" />
+                        )}
                         <button
                           onClick={() => setDrilldown({
                             id: r.ad_squad_id,
