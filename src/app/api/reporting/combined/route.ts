@@ -171,8 +171,32 @@ export async function GET(request: NextRequest) {
         COALESCE(pf.funnel_requests, 0)::bigint   AS pfb_funnel_requests,
         COALESCE(pf.requests, 0)::bigint          AS pfb_requests,
         COALESCE(pf.impressions, 0)::bigint       AS pfb_impressions,
+        COALESCE(k.earnings_eur, 0)               AS vsm_earnings_eur,
+        COALESCE(k.clicks, 0)::bigint             AS vsm_clicks,
+        COALESCE(k.funnel_clicks, 0)::bigint      AS vsm_funnel_clicks,
+        COALESCE(k.funnel_impressions, 0)::bigint AS vsm_funnel_impressions,
+        COALESCE(k.funnel_requests, 0)::bigint    AS vsm_funnel_requests,
+        COALESCE(k.ad_requests, 0)::bigint        AS vsm_requests,
+        COALESCE(k.individual_ad_impressions, 0)::bigint AS vsm_impressions,
         COALESCE(fpc.feed_provider_id, '')        AS feed_provider_id
       FROM meta_ad_set_stats m
+      LEFT JOIN (
+        SELECT
+          custom_channel_name,
+          record_date,
+          SUM(earnings_eur)                       AS earnings_eur,
+          SUM(clicks)::bigint                     AS clicks,
+          SUM(ad_requests)::bigint                AS ad_requests,
+          SUM(individual_ad_impressions)::bigint  AS individual_ad_impressions,
+          SUM(funnel_clicks)::bigint              AS funnel_clicks,
+          SUM(funnel_impressions)::bigint         AS funnel_impressions,
+          SUM(funnel_requests)::bigint            AS funnel_requests
+        FROM visymo_report
+        WHERE record_date BETWEEN ${startDate} AND ${endDate}
+        GROUP BY custom_channel_name, record_date
+      ) k
+        ON  k.custom_channel_name = m.ad_set_id
+        AND k.record_date         = m.stat_date
       LEFT JOIN LATERAL (
         SELECT channel_id, feed_provider_id
         FROM (
@@ -259,10 +283,14 @@ export async function GET(request: NextRequest) {
   for (const r of metaResult.rows) {
     const spendUsd = Number(r.spend_cents) / 100;
     const purchaseValueUsd = Number(r.purchase_value_cents) / 100;
-    // Revenue/ROI come from the Predicto FB sell-side feed (Facebook traffic),
-    // consistent with how Snap rows use Visymo/Predicto. Meta's own pixel value
-    // stays in snap_results / snap_purchase_value_usd (Results / Purchase Value).
-    const revenueUsd = Number(r.pfb_revenue_usd);
+    // Revenue/ROI come from the sell-side feeds for Facebook traffic — Predicto FB
+    // (joined by channel) and Visymo (joined directly by ad_set_id; EUR→USD).
+    // Only one is non-zero per ad set in practice (a provider uses one source),
+    // so summing is safe and mirrors the Snap query. Meta's own pixel value stays
+    // in snap_results / snap_purchase_value_usd (Results / Purchase Value).
+    const visymoUsd = Number(r.vsm_earnings_eur) * eurToUsd;
+    const revenueEur = Number(r.vsm_earnings_eur);
+    const revenueUsd = Number(r.pfb_revenue_usd) + visymoUsd;
     const roiPct = spendUsd > 0 ? (revenueUsd / spendUsd) * 100 : null;
     combined.push({
       ad_squad_id: r.ad_set_id as string,
@@ -274,18 +302,18 @@ export async function GET(request: NextRequest) {
       swipes: 0,
       spend_usd: spendUsd,
       video_views: 0,
-      clicks: Number(r.clicks) + Number(r.pfb_clicks),
-      revenue_eur: 0,
+      clicks: Number(r.clicks) + Number(r.pfb_clicks) + Number(r.vsm_clicks),
+      revenue_eur: revenueEur,
       revenue_usd: revenueUsd,
       roi_pct: roiPct,
       page_views: 0,
       ad_requests: 0,
       matched_ad_requests: 0,
-      requests: Number(r.pfb_requests),
-      feed_impressions: Number(r.pfb_impressions),
-      funnel_clicks: Number(r.pfb_funnel_clicks),
-      funnel_impressions: Number(r.pfb_funnel_impressions),
-      funnel_requests: Number(r.pfb_funnel_requests),
+      requests: Number(r.pfb_requests) + Number(r.vsm_requests),
+      feed_impressions: Number(r.pfb_impressions) + Number(r.vsm_impressions),
+      funnel_clicks: Number(r.pfb_funnel_clicks) + Number(r.vsm_funnel_clicks),
+      funnel_impressions: Number(r.pfb_funnel_impressions) + Number(r.vsm_funnel_impressions),
+      funnel_requests: Number(r.pfb_funnel_requests) + Number(r.vsm_funnel_requests),
       domain_name: "",
       feed_provider_id: r.feed_provider_id as string,
       snap_results: Number(r.purchases),

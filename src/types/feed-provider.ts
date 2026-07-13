@@ -50,7 +50,7 @@ export interface FeedProvider {
     pageId?: string; // legacy single page; kept in sync = first assigned page (allowedPageIds[0])
     allowedPageIds?: string[]; // Facebook Pages assigned to this provider (managed in Traffic Sources)
     campaignNamingTemplate?: NamingSegment[];
-    revenueSource?: "predicto_fb"; // Facebook-traffic revenue source (informational — Meta syncs every cron run)
+    revenueSource?: "predicto_fb" | "visymo"; // Facebook-traffic revenue source (informational — Meta syncs every cron run)
     urlConfig?: UrlConfig; // per-source URL parameters
     channelConfig?: ChannelConfig; // per-source channel pool setup
   };

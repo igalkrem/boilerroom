@@ -73,10 +73,10 @@ export function MetaTab({ metaConfig, onChange, domains, onDomainsChange, feedPr
       <div>
         <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Revenue Source</p>
         <div className="flex gap-2">
-          {(["predicto_fb", "none"] as const).map((val) => {
+          {(["predicto_fb", "visymo", "none"] as const).map((val) => {
             const typed = val === "none" ? undefined : val;
             const isSelected = (metaConfig.revenueSource ?? "none") === val;
-            const label = val === "predicto_fb" ? "Predicto FB" : "Not set";
+            const label = val === "predicto_fb" ? "Predicto FB" : val === "visymo" ? "Visymo" : "Not set";
             return (
               <button
                 key={val}
@@ -94,7 +94,7 @@ export function MetaTab({ metaConfig, onChange, domains, onDomainsChange, feedPr
           })}
         </div>
         <p className="text-xs text-gray-400 mt-1">
-          Predicto FB provides sell-side revenue for Facebook traffic (joined to Meta ad sets by channel).
+          Sell-side revenue for Facebook traffic. Predicto FB joins by channel; Visymo joins by ad set ID.
         </p>
       </div>
 
