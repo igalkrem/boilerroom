@@ -11,6 +11,7 @@ interface FeedStatus {
 interface SyncStatusData {
   visymo: FeedStatus;
   predicto: FeedStatus;
+  predicto_fb?: FeedStatus;
 }
 
 function minutesAgo(ts: string | null): number | null {
@@ -53,11 +54,11 @@ function StatusPill({
   );
 }
 
-function FeedRow({ name, status }: { name: string; status: FeedStatus }) {
+function FeedRow({ name, status, statsLabel = "snap" }: { name: string; status: FeedStatus; statsLabel?: string }) {
   const feedMins = minutesAgo(status.feedLastSynced);
   const feedOverdue = feedMins !== null && feedMins > FEED_OVERDUE_MINUTES;
   const feedDot = feedOverdue ? "red" : status.feedLastSynced ? "green" : "gray";
-  const snapDot = status.snapLastSynced
+  const statsDot = status.snapLastSynced
     ? status.inSync
       ? "green"
       : "amber"
@@ -68,7 +69,7 @@ function FeedRow({ name, status }: { name: string; status: FeedStatus }) {
       <span className="text-gray-500 w-16 text-right">{name}</span>
       <StatusPill label="feed" ts={status.feedLastSynced} dotColor={feedDot} />
       <span className="text-gray-700 text-xs">·</span>
-      <StatusPill label="snap" ts={status.snapLastSynced} dotColor={snapDot} />
+      <StatusPill label={statsLabel} ts={status.snapLastSynced} dotColor={statsDot} />
     </div>
   );
 }
@@ -115,6 +116,13 @@ export function SyncStatusBar({
             <FeedRow name="Visymo" status={status.visymo} />
             <span className="text-gray-700">|</span>
             <FeedRow name="Predicto" status={status.predicto} />
+            {status.predicto_fb &&
+              (status.predicto_fb.feedLastSynced || status.predicto_fb.snapLastSynced) && (
+                <>
+                  <span className="text-gray-700">|</span>
+                  <FeedRow name="Predicto FB" status={status.predicto_fb} statsLabel="meta" />
+                </>
+              )}
           </>
         ) : (
           <span className="text-gray-600 text-xs">Loading sync status…</span>

@@ -1,6 +1,6 @@
 import { runMigrations, sql } from "@/lib/db";
 import { fetchVisymoReport } from "@/lib/visymo";
-import { fetchPredictoReport } from "@/lib/predicto";
+import { fetchPredictoReport, fetchPredictoFbReport } from "@/lib/predicto";
 import { getAdSquadsByAccount } from "@/lib/snapchat/adsquads";
 import { getAdSquadStats } from "@/lib/snapchat/stats";
 import { getAdSetsByAccount } from "@/lib/meta/adsets";
@@ -39,7 +39,7 @@ function lastUpdateWindowTime(updateMinute: number): number {
 
 // Feed-source skip check (Visymo / Predicto). Bypassable by `force` for manual
 // recovery of historical dates (e.g. Force Refresh from the dashboard).
-async function shouldSkipFeed(source: "visymo" | "predicto", date: string, updateMinute: number, force = false): Promise<boolean> {
+async function shouldSkipFeed(source: "visymo" | "predicto" | "predicto_fb", date: string, updateMinute: number, force = false): Promise<boolean> {
   const { rows } = await sql`
     SELECT last_synced FROM report_sync_log
     WHERE source = ${source} AND sync_date = ${date} AND ad_account_id = ''
@@ -356,6 +356,64 @@ export interface MetaSyncResult {
   skipped: number;
   error: string | null;
   ad_sets_found: number;
+  predictoFb: { synced: number; skipped: number };
+}
+
+// Predicto FB feed — global (keyed by channel, not per-account), gated to the
+// :46 window like Predicto (same backend). Called from syncMetaAccount so it is
+// reachable for Meta-only users. Gated so it hits the API once per window even
+// when several Meta accounts trigger it in the same run.
+async function syncPredictoFbFeed(
+  dates: string[],
+  force: boolean
+): Promise<{ synced: number; skipped: number }> {
+  let synced = 0;
+  let skipped = 0;
+  const toFetch: string[] = [];
+  for (const date of dates) {
+    if (await shouldSkipFeed("predicto_fb", date, 46, force)) {
+      skipped++;
+    } else {
+      toFetch.push(date);
+    }
+  }
+  if (toFetch.length === 0) return { synced, skipped };
+
+  const ranges = buildRanges(toFetch);
+  try {
+    for (const [pStart, pEnd] of ranges) {
+      const rows = await fetchPredictoFbReport(pStart, pEnd);
+      for (const r of rows) {
+        await sql`
+          INSERT INTO predicto_fb_report
+            (record_date, custom_channel_id,
+             revenue_usd, clicks, funnel_clicks, funnel_impressions, funnel_requests, requests, impressions,
+             fetched_at)
+          VALUES
+            (${r.date}, ${r.custom_channel_id},
+             ${r.revenue_usd}, ${r.clicks}, ${r.funnel_clicks}, ${r.funnel_impressions},
+             ${r.funnel_requests}, ${r.requests}, ${r.impressions}, NOW())
+          ON CONFLICT (record_date, custom_channel_id)
+          DO UPDATE SET
+            revenue_usd        = EXCLUDED.revenue_usd,
+            clicks             = EXCLUDED.clicks,
+            funnel_clicks      = EXCLUDED.funnel_clicks,
+            funnel_impressions = EXCLUDED.funnel_impressions,
+            funnel_requests    = EXCLUDED.funnel_requests,
+            requests           = EXCLUDED.requests,
+            impressions        = EXCLUDED.impressions,
+            fetched_at         = NOW()
+        `;
+      }
+    }
+    for (const date of toFetch) {
+      await markSynced("predicto_fb", date, "");
+      synced++;
+    }
+  } catch (err) {
+    console.error("[reporting/sync] Predicto FB fetch error:", err);
+  }
+  return { synced, skipped };
 }
 
 export async function syncMetaAccount(
@@ -371,6 +429,9 @@ export async function syncMetaAccount(
   let synced = 0;
   let skipped = 0;
 
+  // Predicto FB sell-side revenue feed (Facebook traffic) — global + :46-gated.
+  const predictoFb = await syncPredictoFbFeed(dates, force);
+
   const datesToFetch: string[] = [];
   for (const date of dates) {
     if (!force && await shouldSkip("meta", date, adAccountId)) {
@@ -381,7 +442,7 @@ export async function syncMetaAccount(
   }
 
   if (datesToFetch.length === 0) {
-    return { synced: 0, skipped, error: null, ad_sets_found: 0 };
+    return { synced: 0, skipped, error: null, ad_sets_found: 0, predictoFb };
   }
 
   try {
@@ -456,10 +517,10 @@ export async function syncMetaAccount(
       synced++;
     }
 
-    return { synced, skipped, error: null, ad_sets_found: adSets.length };
+    return { synced, skipped, error: null, ad_sets_found: adSets.length, predictoFb };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[reporting/sync] Meta sync error:", msg);
-    return { synced, skipped, error: msg, ad_sets_found: 0 };
+    return { synced, skipped, error: msg, ad_sets_found: 0, predictoFb };
   }
 }

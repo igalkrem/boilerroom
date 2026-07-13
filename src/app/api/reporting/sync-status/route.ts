@@ -27,18 +27,22 @@ async function getNetworkForAccount(
   return "unknown";
 }
 
-async function maxSnapSyncForAccounts(ids: string[]): Promise<string | null> {
+async function maxSyncForAccounts(source: string, ids: string[]): Promise<string | null> {
   if (ids.length === 0) return null;
   const results = await Promise.all(
     ids.map((id) =>
       sql`SELECT MAX(last_synced) as ts FROM report_sync_log
-          WHERE source = 'snapchat' AND ad_account_id = ${id} AND sync_date >= CURRENT_DATE - 1`
+          WHERE source = ${source} AND ad_account_id = ${id} AND sync_date >= CURRENT_DATE - 1`
     )
   );
   const timestamps = results.flatMap((r) =>
     r.rows[0]?.ts ? [new Date(r.rows[0].ts as string).getTime()] : []
   );
   return timestamps.length > 0 ? new Date(Math.max(...timestamps)).toISOString() : null;
+}
+
+function maxSnapSyncForAccounts(ids: string[]): Promise<string | null> {
+  return maxSyncForAccounts("snapchat", ids);
 }
 
 export async function GET() {
@@ -54,11 +58,13 @@ export async function GET() {
 
   const accountIds: string[] = session.allowedAdAccountIds ?? [];
 
-  const [krFeed, predFeed] = await Promise.all([
+  const [krFeed, predFeed, predFbFeed] = await Promise.all([
     sql`SELECT MAX(last_synced) as ts FROM report_sync_log
         WHERE source = 'visymo' AND sync_date >= CURRENT_DATE - 1`,
     sql`SELECT MAX(last_synced) as ts FROM report_sync_log
         WHERE source = 'predicto' AND sync_date >= CURRENT_DATE - 1`,
+    sql`SELECT MAX(last_synced) as ts FROM report_sync_log
+        WHERE source = 'predicto_fb' AND sync_date >= CURRENT_DATE - 1`,
   ]);
 
   const visymoFeedTs: string | null = krFeed.rows[0]?.ts
@@ -66,6 +72,9 @@ export async function GET() {
     : null;
   const predictoFeedTs: string | null = predFeed.rows[0]?.ts
     ? new Date(predFeed.rows[0].ts as string).toISOString()
+    : null;
+  const predictoFbFeedTs: string | null = predFbFeed.rows[0]?.ts
+    ? new Date(predFbFeed.rows[0].ts as string).toISOString()
     : null;
 
   const providerMap = await getProviderNetworkMap(session.googleUserId ?? "");
@@ -75,14 +84,19 @@ export async function GET() {
   // Accounts not yet classified by DB data — include in both groups so they show some status
   const unknownIds = networkMap.filter((x) => x.n === "unknown").map((x) => x.id);
 
-  const [krSnapTs, predSnapTs] = await Promise.all([
+  // Predicto FB pairs with Meta stats (Facebook traffic), so its "in sync" dot
+  // compares against the newest Meta stat sync across the user's Meta accounts.
+  const metaAccountIds: string[] = session.metaAllowedAdAccountIds ?? [];
+
+  const [krSnapTs, predSnapTs, metaTs] = await Promise.all([
     maxSnapSyncForAccounts([...krAccountIds, ...unknownIds]),
     maxSnapSyncForAccounts([...predAccountIds, ...unknownIds]),
+    maxSyncForAccounts("meta", metaAccountIds),
   ]);
 
-  function inSync(feedTs: string | null, snapTs: string | null): boolean {
-    if (!feedTs || !snapTs) return false;
-    return new Date(snapTs) >= new Date(feedTs);
+  function inSync(feedTs: string | null, statsTs: string | null): boolean {
+    if (!feedTs || !statsTs) return false;
+    return new Date(statsTs) >= new Date(feedTs);
   }
 
   return NextResponse.json({
@@ -95,6 +109,11 @@ export async function GET() {
       feedLastSynced: predictoFeedTs,
       snapLastSynced: predSnapTs,
       inSync: inSync(predictoFeedTs, predSnapTs),
+    },
+    predicto_fb: {
+      feedLastSynced: predictoFbFeedTs,
+      snapLastSynced: metaTs,
+      inSync: inSync(predictoFbFeedTs, metaTs),
     },
   });
 }

@@ -155,20 +155,61 @@ export async function GET(request: NextRequest) {
   const metaQuery = isMeta
     ? sql`
       SELECT
-        ad_set_id,
-        ad_account_id,
-        COALESCE(NULLIF(ad_set_name, ''), ad_set_id) AS ad_set_name,
-        stat_date::text AS stat_date,
-        impressions::bigint AS impressions,
-        clicks::bigint AS clicks,
-        spend_cents::bigint AS spend_cents,
-        purchases::bigint AS purchases,
-        purchase_value_cents::bigint AS purchase_value_cents
-      FROM meta_ad_set_stats
-      WHERE ad_account_id = ${adAccountId}
-        AND stat_date BETWEEN ${startDate} AND ${endDate}
-        AND (impressions > 0 OR spend_cents > 0)
-      ORDER BY stat_date DESC, spend_cents DESC
+        m.ad_set_id,
+        m.ad_account_id,
+        COALESCE(NULLIF(m.ad_set_name, ''), m.ad_set_id) AS ad_set_name,
+        m.stat_date::text AS stat_date,
+        m.impressions::bigint AS impressions,
+        m.clicks::bigint AS clicks,
+        m.spend_cents::bigint AS spend_cents,
+        m.purchases::bigint AS purchases,
+        m.purchase_value_cents::bigint AS purchase_value_cents,
+        COALESCE(pf.revenue_usd, 0)               AS pfb_revenue_usd,
+        COALESCE(pf.clicks, 0)::bigint            AS pfb_clicks,
+        COALESCE(pf.funnel_clicks, 0)::bigint     AS pfb_funnel_clicks,
+        COALESCE(pf.funnel_impressions, 0)::bigint AS pfb_funnel_impressions,
+        COALESCE(pf.funnel_requests, 0)::bigint   AS pfb_funnel_requests,
+        COALESCE(pf.requests, 0)::bigint          AS pfb_requests,
+        COALESCE(pf.impressions, 0)::bigint       AS pfb_impressions,
+        COALESCE(fpc.feed_provider_id, '')        AS feed_provider_id
+      FROM meta_ad_set_stats m
+      LEFT JOIN LATERAL (
+        SELECT channel_id, feed_provider_id
+        FROM (
+          SELECT channel_id, feed_provider_id, 0 AS _p
+          FROM feed_provider_channels
+          WHERE ad_squad_snap_id = m.ad_set_id
+          UNION ALL
+          SELECT channel_id, feed_provider_id, 1 AS _p
+          FROM feed_provider_channels
+          WHERE channel_id != ''
+            AND ad_squad_snap_id IS DISTINCT FROM m.ad_set_id
+            AND m.ad_set_name ILIKE '%' || REPLACE(REPLACE(channel_id, '%', '\%'), '_', '\_') || '%'
+        ) _fpc_inner
+        ORDER BY _p
+        LIMIT 1
+      ) fpc ON true
+      LEFT JOIN (
+        SELECT
+          custom_channel_id,
+          record_date,
+          SUM(revenue_usd)               AS revenue_usd,
+          SUM(clicks)::bigint            AS clicks,
+          SUM(funnel_clicks)::bigint     AS funnel_clicks,
+          SUM(funnel_impressions)::bigint AS funnel_impressions,
+          SUM(funnel_requests)::bigint   AS funnel_requests,
+          SUM(requests)::bigint          AS requests,
+          SUM(impressions)::bigint       AS impressions
+        FROM predicto_fb_report
+        WHERE record_date BETWEEN ${startDate} AND ${endDate}
+        GROUP BY custom_channel_id, record_date
+      ) pf
+        ON  pf.custom_channel_id = SPLIT_PART(fpc.channel_id, '+', 1)
+        AND pf.record_date       = m.stat_date
+      WHERE m.ad_account_id = ${adAccountId}
+        AND m.stat_date BETWEEN ${startDate} AND ${endDate}
+        AND (m.impressions > 0 OR m.spend_cents > 0)
+      ORDER BY m.stat_date DESC, m.spend_cents DESC
     `
     : Promise.resolve({ rows: [] });
 
@@ -218,7 +259,11 @@ export async function GET(request: NextRequest) {
   for (const r of metaResult.rows) {
     const spendUsd = Number(r.spend_cents) / 100;
     const purchaseValueUsd = Number(r.purchase_value_cents) / 100;
-    const roiPct = spendUsd > 0 ? (purchaseValueUsd / spendUsd) * 100 : null;
+    // Revenue/ROI come from the Predicto FB sell-side feed (Facebook traffic),
+    // consistent with how Snap rows use Visymo/Predicto. Meta's own pixel value
+    // stays in snap_results / snap_purchase_value_usd (Results / Purchase Value).
+    const revenueUsd = Number(r.pfb_revenue_usd);
+    const roiPct = spendUsd > 0 ? (revenueUsd / spendUsd) * 100 : null;
     combined.push({
       ad_squad_id: r.ad_set_id as string,
       ad_account_id: r.ad_account_id as string,
@@ -229,20 +274,20 @@ export async function GET(request: NextRequest) {
       swipes: 0,
       spend_usd: spendUsd,
       video_views: 0,
-      clicks: Number(r.clicks),
+      clicks: Number(r.clicks) + Number(r.pfb_clicks),
       revenue_eur: 0,
-      revenue_usd: purchaseValueUsd,
+      revenue_usd: revenueUsd,
       roi_pct: roiPct,
       page_views: 0,
       ad_requests: 0,
       matched_ad_requests: 0,
-      requests: 0,
-      feed_impressions: 0,
-      funnel_clicks: 0,
-      funnel_impressions: 0,
-      funnel_requests: 0,
+      requests: Number(r.pfb_requests),
+      feed_impressions: Number(r.pfb_impressions),
+      funnel_clicks: Number(r.pfb_funnel_clicks),
+      funnel_impressions: Number(r.pfb_funnel_impressions),
+      funnel_requests: Number(r.pfb_funnel_requests),
       domain_name: "",
-      feed_provider_id: "",
+      feed_provider_id: r.feed_provider_id as string,
       snap_results: Number(r.purchases),
       snap_purchase_value_usd: purchaseValueUsd,
       platform: "meta",

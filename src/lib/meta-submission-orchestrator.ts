@@ -183,9 +183,9 @@ export async function runMetaSubmission(
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          feedProviderId: synthesis.feedProviderId,
           channelId,
-          adSquadSnapId: adSetId,
+          adSquadId: adSetId,
+          campaignSnapId: campaignId,
         }),
       }).catch(() => {});
     }
