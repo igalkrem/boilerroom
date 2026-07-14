@@ -2,19 +2,25 @@
 
 import { Handle, Position } from "@xyflow/react";
 import { useCanvasStore } from "@/hooks/useCanvasStore";
+import { SNAP_CTA_OPTIONS, META_CTA_GROUPS, SHARED_CTA_OPTIONS } from "@/lib/cta-options";
 import type { Article } from "@/types/article";
-
-const CTA_OPTIONS = ["MORE","SHOP_NOW","SIGN_UP","DOWNLOAD","WATCH","GET_NOW","ORDER_NOW","BOOK_NOW","APPLY_NOW","BUY_NOW"];
 
 export function ArticleNode({ id, data }: {
   id: string;
-  data: { article: Article; color: string; onDisconnectTarget: (nodeId: string) => void };
+  data: {
+    article: Article;
+    color: string;
+    platforms: ReadonlySet<"snap" | "meta">;
+    onDisconnectTarget: (nodeId: string) => void;
+  };
 }) {
   const store = useCanvasStore();
   const expanded = useCanvasStore((s) => s.expandedArticleIds.has(id));
 
   const articleEdges = store.edges.providerToArticle.filter((e) => e.articleId === data.article.id);
   const connected = articleEdges.length > 0;
+  const hasSnap = data.platforms.has("snap");
+  const hasMeta = data.platforms.has("meta");
 
   const handleStyle = connected
     ? {
@@ -114,11 +120,32 @@ export function ArticleNode({ id, data }: {
               }
               className="w-full text-xs rounded-lg px-2 py-1 focus:outline-none bg-white/5 border border-white/10 text-gray-300"
             >
-              <option value="">— None —</option>
-              {CTA_OPTIONS.map((c) => (
-                <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
-              ))}
+              {hasMeta && !hasSnap ? (
+                <>
+                  <option value="">— None —</option>
+                  {META_CTA_GROUPS.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.options.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </>
+              ) : hasMeta && hasSnap ? (
+                SHARED_CTA_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))
+              ) : (
+                SNAP_CTA_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))
+              )}
             </select>
+            {hasMeta && hasSnap && (
+              <p className="text-[9px] text-gray-500 mt-0.5">
+                Only CTAs valid on both Snapchat &amp; Meta shown — this article is connected to both.
+              </p>
+            )}
           </div>
         </div>
       ))}
