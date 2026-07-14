@@ -23,6 +23,30 @@ function dateMinus(dateStr: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
+// Run async tasks over items with a cap on how many run at once. Snapchat's
+// rate limiter (rate-limiter.ts) is per-serverless-invocation, not global —
+// firing every account's sync request at once (one invocation per account)
+// multiplies far past Snapchat's real per-app rate limit, causing genuine 429s
+// whose retry/backoff (up to 30s per call) can push an account's sync past its
+// route's own timeout. Capping concurrency here keeps the real request burst
+// against Snapchat sane regardless of how many accounts are active.
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<void>
+): Promise<void> {
+  const queue = [...items];
+  async function worker() {
+    while (queue.length > 0) {
+      const item = queue.shift()!;
+      await fn(item);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+}
+
+const ACCOUNT_SYNC_CONCURRENCY = 3;
+
 export default function PerformancePage() {
   const { accounts } = useAdAccounts();
   const { accounts: metaAccounts } = useMetaAdAccounts();
@@ -136,7 +160,10 @@ export default function PerformancePage() {
     const histStart = dateMinus(start, 3);
     const histEnd = dateMinus(start, 1);
 
-    const snapSyncs = accts.flatMap((a) => {
+    // Each account's own main+historical calls still run in parallel (2 requests),
+    // but only ACCOUNT_SYNC_CONCURRENCY accounts run at once — see
+    // runWithConcurrency above for why this matters.
+    const snapSyncAll = runWithConcurrency(accts, ACCOUNT_SYNC_CONCURRENCY, async (a) => {
       const calls: Promise<Response>[] = [
         fetch("/api/reporting/sync", {
           method: "POST",
@@ -153,10 +180,10 @@ export default function PerformancePage() {
           })
         );
       }
-      return calls;
+      await Promise.allSettled(calls);
     });
 
-    const metaSyncs = activeMetaAccounts.flatMap((a) => {
+    const metaSyncAll = runWithConcurrency(activeMetaAccounts, ACCOUNT_SYNC_CONCURRENCY, async (a) => {
       const calls: Promise<Response>[] = [
         fetch("/api/reporting/meta-sync", {
           method: "POST",
@@ -173,10 +200,10 @@ export default function PerformancePage() {
           })
         );
       }
-      return calls;
+      await Promise.allSettled(calls);
     });
 
-    await Promise.allSettled([...snapSyncs, ...metaSyncs]);
+    await Promise.allSettled([snapSyncAll, metaSyncAll]);
 
     setSyncing(false);
     await loadFromDb(accts, start, end);
