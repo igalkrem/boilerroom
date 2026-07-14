@@ -55,12 +55,19 @@ export async function pollVideoStatus(
   intervalMs = 2000
 ): Promise<void> {
   for (let i = 0; i < maxAttempts; i++) {
-    const status = await metaFetch<MetaVideoStatus>(
-      `/${videoId}?fields=processing_phase`,
+    const result = await metaFetch<MetaVideoStatus>(
+      `/${videoId}?fields=status`,
       {},
       token
     );
-    if (status.processing_phase === "complete") return;
+    const videoStatus = result.status?.video_status;
+    if (i === 0) {
+      console.log(`[meta/pollVideoStatus] ${videoId} raw status response:`, JSON.stringify(result));
+    }
+    if (videoStatus === "ready") return;
+    if (videoStatus === "error") {
+      throw new Error(`Video ${videoId} processing failed on Meta's side`);
+    }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
   throw new Error(`Video ${videoId} processing timed out`);

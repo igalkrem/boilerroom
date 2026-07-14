@@ -141,9 +141,11 @@ export interface MetaAdVideoResponse {
   id: string;
 }
 
+// `processing_phase` is NOT a valid field on the Ad Video node — confirmed live
+// 2026-07-14: "(#100) Tried accessing nonexisting field (processing_phase)".
+// The video's processing state is exposed via `status.video_status`.
 export interface MetaVideoStatus {
-  video_id: string;
-  processing_phase: string; // "complete" when ready
+  status?: { video_status?: string };
 }
 
 // ─── Insights (stats) ───────────────────────────────────────────────────────
