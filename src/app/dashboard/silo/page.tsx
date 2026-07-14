@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { AssetCard } from "@/components/silo/AssetCard";
 import { AssetPreviewModal } from "@/components/silo/AssetPreviewModal";
 import { SnapchatUploadModal } from "@/components/silo/SnapchatUploadModal";
+import { MetaUploadModal } from "@/components/silo/MetaUploadModal";
 import { loadAssets, deleteAsset, upsertAsset } from "@/lib/silo";
 import { loadTags } from "@/lib/silo-tags";
 import type { SiloAsset, SiloTag } from "@/types/silo";
@@ -21,6 +22,7 @@ export default function SiloPage() {
   const [filterStatus, setFilterStatus] = useState<"" | "ready" | "processing" | "failed" | "archived">("");
   const [previewAsset, setPreviewAsset] = useState<SiloAsset | null>(null);
   const [snapUploadAssets, setSnapUploadAssets] = useState<SiloAsset[] | null>(null);
+  const [metaUploadAssets, setMetaUploadAssets] = useState<SiloAsset[] | null>(null);
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -77,6 +79,11 @@ export default function SiloPage() {
   function handleBulkSnapchat() {
     const toUpload = assets.filter((a) => selectedIds.has(a.id));
     if (toUpload.length > 0) setSnapUploadAssets(toUpload);
+  }
+
+  function handleBulkMeta() {
+    const toUpload = assets.filter((a) => selectedIds.has(a.id));
+    if (toUpload.length > 0) setMetaUploadAssets(toUpload);
   }
 
   const tagMap = Object.fromEntries(tags.map((t) => [t.id, t.name]));
@@ -168,6 +175,12 @@ export default function SiloPage() {
             >
               → Snapchat ({selectedIds.size})
             </button>
+            <button
+              onClick={handleBulkMeta}
+              className="px-3 py-1.5 text-xs font-medium bg-white text-gray-700 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
+            >
+              → Meta ({selectedIds.size})
+            </button>
           </div>
           <button
             onClick={() => setSelectedIds(new Set())}
@@ -237,6 +250,7 @@ export default function SiloPage() {
                         onPreview={setPreviewAsset}
                         onDelete={handleDelete}
                         onUploadToSnapchat={(a) => setSnapUploadAssets([a])}
+                  onUploadToMeta={(a) => setMetaUploadAssets([a])}
                         bulkMode={bulkMode}
                         selected={selectedIds.has(asset.id)}
                         onToggleSelect={toggleSelect}
@@ -256,6 +270,7 @@ export default function SiloPage() {
                   onPreview={setPreviewAsset}
                   onDelete={handleDelete}
                   onUploadToSnapchat={(a) => setSnapUploadAssets([a])}
+                  onUploadToMeta={(a) => setMetaUploadAssets([a])}
                   bulkMode={bulkMode}
                   selected={selectedIds.has(asset.id)}
                   onToggleSelect={toggleSelect}
@@ -273,6 +288,7 @@ export default function SiloPage() {
           isOpen
           onClose={() => setPreviewAsset(null)}
           onUploadToSnapchat={(a) => { setPreviewAsset(null); setSnapUploadAssets([a]); }}
+          onUploadToMeta={(a) => { setPreviewAsset(null); setMetaUploadAssets([a]); }}
           onAssetUpdated={(updated) => {
             upsertAsset(updated);
             setPreviewAsset(updated);
@@ -289,6 +305,19 @@ export default function SiloPage() {
           onComplete={(updated) => {
             updated.forEach(upsertAsset);
             setSnapUploadAssets(null);
+            reload();
+          }}
+        />
+      )}
+
+      {metaUploadAssets && (
+        <MetaUploadModal
+          assets={metaUploadAssets}
+          isOpen
+          onClose={() => setMetaUploadAssets(null)}
+          onComplete={(updated) => {
+            updated.forEach(upsertAsset);
+            setMetaUploadAssets(null);
             reload();
           }}
         />

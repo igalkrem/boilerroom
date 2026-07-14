@@ -27,6 +27,22 @@ export interface SnapchatUploadStatus {
   completedAt?: string;
 }
 
+// Meta's media API (POST /api/meta/media) uploads an image hash or a video id
+// and — for video — polls processing status server-side before responding, so
+// there's no client-visible "processing" state like Snapchat's chunked path.
+export type MetaUploadStage = "queued" | "uploading" | "ready" | "failed";
+
+export interface MetaUploadStatus {
+  adAccountId: string;
+  adAccountName: string;
+  stage: MetaUploadStage;
+  imageHash?: string;
+  videoId?: string;
+  error?: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
 export interface SiloAsset {
   id: string;
   name: string;
@@ -46,6 +62,7 @@ export interface SiloAsset {
   uploadDate: string;
   usageHistory: UsageRecord[];
   snapchatUploads: SnapchatUploadStatus[];
+  metaUploads: MetaUploadStatus[];
 }
 
 export interface SiloTag {

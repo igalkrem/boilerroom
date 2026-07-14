@@ -15,6 +15,7 @@ interface AssetCardProps {
   onDelete?: (asset: SiloAsset) => void;
   onSelect?: (asset: SiloAsset) => void;
   onUploadToSnapchat?: (asset: SiloAsset) => void;
+  onUploadToMeta?: (asset: SiloAsset) => void;
   bulkMode?: boolean;
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
@@ -49,6 +50,26 @@ function snapAccountBadge(asset: SiloAsset, highlightAdAccountId?: string) {
   );
 }
 
+function metaAccountBadge(asset: SiloAsset, highlightAdAccountId?: string) {
+  const ready = asset.metaUploads.filter((s) => s.stage === "ready");
+  if (ready.length === 0) return null;
+  const isCachedForHighlighted =
+    highlightAdAccountId != null &&
+    ready.some((s) => s.adAccountId === highlightAdAccountId);
+  return (
+    <div className="mt-1">
+      <span
+        className={clsx(
+          "text-[10px] px-1.5 py-0.5 rounded font-medium",
+          isCachedForHighlighted ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400" : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+        )}
+      >
+        {isCachedForHighlighted ? "✓ Cached" : "Meta ✓"}
+      </span>
+    </div>
+  );
+}
+
 export function AssetCard({
   asset,
   tagName,
@@ -58,6 +79,7 @@ export function AssetCard({
   onDelete,
   onSelect,
   onUploadToSnapchat,
+  onUploadToMeta,
   bulkMode,
   selected,
   onToggleSelect,
@@ -150,6 +172,7 @@ export function AssetCard({
           {formatFileSize(asset.fileSize)} · {new Date(asset.uploadDate).toLocaleDateString()}
         </p>
         {snapAccountBadge(asset, selectedAdAccountId)}
+        {metaAccountBadge(asset, selectedAdAccountId)}
       </div>
 
       {/* Actions — hidden in bulk or select mode */}
@@ -161,6 +184,11 @@ export function AssetCard({
           {onUploadToSnapchat && (
             <Button size="sm" variant="secondary" onClick={() => onUploadToSnapchat(asset)}>
               → Snapchat
+            </Button>
+          )}
+          {onUploadToMeta && (
+            <Button size="sm" variant="secondary" onClick={() => onUploadToMeta(asset)}>
+              → Meta
             </Button>
           )}
           {onDelete && (

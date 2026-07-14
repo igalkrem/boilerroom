@@ -194,6 +194,7 @@ async function processAndUpload(
       uploadDate: new Date().toISOString(),
       usageHistory: [],
       snapchatUploads: [],
+      metaUploads: [],
     };
 
     upsertAsset(asset);

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { SiloAsset, SnapchatUploadStatus } from "@/types/silo";
+import type { SiloAsset, SnapchatUploadStatus, MetaUploadStatus } from "@/types/silo";
 import { syncToKV } from "@/lib/kv-sync";
 
 const STORAGE_KEY = "boilerroom_silo_v1";
@@ -17,6 +17,17 @@ const snapchatUploadSchema = z.object({
   adAccountName: z.string(),
   stage: z.enum(["queued", "uploading_chunks", "processing", "ready", "failed", "interrupted"]),
   snapMediaId: z.string().optional(),
+  error: z.string().optional(),
+  startedAt: z.string().optional(),
+  completedAt: z.string().optional(),
+});
+
+const metaUploadSchema = z.object({
+  adAccountId: z.string(),
+  adAccountName: z.string(),
+  stage: z.enum(["queued", "uploading", "ready", "failed"]),
+  imageHash: z.string().optional(),
+  videoId: z.string().optional(),
   error: z.string().optional(),
   startedAt: z.string().optional(),
   completedAt: z.string().optional(),
@@ -41,6 +52,7 @@ const assetSchema = z.object({
   uploadDate: z.string().min(1),
   usageHistory: z.array(usageRecordSchema),
   snapchatUploads: z.array(snapchatUploadSchema),
+  metaUploads: z.array(metaUploadSchema).optional(),
 });
 
 function saveAssets(assets: SiloAsset[]): void {
@@ -63,7 +75,8 @@ export function loadAssets(): SiloAsset[] {
         if (a.vname !== undefined) return a;
         const m = a.name.match(/_v_(\d+)$/i);
         return m ? { ...a, vname: "V" + parseInt(m[1], 10) } : a;
-      });
+      })
+      .map((a) => (a.metaUploads !== undefined ? a : { ...a, metaUploads: [] }));
   } catch {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
     return [];
@@ -113,4 +126,29 @@ export function updateSnapchatUpload(
     uploads.push({ adAccountId, adAccountName: adAccountId, stage: "queued", ...patch });
   }
   upsertAsset({ ...asset, snapchatUploads: uploads });
+}
+
+export function getMetaMediaRef(
+  asset: SiloAsset,
+  adAccountId: string
+): { imageHash?: string; videoId?: string } | undefined {
+  const ready = asset.metaUploads.find((s) => s.adAccountId === adAccountId && s.stage === "ready");
+  if (!ready) return undefined;
+  return { imageHash: ready.imageHash, videoId: ready.videoId };
+}
+
+export function updateMetaUpload(
+  assetId: string,
+  adAccountId: string,
+  patch: Partial<MetaUploadStatus>
+): void {
+  const asset = getAssetById(assetId);
+  if (!asset) return;
+  const uploads = asset.metaUploads.map((s) =>
+    s.adAccountId === adAccountId ? { ...s, ...patch } : s
+  );
+  if (!uploads.find((s) => s.adAccountId === adAccountId)) {
+    uploads.push({ adAccountId, adAccountName: adAccountId, stage: "queued", ...patch });
+  }
+  upsertAsset({ ...asset, metaUploads: uploads });
 }

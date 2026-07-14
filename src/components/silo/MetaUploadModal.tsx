@@ -1,0 +1,290 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/Button";
+import { Alert } from "@/components/ui/Alert";
+import { updateMetaUpload, getAssetById } from "@/lib/silo";
+import { uploadBlobToMeta } from "@/lib/uploadMediaToMeta";
+import { loadAdAccountConfigs } from "@/lib/adAccounts";
+import { useMetaAdAccounts } from "@/hooks/useMetaAdAccounts";
+import type { SiloAsset, MetaUploadStatus, MetaUploadStage } from "@/types/silo";
+import type { MetaAdAccount } from "@/lib/meta/adaccounts";
+
+interface MetaUploadModalProps {
+  assets: SiloAsset[];
+  isOpen: boolean;
+  onClose: () => void;
+  onComplete: (updatedAssets: SiloAsset[]) => void;
+}
+
+type AccountRow = MetaAdAccount & { uploadStatus?: MetaUploadStatus };
+
+const CONCURRENCY = 2;
+
+function stageBadge(stage: MetaUploadStage | undefined) {
+  if (!stage) return null;
+  const map: Record<MetaUploadStage, { label: string; color: string }> = {
+    queued: { label: "Queued", color: "text-gray-500" },
+    uploading: { label: "Uploading…", color: "text-cyan-600" },
+    ready: { label: "Ready ✅", color: "text-green-600" },
+    failed: { label: "Failed ❌", color: "text-red-600" },
+  };
+  const entry = map[stage];
+  return <span className={`text-xs font-medium ${entry.color}`}>{entry.label}</span>;
+}
+
+export function MetaUploadModal({ assets, isOpen, onClose, onComplete }: MetaUploadModalProps) {
+  const isBulk = assets.length > 1;
+  const { accounts: metaAccounts } = useMetaAdAccounts();
+  // Single-asset mode: track the one asset's live state
+  const [currentAsset, setCurrentAsset] = useState<SiloAsset>(assets[0]);
+  const [accounts, setAccounts] = useState<AccountRow[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [running, setRunning] = useState(false);
+  const [progressMsg, setProgressMsg] = useState<Record<string, string>>({});
+  // Bulk mode: plain progress log
+  const [bulkLog, setBulkLog] = useState<string[]>([]);
+  const [bulkDone, setBulkDone] = useState(false);
+
+  useEffect(() => {
+    if (!isBulk) setCurrentAsset(assets[0]);
+  }, [assets, isBulk]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const hiddenIds = new Set(
+      loadAdAccountConfigs()
+        .filter((c) => c.hidden && (c.platform ?? "snap") === "meta")
+        .map((c) => c.id)
+    );
+    const rows: AccountRow[] = metaAccounts
+      .filter((a) => !hiddenIds.has(a.id))
+      .map((a) => ({
+        ...a,
+        uploadStatus: isBulk
+          ? undefined
+          : currentAsset.metaUploads.find((s) => s.adAccountId === a.id),
+      }));
+    setAccounts(rows);
+  }, [isOpen, metaAccounts]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!isOpen) return null;
+
+  function toggleAccount(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function uploadAssetToAccount(asset: SiloAsset, account: AccountRow): Promise<SiloAsset> {
+    const adAccountId = account.id;
+
+    updateMetaUpload(asset.id, adAccountId, {
+      adAccountName: account.name,
+      stage: "uploading",
+      startedAt: new Date().toISOString(),
+      completedAt: undefined,
+      error: undefined,
+      imageHash: undefined,
+      videoId: undefined,
+    });
+    if (!isBulk) setCurrentAsset({ ...getAssetById(asset.id)! });
+
+    try {
+      const blobUrl = asset.optimizedUrl ?? asset.originalUrl;
+      if (!isBulk) setProgressMsg((p) => ({ ...p, [adAccountId]: "Uploading to Meta…" }));
+      const { imageHash, videoId } = await uploadBlobToMeta(
+        blobUrl,
+        asset.originalFileName,
+        adAccountId,
+        asset.mediaType
+      );
+
+      updateMetaUpload(asset.id, adAccountId, {
+        stage: "ready",
+        imageHash,
+        videoId,
+        completedAt: new Date().toISOString(),
+      });
+      const refreshed = getAssetById(asset.id)!;
+      if (!isBulk) {
+        setCurrentAsset({ ...refreshed });
+        setAccounts((prev) => prev.map((a) =>
+          a.id === adAccountId
+            ? { ...a, uploadStatus: refreshed.metaUploads.find((s) => s.adAccountId === adAccountId) }
+            : a
+        ));
+      }
+      return refreshed;
+    } catch (err) {
+      updateMetaUpload(asset.id, adAccountId, {
+        stage: "failed",
+        error: String(err),
+        completedAt: new Date().toISOString(),
+      });
+      if (!isBulk) setCurrentAsset({ ...getAssetById(asset.id)! });
+      return getAssetById(asset.id)!;
+    } finally {
+      if (!isBulk) setProgressMsg((p) => { const n = { ...p }; delete n[adAccountId]; return n; });
+    }
+  }
+
+  async function startUpload() {
+    const targets = accounts.filter((a) => selected.has(a.id));
+    if (targets.length === 0) return;
+    setRunning(true);
+    setSelected(new Set());
+
+    if (isBulk) {
+      setBulkLog([]);
+      setBulkDone(false);
+      const updatedAssets: SiloAsset[] = [];
+      for (const asset of assets) {
+        const queue = [...targets];
+        const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+          while (queue.length > 0) {
+            const account = queue.shift();
+            if (!account) break;
+            setBulkLog((l) => [...l, `Uploading "${asset.name}" → ${account.name}…`]);
+            const updated = await uploadAssetToAccount(asset, account);
+            setBulkLog((l) => {
+              const next = [...l];
+              next[next.length - 1] = `✓ "${asset.name}" → ${account.name}`;
+              return next;
+            });
+            const idx = updatedAssets.findIndex((a) => a.id === updated.id);
+            if (idx === -1) updatedAssets.push(updated); else updatedAssets[idx] = updated;
+          }
+        });
+        await Promise.all(workers);
+      }
+      setBulkDone(true);
+      setRunning(false);
+      onComplete(updatedAssets);
+    } else {
+      const queue = [...targets];
+      const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+        while (queue.length > 0) {
+          const account = queue.shift();
+          if (!account) break;
+          await uploadAssetToAccount(currentAsset, account);
+        }
+      });
+      await Promise.all(workers);
+      setRunning(false);
+      onComplete([getAssetById(currentAsset.id) ?? currentAsset]);
+    }
+  }
+
+  async function retryUpload(account: AccountRow) {
+    setRunning(true);
+    await uploadAssetToAccount(currentAsset, account);
+    setRunning(false);
+    onComplete([getAssetById(currentAsset.id) ?? currentAsset]);
+  }
+
+  const uploadableSelected = [...selected].filter((id) => {
+    const row = accounts.find((a) => a.id === id);
+    return isBulk ? true : row?.uploadStatus?.stage !== "ready";
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Upload to Meta</h2>
+            <p className="text-xs text-gray-500 mt-0.5 truncate max-w-xs">
+              {isBulk ? `${assets.length} assets selected` : currentAsset.name}
+            </p>
+          </div>
+          <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+          {isBulk && bulkLog.length > 0 && (
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 space-y-1">
+              {bulkLog.map((line, i) => (
+                <p key={i} className="text-xs text-gray-600 dark:text-gray-300 font-mono">{line}</p>
+              ))}
+            </div>
+          )}
+
+          {!bulkDone && (
+            <>
+              {accounts.length === 0 && (
+                <Alert type="error">Could not load Meta ad accounts.</Alert>
+              )}
+              {accounts.map((account) => {
+                const status = isBulk
+                  ? undefined
+                  : currentAsset.metaUploads.find((s) => s.adAccountId === account.id);
+                const isReady = !isBulk && status?.stage === "ready";
+                const isFailed = !isBulk && status?.stage === "failed";
+                const isRunningNow = running && selected.size > 0;
+
+                return (
+                  <div
+                    key={account.id}
+                    className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    {(!isReady && !isRunningNow) && (
+                      <input
+                        type="checkbox"
+                        checked={selected.has(account.id)}
+                        onChange={() => toggleAccount(account.id)}
+                        disabled={running}
+                        className="h-4 w-4 rounded border-gray-300 text-cyan-600"
+                      />
+                    )}
+                    {(isReady || isRunningNow) && <div className="w-4 h-4 shrink-0" />}
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{account.name}</p>
+                      {!isBulk && progressMsg[account.id] && (
+                        <p className="text-xs text-gray-500 animate-pulse">{progressMsg[account.id]}</p>
+                      )}
+                      {!isBulk && status?.error && (
+                        <p className="text-xs text-red-500 mt-0.5">{status.error}</p>
+                      )}
+                    </div>
+
+                    <div className="shrink-0 flex items-center gap-2">
+                      {!isBulk && stageBadge(status?.stage)}
+                      {isFailed && !running && (
+                        <Button size="sm" variant="secondary" onClick={() => retryUpload(account)}>
+                          Retry
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {bulkDone && (
+            <p className="text-sm text-green-700 font-medium text-center py-2">
+              All uploads complete ✅
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+          <Button variant="ghost" onClick={onClose} disabled={running}>Close</Button>
+          {uploadableSelected.length > 0 && !running && !bulkDone && (
+            <Button onClick={startUpload}>
+              {isBulk
+                ? `Upload ${assets.length} asset${assets.length !== 1 ? "s" : ""} to ${uploadableSelected.length} account${uploadableSelected.length !== 1 ? "s" : ""}`
+                : `Upload to ${uploadableSelected.length} account${uploadableSelected.length !== 1 ? "s" : ""}`
+              }
+            </Button>
+          )}
+          {running && <Button disabled loading>Uploading…</Button>}
+        </div>
+      </div>
+    </div>
+  );
+}

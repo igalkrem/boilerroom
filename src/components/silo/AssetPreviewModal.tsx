@@ -13,6 +13,7 @@ interface AssetPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUploadToSnapchat: (asset: SiloAsset) => void;
+  onUploadToMeta?: (asset: SiloAsset) => void;
   onAssetUpdated: (asset: SiloAsset) => void;
 }
 
@@ -22,6 +23,7 @@ export function AssetPreviewModal({
   isOpen,
   onClose,
   onUploadToSnapchat,
+  onUploadToMeta,
   onAssetUpdated,
 }: AssetPreviewModalProps) {
   const [editingName, setEditingName] = useState(false);
@@ -40,6 +42,8 @@ export function AssetPreviewModal({
 
   const readyUploads = asset.snapchatUploads.filter((s) => s.stage === "ready");
   const pendingUploads = asset.snapchatUploads.filter((s) => s.stage !== "ready" && s.stage !== "failed");
+  const readyMetaUploads = asset.metaUploads.filter((s) => s.stage === "ready");
+  const pendingMetaUploads = asset.metaUploads.filter((s) => s.stage !== "ready" && s.stage !== "failed");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
@@ -159,6 +163,36 @@ export function AssetPreviewModal({
                 Upload to Snapchat…
               </Button>
             </div>
+
+            {/* Meta status */}
+            {onUploadToMeta && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Meta</h3>
+                {readyMetaUploads.length === 0 && pendingMetaUploads.length === 0 ? (
+                  <p className="text-sm text-gray-400">Not yet uploaded to any ad account.</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {readyMetaUploads.map((s) => (
+                      <li key={s.adAccountId} className="flex items-center gap-2 text-sm">
+                        <span className="text-green-600">✅</span>
+                        <span className="text-gray-700 dark:text-gray-300">{s.adAccountName}</span>
+                        <span className="text-xs text-gray-400 font-mono truncate">{s.imageHash ?? s.videoId}</span>
+                      </li>
+                    ))}
+                    {pendingMetaUploads.map((s) => (
+                      <li key={s.adAccountId} className="flex items-center gap-2 text-sm">
+                        <span className="text-yellow-500">⏳</span>
+                        <span className="text-gray-700 dark:text-gray-300">{s.adAccountName}</span>
+                        <span className="text-xs text-gray-500">{s.stage}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <Button size="sm" variant="secondary" onClick={() => onUploadToMeta(asset)}>
+                  Upload to Meta…
+                </Button>
+              </div>
+            )}
 
             {/* Usage history */}
             {asset.usageHistory.length > 0 && (
