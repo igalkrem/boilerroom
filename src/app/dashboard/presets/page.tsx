@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation";
 import { loadPresets, deletePreset, duplicatePreset } from "@/lib/presets";
 import { loadFeedProviders } from "@/lib/feed-providers";
 import { loadPixels } from "@/lib/pixels";
+import { loadCountryGroups } from "@/lib/country-groups";
+import { CountryGroupsModal } from "@/components/presets/CountryGroupsModal";
 import type { CampaignPreset, AdSquadPresetData } from "@/types/preset";
 import type { FeedProvider } from "@/types/feed-provider";
 import type { SavedPixel } from "@/types/pixel";
+import type { CountryGroup } from "@/types/country-group";
 
 function DataRow({ label, value }: { label: string; value: string }) {
   return (
@@ -33,10 +36,17 @@ function TrafficSourceBadge({ source }: { source: "snap" | "facebook" }) {
   );
 }
 
-function geoText(sq?: AdSquadPresetData): string {
-  if (!sq) return "—";
-  const legacy = sq as unknown as { geoCountryCodes?: string[]; geoCountryCode?: string };
-  const codes = legacy.geoCountryCodes ?? (legacy.geoCountryCode ? [legacy.geoCountryCode] : []);
+function geoText(preset: CampaignPreset, groupMap: Record<string, CountryGroup>): string {
+  if (preset.countryGroupId) {
+    const group = groupMap[preset.countryGroupId];
+    if (group) return `🔗 ${group.name}: ${group.countryCodes.join(", ")}`;
+  }
+  const sq = preset.adSquads?.[0] as unknown as { geoCountryCodes?: string[]; geoCountryCode?: string } | undefined;
+  const codes =
+    sq?.geoCountryCodes ??
+    (sq?.geoCountryCode ? [sq.geoCountryCode] : undefined) ??
+    preset.metaAdSet?.geoCountryCodes ??
+    [];
   return codes.length > 0 ? codes.join(", ") : "Any";
 }
 
@@ -65,6 +75,12 @@ export default function PresetsPage() {
   const [presets, setPresets] = useState<CampaignPreset[]>([]);
   const [providerMap, setProviderMap] = useState<Record<string, FeedProvider>>({});
   const [pixelMap, setPixelMap] = useState<Record<string, SavedPixel>>({});
+  const [groupMap, setGroupMap] = useState<Record<string, CountryGroup>>({});
+  const [showCountryGroups, setShowCountryGroups] = useState(false);
+
+  function reloadGroups() {
+    setGroupMap(Object.fromEntries(loadCountryGroups().map((g) => [g.id, g])));
+  }
 
   useEffect(() => {
     setPresets(loadPresets());
@@ -72,6 +88,7 @@ export default function PresetsPage() {
     setProviderMap(Object.fromEntries(providers.map((p) => [p.id, p])));
     const pixels = loadPixels();
     setPixelMap(Object.fromEntries(pixels.map((px) => [px.pixelId, px])));
+    reloadGroups();
   }, []);
 
   function handleDelete(id: string, name: string) {
@@ -96,12 +113,20 @@ export default function PresetsPage() {
             Reusable ad set configurations — select a preset in the wizard canvas.
           </p>
         </div>
-        <button
-          onClick={() => router.push("/dashboard/presets/new")}
-          className="px-4 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-sm font-semibold transition-colors"
-        >
-          + New Preset
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowCountryGroups(true)}
+            className={`${btnBase} border-gray-200 text-gray-600 hover:border-gray-300 hover:text-gray-900`}
+          >
+            Country Groups
+          </button>
+          <button
+            onClick={() => router.push("/dashboard/presets/new")}
+            className="px-4 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-sm font-semibold transition-colors"
+          >
+            + New Preset
+          </button>
+        </div>
       </div>
 
       {presets.length === 0 ? (
@@ -142,7 +167,7 @@ export default function PresetsPage() {
                 {/* Data grid */}
                 <div className="px-4 py-3 grid grid-cols-2 gap-x-6 gap-y-3 flex-1">
                   <DataRow label="Feed" value={providerName ?? "—"} />
-                  <DataRow label="Geo" value={geoText(sq0)} />
+                  <DataRow label="Geo" value={geoText(preset, groupMap)} />
                   <DataRow label="Pixel" value={pixelName} />
                   <DataRow label="Bid" value={bidText(sq0)} />
                   <DataRow label="Budget" value={budgetText(sq0)} />
@@ -174,6 +199,16 @@ export default function PresetsPage() {
             );
           })}
         </div>
+      )}
+
+      {showCountryGroups && (
+        <CountryGroupsModal
+          onClose={() => {
+            setShowCountryGroups(false);
+            reloadGroups();
+            setPresets(loadPresets());
+          }}
+        />
       )}
     </div>
   );

@@ -8,6 +8,17 @@ import type { SiloAsset } from "@/types/silo";
 import type { MetaBillingEvent, MetaOptimizationGoal, MetaPixelEvent } from "@/types/meta";
 import { DEFAULT_PAGE_AD_LIMIT } from "@/types/page-config";
 import { getMetaMediaRef } from "@/lib/silo";
+import { getCountryGroupById } from "@/lib/country-groups";
+
+// When a preset is linked to a Country Group, resolve the group's CURRENT
+// members at build time instead of the preset's last-saved snapshot — this is
+// what makes the link live: editing a group changes every future campaign
+// built from a linked preset, without needing to re-save the preset itself.
+function resolveGeoCountryCodes(preset: CampaignPreset, fallback: string[]): string[] {
+  if (!preset.countryGroupId) return fallback;
+  const group = getCountryGroupById(preset.countryGroupId);
+  return group?.countryCodes ?? fallback; // group deleted/missing → fall back to last-saved snapshot
+}
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -75,8 +86,11 @@ export function synthesizeCampaign(
     campaignId,
     name: campaignName,
     type: squadTemplate.type,
-    geoCountryCodes: (squadTemplate as { geoCountryCodes?: string[]; geoCountryCode?: string }).geoCountryCodes
-      ?? [(squadTemplate as { geoCountryCodes?: string[]; geoCountryCode?: string }).geoCountryCode ?? "US"],
+    geoCountryCodes: resolveGeoCountryCodes(
+      preset,
+      (squadTemplate as { geoCountryCodes?: string[]; geoCountryCode?: string }).geoCountryCodes
+        ?? [(squadTemplate as { geoCountryCodes?: string[]; geoCountryCode?: string }).geoCountryCode ?? "US"]
+    ),
     optimizationGoal: squadTemplate.optimizationGoal,
     bidStrategy: squadTemplate.bidStrategy,
     bidAmountUsd: squadTemplate.bidAmountUsd,
@@ -299,7 +313,7 @@ export function synthesizeMetaCampaign(
     adSet: {
       name: campaignName,
       status: metaAdSet.status,
-      geoCountryCodes: metaAdSet.geoCountryCodes,
+      geoCountryCodes: resolveGeoCountryCodes(preset, metaAdSet.geoCountryCodes),
       billingEvent: metaAdSet.billingEvent,
       optimizationGoal: metaAdSet.optimizationGoal,
       bidAmountCents: metaAdSet.bidAmountCents,

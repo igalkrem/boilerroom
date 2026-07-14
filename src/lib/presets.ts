@@ -30,6 +30,11 @@ export function loadPresets(): CampaignPreset[] {
       localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
       return [];
     }
+    // "UK" is not a valid ISO 3166-1 alpha-2 code (the real code is "GB") — both
+    // Snapchat and Meta reject/ignore it for geo-targeting. Rewrite any preset
+    // that stored it before the country picker was fixed.
+    const fixUkToGb = (codes?: string[]) => codes?.map((c) => (c === "UK" ? "GB" : c));
+
     // Filter out corrupted entries rather than wiping the entire store.
     return parsed
       .filter((item) => presetSchema.safeParse(item).success)
@@ -42,7 +47,18 @@ export function loadPresets(): CampaignPreset[] {
           productSetId: undefined,
           dynamicTemplateId: undefined,
           ...sq,
+          geoCountryCodes: fixUkToGb(sq.geoCountryCodes as string[] | undefined) ?? sq.geoCountryCodes,
         })),
+        ...(item.metaAdSet
+          ? {
+              metaAdSet: {
+                ...item.metaAdSet,
+                geoCountryCodes:
+                  fixUkToGb(item.metaAdSet.geoCountryCodes as string[] | undefined) ??
+                  item.metaAdSet.geoCountryCodes,
+              },
+            }
+          : {}),
       })) as CampaignPreset[];
   } catch {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([]));

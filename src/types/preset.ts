@@ -70,6 +70,10 @@ export interface CampaignPreset {
   tag?: string; // resolves {{preset.tag}} in campaign naming templates
   trafficSource?: "snap" | "facebook";
   feedProviderId: string; // required — preset belongs to one provider ("" for legacy presets)
+  countryGroupId?: string; // when set, geo targeting is resolved live from this Country Group at
+                           // every campaign build (see resolveGeoCountryCodes in synthesize-campaign.ts);
+                           // geoCountryCodes on adSquads[0]/metaAdSet still holds the last-resolved
+                           // snapshot for display + fallback if the group is deleted
   createdAt: string; // ISO timestamp
   isCatalogue?: boolean; // true = Dynamic Product Ads (no Silo media, uses product feed)
   campaign: CampaignPresetData;

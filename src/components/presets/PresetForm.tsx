@@ -11,10 +11,13 @@ import { MultiSelect } from "@/components/ui/MultiSelect";
 import { upsertPreset } from "@/lib/presets";
 import { loadPixels } from "@/lib/pixels";
 import { loadFeedProviders } from "@/lib/feed-providers";
+import { loadCountryGroups } from "@/lib/country-groups";
+import { COUNTRY_OPTIONS } from "@/lib/countries";
 import type { CampaignPreset, MetaAdSetPresetData } from "@/types/preset";
 import type { SavedPixel } from "@/types/pixel";
 import type { FeedProvider } from "@/types/feed-provider";
 import type { MetaOptimizationGoal, MetaBillingEvent, MetaPixelEvent } from "@/types/meta";
+import type { CountryGroup } from "@/types/country-group";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -57,79 +60,6 @@ const presetFormSchema = z
 type PresetFormValues = z.infer<typeof presetFormSchema>;
 
 // ─── Options ─────────────────────────────────────────────────────────────────
-
-const GEO_OPTIONS = [
-  { value: "AE", label: "United Arab Emirates" },
-  { value: "AR", label: "Argentina" },
-  { value: "AT", label: "Austria" },
-  { value: "AU", label: "Australia" },
-  { value: "BE", label: "Belgium" },
-  { value: "BH", label: "Bahrain" },
-  { value: "BG", label: "Bulgaria" },
-  { value: "BR", label: "Brazil" },
-  { value: "CA", label: "Canada" },
-  { value: "CH", label: "Switzerland" },
-  { value: "CL", label: "Chile" },
-  { value: "CO", label: "Colombia" },
-  { value: "CR", label: "Costa Rica" },
-  { value: "CZ", label: "Czech Republic" },
-  { value: "DE", label: "Germany" },
-  { value: "DK", label: "Denmark" },
-  { value: "DO", label: "Dominican Republic" },
-  { value: "DZ", label: "Algeria" },
-  { value: "EC", label: "Ecuador" },
-  { value: "EG", label: "Egypt" },
-  { value: "ES", label: "Spain" },
-  { value: "FI", label: "Finland" },
-  { value: "FR", label: "France" },
-  { value: "GR", label: "Greece" },
-  { value: "HK", label: "Hong Kong" },
-  { value: "HR", label: "Croatia" },
-  { value: "HU", label: "Hungary" },
-  { value: "ID", label: "Indonesia" },
-  { value: "IE", label: "Ireland" },
-  { value: "IL", label: "Israel" },
-  { value: "IN", label: "India" },
-  { value: "IQ", label: "Iraq" },
-  { value: "IT", label: "Italy" },
-  { value: "JP", label: "Japan" },
-  { value: "JO", label: "Jordan" },
-  { value: "KE", label: "Kenya" },
-  { value: "KW", label: "Kuwait" },
-  { value: "KZ", label: "Kazakhstan" },
-  { value: "LB", label: "Lebanon" },
-  { value: "LT", label: "Lithuania" },
-  { value: "LU", label: "Luxembourg" },
-  { value: "MA", label: "Morocco" },
-  { value: "MX", label: "Mexico" },
-  { value: "MY", label: "Malaysia" },
-  { value: "NG", label: "Nigeria" },
-  { value: "NL", label: "Netherlands" },
-  { value: "NO", label: "Norway" },
-  { value: "NZ", label: "New Zealand" },
-  { value: "OM", label: "Oman" },
-  { value: "PE", label: "Peru" },
-  { value: "PH", label: "Philippines" },
-  { value: "PK", label: "Pakistan" },
-  { value: "PL", label: "Poland" },
-  { value: "PR", label: "Puerto Rico" },
-  { value: "PT", label: "Portugal" },
-  { value: "QA", label: "Qatar" },
-  { value: "RO", label: "Romania" },
-  { value: "RS", label: "Serbia" },
-  { value: "SA", label: "Saudi Arabia" },
-  { value: "SE", label: "Sweden" },
-  { value: "SG", label: "Singapore" },
-  { value: "SI", label: "Slovenia" },
-  { value: "SK", label: "Slovakia" },
-  { value: "TH", label: "Thailand" },
-  { value: "TN", label: "Tunisia" },
-  { value: "TR", label: "Turkey" },
-  { value: "UK", label: "United Kingdom" },
-  { value: "US", label: "United States" },
-  { value: "UY", label: "Uruguay" },
-  { value: "ZA", label: "South Africa" },
-];
 
 const OPTIMIZATION_GOAL_OPTIONS = [
   { value: "PIXEL_PURCHASE", label: "Pixel Purchase" },
@@ -211,6 +141,8 @@ export function PresetForm({ preset }: PresetFormProps) {
   );
   const [pixels, setPixels] = useState<SavedPixel[]>([]);
   const [feedProviders, setFeedProviders] = useState<FeedProvider[]>([]);
+  const [countryGroups, setCountryGroups] = useState<CountryGroup[]>([]);
+  const [countryGroupId, setCountryGroupId] = useState<string | undefined>(preset?.countryGroupId);
 
   // Meta-specific state
   const existingMetaAdSet = preset?.metaAdSet;
@@ -226,6 +158,7 @@ export function PresetForm({ preset }: PresetFormProps) {
   useEffect(() => {
     setPixels(loadPixels());
     setFeedProviders(loadFeedProviders());
+    setCountryGroups(loadCountryGroups());
   }, []);
 
   const pixelOptions = pixels.map((p) => ({ value: p.pixelId, label: p.name }));
@@ -285,6 +218,20 @@ export function PresetForm({ preset }: PresetFormProps) {
     }
   }, [pixels, sq0?.pixelId, setValue]);
 
+  // A linked preset's geo targeting IS the group's current list — selecting a
+  // group resolves its members into the form immediately; picking "Custom"
+  // unlinks and leaves whatever codes are currently in the field editable.
+  function handleSelectCountryGroup(groupId: string) {
+    if (!groupId) {
+      setCountryGroupId(undefined);
+      return;
+    }
+    const group = countryGroups.find((g) => g.id === groupId);
+    if (!group) return;
+    setCountryGroupId(groupId);
+    setValue("geoCountryCodes", group.countryCodes);
+  }
+
   const onSubmit = (data: PresetFormValues) => {
     if (isCatalogue && !catalogId.trim()) {
       alert("Catalog ID is required for Catalogue campaigns.");
@@ -319,6 +266,7 @@ export function PresetForm({ preset }: PresetFormProps) {
       trafficSource,
       isCatalogue: isMeta ? false : isCatalogue,
       feedProviderId,
+      countryGroupId,
       createdAt: preset?.createdAt ?? new Date().toISOString(),
       campaign: {
         objective: "SALES",
@@ -536,19 +484,42 @@ export function PresetForm({ preset }: PresetFormProps) {
 
       {/* Targeting */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-2 space-y-2">
+          {countryGroups.length > 0 && (
+            <Select
+              label="Country Group"
+              options={[
+                { value: "", label: "— Custom (no group) —" },
+                ...countryGroups.map((g) => ({ value: g.id, label: g.name })),
+              ]}
+              value={countryGroupId ?? ""}
+              onChange={(e) => handleSelectCountryGroup(e.target.value)}
+            />
+          )}
           <Controller
             control={control}
             name="geoCountryCodes"
-            render={({ field }) => (
-              <MultiSelect
-                label="Geo Targeting"
-                options={GEO_OPTIONS}
-                value={field.value}
-                onChange={field.onChange}
-                error={errors.geoCountryCodes?.message}
-              />
-            )}
+            render={({ field }) =>
+              countryGroupId ? (
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Geo Targeting
+                  </label>
+                  <p className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+                    {field.value.join(", ")}{" "}
+                    <span className="text-xs text-gray-400">(from group — switch to Custom to edit)</span>
+                  </p>
+                </div>
+              ) : (
+                <MultiSelect
+                  label="Geo Targeting"
+                  options={COUNTRY_OPTIONS}
+                  value={field.value}
+                  onChange={field.onChange}
+                  error={errors.geoCountryCodes?.message}
+                />
+              )
+            }
           />
         </div>
 

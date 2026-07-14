@@ -8,6 +8,7 @@ const VALID_KEYS = [
   "br_pixels",
   "br_meta_pixels",
   "br_presets",
+  "br_country_groups",
   "br_feed_providers",
   "br_articles",
   "br_ad_accounts_v1",
