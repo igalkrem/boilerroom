@@ -207,7 +207,6 @@ export interface MetaSynthesisResult {
   campaign: {
     name: string;
     status: "ACTIVE" | "PAUSED";
-    dailyBudgetCents?: number;
   };
   adSet: {
     name: string;
@@ -308,7 +307,6 @@ export function synthesizeMetaCampaign(
     campaign: {
       name: campaignName,
       status: preset.campaign.status,
-      dailyBudgetCents: metaAdSet.dailyBudgetCents,
     },
     adSet: {
       name: campaignName,

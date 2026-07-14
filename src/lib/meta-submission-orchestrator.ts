@@ -116,12 +116,13 @@ export async function runMetaSubmission(
   // ── Stage 3: Create campaign ─────────────────────────────────────────────
   onStage("campaigns");
 
+  // Budget always lives on the ad set (ABO) — Meta rejects a request that sets
+  // budget on both campaign and ad set, so the campaign must never include one.
   const campaignPayload: MetaCampaignPayload = {
     name: resolveChannel(synthesis.campaign.name),
     status: synthesis.campaign.status,
     objective: "OUTCOME_SALES",
     special_ad_categories: [],
-    daily_budget: synthesis.campaign.dailyBudgetCents,
   };
 
   let campaignId = "";
