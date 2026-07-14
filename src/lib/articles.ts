@@ -33,6 +33,12 @@ function upcast(raw: Record<string, unknown>): Article {
           }
     ),
     defaultHeadlineIndex: typeof raw.defaultHeadlineIndex === "number" ? raw.defaultHeadlineIndex : undefined,
+    // Legacy articles predate this field — default to both platforms so
+    // existing wiring (which had no restriction) keeps working unchanged.
+    trafficSources:
+      Array.isArray(raw.trafficSources) && raw.trafficSources.length > 0
+        ? (raw.trafficSources as string[])
+        : ["Snap", "Meta"],
     createdAt: raw.createdAt as string,
   };
 }

@@ -507,8 +507,9 @@ export async function runSubmission(
       type: creativeType,
       headline: cr.headline || undefined,
       brand_name: cr.brandName || undefined,
-      // call_to_action is not valid on SNAP_AD type creatives (E2002 "call to action must be null")
-      call_to_action: creativeType !== "SNAP_AD" && cr.callToAction ? cr.callToAction : undefined,
+      // call_to_action is not valid on SNAP_AD type creatives (E2002 "call to action must be null").
+      // Every other creative type gets a fixed "MORE" CTA — no per-preset/article configuration.
+      call_to_action: creativeType !== "SNAP_AD" ? "MORE" : undefined,
       top_snap_media_id: mediaIdMap.get(cr.id) ?? cr.mediaId ?? "",
       profile_properties: { profile_id: snapProfileId! },
       web_view_properties:

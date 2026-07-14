@@ -10,5 +10,7 @@ export interface Article {
   locale?: string; // e.g. "en_US"
   allowedHeadlines: { text: string; rac: string }[];
   defaultHeadlineIndex?: number; // index into allowedHeadlines; auto-selected in wizard
+  trafficSources: string[]; // which traffic sources this article may be used with: "Snap" | "Meta"
+                            // (mirrors FeedProviderDomain.trafficSources); defaults to both via upcast()
   createdAt: string;
 }

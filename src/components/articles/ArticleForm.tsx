@@ -26,6 +26,12 @@ const LOCALES = [
   { value: "en_US", label: "English - United States" },
 ];
 
+// Mirrors FeedProviderDomain.trafficSources exactly ("Snap"/"Meta" values).
+const ARTICLE_TRAFFIC_SOURCES: Array<{ value: string; label: string }> = [
+  { value: "Snap", label: "Snap" },
+  { value: "Meta", label: "Facebook" },
+];
+
 const articleFormSchema = z.object({
   feedProviderId: z.string().min(1, "Feed provider is required"),
   slug: z.string().min(1, "Keyword is required").max(200),
@@ -34,6 +40,7 @@ const articleFormSchema = z.object({
   previewUrl: z.string().max(2000),
   domain: z.string().max(200),
   locale: z.string().max(10),
+  trafficSources: z.array(z.string()).min(1, "Select at least one traffic source"),
   allowedHeadlines: z.array(
     z.object({
       text: z.string().max(34, "Max 34 characters"),
@@ -95,9 +102,10 @@ export function ArticleForm({ article }: ArticleFormProps) {
           previewUrl: article.previewUrl ?? "",
           domain: article.domain ?? "",
           locale: article.locale ?? "",
+          trafficSources: article.trafficSources ?? ["Snap", "Meta"],
           allowedHeadlines: article.allowedHeadlines.map((h) => ({ text: h.text, rac: h.rac })),
         }
-      : { feedProviderId: "", slug: "", query: "", title: "", previewUrl: "", domain: "", locale: "", allowedHeadlines: [] },
+      : { feedProviderId: "", slug: "", query: "", title: "", previewUrl: "", domain: "", locale: "", trafficSources: ["Snap", "Meta"], allowedHeadlines: [] },
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -133,6 +141,7 @@ export function ArticleForm({ article }: ArticleFormProps) {
       previewUrl: data.previewUrl.trim() || undefined,
       domain: data.domain || undefined,
       locale: data.locale || undefined,
+      trafficSources: data.trafficSources,
       allowedHeadlines: filteredWithIdx.map(({ h }) => ({ text: h.text.trim(), rac: h.rac.trim() })),
       defaultHeadlineIndex: savedDefaultIndex >= 0 ? savedDefaultIndex : undefined,
       createdAt: article?.createdAt ?? new Date().toISOString(),
@@ -161,6 +170,31 @@ export function ArticleForm({ article }: ArticleFormProps) {
               error={errors.feedProviderId?.message}
             />
           )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              Traffic Sources
+            </label>
+            <div className="flex gap-4">
+              {ARTICLE_TRAFFIC_SOURCES.map((src) => (
+                <label key={src.value} className="flex items-center gap-1.5 cursor-pointer text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    value={src.value}
+                    {...register("trafficSources")}
+                    className="rounded border-gray-300"
+                  />
+                  {src.label}
+                </label>
+              ))}
+            </div>
+            {errors.trafficSources && (
+              <p className="text-xs text-red-500 mt-1">{errors.trafficSources.message}</p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Which platform(s) this article can be used with in the wizard.
+            </p>
+          </div>
 
           {/* Domain picker — reactive to provider selection */}
           {watchedProviderId && (

@@ -14,7 +14,6 @@ import { loadMetaPixels } from "@/lib/meta-pixels";
 import { loadFeedProviders } from "@/lib/feed-providers";
 import { loadCountryGroups } from "@/lib/country-groups";
 import { COUNTRY_OPTIONS } from "@/lib/countries";
-import { SNAP_CTA_OPTIONS, META_CTA_GROUPS } from "@/lib/cta-options";
 import type { CampaignPreset, MetaAdSetPresetData } from "@/types/preset";
 import type { SavedPixel } from "@/types/pixel";
 import type { SavedMetaPixel } from "@/types/meta-pixel";
@@ -101,10 +100,6 @@ const AGE_OPTIONS = [
   { value: "55", label: "55+" },
 ];
 
-// Snap/Meta call_to_action options moved to src/lib/cta-options.ts — shared
-// with the canvas wizard's per-article CTA picker (ArticleNode.tsx) so the
-// two never drift apart.
-
 const selectCls =
   "w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 bg-white dark:bg-gray-800 dark:text-gray-100";
 
@@ -128,9 +123,6 @@ export function PresetForm({ preset }: PresetFormProps) {
   const [tag, setTag] = useState<string>(preset?.tag ?? "");
   const [adStatus, setAdStatus] = useState<"ACTIVE" | "PAUSED">(
     preset?.creativeDefaults?.adStatus ?? "PAUSED"
-  );
-  const [callToAction, setCallToAction] = useState<string>(
-    preset?.creativeDefaults?.callToAction ?? ""
   );
   const [pixels, setPixels] = useState<SavedPixel[]>([]);
   const [feedProviders, setFeedProviders] = useState<FeedProvider[]>([]);
@@ -336,7 +328,6 @@ export function PresetForm({ preset }: PresetFormProps) {
       metaAdSet,
       creativeDefaults: {
         adStatus,
-        callToAction: callToAction || undefined,
       },
     };
     upsertPreset(saved);
@@ -800,35 +791,6 @@ export function PresetForm({ preset }: PresetFormProps) {
           </select>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Call to Action</label>
-          <select
-            value={callToAction}
-            onChange={(e) => setCallToAction(e.target.value)}
-            className={selectCls}
-          >
-            {trafficSource === "facebook" ? (
-              <>
-                <option value="">— None —</option>
-                {META_CTA_GROUPS.map((group) => (
-                  <optgroup key={group.label} label={group.label}>
-                    {group.options.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </>
-            ) : (
-              SNAP_CTA_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))
-            )}
-          </select>
-        </div>
       </div>
 
       {/* Actions */}

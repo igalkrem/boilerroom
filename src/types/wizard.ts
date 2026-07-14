@@ -57,7 +57,6 @@ export interface CreativeFormData {
   name: string;
   headline: string; // max 34 chars
   brandName?: string;
-  callToAction?: string;
   mediaId?: string; // resolved at submission time by uploadMedia stage
   mediaFile?: File; // transcoded/resized file stored in Step 3, uploaded in Step 4
   mediaFileName?: string;
@@ -148,7 +147,6 @@ export interface CanvasEdges {
     articleId: string;
     headline: string;
     headlineRac?: string;
-    callToAction: string;
   }>;
   articleToPreset: Array<{
     articleId: string;
@@ -167,6 +165,5 @@ export interface CampaignBuildItem {
   duplicationIndex: number; // 0-based within the duplication count
   headline: string;
   headlineRac: string;
-  callToAction: string;
   trafficSource: "snap" | "facebook";
 }

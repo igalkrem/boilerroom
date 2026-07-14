@@ -41,7 +41,7 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   return <span className="ml-1 text-cyan-500">{dir === "asc" ? "↑" : "↓"}</span>;
 }
 
-const TOTAL_COLS = 7;
+const TOTAL_COLS = 8;
 
 export default function ArticlesPage() {
   const router = useRouter();
@@ -251,6 +251,7 @@ export default function ArticlesPage() {
                       </th>
                       <th className={thStatic}>Language</th>
                       <th className={thStatic}>Domain</th>
+                      <th className={thStatic}>Traffic</th>
                       <th className={thClass} onClick={() => toggleSort("headlines")}>
                         Headlines <SortIcon active={sortCol === "headlines"} dir={sortDir} />
                       </th>
@@ -337,6 +338,22 @@ export default function ArticlesPage() {
                               ) : (
                                 <span className="text-xs text-gray-300">—</span>
                               )}
+                            </td>
+
+                            {/* Traffic Sources */}
+                            <td className={tdClass}>
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {(article.trafficSources ?? ["Snap", "Meta"]).includes("Snap") && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-yellow-50 text-yellow-700 border border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800">
+                                    Snap
+                                  </span>
+                                )}
+                                {(article.trafficSources ?? ["Snap", "Meta"]).includes("Meta") && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
+                                    Meta
+                                  </span>
+                                )}
+                              </div>
                             </td>
 
                             {/* Headlines */}

@@ -10,7 +10,6 @@ export const creativeSchema = z
       .min(1, "Headline is required")
       .max(34, "Max 34 characters"),
     brandName: z.string().max(25).optional(),
-    callToAction: z.string().optional(),
     mediaId: z.string().optional(),
     mediaFileName: z.string().optional(),
     uploadStatus: z.enum(["idle", "uploading", "done", "error"]),

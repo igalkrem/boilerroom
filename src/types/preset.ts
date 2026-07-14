@@ -63,7 +63,6 @@ export interface MetaAdSetPresetData {
 export interface CreativePresetDefaults {
   adStatus: "ACTIVE" | "PAUSED";
   brandName?: string;
-  callToAction?: string;
 }
 
 export interface CampaignPreset {

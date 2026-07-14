@@ -2,7 +2,6 @@
 
 import { Handle, Position } from "@xyflow/react";
 import { useCanvasStore } from "@/hooks/useCanvasStore";
-import { SNAP_CTA_OPTIONS, META_CTA_GROUPS, SHARED_CTA_OPTIONS } from "@/lib/cta-options";
 import type { Article } from "@/types/article";
 
 export function ArticleNode({ id, data }: {
@@ -10,7 +9,6 @@ export function ArticleNode({ id, data }: {
   data: {
     article: Article;
     color: string;
-    platforms: ReadonlySet<"snap" | "meta">;
     onDisconnectTarget: (nodeId: string) => void;
   };
 }) {
@@ -19,8 +17,6 @@ export function ArticleNode({ id, data }: {
 
   const articleEdges = store.edges.providerToArticle.filter((e) => e.articleId === data.article.id);
   const connected = articleEdges.length > 0;
-  const hasSnap = data.platforms.has("snap");
-  const hasMeta = data.platforms.has("meta");
 
   const handleStyle = connected
     ? {
@@ -89,7 +85,7 @@ export function ArticleNode({ id, data }: {
                 onChange={(e) => {
                   const val = e.target.value;
                   const rac = data.article.allowedHeadlines.find((h) => h.text === val)?.rac ?? "";
-                  store.setArticleContent(ae.feedProviderId, data.article.id, val, ae.callToAction, rac);
+                  store.setArticleContent(ae.feedProviderId, data.article.id, val, rac);
                 }}
                 className="w-full text-xs rounded-lg px-2 py-1 focus:outline-none bg-white/5 border border-white/10 text-gray-300"
               >
@@ -105,46 +101,10 @@ export function ArticleNode({ id, data }: {
                 value={ae.headline}
                 placeholder="Headline (max 34 chars)"
                 onChange={(e) =>
-                  store.setArticleContent(ae.feedProviderId, data.article.id, e.target.value, ae.callToAction, "")
+                  store.setArticleContent(ae.feedProviderId, data.article.id, e.target.value, "")
                 }
                 className="w-full text-xs rounded-lg px-2 py-1 focus:outline-none bg-white/5 border border-white/10 text-gray-300 placeholder-gray-600"
               />
-            )}
-          </div>
-          <div>
-            <label className="text-[10px] font-semibold text-gray-500 block mb-1 uppercase tracking-wider">Call to Action</label>
-            <select
-              value={ae.callToAction}
-              onChange={(e) =>
-                store.setArticleContent(ae.feedProviderId, data.article.id, ae.headline, e.target.value, ae.headlineRac)
-              }
-              className="w-full text-xs rounded-lg px-2 py-1 focus:outline-none bg-white/5 border border-white/10 text-gray-300"
-            >
-              {hasMeta && !hasSnap ? (
-                <>
-                  <option value="">— None —</option>
-                  {META_CTA_GROUPS.map((group) => (
-                    <optgroup key={group.label} label={group.label}>
-                      {group.options.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </>
-              ) : hasMeta && hasSnap ? (
-                SHARED_CTA_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))
-              ) : (
-                SNAP_CTA_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))
-              )}
-            </select>
-            {hasMeta && hasSnap && (
-              <p className="text-[9px] text-gray-500 mt-0.5">
-                Only CTAs valid on both Snapchat &amp; Meta shown — this article is connected to both.
-              </p>
             )}
           </div>
         </div>

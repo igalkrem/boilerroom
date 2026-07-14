@@ -67,7 +67,7 @@ interface CanvasStore {
   disconnectRowFromProvider: (rowId: string, feedProviderId: string) => void;
 
   toggleProviderToArticle: (feedProviderId: string, articleId: string, defaultHeadline?: string, defaultHeadlineRac?: string) => void;
-  setArticleContent: (feedProviderId: string, articleId: string, headline: string, callToAction: string, headlineRac?: string) => void;
+  setArticleContent: (feedProviderId: string, articleId: string, headline: string, headlineRac?: string) => void;
   toggleArticleToPreset: (articleId: string, presetId: string) => void;
   setDuplications: (articleId: string, presetId: string, count: number) => void;
 
@@ -258,7 +258,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
             ...s.edges,
             providerToArticle: [
               ...s.edges.providerToArticle,
-              { feedProviderId, articleId, headline: defaultHeadline ?? "", headlineRac: defaultHeadlineRac ?? "", callToAction: "MORE" },
+              { feedProviderId, articleId, headline: defaultHeadline ?? "", headlineRac: defaultHeadlineRac ?? "" },
             ],
           },
         };
@@ -270,13 +270,13 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       return { edges: { ...s.edges, providerToArticle: newP2A, articleToPreset: newA2P } };
     }),
 
-  setArticleContent: (feedProviderId, articleId, headline, callToAction, headlineRac) =>
+  setArticleContent: (feedProviderId, articleId, headline, headlineRac) =>
     set((s) => ({
       edges: {
         ...s.edges,
         providerToArticle: s.edges.providerToArticle.map((e) =>
           e.feedProviderId === feedProviderId && e.articleId === articleId
-            ? { ...e, headline, callToAction, ...(headlineRac !== undefined ? { headlineRac } : {}) }
+            ? { ...e, headline, ...(headlineRac !== undefined ? { headlineRac } : {}) }
             : e
         ),
       },
@@ -378,7 +378,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
           (e) => e.feedProviderId === feedProviderId
         );
 
-        for (const { articleId, headline, headlineRac, callToAction } of articleEdges) {
+        for (const { articleId, headline, headlineRac } of articleEdges) {
           const presetEdges = edges.articleToPreset.filter((e) => e.articleId === articleId);
           const eligibleAccounts = edges.articleToAdAccount
             .filter((e) => e.articleId === articleId)
@@ -398,7 +398,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
                   duplicationIndex: i,
                   headline,
                   headlineRac: headlineRac ?? "",
-                  callToAction,
                   trafficSource: presetMap.get(presetId)?.trafficSource ?? "snap",
                 });
               }

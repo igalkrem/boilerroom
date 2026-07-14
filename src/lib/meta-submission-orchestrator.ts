@@ -251,9 +251,8 @@ export async function runMetaSubmission(
                 image_hash: media.imageHash!,
                 name: creative.headline,
                 message: creative.headline,
-                ...(creative.callToAction
-                  ? { call_to_action: { type: creative.callToAction, value: { link: webViewUrl } } }
-                  : {}),
+                // Fixed CTA — no per-preset/article configuration.
+                call_to_action: { type: "LEARN_MORE", value: { link: webViewUrl } },
               },
             }
           : {
@@ -262,9 +261,7 @@ export async function runMetaSubmission(
                 image_hash: "",
                 title: creative.headline,
                 message: creative.headline,
-                ...(creative.callToAction
-                  ? { call_to_action: { type: creative.callToAction, value: { link: webViewUrl } } }
-                  : {}),
+                call_to_action: { type: "LEARN_MORE", value: { link: webViewUrl } },
               },
             }),
       },

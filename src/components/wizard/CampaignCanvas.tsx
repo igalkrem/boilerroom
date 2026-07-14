@@ -62,10 +62,6 @@ const EDGE_TYPES = {
 };
 
 const COLUMN_X = { group: 0, provider: 300, router: 520, article: 740, adaccount: 1040, preset: 1320 };
-// Module-level stable reference — see the useAdAccounts EMPTY_ACCOUNTS hazard
-// note in CLAUDE.md; an inline new Set() as a fallback would create a fresh
-// reference on every render and defeat memoization.
-const EMPTY_PLATFORM_SET: ReadonlySet<"snap" | "meta"> = new Set();
 const ROW_GAP = 130;
 const ROW_CARD_STEP = 172; // CARD_W (160) + CARD_GAP (12) — used to shift row left when prepending a card
 
@@ -135,24 +131,6 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     () => store.edges.articleToAdAccount.length > 0,
     [store.edges.articleToAdAccount]
   );
-
-  // Which platform(s) each article is currently wired to, via its connected ad
-  // accounts — lets ArticleNode show the right call-to-action vocabulary
-  // (Snap vs Meta have different real call_to_action enums). Both dependency
-  // values are already-stable/memoized (allAccounts, and the specific
-  // store.edges.articleToAdAccount field per the canSelectPresets precedent
-  // above), so this is safe to feed into buildNodes.
-  const articlePlatforms = useMemo(() => {
-    const accountPlatform = new Map(allAccounts.map((a) => [a.id, a.platform]));
-    const map = new Map<string, Set<"snap" | "meta">>();
-    for (const e of store.edges.articleToAdAccount) {
-      const platform = accountPlatform.get(e.adAccountId);
-      if (!platform) continue;
-      if (!map.has(e.articleId)) map.set(e.articleId, new Set());
-      map.get(e.articleId)!.add(platform);
-    }
-    return map;
-  }, [store.edges.articleToAdAccount, allAccounts]);
 
   const visiblePresets = useMemo(() => {
     if (!canSelectPresets) return [];
@@ -322,7 +300,6 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         data: {
           article,
           color,
-          platforms: articlePlatforms.get(article.id) ?? EMPTY_PLATFORM_SET,
           onDisconnectTarget: makeDisconnectTarget,
         },
       });
@@ -373,7 +350,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   }, [
     store.creativeRows, store.routerNodes,
     sortedByCreation, providerColorMap, connectedProviderIds, visibleArticles, visibleAccounts, visiblePresets,
-    adAccountConfigs, articles, canSelectPresets, articlePlatforms, makeDisconnectTarget,
+    adAccountConfigs, articles, canSelectPresets, makeDisconnectTarget,
   ]);
 
   // ─── Build React Flow edges ───────────────────────────────────────────────
@@ -533,6 +510,12 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         const article = articles.find((a) => a.id === articleId);
         const cfg = adAccountConfigs.find((c) => c.id === accountId);
         if (article && cfg && cfg.feedProviderIds.length > 0 && !cfg.feedProviderIds.includes(article.feedProviderId)) return;
+        // Platform gate: article must be assigned to the account's traffic source (if restricted)
+        const account = allAccounts.find((a) => a.id === accountId);
+        if (article && account && article.trafficSources.length > 0) {
+          const articlePlatforms = article.trafficSources.map((s2) => (s2 === "Meta" ? "meta" : "snap"));
+          if (!articlePlatforms.includes(account.platform)) return;
+        }
         s.toggleArticleToAdAccount(articleId, accountId);
 
       } else if (srcType === "account" && tgtType === "preset") {
@@ -614,6 +597,14 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         const accountId = target.replace(/^account-/, "");
         const article = articles.find((a) => a.id === articleId);
         if (!article) return false;
+
+        // Platform gate: article must be assigned to the account's traffic source (if restricted)
+        const account = allAccounts.find((a) => a.id === accountId);
+        if (account && article.trafficSources.length > 0) {
+          const articlePlatforms = article.trafficSources.map((s) => (s === "Meta" ? "meta" : "snap"));
+          if (!articlePlatforms.includes(account.platform)) return false;
+        }
+
         // Static config check
         const cfg = adAccountConfigs.find((c) => c.id === accountId);
         if (cfg && cfg.feedProviderIds.length > 0) {

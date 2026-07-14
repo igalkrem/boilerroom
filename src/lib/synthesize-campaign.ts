@@ -128,7 +128,6 @@ export function synthesizeCampaign(
     name: multiAsset ? `${campaignName} [${idx + 1}]` : campaignName,
     headline: item.headline,
     brandName: preset.creativeDefaults?.brandName,
-    callToAction: item.callToAction || preset.creativeDefaults?.callToAction,
     interactionType: "WEB_VIEW" as const,
     webViewUrl: urlTemplatePlaceholder,
     articleId: article.id,
@@ -235,7 +234,6 @@ export interface MetaSynthesisResult {
     pageId: string;
     webViewUrl: string;
     headline?: string;
-    callToAction?: string;
     adStatus: "ACTIVE" | "PAUSED";
     siloAssetBlobUrl?: string;
     siloAssetMediaType?: "VIDEO" | "IMAGE";
@@ -341,7 +339,6 @@ export function synthesizeMetaCampaign(
         pageId,
         webViewUrl: urlTemplate,
         headline: item.headline,
-        callToAction: item.callToAction || preset.creativeDefaults?.callToAction,
         adStatus: preset.creativeDefaults?.adStatus ?? "PAUSED",
         siloAssetBlobUrl: asset.optimizedUrl ?? asset.originalUrl,
         siloAssetMediaType: asset.mediaType,
