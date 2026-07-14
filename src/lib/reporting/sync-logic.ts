@@ -37,9 +37,14 @@ function lastUpdateWindowTime(updateMinute: number): number {
   return t.getTime();
 }
 
-// Feed-source skip check (Visymo / Predicto). Bypassable by `force` for manual
-// recovery of historical dates (e.g. Force Refresh from the dashboard).
+// Feed-source skip check (Visymo / Predicto / Predicto FB). `force` (dashboard
+// Force Refresh — documented as "re-fetches all sources regardless of cache")
+// bypasses BOTH the historical "< yesterday" permanent block AND the per-hour
+// update-window throttle, so a manual refresh always hits the live feed.
+// Non-forced callers (cron, page-mount auto-load) keep the once-per-window gate.
 async function shouldSkipFeed(source: "visymo" | "predicto" | "predicto_fb", date: string, updateMinute: number, force = false): Promise<boolean> {
+  if (force) return false;
+
   const { rows } = await sql`
     SELECT last_synced FROM report_sync_log
     WHERE source = ${source} AND sync_date = ${date} AND ad_account_id = ''
@@ -54,10 +59,7 @@ async function shouldSkipFeed(source: "visymo" | "predicto" | "predicto_fb", dat
   yesterday.setUTCHours(0, 0, 0, 0);
   yesterday.setUTCDate(yesterday.getUTCDate() - 1);
 
-  if (dateObj < yesterday) {
-    if (force) return false; // manual force sync — bypass permanent block for historical dates
-    return true;
-  }
+  if (dateObj < yesterday) return true;
   return lastSynced >= lastUpdateWindowTime(updateMinute);
 }
 
