@@ -7,6 +7,7 @@ import type { CampaignPreset } from "@/types/preset";
 import type { SiloAsset } from "@/types/silo";
 import type { MetaBillingEvent, MetaOptimizationGoal, MetaPixelEvent } from "@/types/meta";
 import { DEFAULT_PAGE_AD_LIMIT } from "@/types/page-config";
+import { getMetaMediaRef } from "@/lib/silo";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -224,6 +225,8 @@ export interface MetaSynthesisResult {
     siloAssetMediaType?: "VIDEO" | "IMAGE";
     siloAssetOriginalFileName?: string;
     siloAssetId?: string;
+    metaImageHash?: string;
+    metaVideoId?: string;
   }>;
   feedProviderId: string;
   articleQuery: string;
@@ -310,19 +313,26 @@ export function synthesizeMetaCampaign(
       startDate: metaAdSet.startDate ? ensureFutureDate(metaAdSet.startDate) : undefined,
       endDate: metaAdSet.endDate ? ensureFutureDate(metaAdSet.endDate) : undefined,
     },
-    creatives: assets.map((asset, idx) => ({
-      id: uuid(),
-      name: multiAsset ? `${campaignName} [${idx + 1}]` : campaignName,
-      pageId,
-      webViewUrl: urlTemplate,
-      headline: item.headline,
-      callToAction: item.callToAction || preset.creativeDefaults?.callToAction,
-      adStatus: preset.creativeDefaults?.adStatus ?? "PAUSED",
-      siloAssetBlobUrl: asset.optimizedUrl ?? asset.originalUrl,
-      siloAssetMediaType: asset.mediaType,
-      siloAssetOriginalFileName: asset.originalFileName,
-      siloAssetId: asset.id,
-    })),
+    creatives: assets.map((asset, idx) => {
+      // Reuse a pre-uploaded Meta media ref (Silo "→ Meta" upload) for this exact
+      // ad account when available, so the orchestrator can skip re-uploading.
+      const cached = getMetaMediaRef(asset, item.adAccountId);
+      return {
+        id: uuid(),
+        name: multiAsset ? `${campaignName} [${idx + 1}]` : campaignName,
+        pageId,
+        webViewUrl: urlTemplate,
+        headline: item.headline,
+        callToAction: item.callToAction || preset.creativeDefaults?.callToAction,
+        adStatus: preset.creativeDefaults?.adStatus ?? "PAUSED",
+        siloAssetBlobUrl: asset.optimizedUrl ?? asset.originalUrl,
+        siloAssetMediaType: asset.mediaType,
+        siloAssetOriginalFileName: asset.originalFileName,
+        siloAssetId: asset.id,
+        metaImageHash: cached?.imageHash,
+        metaVideoId: cached?.videoId,
+      };
+    }),
     feedProviderId: provider.id,
     articleQuery: article.query,
     articleSlug: article.slug,

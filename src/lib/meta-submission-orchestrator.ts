@@ -32,7 +32,21 @@ export async function runMetaSubmission(
 
   const mediaMap = new Map<string, { type: "IMAGE" | "VIDEO"; imageHash?: string; videoId?: string }>();
 
-  const uploadQueue = synthesis.creatives.filter((c) => c.siloAssetBlobUrl);
+  // Reuse a pre-uploaded Meta media ref (from a Silo "→ Meta" upload to this exact
+  // ad account) instead of re-uploading the same asset fresh at every launch.
+  for (const creative of synthesis.creatives) {
+    if (creative.metaImageHash) {
+      mediaMap.set(creative.id, { type: "IMAGE", imageHash: creative.metaImageHash });
+      results.uploadMedia.push({ clientId: creative.id, snapId: "", platformId: creative.metaImageHash, name: creative.name });
+    } else if (creative.metaVideoId) {
+      mediaMap.set(creative.id, { type: "VIDEO", videoId: creative.metaVideoId });
+      results.uploadMedia.push({ clientId: creative.id, snapId: "", platformId: creative.metaVideoId, name: creative.name });
+    }
+  }
+
+  const uploadQueue = synthesis.creatives.filter(
+    (c) => c.siloAssetBlobUrl && !c.metaImageHash && !c.metaVideoId
+  );
   const runQueue = [...uploadQueue];
 
   async function uploadWorker() {
