@@ -116,7 +116,7 @@ export default function PresetsPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setShowCountryGroups(true)}
-            className={`${btnBase} border-cyan-500 text-cyan-600 font-semibold hover:bg-cyan-50 dark:border-cyan-400 dark:text-cyan-400 dark:hover:bg-cyan-900/20`}
+            className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-gray-950 text-sm font-semibold transition-colors"
           >
             Country Groups
           </button>
