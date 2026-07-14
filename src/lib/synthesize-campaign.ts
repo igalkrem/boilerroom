@@ -5,7 +5,7 @@ import type { FeedProvider } from "@/types/feed-provider";
 import type { Article } from "@/types/article";
 import type { CampaignPreset } from "@/types/preset";
 import type { SiloAsset } from "@/types/silo";
-import type { MetaBillingEvent, MetaOptimizationGoal, MetaPixelEvent } from "@/types/meta";
+import type { MetaBillingEvent, MetaOptimizationGoal, MetaPixelEvent, MetaBidStrategy } from "@/types/meta";
 import { DEFAULT_PAGE_AD_LIMIT } from "@/types/page-config";
 import { getMetaMediaRef } from "@/lib/silo";
 import { getCountryGroupById } from "@/lib/country-groups";
@@ -216,7 +216,9 @@ export interface MetaSynthesisResult {
     geoCountryCodes: string[];
     billingEvent: MetaBillingEvent;
     optimizationGoal: MetaOptimizationGoal;
+    bidStrategy?: MetaBidStrategy;
     bidAmountCents?: number;
+    roasFloor?: number;
     dailyBudgetCents: number;
     pixelId?: string;
     pixelEvent?: MetaPixelEvent;
@@ -316,7 +318,9 @@ export function synthesizeMetaCampaign(
       geoCountryCodes: resolveGeoCountryCodes(preset, metaAdSet.geoCountryCodes),
       billingEvent: metaAdSet.billingEvent,
       optimizationGoal: metaAdSet.optimizationGoal,
+      bidStrategy: metaAdSet.bidStrategy,
       bidAmountCents: metaAdSet.bidAmountCents,
+      roasFloor: metaAdSet.roasFloor,
       dailyBudgetCents: metaAdSet.dailyBudgetCents,
       pixelId: metaAdSet.pixelId,
       pixelEvent: metaAdSet.pixelEvent,

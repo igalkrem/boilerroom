@@ -27,6 +27,12 @@ export type MetaPixelEvent =
 
 export type MetaCampaignStatus = "ACTIVE" | "PAUSED";
 
+// Confirmed against a live ad set (bid_strategy "ROAS goal" resolved to this
+// enum's LOWEST_COST_WITH_MIN_ROAS) and a Meta tool's create-campaign schema.
+// LOWEST_COST_WITH_BID_CAP (manual bid cap) exists on Meta's side but isn't
+// offered in this app — only Cost Cap and Min ROAS goals are exposed.
+export type MetaBidStrategy = "LOWEST_COST_WITHOUT_CAP" | "COST_CAP" | "LOWEST_COST_WITH_MIN_ROAS";
+
 // ─── Campaigns ──────────────────────────────────────────────────────────────
 
 export interface MetaCampaignPayload {
@@ -65,7 +71,8 @@ export interface MetaAdSetPayload {
   targeting: MetaTargeting;
   billing_event: MetaBillingEvent;
   optimization_goal: MetaOptimizationGoal;
-  bid_amount?: number; // cents
+  bid_strategy?: MetaBidStrategy; // omitted → Meta defaults to LOWEST_COST_WITHOUT_CAP
+  bid_amount?: number; // cents when bid_strategy is COST_CAP; ROAS floor encoding when LOWEST_COST_WITH_MIN_ROAS
   daily_budget?: number; // cents
   lifetime_budget?: number;
   promoted_object?: MetaPromotedObject;

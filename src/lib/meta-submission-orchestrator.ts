@@ -163,7 +163,6 @@ export async function runMetaSubmission(
     targeting,
     billing_event: synthesis.adSet.billingEvent,
     optimization_goal: synthesis.adSet.optimizationGoal,
-    bid_amount: synthesis.adSet.bidAmountCents,
     daily_budget: synthesis.adSet.dailyBudgetCents,
     start_time: synthesis.adSet.startDate
       ? new Date(synthesis.adSet.startDate).toISOString()
@@ -172,6 +171,20 @@ export async function runMetaSubmission(
       ? new Date(synthesis.adSet.endDate).toISOString()
       : undefined,
   };
+
+  // Omit bid_strategy/bid_amount entirely for LOWEST_COST_WITHOUT_CAP — Meta
+  // defaults to it and rejects bid_amount without a matching bid_strategy.
+  if (synthesis.adSet.bidStrategy && synthesis.adSet.bidStrategy !== "LOWEST_COST_WITHOUT_CAP") {
+    adSetPayload.bid_strategy = synthesis.adSet.bidStrategy;
+    adSetPayload.bid_amount =
+      synthesis.adSet.bidStrategy === "COST_CAP"
+        ? synthesis.adSet.bidAmountCents
+        // ROAS floor encoding (roasFloor * 1000) is a best-effort guess, not yet
+        // confirmed against a live Graph API response — verify via Vercel logs
+        // on first real launch with a ROAS goal set, same as any other
+        // unverified Meta field (see CLAUDE.md debugging notes).
+        : Math.round((synthesis.adSet.roasFloor ?? 0) * 1000);
+  }
 
   if (synthesis.adSet.pixelId && synthesis.adSet.pixelEvent) {
     adSetPayload.promoted_object = {

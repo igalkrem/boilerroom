@@ -10,13 +10,15 @@ import { Input, Select, Button } from "@/components/ui";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { upsertPreset } from "@/lib/presets";
 import { loadPixels } from "@/lib/pixels";
+import { loadMetaPixels } from "@/lib/meta-pixels";
 import { loadFeedProviders } from "@/lib/feed-providers";
 import { loadCountryGroups } from "@/lib/country-groups";
 import { COUNTRY_OPTIONS } from "@/lib/countries";
 import type { CampaignPreset, MetaAdSetPresetData } from "@/types/preset";
 import type { SavedPixel } from "@/types/pixel";
+import type { SavedMetaPixel } from "@/types/meta-pixel";
 import type { FeedProvider } from "@/types/feed-provider";
-import type { MetaOptimizationGoal, MetaBillingEvent, MetaPixelEvent } from "@/types/meta";
+import type { MetaOptimizationGoal, MetaBillingEvent, MetaPixelEvent, MetaBidStrategy } from "@/types/meta";
 import type { CountryGroup } from "@/types/country-group";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -146,22 +148,40 @@ export function PresetForm({ preset }: PresetFormProps) {
 
   // Meta-specific state
   const existingMetaAdSet = preset?.metaAdSet;
-  const [metaOptGoal, setMetaOptGoal] = useState<MetaOptimizationGoal>(existingMetaAdSet?.optimizationGoal ?? "OFFSITE_CONVERSIONS");
   const [metaBillingEvent, setMetaBillingEvent] = useState<MetaBillingEvent>(existingMetaAdSet?.billingEvent ?? "IMPRESSIONS");
   const [metaPixelEvent, setMetaPixelEvent] = useState<MetaPixelEvent>(existingMetaAdSet?.pixelEvent ?? "PURCHASE");
-  const [metaDailyBudgetCents, setMetaDailyBudgetCents] = useState<number>(existingMetaAdSet?.dailyBudgetCents ?? 2000);
-  const [metaBidAmountCents, setMetaBidAmountCents] = useState<number | undefined>(existingMetaAdSet?.bidAmountCents);
+  const [metaDailyBudgetUsd, setMetaDailyBudgetUsd] = useState<number>(
+    existingMetaAdSet?.dailyBudgetCents ? existingMetaAdSet.dailyBudgetCents / 100 : 20
+  );
+  // Bidding strategy — two performance goals, each with an optional bid goal.
+  // Any legacy optimizationGoal other than VALUE (e.g. old LINK_CLICKS/REACH
+  // presets) falls back to "conversions" — those goals aren't valid for this
+  // app's hardcoded OUTCOME_SALES objective anyway.
+  const [metaBidChoice, setMetaBidChoice] = useState<"conversions" | "value">(
+    existingMetaAdSet?.optimizationGoal === "VALUE" ? "value" : "conversions"
+  );
+  const [metaCostPerResultUsd, setMetaCostPerResultUsd] = useState<number | undefined>(
+    existingMetaAdSet?.bidStrategy === "COST_CAP" && existingMetaAdSet.bidAmountCents
+      ? existingMetaAdSet.bidAmountCents / 100
+      : undefined
+  );
+  const [metaRoasGoal, setMetaRoasGoal] = useState<number | undefined>(
+    existingMetaAdSet?.bidStrategy === "LOWEST_COST_WITH_MIN_ROAS" ? existingMetaAdSet.roasFloor : undefined
+  );
   const [metaPublisherPlatforms, setMetaPublisherPlatforms] = useState<("facebook" | "instagram" | "audience_network")[]>(
     existingMetaAdSet?.publisherPlatforms ?? ["facebook", "instagram"]
   );
+  const [metaPixels, setMetaPixels] = useState<SavedMetaPixel[]>([]);
 
   useEffect(() => {
     setPixels(loadPixels());
+    setMetaPixels(loadMetaPixels());
     setFeedProviders(loadFeedProviders());
     setCountryGroups(loadCountryGroups());
   }, []);
 
   const pixelOptions = pixels.map((p) => ({ value: p.pixelId, label: p.name }));
+  const metaPixelOptions = metaPixels.map((p) => ({ value: p.pixelId, label: p.name }));
 
   const sq0 = preset?.adSquads?.[0];
 
@@ -173,28 +193,33 @@ export function PresetForm({ preset }: PresetFormProps) {
     formState: { errors },
   } = useForm<PresetFormValues>({
     resolver: zodResolver(presetFormSchema),
-    defaultValues: sq0
+    // Keyed on `preset` (not `sq0`) — Meta presets always save adSquads: [], so
+    // sq0 is undefined for every Meta preset. Keying on sq0 alone meant editing
+    // an existing Meta preset silently reset shared fields (name, geo, pixel,
+    // status) to blank/"new preset" defaults. Fall back to existingMetaAdSet
+    // for the fields Meta presets actually populate.
+    defaultValues: preset
       ? {
-          presetName: preset!.name,
-          trafficSource: preset?.trafficSource ?? "snap",
+          presetName: preset.name,
+          trafficSource: preset.trafficSource ?? "snap",
           geoCountryCodes:
-            (sq0 as unknown as { geoCountryCodes?: string[]; geoCountryCode?: string })
-              .geoCountryCodes ??
+            (sq0 as unknown as { geoCountryCodes?: string[]; geoCountryCode?: string } | undefined)
+              ?.geoCountryCodes ??
+            existingMetaAdSet?.geoCountryCodes ??
             [
-              (sq0 as unknown as { geoCountryCodes?: string[]; geoCountryCode?: string })
-                .geoCountryCode ?? "US",
+              (sq0 as unknown as { geoCountryCode?: string } | undefined)?.geoCountryCode ?? "US",
             ],
-          optimizationGoal: sq0.optimizationGoal,
-          bidStrategy: sq0.bidStrategy,
-          bidAmountUsd: sq0.bidAmountUsd,
-          dailyBudgetUsd: sq0.dailyBudgetUsd,
-          smartPlacement: sq0.smartPlacement ?? false,
-          targetingDeviceType: sq0.targetingDeviceType,
-          targetingOsType: sq0.targetingOsType,
-          minAge: sq0.minAge,
-          maxAge: sq0.maxAge,
-          pixelId: sq0.pixelId,
-          status: sq0.status,
+          optimizationGoal: sq0?.optimizationGoal ?? "PIXEL_PURCHASE",
+          bidStrategy: sq0?.bidStrategy ?? "AUTO_BID",
+          bidAmountUsd: sq0?.bidAmountUsd,
+          dailyBudgetUsd: sq0?.dailyBudgetUsd,
+          smartPlacement: sq0?.smartPlacement ?? false,
+          targetingDeviceType: sq0?.targetingDeviceType ?? "ALL",
+          targetingOsType: sq0?.targetingOsType,
+          minAge: sq0?.minAge,
+          maxAge: sq0?.maxAge,
+          pixelId: sq0?.pixelId ?? existingMetaAdSet?.pixelId,
+          status: sq0?.status ?? existingMetaAdSet?.status ?? "PAUSED",
         }
       : {
           presetName: "",
@@ -217,6 +242,12 @@ export function PresetForm({ preset }: PresetFormProps) {
       setValue("pixelId", sq0.pixelId);
     }
   }, [pixels, sq0?.pixelId, setValue]);
+
+  useEffect(() => {
+    if (existingMetaAdSet?.pixelId && metaPixels.length > 0) {
+      setValue("pixelId", existingMetaAdSet.pixelId);
+    }
+  }, [metaPixels, existingMetaAdSet?.pixelId, setValue]);
 
   // A linked preset's geo targeting IS the group's current list — selecting a
   // group resolves its members into the form immediately; picking "Custom"
@@ -243,13 +274,23 @@ export function PresetForm({ preset }: PresetFormProps) {
     }
     const isMeta = trafficSource === "facebook";
 
+    const metaOptimizationGoal: MetaOptimizationGoal = metaBidChoice === "value" ? "VALUE" : "OFFSITE_CONVERSIONS";
+    const metaBidStrategy: MetaBidStrategy =
+      metaBidChoice === "conversions" && metaCostPerResultUsd
+        ? "COST_CAP"
+        : metaBidChoice === "value" && metaRoasGoal
+        ? "LOWEST_COST_WITH_MIN_ROAS"
+        : "LOWEST_COST_WITHOUT_CAP";
+
     const metaAdSet: MetaAdSetPresetData | undefined = isMeta
       ? {
           geoCountryCodes: data.geoCountryCodes,
-          optimizationGoal: metaOptGoal,
+          optimizationGoal: metaOptimizationGoal,
           billingEvent: metaBillingEvent,
-          bidAmountCents: metaBidAmountCents,
-          dailyBudgetCents: metaDailyBudgetCents,
+          bidStrategy: metaBidStrategy,
+          bidAmountCents: metaBidStrategy === "COST_CAP" ? Math.round(metaCostPerResultUsd! * 100) : undefined,
+          roasFloor: metaBidStrategy === "LOWEST_COST_WITH_MIN_ROAS" ? metaRoasGoal : undefined,
+          dailyBudgetCents: Math.round(metaDailyBudgetUsd * 100),
           status: data.status,
           pixelId: data.pixelId || undefined,
           pixelEvent: data.pixelId ? metaPixelEvent : undefined,
@@ -605,7 +646,7 @@ export function PresetForm({ preset }: PresetFormProps) {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Pixel (optional)</label>
           <select {...register("pixelId")} className={selectCls}>
             <option value="">— None —</option>
-            {pixelOptions.map((o) => (
+            {(trafficSource === "facebook" ? metaPixelOptions : pixelOptions).map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -673,20 +714,48 @@ export function PresetForm({ preset }: PresetFormProps) {
         ) : (
           <>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Optimization Goal</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Bidding Strategy</label>
               <select
-                value={metaOptGoal}
-                onChange={(e) => setMetaOptGoal(e.target.value as MetaOptimizationGoal)}
+                value={metaBidChoice}
+                onChange={(e) => setMetaBidChoice(e.target.value as "conversions" | "value")}
                 className={selectCls}
               >
-                <option value="OFFSITE_CONVERSIONS">Offsite Conversions</option>
-                <option value="LINK_CLICKS">Link Clicks</option>
-                <option value="IMPRESSIONS">Impressions</option>
-                <option value="LANDING_PAGE_VIEWS">Landing Page Views</option>
-                <option value="REACH">Reach</option>
-                <option value="VALUE">Value</option>
+                <option value="conversions">Maximize number of conversions</option>
+                <option value="value">Maximize value of conversions</option>
               </select>
             </div>
+
+            {metaBidChoice === "conversions" ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Cost per Result Goal (USD, optional)
+                </label>
+                <input
+                  type="number"
+                  min={0.01}
+                  step={0.01}
+                  value={metaCostPerResultUsd ?? ""}
+                  onChange={(e) => setMetaCostPerResultUsd(e.target.value ? Number(e.target.value) : undefined)}
+                  placeholder="Leave empty for no cap"
+                  className={selectCls}
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  ROAS Goal (optional)
+                </label>
+                <input
+                  type="number"
+                  min={0.1}
+                  step={0.1}
+                  value={metaRoasGoal ?? ""}
+                  onChange={(e) => setMetaRoasGoal(e.target.value ? Number(e.target.value) : undefined)}
+                  placeholder="e.g. 4 = 400% return"
+                  className={selectCls}
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Billing Event</label>
@@ -702,34 +771,17 @@ export function PresetForm({ preset }: PresetFormProps) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Daily Budget (cents)
-              </label>
-              <input
-                type="number"
-                min={100}
-                step={100}
-                value={metaDailyBudgetCents}
-                onChange={(e) => setMetaDailyBudgetCents(Number(e.target.value))}
-                className={selectCls}
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                In cents — e.g. 2000 = $20. Min 100 ($1).
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Bid Amount (cents, optional)
+                Daily Budget (USD)
               </label>
               <input
                 type="number"
                 min={1}
                 step={1}
-                value={metaBidAmountCents ?? ""}
-                onChange={(e) => setMetaBidAmountCents(e.target.value ? Number(e.target.value) : undefined)}
-                placeholder="Leave empty for auto"
+                value={metaDailyBudgetUsd}
+                onChange={(e) => setMetaDailyBudgetUsd(Number(e.target.value))}
                 className={selectCls}
               />
+              <p className="text-xs text-gray-400 mt-1">Min $1.</p>
             </div>
           </>
         )}
