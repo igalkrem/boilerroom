@@ -72,16 +72,6 @@ export async function POST(request: NextRequest) {
     const result = await createAdSet(adAccountId, adSet as unknown as MetaAdSetPayload);
     return NextResponse.json({ adSet: result });
   } catch (err) {
-    console.error(
-      "[meta/adsets] POST error, bidding fields:",
-      JSON.stringify({
-        optimization_goal: (adSet as Record<string, unknown>).optimization_goal,
-        bid_strategy: (adSet as Record<string, unknown>).bid_strategy,
-        bid_amount: (adSet as Record<string, unknown>).bid_amount,
-        billing_event: (adSet as Record<string, unknown>).billing_event,
-        promoted_object: (adSet as Record<string, unknown>).promoted_object,
-      })
-    );
     console.error("[meta/adsets] POST error:", err);
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }

@@ -46,8 +46,7 @@ export interface MetaAdSetPresetData {
   optimizationGoal: MetaOptimizationGoal;
   billingEvent: MetaBillingEvent;
   bidStrategy?: MetaBidStrategy; // default LOWEST_COST_WITHOUT_CAP when absent
-  bidAmountCents?: number;       // Cost Cap target — only used when bidStrategy === "COST_CAP"
-  roasFloor?: number;            // ROAS floor ratio (e.g. 4 = 400%), NOT cents — only used when bidStrategy === "LOWEST_COST_WITH_MIN_ROAS"
+  bidAmountCents?: number;       // Cost Cap target — only used when bidStrategy === "COST_CAP". LOWEST_COST_WITH_MIN_ROAS never carries an amount (this account rejects a ROAS floor — confirmed live 2026-07-15).
   dailyBudgetCents: number;
   status: "ACTIVE" | "PAUSED";
   pixelId?: string;

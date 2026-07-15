@@ -178,19 +178,16 @@ export async function runMetaSubmission(
   // defaults to it and rejects bid_amount without a matching bid_strategy.
   if (synthesis.adSet.bidStrategy && synthesis.adSet.bidStrategy !== "LOWEST_COST_WITHOUT_CAP") {
     adSetPayload.bid_strategy = synthesis.adSet.bidStrategy;
-    // bid_amount is an optional cap/floor on top of bid_strategy — only send it
-    // when the user actually set a goal. Sending bid_amount: 0 (e.g. no ROAS
-    // goal entered) is a distinct value to Meta, not "no floor".
+    // bid_amount is an optional cap on top of bid_strategy — only send it for
+    // COST_CAP. Confirmed live (2026-07-15) via GET /api/meta/adsets on this
+    // account: every existing LOWEST_COST_WITH_MIN_ROAS ad set (including the
+    // reference "boiler" campaign) has NO bid_amount at all — this account
+    // doesn't accept an explicit ROAS floor on that strategy; every attempt to
+    // send one (at *1000 and *10000 scale) failed with "Bid Strategy Doesn't
+    // Support Value Optimization" (error_subcode 1885324). Value optimization
+    // here always runs uncapped.
     if (synthesis.adSet.bidStrategy === "COST_CAP" && synthesis.adSet.bidAmountCents) {
       adSetPayload.bid_amount = synthesis.adSet.bidAmountCents;
-    } else if (synthesis.adSet.bidStrategy === "LOWEST_COST_WITH_MIN_ROAS" && synthesis.adSet.roasFloor) {
-      // ROAS floor encoding (roasFloor * 10000, e.g. a 4.0/400% floor -> 40000)
-      // is Meta's documented convention for this bid_strategy. A first attempt
-      // used *1000 with a sub-1.0 floor (0.9) and got rejected with
-      // "Bid Strategy Doesn't Support Value Optimization" (error_subcode
-      // 1885324) even though this account's other campaigns use ROAS-goal
-      // bidding successfully — pointing at encoding/value, not eligibility.
-      adSetPayload.bid_amount = Math.round(synthesis.adSet.roasFloor * 10000);
     }
   }
 
