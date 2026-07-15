@@ -123,6 +123,7 @@ export async function runMetaSubmission(
     status: synthesis.campaign.status,
     objective: "OUTCOME_SALES",
     special_ad_categories: [],
+    is_adset_budget_sharing_enabled: false,
   };
 
   let campaignId = "";

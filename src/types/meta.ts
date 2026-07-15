@@ -40,6 +40,10 @@ export interface MetaCampaignPayload {
   status: MetaCampaignStatus;
   objective: MetaCampaignObjective;
   special_ad_categories: string[]; // empty array for standard campaigns
+  // Required by Meta (confirmed live 2026-07-15, error_subcode 4834011) whenever
+  // the campaign has no daily_budget/lifetime_budget of its own (i.e. ABO —
+  // budget lives on the ad set). false = don't share budget across ad sets.
+  is_adset_budget_sharing_enabled?: boolean;
   daily_budget?: number; // in cents — $20 = 2000
   lifetime_budget?: number;
 }

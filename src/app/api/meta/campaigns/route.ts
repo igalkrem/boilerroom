@@ -13,6 +13,7 @@ const postSchema = z.object({
     status: z.enum(["ACTIVE", "PAUSED"]),
     objective: z.literal("OUTCOME_SALES"),
     special_ad_categories: z.array(z.string()),
+    is_adset_budget_sharing_enabled: z.boolean().optional(),
     daily_budget: z.number().optional(),
     lifetime_budget: z.number().optional(),
   }),
