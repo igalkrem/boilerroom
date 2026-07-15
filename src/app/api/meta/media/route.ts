@@ -1,7 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uploadImage, uploadVideo, pollVideoStatus } from "@/lib/meta/creatives";
+import { uploadImage, uploadVideo, pollVideoStatus, getVideoThumbnailUrl } from "@/lib/meta/creatives";
 import { getSession, isSessionValid, isMetaConnected, isMetaAdAccountAllowed } from "@/lib/session";
 import { z } from "zod";
+
+export async function GET(request: NextRequest) {
+  const session = await getSession();
+  if (!isSessionValid(session)) {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+  }
+  if (!isMetaConnected(session)) {
+    return NextResponse.json({ error: "meta_not_connected" }, { status: 403 });
+  }
+
+  const videoId = request.nextUrl.searchParams.get("videoId");
+  if (!videoId) {
+    return NextResponse.json({ error: "videoId required" }, { status: 400 });
+  }
+
+  try {
+    const thumbnailUrl = await getVideoThumbnailUrl(videoId);
+    return NextResponse.json({ thumbnailUrl: thumbnailUrl ?? null });
+  } catch (err) {
+    console.error("[meta/media] GET thumbnail error:", err);
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
+  }
+}
 
 export const maxDuration = 120;
 

@@ -117,7 +117,8 @@ export interface MetaLinkData {
 
 export interface MetaVideoData {
   video_id: string;
-  image_hash: string; // thumbnail
+  image_hash?: string; // thumbnail — one of image_hash/image_url is required
+  image_url?: string; // thumbnail via URL — Meta's auto-generated video thumbnail (see getVideoThumbnailUrl)
   title?: string;
   message?: string;
   call_to_action?: MetaCallToAction;

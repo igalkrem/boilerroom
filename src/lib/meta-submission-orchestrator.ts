@@ -246,6 +246,20 @@ export async function runMetaSubmission(
       .replace(/\{\{campaign\.id\}\}/gi, campaignId)
       .replace(/\{\{adset\.id\}\}/gi, adSetId);
 
+    // Meta rejects video creatives with no thumbnail ("Your ad needs a video
+    // thumbnail", error_subcode 1443226, confirmed live 2026-07-15) — fetch
+    // Meta's auto-generated thumbnail for the uploaded/pre-uploaded video.
+    let videoThumbnailUrl: string | undefined;
+    if (media.type === "VIDEO") {
+      try {
+        const res = await fetch(`/api/meta/media?videoId=${encodeURIComponent(media.videoId!)}`);
+        const data = await res.json();
+        videoThumbnailUrl = data.thumbnailUrl ?? undefined;
+      } catch {
+        // fall through — creative creation below will surface Meta's own error
+      }
+    }
+
     const creativePayload: MetaAdCreativePayload = {
       name: resolveChannel(creative.name),
       object_story_spec: {
@@ -264,7 +278,7 @@ export async function runMetaSubmission(
           : {
               video_data: {
                 video_id: media.videoId!,
-                image_hash: "",
+                ...(videoThumbnailUrl ? { image_url: videoThumbnailUrl } : {}),
                 title: creative.headline,
                 message: creative.headline,
                 call_to_action: { type: "LEARN_MORE", value: { link: webViewUrl } },

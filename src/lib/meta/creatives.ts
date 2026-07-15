@@ -73,6 +73,24 @@ export async function pollVideoStatus(
   throw new Error(`Video ${videoId} processing timed out`);
 }
 
+// Meta requires an explicit thumbnail on video ads ("Your ad needs a video
+// thumbnail", error_subcode 1443226) — video_data.image_hash: "" is rejected,
+// not just by our own validation but by Meta itself (confirmed live
+// 2026-07-15). Meta auto-generates thumbnails once the video finishes
+// processing; fetch one and pass its URL via video_data.image_url instead.
+export async function getVideoThumbnailUrl(
+  videoId: string,
+  token?: string
+): Promise<string | undefined> {
+  const result = await metaFetch<{ data: Array<{ uri: string; is_preferred?: boolean }> }>(
+    `/${videoId}/thumbnails`,
+    {},
+    token
+  );
+  const thumbnails = result.data ?? [];
+  return (thumbnails.find((t) => t.is_preferred) ?? thumbnails[0])?.uri;
+}
+
 export async function createAdCreative(
   adAccountId: string,
   creative: MetaAdCreativePayload,
