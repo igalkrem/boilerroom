@@ -258,11 +258,15 @@ export function PresetForm({ preset }: PresetFormProps) {
     const isMeta = trafficSource === "facebook";
 
     const metaOptimizationGoal: MetaOptimizationGoal = metaBidChoice === "value" ? "VALUE" : "OFFSITE_CONVERSIONS";
+    // Meta rejects VALUE optimization paired with the default LOWEST_COST_WITHOUT_CAP
+    // bid strategy ("Bid Strategy Doesn't Support Value Optimization", error_subcode
+    // 1885324, confirmed live 2026-07-15) — LOWEST_COST_WITH_MIN_ROAS is mandatory
+    // whenever optimizing for value, with or without an explicit ROAS goal set.
     const metaBidStrategy: MetaBidStrategy =
-      metaBidChoice === "conversions" && metaCostPerResultUsd
-        ? "COST_CAP"
-        : metaBidChoice === "value" && metaRoasGoal
+      metaBidChoice === "value"
         ? "LOWEST_COST_WITH_MIN_ROAS"
+        : metaCostPerResultUsd
+        ? "COST_CAP"
         : "LOWEST_COST_WITHOUT_CAP";
 
     const metaAdSet: MetaAdSetPresetData | undefined = isMeta

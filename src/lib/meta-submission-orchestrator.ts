@@ -178,14 +178,18 @@ export async function runMetaSubmission(
   // defaults to it and rejects bid_amount without a matching bid_strategy.
   if (synthesis.adSet.bidStrategy && synthesis.adSet.bidStrategy !== "LOWEST_COST_WITHOUT_CAP") {
     adSetPayload.bid_strategy = synthesis.adSet.bidStrategy;
-    adSetPayload.bid_amount =
-      synthesis.adSet.bidStrategy === "COST_CAP"
-        ? synthesis.adSet.bidAmountCents
-        // ROAS floor encoding (roasFloor * 1000) is a best-effort guess, not yet
-        // confirmed against a live Graph API response — verify via Vercel logs
-        // on first real launch with a ROAS goal set, same as any other
-        // unverified Meta field (see CLAUDE.md debugging notes).
-        : Math.round((synthesis.adSet.roasFloor ?? 0) * 1000);
+    // bid_amount is an optional cap/floor on top of bid_strategy — only send it
+    // when the user actually set a goal. Sending bid_amount: 0 (e.g. no ROAS
+    // goal entered) is a distinct value to Meta, not "no floor".
+    if (synthesis.adSet.bidStrategy === "COST_CAP" && synthesis.adSet.bidAmountCents) {
+      adSetPayload.bid_amount = synthesis.adSet.bidAmountCents;
+    } else if (synthesis.adSet.bidStrategy === "LOWEST_COST_WITH_MIN_ROAS" && synthesis.adSet.roasFloor) {
+      // ROAS floor encoding (roasFloor * 1000) is a best-effort guess, not yet
+      // confirmed against a live Graph API response — verify via Vercel logs
+      // on first real launch with a ROAS goal set, same as any other
+      // unverified Meta field (see CLAUDE.md debugging notes).
+      adSetPayload.bid_amount = Math.round(synthesis.adSet.roasFloor * 1000);
+    }
   }
 
   if (synthesis.adSet.pixelId && synthesis.adSet.pixelEvent) {
