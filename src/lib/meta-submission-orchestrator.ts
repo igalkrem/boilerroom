@@ -165,6 +165,7 @@ export async function runMetaSubmission(
     targeting,
     billing_event: synthesis.adSet.billingEvent,
     optimization_goal: synthesis.adSet.optimizationGoal,
+    attribution_spec: [{ event_type: "CLICK_THROUGH", window_days: 1 }],
     daily_budget: synthesis.adSet.dailyBudgetCents,
     start_time: synthesis.adSet.startDate
       ? new Date(synthesis.adSet.startDate).toISOString()

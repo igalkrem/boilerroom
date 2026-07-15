@@ -78,6 +78,11 @@ export interface MetaBidConstraints {
   roas_average_floor: number;
 }
 
+export interface MetaAttributionSpecEntry {
+  event_type: "CLICK_THROUGH" | "VIEW_THROUGH" | "ENGAGED_VIDEO_VIEW";
+  window_days: number;
+}
+
 export interface MetaAdSetPayload {
   campaign_id: string;
   name: string;
@@ -88,6 +93,7 @@ export interface MetaAdSetPayload {
   bid_strategy?: MetaBidStrategy; // omitted → Meta defaults to LOWEST_COST_WITHOUT_CAP
   bid_amount?: number; // cents — only used when bid_strategy is COST_CAP
   bid_constraints?: MetaBidConstraints; // ROAS floor — only used when bid_strategy is LOWEST_COST_WITH_MIN_ROAS
+  attribution_spec?: MetaAttributionSpecEntry[]; // always forced to 1-day click, see orchestrator
   daily_budget?: number; // cents
   lifetime_budget?: number;
   promoted_object?: MetaPromotedObject;
