@@ -733,11 +733,11 @@ export function PresetForm({ preset }: PresetFormProps) {
                 </label>
                 <input
                   type="number"
-                  min={0.1}
+                  min={1}
                   step={0.1}
                   value={metaRoasGoal ?? ""}
                   onChange={(e) => setMetaRoasGoal(e.target.value ? Number(e.target.value) : undefined)}
-                  placeholder="e.g. 4 = 400% return"
+                  placeholder="e.g. 4 = 400% return; must be at least 1 (100%)"
                   className={selectCls}
                 />
               </div>

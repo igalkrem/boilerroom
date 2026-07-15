@@ -184,11 +184,13 @@ export async function runMetaSubmission(
     if (synthesis.adSet.bidStrategy === "COST_CAP" && synthesis.adSet.bidAmountCents) {
       adSetPayload.bid_amount = synthesis.adSet.bidAmountCents;
     } else if (synthesis.adSet.bidStrategy === "LOWEST_COST_WITH_MIN_ROAS" && synthesis.adSet.roasFloor) {
-      // ROAS floor encoding (roasFloor * 1000) is a best-effort guess, not yet
-      // confirmed against a live Graph API response — verify via Vercel logs
-      // on first real launch with a ROAS goal set, same as any other
-      // unverified Meta field (see CLAUDE.md debugging notes).
-      adSetPayload.bid_amount = Math.round(synthesis.adSet.roasFloor * 1000);
+      // ROAS floor encoding (roasFloor * 10000, e.g. a 4.0/400% floor -> 40000)
+      // is Meta's documented convention for this bid_strategy. A first attempt
+      // used *1000 with a sub-1.0 floor (0.9) and got rejected with
+      // "Bid Strategy Doesn't Support Value Optimization" (error_subcode
+      // 1885324) even though this account's other campaigns use ROAS-goal
+      // bidding successfully — pointing at encoding/value, not eligibility.
+      adSetPayload.bid_amount = Math.round(synthesis.adSet.roasFloor * 10000);
     }
   }
 
