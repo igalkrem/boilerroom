@@ -68,6 +68,16 @@ export interface MetaPromotedObject {
   custom_event_type: MetaPixelEvent;
 }
 
+export interface MetaBidConstraints {
+  // ROAS floor * 10000 (e.g. a 0.9/90% floor -> 9000). Confirmed live 2026-07-15
+  // via GET /api/meta/adsets against the reference "boiler" ad set (fields=
+  // bid_constraints), which showed exactly {"roas_average_floor":9000} for a
+  // 0.9 ROAS goal. bid_amount is NOT used for LOWEST_COST_WITH_MIN_ROAS at all
+  // — two earlier attempts sending it there (at *1000 and *10000 scale) both
+  // failed with "Bid Strategy Doesn't Support Value Optimization".
+  roas_average_floor: number;
+}
+
 export interface MetaAdSetPayload {
   campaign_id: string;
   name: string;
@@ -76,7 +86,8 @@ export interface MetaAdSetPayload {
   billing_event: MetaBillingEvent;
   optimization_goal: MetaOptimizationGoal;
   bid_strategy?: MetaBidStrategy; // omitted → Meta defaults to LOWEST_COST_WITHOUT_CAP
-  bid_amount?: number; // cents when bid_strategy is COST_CAP; ROAS floor encoding when LOWEST_COST_WITH_MIN_ROAS
+  bid_amount?: number; // cents — only used when bid_strategy is COST_CAP
+  bid_constraints?: MetaBidConstraints; // ROAS floor — only used when bid_strategy is LOWEST_COST_WITH_MIN_ROAS
   daily_budget?: number; // cents
   lifetime_budget?: number;
   promoted_object?: MetaPromotedObject;

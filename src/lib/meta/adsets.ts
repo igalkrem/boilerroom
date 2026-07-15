@@ -33,7 +33,7 @@ export async function getAdSetsByAccount(
   token?: string
 ): Promise<MetaAdSet[]> {
   const data = await metaFetch<{ data: MetaAdSet[] }>(
-    `/act_${adAccountId.replace("act_", "")}/adsets?fields=id,name,status,daily_budget,bid_amount,bid_strategy,optimization_goal,campaign_id,account_id&limit=500`,
+    `/act_${adAccountId.replace("act_", "")}/adsets?fields=id,name,status,daily_budget,bid_amount,bid_strategy,bid_constraints,optimization_goal,campaign_id,account_id&limit=500`,
     {},
     token
   );

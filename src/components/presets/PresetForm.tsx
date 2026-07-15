@@ -148,6 +148,9 @@ export function PresetForm({ preset }: PresetFormProps) {
       ? existingMetaAdSet.bidAmountCents / 100
       : undefined
   );
+  const [metaRoasGoal, setMetaRoasGoal] = useState<number | undefined>(
+    existingMetaAdSet?.bidStrategy === "LOWEST_COST_WITH_MIN_ROAS" ? existingMetaAdSet.roasFloor : undefined
+  );
   const [metaPublisherPlatforms, setMetaPublisherPlatforms] = useState<("facebook" | "instagram" | "audience_network")[]>(
     existingMetaAdSet?.publisherPlatforms ?? ["facebook", "instagram"]
   );
@@ -273,6 +276,7 @@ export function PresetForm({ preset }: PresetFormProps) {
           billingEvent: metaBillingEvent,
           bidStrategy: metaBidStrategy,
           bidAmountCents: metaBidStrategy === "COST_CAP" ? Math.round(metaCostPerResultUsd! * 100) : undefined,
+          roasFloor: metaBidStrategy === "LOWEST_COST_WITH_MIN_ROAS" ? metaRoasGoal : undefined,
           dailyBudgetCents: Math.round(metaDailyBudgetUsd * 100),
           status: data.status,
           pixelId: data.pixelId || undefined,
@@ -723,9 +727,22 @@ export function PresetForm({ preset }: PresetFormProps) {
                 />
               </div>
             )}
-            {/* No ROAS-goal input for "Maximize value of conversions" — confirmed
-                live (2026-07-15) that this account's value-optimization ad sets
-                never carry an explicit bid_amount/ROAS floor; Meta rejects one. */}
+            {metaBidChoice === "value" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  ROAS Goal (optional)
+                </label>
+                <input
+                  type="number"
+                  min={0.1}
+                  step={0.1}
+                  value={metaRoasGoal ?? ""}
+                  onChange={(e) => setMetaRoasGoal(e.target.value ? Number(e.target.value) : undefined)}
+                  placeholder="e.g. 0.9 = 90%, 4 = 400% return"
+                  className={selectCls}
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Billing Event</label>

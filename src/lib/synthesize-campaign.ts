@@ -216,6 +216,7 @@ export interface MetaSynthesisResult {
     optimizationGoal: MetaOptimizationGoal;
     bidStrategy?: MetaBidStrategy;
     bidAmountCents?: number;
+    roasFloor?: number;
     dailyBudgetCents: number;
     pixelId?: string;
     pixelEvent?: MetaPixelEvent;
@@ -315,6 +316,7 @@ export function synthesizeMetaCampaign(
       optimizationGoal: metaAdSet.optimizationGoal,
       bidStrategy: metaAdSet.bidStrategy,
       bidAmountCents: metaAdSet.bidAmountCents,
+      roasFloor: metaAdSet.roasFloor,
       dailyBudgetCents: metaAdSet.dailyBudgetCents,
       pixelId: metaAdSet.pixelId,
       pixelEvent: metaAdSet.pixelEvent,
