@@ -148,16 +148,8 @@ export async function runMetaSubmission(
 
   const targeting: MetaTargeting = {
     geo_locations: { countries: synthesis.adSet.geoCountryCodes },
-    // Meta implicitly includes under-18 audiences (under-20 in Thailand) when
-    // age_min is omitted, and rejects manual publisher_platforms selection for
-    // that range ("Selected targeting options unavailable for young people",
-    // error_subcode 1870249, confirmed live 2026-07-15 — age_min: 18 alone
-    // still failed once Thailand's stricter 20+ floor was hit, since this
-    // app's geo lists commonly include TH). This app never targets minors, so
-    // always send an explicit floor of 20, satisfying every country's rule at
-    // once, rather than relying on Meta's default or a per-country floor.
-    age_min: Math.max(synthesis.adSet.minAge || 20, 20),
   };
+  if (synthesis.adSet.minAge) targeting.age_min = synthesis.adSet.minAge;
   if (synthesis.adSet.maxAge) targeting.age_max = synthesis.adSet.maxAge;
   if (synthesis.adSet.targetingGender && synthesis.adSet.targetingGender !== "ALL") {
     targeting.genders = synthesis.adSet.targetingGender === "MALE" ? [1] : [2];
