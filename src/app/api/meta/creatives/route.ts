@@ -24,7 +24,7 @@ const postSchema = z.object({
       }).optional(),
       video_data: z.object({
         video_id: z.string().min(1),
-        image_hash: z.string().min(1),
+        image_hash: z.string(), // "" is valid — Meta doesn't require an explicit thumbnail override
         title: z.string().optional(),
         message: z.string().optional(),
         call_to_action: z.object({
