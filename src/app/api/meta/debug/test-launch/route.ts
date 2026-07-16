@@ -165,7 +165,6 @@ export async function POST(request: NextRequest) {
         : {}),
       attribution_spec: [{ event_type: "CLICK_THROUGH", window_days: 1 }],
       daily_budget: 500,
-      is_dynamic_creative: true,
     };
     steps.adSetPayloadSent = adSetPayload;
     const result = await createAdSet(adAccountId, adSetPayload, token);
@@ -234,74 +233,75 @@ export async function POST(request: NextRequest) {
     steps.businessCrossCheck = { error: err instanceof Error ? err.message : String(err) };
   }
 
-  // Upload two distinct 600x600 test images so the creative can use
-  // asset_feed_spec (multi-media "Flexible" format).
-  const imageHashes: string[] = [];
+  // Upload two distinct 600x600 test images → create two separate creatives +
+  // ads in the same ad set. The reference "Flexible" ad set has
+  // is_dynamic_creative:false and multiple individual ads, each with single
+  // object_story_spec + degrees_of_freedom_spec — NOT asset_feed_spec.
   const testImages: [string, Buffer][] = [
     ["red", createTestPng(600, 600, 255, 0, 0)],
     ["green", createTestPng(600, 600, 0, 180, 0)],
   ];
+
+  const adIds: string[] = [];
   for (const [label, pngBuf] of testImages) {
+    let imageHash = "";
     try {
       const result = await uploadImage(adAccountId, pngBuf, `debug-test-${label}.png`, token);
-      imageHashes.push(result.hash);
-      steps[`imageUpload_${label}`] = { ok: true, hash: result.hash };
+      imageHash = result.hash;
+      steps[`imageUpload_${label}`] = { ok: true, hash: imageHash };
     } catch (err) {
       steps[`imageUpload_${label}`] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+      continue;
     }
-  }
-  if (imageHashes.length === 0) {
-    return NextResponse.json({ steps, campaignId, adSetId });
-  }
 
-  let creativeId = "";
-  try {
-    const creativePayload: MetaAdCreativePayload = {
-      name: "ZZZ_DEBUG_TEST creative",
-      ...(instagramActorId ? { instagram_actor_id: instagramActorId } : {}),
-      degrees_of_freedom_spec: buildAdvantagePlusCreativeFeatures("IMAGE"),
-      object_story_spec: {
-        page_id: pageId,
-      },
-      asset_feed_spec: {
-        images: imageHashes.map((hash) => ({ hash })),
-        bodies: [{ text: "Debug test" }],
-        titles: [{ text: "Debug test" }],
-        link_urls: [{ website_url: "https://example.com/" }],
-        call_to_action_types: ["LEARN_MORE"],
-        ad_formats: ["SINGLE_IMAGE"],
-      },
-    };
-    const result = await createAdCreative(adAccountId, creativePayload, token);
-    creativeId = result.id;
-    steps.creative = { ok: true, id: creativeId, payloadSent: creativePayload };
-  } catch (err) {
-    steps.creative = {
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-      payloadSent: { instagram_actor_id: instagramActorId ?? null, page_id: pageId, imageHashes },
-    };
-    return NextResponse.json({ steps, campaignId, adSetId });
-  }
+    let creativeId = "";
+    try {
+      const creativePayload: MetaAdCreativePayload = {
+        name: `ZZZ_DEBUG_TEST creative ${label}`,
+        ...(instagramActorId ? { instagram_actor_id: instagramActorId } : {}),
+        degrees_of_freedom_spec: buildAdvantagePlusCreativeFeatures("IMAGE"),
+        object_story_spec: {
+          page_id: pageId,
+          link_data: {
+            link: "https://example.com/",
+            image_hash: imageHash,
+            name: `Debug test ${label}`,
+            message: `Debug test ${label}`,
+            call_to_action: { type: "LEARN_MORE", value: { link: "https://example.com/" } },
+          },
+        },
+      };
+      const result = await createAdCreative(adAccountId, creativePayload, token);
+      creativeId = result.id;
+      steps[`creative_${label}`] = { ok: true, id: creativeId, payloadSent: creativePayload };
+    } catch (err) {
+      steps[`creative_${label}`] = {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+      continue;
+    }
 
-  try {
-    const adPayload: MetaAdPayload = {
-      name: "ZZZ_DEBUG_TEST ad",
-      adset_id: adSetId,
-      creative: { creative_id: creativeId },
-      status: "PAUSED",
-    };
-    const result = await createAd(adAccountId, adPayload, token);
-    steps.ad = { ok: true, id: result.id };
-  } catch (err) {
-    steps.ad = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    try {
+      const adPayload: MetaAdPayload = {
+        name: `ZZZ_DEBUG_TEST ad ${label}`,
+        adset_id: adSetId,
+        creative: { creative_id: creativeId },
+        status: "PAUSED",
+      };
+      const result = await createAd(adAccountId, adPayload, token);
+      adIds.push(result.id);
+      steps[`ad_${label}`] = { ok: true, id: result.id };
+    } catch (err) {
+      steps[`ad_${label}`] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
   }
 
   return NextResponse.json({
     steps,
     campaignId,
     adSetId,
-    creativeId,
+    adIds,
     cleanupHint: `Everything created is PAUSED and named "ZZZ_DEBUG_TEST*" — delete campaign ${campaignId} in Ads Manager when done.`,
   });
 }
