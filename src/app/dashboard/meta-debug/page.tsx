@@ -43,6 +43,24 @@ export default function MetaDebugPage() {
   const [err, setErr] = useState<string | null>(null);
   const [cleaningUp, setCleaningUp] = useState(false);
   const [cleanupResult, setCleanupResult] = useState<Record<string, { ok: boolean; error?: string }> | null>(null);
+  const [inspectAdId, setInspectAdId] = useState("");
+  const [inspecting, setInspecting] = useState(false);
+  const [inspectResult, setInspectResult] = useState<unknown>(null);
+
+  const inspectAd = async () => {
+    if (!inspectAdId) return;
+    setInspecting(true);
+    setInspectResult(null);
+    try {
+      const res = await fetch(`/api/meta/ads?adId=${encodeURIComponent(inspectAdId)}`);
+      const data = await res.json();
+      setInspectResult(data);
+    } catch (e) {
+      setInspectResult({ error: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setInspecting(false);
+    }
+  };
 
   const cleanup = async () => {
     setCleaningUp(true);
@@ -155,6 +173,33 @@ export default function MetaDebugPage() {
         {cleanupResult && (
           <pre className="bg-gray-900 border border-gray-700 rounded p-4 text-xs overflow-x-auto whitespace-pre-wrap mt-3">
             {JSON.stringify(cleanupResult, null, 2)}
+          </pre>
+        )}
+      </div>
+
+      <div className="mb-6 pt-4 border-t border-gray-700">
+        <p className="text-sm text-gray-400 mb-2">
+          Inspect a live ad (returns the ad + its creative, including asset_feed_spec /
+          degrees_of_freedom_spec for Flexible-format ads).
+        </p>
+        <div className="flex gap-2">
+          <input
+            className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-2"
+            placeholder="Ad ID, e.g. 120251719284310745"
+            value={inspectAdId}
+            onChange={(e) => setInspectAdId(e.target.value)}
+          />
+          <button
+            onClick={inspectAd}
+            disabled={inspecting || !inspectAdId}
+            className="bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded"
+          >
+            {inspecting ? "Inspecting…" : "Inspect Ad"}
+          </button>
+        </div>
+        {inspectResult != null && (
+          <pre className="bg-gray-900 border border-gray-700 rounded p-4 text-xs overflow-x-auto whitespace-pre-wrap mt-3">
+            {JSON.stringify(inspectResult, null, 2)}
           </pre>
         )}
       </div>
