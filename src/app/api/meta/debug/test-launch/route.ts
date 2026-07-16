@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
       targeting: { geo_locations: { countries: ["US"] } },
       billing_event: "LINK_CLICKS",
       optimization_goal: "LINK_CLICKS",
+      bid_strategy: "LOWEST_COST_WITHOUT_CAP",
       attribution_spec: [{ event_type: "CLICK_THROUGH", window_days: 1 }],
       daily_budget: 500,
     };
