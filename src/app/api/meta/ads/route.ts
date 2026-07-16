@@ -1,10 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAd, updateAd } from "@/lib/meta/ads";
+import { createAd, updateAd, getAd } from "@/lib/meta/ads";
+import { getAdCreative } from "@/lib/meta/creatives";
 import { getSession, isSessionValid, isMetaConnected, isMetaAdAccountAllowed } from "@/lib/session";
 import type { MetaAdPayload } from "@/types/meta";
 import { z } from "zod";
 
 export const maxDuration = 60;
+
+export async function GET(request: NextRequest) {
+  const session = await getSession();
+  if (!isSessionValid(session)) {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+  }
+  if (!isMetaConnected(session)) {
+    return NextResponse.json({ error: "meta_not_connected" }, { status: 403 });
+  }
+
+  const adId = request.nextUrl.searchParams.get("adId");
+  if (!adId) {
+    return NextResponse.json({ error: "adId required" }, { status: 400 });
+  }
+
+  try {
+    const ad = await getAd(adId);
+    if (!ad.account_id || !isMetaAdAccountAllowed(session, `act_${ad.account_id}`)) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    const creativeId = (ad.creative as { id?: string } | undefined)?.id;
+    const creative = creativeId ? await getAdCreative(creativeId) : null;
+    return NextResponse.json({ ad, creative });
+  } catch (err) {
+    console.error("[meta/ads] GET error:", err);
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
+  }
+}
 
 const postSchema = z.object({
   adAccountId: z.string().min(1),

@@ -233,6 +233,10 @@ export async function runMetaSubmission(
   // ── Stage 5: Create creatives + ads ──────────────────────────────────────
   onStage("creatives");
 
+  // Cache page → page-backed Instagram actor id lookups across creatives that
+  // share the same Facebook Page.
+  const instagramActorIdByPage = new Map<string, string | undefined>();
+
   for (const creative of synthesis.creatives) {
     const media = mediaMap.get(creative.id);
     if (!media) {
@@ -261,8 +265,29 @@ export async function runMetaSubmission(
       }
     }
 
+    // Ads Manager's "Identity" section needs an Instagram actor set even when
+    // no real IG account is connected — Meta uses the page's page-backed
+    // Instagram account (the "Use Facebook Page" option). Confirmed live
+    // 2026-07-16 via GET /api/meta/ads against a reference ad: its creative
+    // carries `instagram_user_id` (read-back name for the write field
+    // `instagram_actor_id`) even though no professional IG account is linked.
+    let instagramActorId: string | undefined;
+    if (instagramActorIdByPage.has(creative.pageId)) {
+      instagramActorId = instagramActorIdByPage.get(creative.pageId);
+    } else {
+      try {
+        const res = await fetch(`/api/meta/media?pageId=${encodeURIComponent(creative.pageId)}`);
+        const data = await res.json();
+        instagramActorId = data.instagramActorId ?? undefined;
+      } catch {
+        // fall through — ad will simply have no Instagram identity set
+      }
+      instagramActorIdByPage.set(creative.pageId, instagramActorId);
+    }
+
     const creativePayload: MetaAdCreativePayload = {
       name: resolveChannel(creative.name),
+      ...(instagramActorId ? { instagram_actor_id: instagramActorId } : {}),
       object_story_spec: {
         page_id: creative.pageId,
         ...(media.type === "IMAGE"

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { uploadImage, uploadVideo, pollVideoStatus, getVideoThumbnailUrl } from "@/lib/meta/creatives";
+import { getOrCreatePageBackedInstagramAccount } from "@/lib/meta/business-pages";
 import { getSession, isSessionValid, isMetaConnected, isMetaAdAccountAllowed } from "@/lib/session";
 import { z } from "zod";
 
@@ -13,6 +14,18 @@ export async function GET(request: NextRequest) {
   }
 
   const videoId = request.nextUrl.searchParams.get("videoId");
+  const pageId = request.nextUrl.searchParams.get("pageId");
+
+  if (pageId) {
+    try {
+      const instagramActorId = await getOrCreatePageBackedInstagramAccount(pageId);
+      return NextResponse.json({ instagramActorId: instagramActorId ?? null });
+    } catch (err) {
+      console.error("[meta/media] GET page-backed IG account error:", err);
+      return NextResponse.json({ error: "internal_error" }, { status: 500 });
+    }
+  }
+
   if (!videoId) {
     return NextResponse.json({ error: "videoId required" }, { status: 400 });
   }

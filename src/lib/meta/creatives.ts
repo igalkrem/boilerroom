@@ -111,7 +111,7 @@ export async function getAdCreative(
   token?: string
 ): Promise<MetaAdCreative> {
   return metaFetch<MetaAdCreative>(
-    `/${creativeId}?fields=id,name,object_story_spec,account_id`,
+    `/${creativeId}?fields=id,name,object_story_spec,asset_feed_spec,degrees_of_freedom_spec,instagram_actor_id,instagram_user_id,account_id`,
     {},
     token
   );

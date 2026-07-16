@@ -139,6 +139,7 @@ export interface MetaObjectStorySpec {
 export interface MetaAdCreativePayload {
   name: string;
   object_story_spec: MetaObjectStorySpec;
+  instagram_actor_id?: string; // page-backed Instagram identity — see getOrCreatePageBackedInstagramAccount
 }
 
 export interface MetaAdCreative extends MetaAdCreativePayload {

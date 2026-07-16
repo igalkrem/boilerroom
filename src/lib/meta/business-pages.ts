@@ -1,5 +1,35 @@
 import { metaFetch } from "./client";
 
+interface PageBackedInstagramAccountsResponse {
+  data?: { id: string }[];
+}
+
+/**
+ * The Instagram identity Meta uses for "Use Facebook Page" (no real IG
+ * professional account connected) — a page-backed Instagram account (PBIA).
+ * Returns an existing one if the page already has one, otherwise creates it.
+ * Requires the pages_read_engagement scope (added 2026-07-16) — accounts
+ * connected before that scope was added must reconnect Meta once.
+ */
+export async function getOrCreatePageBackedInstagramAccount(
+  pageId: string,
+  token?: string
+): Promise<string | undefined> {
+  const existing = await metaFetch<PageBackedInstagramAccountsResponse>(
+    `/${pageId}/page_backed_instagram_accounts`,
+    {},
+    token
+  );
+  if (existing.data?.[0]?.id) return existing.data[0].id;
+
+  const created = await metaFetch<{ id: string }>(
+    `/${pageId}/page_backed_instagram_accounts`,
+    { method: "POST" },
+    token
+  );
+  return created.id;
+}
+
 export interface BusinessPageInfo {
   name?: string;
   businessName?: string;

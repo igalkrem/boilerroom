@@ -10,6 +10,7 @@ const postSchema = z.object({
   adAccountId: z.string().min(1),
   creative: z.object({
     name: z.string().min(1),
+    instagram_actor_id: z.string().optional(),
     object_story_spec: z.object({
       page_id: z.string().min(1),
       link_data: z.object({
