@@ -52,8 +52,8 @@ function CopyButton({ getText }: { getText: () => string }) {
 export default function MetaDebugPage() {
   const { accounts, isLoading: accountsLoading } = useMetaAdAccounts();
   const { pages, isLoading: pagesLoading } = useMetaAdLimits();
-  const [adAccountId, setAdAccountId] = useState("");
-  const [pageId, setPageId] = useState("");
+  const [adAccountId, setAdAccountId] = useState("act_1549356156312143");
+  const [pageId, setPageId] = useState("927549190441376");
   const [running, setRunning] = useState(false);
   const [report, setReport] = useState<TestLaunchReport | null>(null);
   const [err, setErr] = useState<string | null>(null);
