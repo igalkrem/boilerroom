@@ -79,8 +79,8 @@ export async function POST(request: NextRequest) {
       name: "ZZZ_DEBUG_TEST ad set",
       status: "PAUSED",
       targeting: { geo_locations: { countries: ["US"] } },
-      billing_event: "IMPRESSIONS",
-      optimization_goal: "REACH",
+      billing_event: "LINK_CLICKS",
+      optimization_goal: "LINK_CLICKS",
       attribution_spec: [{ event_type: "CLICK_THROUGH", window_days: 1 }],
       daily_budget: 500,
     };
