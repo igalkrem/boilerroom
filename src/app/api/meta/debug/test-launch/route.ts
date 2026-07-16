@@ -155,27 +155,37 @@ export async function POST(request: NextRequest) {
   // the page (and thus the PBIA)? Meta may only allow an ad account to use a
   // page-backed Instagram account when the ad account and page share a
   // Business Manager (or the page is otherwise shared with that business).
+  const rawPageId = pageId; // instagramActorId above may already be nulled by the usability check
   try {
-    const [acctInfo, pageInfo, acctIgAccounts] = await Promise.all([
-      metaFetch<{ id: string; name?: string; business?: { id: string; name?: string } }>(
-        `/act_${adAccountId.replace("act_", "")}?fields=id,name,business`,
+    const acctInfo = await metaFetch<{ id: string; name?: string; business?: { id: string; name?: string } }>(
+      `/act_${adAccountId.replace("act_", "")}?fields=id,name,business`,
+      {},
+      token
+    );
+    const [pageInfo, acctIgAccounts, businessIgAccounts] = await Promise.all([
+      metaFetch<{ id: string; name?: string; instagram_business_account?: { id: string }; connected_instagram_account?: { id: string } }>(
+        `/${rawPageId}?fields=id,name,instagram_business_account,connected_instagram_account`,
         {},
         token
-      ),
-      metaFetch<{ id: string; name?: string }>(`/${pageId}?fields=id,name`, {}, token),
+      ).catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
       metaFetch<{ data?: { id: string; username?: string }[] }>(
         `/act_${adAccountId.replace("act_", "")}/instagram_accounts?fields=id,username`,
         {},
         token
       ).catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
+      acctInfo.business?.id
+        ? metaFetch<{ data?: { id: string; username?: string }[] }>(
+            `/${acctInfo.business.id}/instagram_accounts?fields=id,username`,
+            {},
+            token
+          ).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }))
+        : Promise.resolve({ skipped: "no business id on ad account" }),
     ]);
     steps.businessCrossCheck = {
       adAccountBusiness: acctInfo.business ?? null,
-      pageName: pageInfo.name,
+      pageInfo,
       adAccountUsableInstagramAccounts: acctIgAccounts,
-      resolvedInstagramActorIdIsInThatList: Array.isArray((acctIgAccounts as { data?: { id: string }[] }).data)
-        ? (acctIgAccounts as { data: { id: string }[] }).data.some((a) => a.id === instagramActorId)
-        : null,
+      businessOwnedInstagramAccounts: businessIgAccounts,
     };
   } catch (err) {
     steps.businessCrossCheck = { error: err instanceof Error ? err.message : String(err) };
