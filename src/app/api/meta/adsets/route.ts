@@ -36,6 +36,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "adAccountId required" }, { status: 400 });
   }
   if (!isMetaAdAccountAllowed(session, adAccountId)) {
+    console.error(
+      `[meta/adsets] GET forbidden: adAccountId=${adAccountId} not in metaAllowedAdAccountIds=${JSON.stringify(session.metaAllowedAdAccountIds)}`
+    );
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

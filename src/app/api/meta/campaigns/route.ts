@@ -62,6 +62,9 @@ export async function POST(request: NextRequest) {
 
   const { adAccountId, campaign } = parsed.data;
   if (!isMetaAdAccountAllowed(session, adAccountId)) {
+    console.error(
+      `[meta/campaigns] POST forbidden: adAccountId=${adAccountId} not in metaAllowedAdAccountIds=${JSON.stringify(session.metaAllowedAdAccountIds)}`
+    );
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
