@@ -14,15 +14,54 @@ import type {
   MetaPixelEvent,
 } from "@/types/meta";
 import { z } from "zod";
+import { deflateSync } from "zlib";
 
 export const maxDuration = 60;
 
-// Two minimal valid 1x1 JPEGs (red + green) so this route can test
-// asset_feed_spec with multiple images without needing a file upload UI.
-const TEST_IMAGE_RED_BASE64 =
-  "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=";
-const TEST_IMAGE_GREEN_BASE64 =
-  "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCwABmX/9k=";
+// Generate a solid-color PNG at the given dimensions. Meta's Dynamic Creative
+// (asset_feed_spec) rejects tiny images (error_subcode 1885558), so the old
+// 1x1 base64 JPEGs can't be used — build 600x600 PNGs on the fly instead.
+function crc32(buf: Buffer): number {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) {
+    c ^= buf[i];
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+  }
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length, 0);
+  const typeBuf = Buffer.from(type, "ascii");
+  const payload = Buffer.concat([typeBuf, data]);
+  const crcBuf = Buffer.alloc(4);
+  crcBuf.writeUInt32BE(crc32(payload), 0);
+  return Buffer.concat([len, payload, crcBuf]);
+}
+
+function createTestPng(width: number, height: number, r: number, g: number, b: number): Buffer {
+  const rowBytes = 1 + width * 3;
+  const raw = Buffer.alloc(rowBytes * height);
+  for (let y = 0; y < height; y++) {
+    const off = y * rowBytes;
+    raw[off] = 0;
+    for (let x = 0; x < width; x++) {
+      const px = off + 1 + x * 3;
+      raw[px] = r; raw[px + 1] = g; raw[px + 2] = b;
+    }
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; ihdr[9] = 2;
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", deflateSync(raw)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
 
 // Debug-only endpoint: replays the exact campaign -> ad set -> creative -> ad
 // sequence the wizard's submission orchestrator uses, in one server-side call,
@@ -194,12 +233,16 @@ export async function POST(request: NextRequest) {
     steps.businessCrossCheck = { error: err instanceof Error ? err.message : String(err) };
   }
 
-  // Upload two distinct test images so the creative can use asset_feed_spec
-  // (multi-media "Flexible" format) instead of single-media object_story_spec.
+  // Upload two distinct 600x600 test images so the creative can use
+  // asset_feed_spec (multi-media "Flexible" format).
   const imageHashes: string[] = [];
-  for (const [label, b64] of [["red", TEST_IMAGE_RED_BASE64], ["green", TEST_IMAGE_GREEN_BASE64]] as const) {
+  const testImages: [string, Buffer][] = [
+    ["red", createTestPng(600, 600, 255, 0, 0)],
+    ["green", createTestPng(600, 600, 0, 180, 0)],
+  ];
+  for (const [label, pngBuf] of testImages) {
     try {
-      const result = await uploadImage(adAccountId, Buffer.from(b64, "base64"), `debug-test-${label}.jpg`, token);
+      const result = await uploadImage(adAccountId, pngBuf, `debug-test-${label}.png`, token);
       imageHashes.push(result.hash);
       steps[`imageUpload_${label}`] = { ok: true, hash: result.hash };
     } catch (err) {
