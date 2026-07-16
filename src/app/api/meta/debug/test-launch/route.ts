@@ -17,9 +17,12 @@ import { z } from "zod";
 
 export const maxDuration = 60;
 
-// A minimal valid 1x1 red JPEG, used so this route needs no file upload UI.
-const TEST_IMAGE_BASE64 =
+// Two minimal valid 1x1 JPEGs (red + green) so this route can test
+// asset_feed_spec with multiple images without needing a file upload UI.
+const TEST_IMAGE_RED_BASE64 =
   "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=";
+const TEST_IMAGE_GREEN_BASE64 =
+  "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCwABmX/9k=";
 
 // Debug-only endpoint: replays the exact campaign -> ad set -> creative -> ad
 // sequence the wizard's submission orchestrator uses, in one server-side call,
@@ -191,13 +194,19 @@ export async function POST(request: NextRequest) {
     steps.businessCrossCheck = { error: err instanceof Error ? err.message : String(err) };
   }
 
-  let imageHash = "";
-  try {
-    const result = await uploadImage(adAccountId, Buffer.from(TEST_IMAGE_BASE64, "base64"), "debug-test.jpg", token);
-    imageHash = result.hash;
-    steps.imageUpload = { ok: true, hash: imageHash };
-  } catch (err) {
-    steps.imageUpload = { ok: false, error: err instanceof Error ? err.message : String(err) };
+  // Upload two distinct test images so the creative can use asset_feed_spec
+  // (multi-media "Flexible" format) instead of single-media object_story_spec.
+  const imageHashes: string[] = [];
+  for (const [label, b64] of [["red", TEST_IMAGE_RED_BASE64], ["green", TEST_IMAGE_GREEN_BASE64]] as const) {
+    try {
+      const result = await uploadImage(adAccountId, Buffer.from(b64, "base64"), `debug-test-${label}.jpg`, token);
+      imageHashes.push(result.hash);
+      steps[`imageUpload_${label}`] = { ok: true, hash: result.hash };
+    } catch (err) {
+      steps[`imageUpload_${label}`] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+  if (imageHashes.length === 0) {
     return NextResponse.json({ steps, campaignId, adSetId });
   }
 
@@ -209,13 +218,14 @@ export async function POST(request: NextRequest) {
       degrees_of_freedom_spec: buildAdvantagePlusCreativeFeatures("IMAGE"),
       object_story_spec: {
         page_id: pageId,
-        link_data: {
-          link: "https://example.com",
-          image_hash: imageHash,
-          name: "Debug test",
-          message: "Debug test",
-          call_to_action: { type: "LEARN_MORE", value: { link: "https://example.com" } },
-        },
+      },
+      asset_feed_spec: {
+        images: imageHashes.map((hash) => ({ hash })),
+        bodies: [{ text: "Debug test" }],
+        titles: [{ text: "Debug test" }],
+        link_urls: [{ website_url: "https://example.com/" }],
+        call_to_action_types: ["LEARN_MORE"],
+        ad_formats: ["SINGLE_IMAGE"],
       },
     };
     const result = await createAdCreative(adAccountId, creativePayload, token);
@@ -225,7 +235,7 @@ export async function POST(request: NextRequest) {
     steps.creative = {
       ok: false,
       error: err instanceof Error ? err.message : String(err),
-      payloadSent: { instagram_actor_id: instagramActorId ?? null, page_id: pageId },
+      payloadSent: { instagram_actor_id: instagramActorId ?? null, page_id: pageId, imageHashes },
     };
     return NextResponse.json({ steps, campaignId, adSetId });
   }

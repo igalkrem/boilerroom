@@ -161,9 +161,34 @@ export interface MetaDegreesOfFreedomSpec {
   creative_features_spec: MetaCreativeFeaturesSpec;
 }
 
+// "Flexible" format: multiple media per ad, Meta picks the best one per
+// impression. Used in place of single-media object_story_spec.link_data /
+// video_data when the creative group has 2+ assets.
+export interface MetaAssetFeedImage {
+  hash: string;
+}
+
+export interface MetaAssetFeedVideo {
+  video_id: string;
+  thumbnail_url?: string;
+  thumbnail_hash?: string;
+}
+
+export interface MetaAssetFeedSpec {
+  images?: MetaAssetFeedImage[];
+  videos?: MetaAssetFeedVideo[];
+  bodies: Array<{ text: string }>;
+  titles?: Array<{ text: string }>;
+  descriptions?: Array<{ text: string }>;
+  link_urls: Array<{ website_url: string; display_url?: string }>;
+  call_to_action_types?: string[];
+  ad_formats?: string[];
+}
+
 export interface MetaAdCreativePayload {
   name: string;
-  object_story_spec: MetaObjectStorySpec;
+  object_story_spec?: MetaObjectStorySpec;
+  asset_feed_spec?: MetaAssetFeedSpec;
   instagram_actor_id?: string; // page-backed Instagram identity — see getOrCreatePageBackedInstagramAccount
   degrees_of_freedom_spec?: MetaDegreesOfFreedomSpec; // "Flexible" format + Advantage+ creative — see above
 }
