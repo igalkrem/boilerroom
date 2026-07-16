@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, isSessionValid, isMetaConnected, isMetaAdAccountAllowed } from "@/lib/session";
-import { getValidMetaToken } from "@/lib/meta/client";
+import { getValidMetaToken, metaFetch } from "@/lib/meta/client";
 import { createCampaign } from "@/lib/meta/campaigns";
 import { createAdSet } from "@/lib/meta/adsets";
 import { uploadImage, createAdCreative } from "@/lib/meta/creatives";
@@ -11,6 +11,7 @@ import type {
   MetaAdSetPayload,
   MetaAdCreativePayload,
   MetaAdPayload,
+  MetaPixelEvent,
 } from "@/types/meta";
 import { z } from "zod";
 
@@ -55,6 +56,30 @@ export async function POST(request: NextRequest) {
   const steps: Record<string, unknown> = {};
   const token = await getValidMetaToken();
 
+  // Mirror the exact bid setup of a known-working reference ad set (campaign
+  // 120251719274320745 / "boiler", ad set 120251719276040745) instead of
+  // guessing an optimization_goal/bid_strategy combo — this account/objective
+  // apparently rejects the implicit LOWEST_COST_WITHOUT_CAP default.
+  const REFERENCE_ADSET_ID = "120251719276040745";
+  let refFields: {
+    optimization_goal?: string;
+    billing_event?: string;
+    bid_strategy?: string;
+    bid_amount?: number;
+    bid_constraints?: { roas_average_floor?: number };
+    promoted_object?: { pixel_id?: string; custom_event_type?: string };
+  } = {};
+  try {
+    refFields = await metaFetch(
+      `/${REFERENCE_ADSET_ID}?fields=optimization_goal,billing_event,bid_strategy,bid_amount,bid_constraints,promoted_object`,
+      {},
+      token
+    );
+    steps.referenceAdSet = { ok: true, fields: refFields };
+  } catch (err) {
+    steps.referenceAdSet = { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+
   let campaignId = "";
   try {
     const campaignPayload: MetaCampaignPayload = {
@@ -79,12 +104,27 @@ export async function POST(request: NextRequest) {
       name: "ZZZ_DEBUG_TEST ad set",
       status: "PAUSED",
       targeting: { geo_locations: { countries: ["US"] } },
-      billing_event: "LINK_CLICKS",
-      optimization_goal: "LINK_CLICKS",
-      bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+      billing_event: (refFields.billing_event as MetaAdSetPayload["billing_event"]) ?? "IMPRESSIONS",
+      optimization_goal: (refFields.optimization_goal as MetaAdSetPayload["optimization_goal"]) ?? "VALUE",
+      ...(refFields.bid_strategy
+        ? { bid_strategy: refFields.bid_strategy as MetaAdSetPayload["bid_strategy"] }
+        : {}),
+      ...(refFields.bid_amount ? { bid_amount: refFields.bid_amount } : {}),
+      ...(refFields.bid_constraints?.roas_average_floor
+        ? { bid_constraints: { roas_average_floor: refFields.bid_constraints.roas_average_floor } }
+        : {}),
+      ...(refFields.promoted_object?.pixel_id
+        ? {
+            promoted_object: {
+              pixel_id: refFields.promoted_object.pixel_id,
+              custom_event_type: (refFields.promoted_object.custom_event_type as MetaPixelEvent) ?? "PURCHASE",
+            },
+          }
+        : {}),
       attribution_spec: [{ event_type: "CLICK_THROUGH", window_days: 1 }],
       daily_budget: 500,
     };
+    steps.adSetPayloadSent = adSetPayload;
     const result = await createAdSet(adAccountId, adSetPayload, token);
     adSetId = result.id;
     steps.adSet = { ok: true, id: adSetId };
