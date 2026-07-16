@@ -141,6 +141,36 @@ export async function POST(request: NextRequest) {
     steps.instagramActor = { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 
+  // Diagnostic: is this ad account's Business Manager the same one that owns
+  // the page (and thus the PBIA)? Meta may only allow an ad account to use a
+  // page-backed Instagram account when the ad account and page share a
+  // Business Manager (or the page is otherwise shared with that business).
+  try {
+    const [acctInfo, pageInfo, acctIgAccounts] = await Promise.all([
+      metaFetch<{ id: string; name?: string; business?: { id: string; name?: string } }>(
+        `/act_${adAccountId.replace("act_", "")}?fields=id,name,business`,
+        {},
+        token
+      ),
+      metaFetch<{ id: string; name?: string }>(`/${pageId}?fields=id,name`, {}, token),
+      metaFetch<{ data?: { id: string; username?: string }[] }>(
+        `/act_${adAccountId.replace("act_", "")}/instagram_accounts?fields=id,username`,
+        {},
+        token
+      ).catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
+    ]);
+    steps.businessCrossCheck = {
+      adAccountBusiness: acctInfo.business ?? null,
+      pageName: pageInfo.name,
+      adAccountUsableInstagramAccounts: acctIgAccounts,
+      resolvedInstagramActorIdIsInThatList: Array.isArray((acctIgAccounts as { data?: { id: string }[] }).data)
+        ? (acctIgAccounts as { data: { id: string }[] }).data.some((a) => a.id === instagramActorId)
+        : null,
+    };
+  } catch (err) {
+    steps.businessCrossCheck = { error: err instanceof Error ? err.message : String(err) };
+  }
+
   let imageHash = "";
   try {
     const result = await uploadImage(adAccountId, Buffer.from(TEST_IMAGE_BASE64, "base64"), "debug-test.jpg", token);
