@@ -7,6 +7,8 @@ import type {
   MetaVideoStatus,
 } from "@/types/meta";
 
+export { buildAdvantagePlusCreativeFeatures } from "./creative-features";
+
 export async function uploadImage(
   adAccountId: string,
   imageBytes: Buffer,

@@ -8,6 +8,7 @@ import type {
   MetaAdCreativePayload,
   MetaAdPayload,
 } from "@/types/meta";
+import { buildAdvantagePlusCreativeFeatures } from "@/lib/meta/creative-features";
 
 type OnStageChange = (stage: string) => void;
 
@@ -290,6 +291,7 @@ export async function runMetaSubmission(
     const creativePayload: MetaAdCreativePayload = {
       name: resolveChannel(creative.name),
       ...(instagramActorId ? { instagram_actor_id: instagramActorId } : {}),
+      degrees_of_freedom_spec: buildAdvantagePlusCreativeFeatures(media.type),
       object_story_spec: {
         page_id: creative.pageId,
         ...(media.type === "IMAGE"

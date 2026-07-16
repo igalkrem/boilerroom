@@ -3,7 +3,7 @@ import { getSession, isSessionValid, isMetaConnected, isMetaAdAccountAllowed } f
 import { getValidMetaToken, metaFetch } from "@/lib/meta/client";
 import { createCampaign } from "@/lib/meta/campaigns";
 import { createAdSet } from "@/lib/meta/adsets";
-import { uploadImage, createAdCreative } from "@/lib/meta/creatives";
+import { uploadImage, createAdCreative, buildAdvantagePlusCreativeFeatures } from "@/lib/meta/creatives";
 import { createAd } from "@/lib/meta/ads";
 import { getOrCreatePageBackedInstagramAccount, isInstagramActorUsableByAdAccount } from "@/lib/meta/business-pages";
 import type {
@@ -206,6 +206,7 @@ export async function POST(request: NextRequest) {
     const creativePayload: MetaAdCreativePayload = {
       name: "ZZZ_DEBUG_TEST creative",
       ...(instagramActorId ? { instagram_actor_id: instagramActorId } : {}),
+      degrees_of_freedom_spec: buildAdvantagePlusCreativeFeatures("IMAGE"),
       object_story_spec: {
         page_id: pageId,
         link_data: {

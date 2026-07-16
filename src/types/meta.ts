@@ -136,10 +136,36 @@ export interface MetaObjectStorySpec {
   video_data?: MetaVideoData;
 }
 
+// "Format: Flexible" + "Advantage+ creative optimizations" in Ads Manager's UI
+// map to this — confirmed live 2026-07-16 via GET /api/meta/ads against a real
+// reference ad (120251719284310745): its object_story_spec is a plain single
+// video_data, identical in shape to what this app already builds. The only
+// difference is this degrees_of_freedom_spec block. video_auto_crop is
+// video-only — omit it for image creatives (unconfirmed whether Meta rejects
+// it on an image, so don't send it there).
+export interface MetaCreativeFeatureEnrollment {
+  enroll_status: "OPT_IN" | "OPT_OUT";
+}
+
+export interface MetaCreativeFeaturesSpec {
+  advantage_plus_creative?: MetaCreativeFeatureEnrollment;
+  inline_comment?: MetaCreativeFeatureEnrollment;
+  product_extensions?: MetaCreativeFeatureEnrollment;
+  site_extensions?: MetaCreativeFeatureEnrollment;
+  standard_enhancements?: MetaCreativeFeatureEnrollment;
+  text_optimizations?: MetaCreativeFeatureEnrollment;
+  video_auto_crop?: MetaCreativeFeatureEnrollment;
+}
+
+export interface MetaDegreesOfFreedomSpec {
+  creative_features_spec: MetaCreativeFeaturesSpec;
+}
+
 export interface MetaAdCreativePayload {
   name: string;
   object_story_spec: MetaObjectStorySpec;
   instagram_actor_id?: string; // page-backed Instagram identity — see getOrCreatePageBackedInstagramAccount
+  degrees_of_freedom_spec?: MetaDegreesOfFreedomSpec; // "Flexible" format + Advantage+ creative — see above
 }
 
 export interface MetaAdCreative extends MetaAdCreativePayload {
