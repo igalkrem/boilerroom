@@ -3,8 +3,9 @@ import { put, list, getDownloadUrl } from "@vercel/blob";
 // Server-side cache for the (call-heavy) Meta ad-limits result, so the FB Pages
 // table doesn't re-hit ~35 Graph endpoints on every page load and trip the app
 // rate limit (#4). Stored per user in the same public blob store as /api/data.
-
-export const AD_LIMITS_TTL_MS = 10 * 60 * 1000; // 10 minutes
+// No TTL — cache is served indefinitely until the user explicitly clicks
+// "Refresh" (?refresh=1). Pre-launch ad counts use a separate live endpoint
+// (/api/meta/page-ad-counts).
 
 export interface AdLimitPageRow {
   pageId: string;

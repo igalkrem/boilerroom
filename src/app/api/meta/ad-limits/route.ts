@@ -7,7 +7,6 @@ import { getBusinessPages, getOrCreatePageBackedInstagramAccount } from "@/lib/m
 import {
   readAdLimitsCache,
   writeAdLimitsCache,
-  AD_LIMITS_TTL_MS,
   type AdLimitPageRow,
 } from "@/lib/meta/ad-limits-cache";
 import { readInstagramActorCache, writeInstagramActorCacheEntries } from "@/lib/meta/instagram-actor-cache";
@@ -91,9 +90,12 @@ export async function GET(req: Request) {
   const userId = session.googleUserId;
   const force = new URL(req.url).searchParams.get("refresh") === "1";
 
-  // Serve from cache unless it's stale or a refresh was explicitly requested.
+  // Serve from cache unless a refresh was explicitly requested (?refresh=1).
+  // No TTL expiry — the cache is only refreshed on explicit user action
+  // (the refresh button on /dashboard/traffic-sources) or before campaign
+  // creation (which uses the separate /api/meta/page-ad-counts live endpoint).
   const cache = userId ? await readAdLimitsCache(userId) : null;
-  if (cache && !force && Date.now() - cache.cachedAt < AD_LIMITS_TTL_MS) {
+  if (cache && !force) {
     return NextResponse.json({ pages: cache.pages, cachedAt: cache.cachedAt, cached: true });
   }
 
