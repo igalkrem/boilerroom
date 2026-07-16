@@ -3,13 +3,44 @@ import { getSession, isSessionValid, isMetaConnected } from "@/lib/session";
 import { getValidMetaToken, metaFetch } from "@/lib/meta/client";
 import { getMetaAdAccounts } from "@/lib/meta/adaccounts";
 import { getAdsVolume } from "@/lib/meta/ad-volume";
-import { getBusinessPages } from "@/lib/meta/business-pages";
+import { getBusinessPages, getOrCreatePageBackedInstagramAccount } from "@/lib/meta/business-pages";
 import {
   readAdLimitsCache,
   writeAdLimitsCache,
   AD_LIMITS_TTL_MS,
   type AdLimitPageRow,
 } from "@/lib/meta/ad-limits-cache";
+import { readInstagramActorCache, writeInstagramActorCacheEntries } from "@/lib/meta/instagram-actor-cache";
+
+// A page's page-backed Instagram account never changes, so most pages hit the
+// permanent cache; only genuinely new pages need a live Meta call. Bounded
+// concurrency keeps a large first-ever page list from tripping rate limits.
+const INSTAGRAM_LOOKUP_CONCURRENCY = 5;
+
+async function resolveInstagramActorIds(pageIds: string[]): Promise<Record<string, string>> {
+  const cached = await readInstagramActorCache();
+  const uncached = pageIds.filter((id) => !cached[id]);
+  const resolved: Record<string, string> = {};
+
+  let i = 0;
+  async function worker() {
+    while (i < uncached.length) {
+      const pageId = uncached[i++];
+      try {
+        const id = await getOrCreatePageBackedInstagramAccount(pageId);
+        if (id) resolved[pageId] = id;
+      } catch (e) {
+        console.error(`[meta/ad-limits] instagram actor lookup failed for ${pageId}:`, e);
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: INSTAGRAM_LOOKUP_CONCURRENCY }, worker));
+
+  if (Object.keys(resolved).length > 0) {
+    await writeInstagramActorCacheEntries(resolved);
+  }
+  return { ...cached, ...resolved };
+}
 
 // Resolve page names for ids not covered by the Business Manager page list, via
 // the batch `?ids=` node (50 max per call). Only used as a fallback for pages
@@ -107,11 +138,19 @@ export async function GET(req: Request) {
     const missingName = [...allIds].filter((id) => !bizPages[id]?.name);
     const resolved = missingName.length ? await resolvePageNames(missingName) : {};
 
+    let instagramActorIds: Record<string, string> = {};
+    try {
+      instagramActorIds = await resolveInstagramActorIds([...allIds]);
+    } catch (e) {
+      console.error("[meta/ad-limits] instagram actor id resolution failed:", e);
+    }
+
     const pages: AdLimitPageRow[] = [...allIds].map((pageId) => ({
       pageId,
       name: bizPages[pageId]?.name ?? resolved[pageId] ?? pageId,
       businessName: bizPages[pageId]?.businessName ?? null,
       running: runningByPage.get(pageId) ?? 0,
+      instagramActorId: instagramActorIds[pageId] ?? null,
     }));
 
     // If the fresh fetch came back empty (e.g. a transient rate limit blanked

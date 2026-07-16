@@ -11,6 +11,7 @@ export interface AdLimitPageRow {
   name: string;
   businessName: string | null;
   running: number;
+  instagramActorId: string | null;
 }
 
 interface CachePayload {

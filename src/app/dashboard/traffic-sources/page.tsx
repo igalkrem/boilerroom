@@ -73,7 +73,13 @@ export default function TrafficSourcesPage() {
   const { pages: adLimitPages, runningByPage, isLoading: pagesLoading, refresh: refreshAdLimits } =
     useMetaAdLimits();
   const metaPages = useMemo(
-    () => adLimitPages.map((p) => ({ id: p.pageId, name: p.name, businessName: p.businessName })),
+    () =>
+      adLimitPages.map((p) => ({
+        id: p.pageId,
+        name: p.name,
+        businessName: p.businessName,
+        instagramActorId: p.instagramActorId,
+      })),
     [adLimitPages]
   );
   const [adAccountConfigs, setAdAccountConfigs] = useState<AdAccountConfig[]>([]);
@@ -602,6 +608,7 @@ export default function TrafficSourcesPage() {
               <th className={thClass}>Page</th>
               <th className={thClass}>Business</th>
               <th className={thClass}>Ads</th>
+              <th className={thClass}>Instagram Actor ID</th>
               <th className={thClass}>Feed Providers</th>
               <th className={thClass}>Status</th>
               <th className={`${thClass} w-8`}></th>
@@ -661,6 +668,17 @@ export default function TrafficSourcesPage() {
                           {running} / {limit}
                         </span>
                       </div>
+                    </td>
+
+                    {/* Page-backed Instagram account used for ad Identity */}
+                    <td className={tdClass}>
+                      {p.instagramActorId ? (
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400 font-mono truncate max-w-[160px] block">
+                          {p.instagramActorId}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300 dark:text-gray-600">—</span>
+                      )}
                     </td>
 
                     {/* Feed provider chips — click to expand assignment checklist */}
@@ -738,7 +756,7 @@ export default function TrafficSourcesPage() {
                   {/* Inline expand: feed provider checklist */}
                   {isExpanded && (
                     <tr className="bg-gray-50/80 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                      <td colSpan={7} className="px-4 py-3">
+                      <td colSpan={8} className="px-4 py-3">
                         {feedProviders.length === 0 ? (
                           <p className="text-xs text-gray-400 dark:text-gray-500 italic">
                             No feed providers yet.

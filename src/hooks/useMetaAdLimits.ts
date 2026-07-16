@@ -9,6 +9,7 @@ export interface AdLimitPage {
   name: string;
   businessName: string | null;
   running: number;
+  instagramActorId: string | null;
 }
 
 const EMPTY_ROWS: AdLimitPage[] = [];

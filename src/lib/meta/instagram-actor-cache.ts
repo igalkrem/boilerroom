@@ -9,6 +9,25 @@ const CACHE_PATH = "metadata/global/meta_instagram_actor_cache.json";
 
 type CacheMap = Record<string, string>; // pageId -> instagramActorId
 
+export async function readInstagramActorCache(): Promise<CacheMap> {
+  return readCache();
+}
+
+export async function writeInstagramActorCacheEntries(entries: Record<string, string>): Promise<void> {
+  if (Object.keys(entries).length === 0) return;
+  try {
+    const cache = await readCache();
+    Object.assign(cache, entries);
+    await put(CACHE_PATH, JSON.stringify(cache), {
+      access: "public",
+      allowOverwrite: true,
+      addRandomSuffix: false,
+    });
+  } catch (err) {
+    console.error("[meta/instagram-actor-cache] bulk write failed:", err);
+  }
+}
+
 async function readCache(): Promise<CacheMap> {
   try {
     const { blobs } = await list({ prefix: CACHE_PATH });
