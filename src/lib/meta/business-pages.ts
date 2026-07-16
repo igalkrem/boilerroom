@@ -15,17 +15,26 @@ export async function getOrCreatePageBackedInstagramAccount(
   pageId: string,
   token?: string
 ): Promise<string | undefined> {
+  // The page_backed_instagram_accounts edge requires a Page Access Token.
+  const pageNode = await metaFetch<{ access_token?: string }>(
+    `/${pageId}?fields=access_token`,
+    {},
+    token
+  );
+  const pageToken = pageNode.access_token;
+  if (!pageToken) return undefined;
+
   const existing = await metaFetch<PageBackedInstagramAccountsResponse>(
     `/${pageId}/page_backed_instagram_accounts`,
     {},
-    token
+    pageToken
   );
   if (existing.data?.[0]?.id) return existing.data[0].id;
 
   const created = await metaFetch<{ id: string }>(
     `/${pageId}/page_backed_instagram_accounts`,
     { method: "POST" },
-    token
+    pageToken
   );
   return created.id;
 }
