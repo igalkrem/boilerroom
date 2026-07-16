@@ -62,6 +62,9 @@ export default function MetaDebugPage() {
   const [inspectAdId, setInspectAdId] = useState("");
   const [inspecting, setInspecting] = useState(false);
   const [inspectResult, setInspectResult] = useState<unknown>(null);
+  const [inspectAdSetId, setInspectAdSetId] = useState("");
+  const [inspectingAdSet, setInspectingAdSet] = useState(false);
+  const [inspectAdSetResult, setInspectAdSetResult] = useState<unknown>(null);
 
   const inspectAd = async () => {
     if (!inspectAdId) return;
@@ -75,6 +78,21 @@ export default function MetaDebugPage() {
       setInspectResult({ error: e instanceof Error ? e.message : String(e) });
     } finally {
       setInspecting(false);
+    }
+  };
+
+  const inspectAdSet = async () => {
+    if (!inspectAdSetId) return;
+    setInspectingAdSet(true);
+    setInspectAdSetResult(null);
+    try {
+      const res = await fetch(`/api/meta/adsets?adSetId=${encodeURIComponent(inspectAdSetId)}`);
+      const data = await res.json();
+      setInspectAdSetResult(data);
+    } catch (e) {
+      setInspectAdSetResult({ error: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setInspectingAdSet(false);
     }
   };
 
@@ -225,6 +243,38 @@ export default function MetaDebugPage() {
             </div>
             <pre className="bg-gray-900 border border-gray-700 rounded p-4 text-xs overflow-x-auto whitespace-pre-wrap">
               {JSON.stringify(inspectResult, null, 2)}
+            </pre>
+          </div>
+        )}
+      </div>
+
+      <div className="mb-6 pt-4 border-t border-gray-700">
+        <p className="text-sm text-gray-400 mb-2">
+          Inspect an ad set — returns is_dynamic_creative, optimization_goal, bid_strategy, and
+          other fields to compare reference vs. test ad sets.
+        </p>
+        <div className="flex gap-2">
+          <input
+            className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-2"
+            placeholder="Ad Set ID, e.g. 120251719276040745"
+            value={inspectAdSetId}
+            onChange={(e) => setInspectAdSetId(e.target.value)}
+          />
+          <button
+            onClick={inspectAdSet}
+            disabled={inspectingAdSet || !inspectAdSetId}
+            className="bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded"
+          >
+            {inspectingAdSet ? "Inspecting…" : "Inspect Ad Set"}
+          </button>
+        </div>
+        {inspectAdSetResult != null && (
+          <div className="mt-3">
+            <div className="flex justify-end mb-1">
+              <CopyButton getText={() => JSON.stringify(inspectAdSetResult, null, 2)} />
+            </div>
+            <pre className="bg-gray-900 border border-gray-700 rounded p-4 text-xs overflow-x-auto whitespace-pre-wrap">
+              {JSON.stringify(inspectAdSetResult, null, 2)}
             </pre>
           </div>
         )}

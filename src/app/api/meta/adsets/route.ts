@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdSet, getAdSetsByAccount, updateAdSet } from "@/lib/meta/adsets";
+import { createAdSet, getAdSet, getAdSetsByAccount, updateAdSet } from "@/lib/meta/adsets";
 import { getSession, isSessionValid, isMetaConnected, isMetaAdAccountAllowed } from "@/lib/session";
 import type { MetaAdSetPayload } from "@/types/meta";
 import { z } from "zod";
@@ -29,6 +29,18 @@ export async function GET(request: NextRequest) {
   }
   if (!isMetaConnected(session)) {
     return NextResponse.json({ error: "meta_not_connected" }, { status: 403 });
+  }
+
+  // Single ad set by ID (used by the meta-debug "Inspect Ad Set" tool)
+  const adSetId = request.nextUrl.searchParams.get("adSetId");
+  if (adSetId) {
+    try {
+      const adSet = await getAdSet(adSetId);
+      return NextResponse.json({ adSet });
+    } catch (err) {
+      console.error("[meta/adsets] GET by adSetId error:", err);
+      return NextResponse.json({ error: "internal_error" }, { status: 500 });
+    }
   }
 
   const adAccountId = request.nextUrl.searchParams.get("adAccountId");
