@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { uploadImage, uploadVideo, pollVideoStatus, getVideoThumbnailUrl } from "@/lib/meta/creatives";
 import { getOrCreatePageBackedInstagramAccount } from "@/lib/meta/business-pages";
+import { getCachedInstagramActorId, setCachedInstagramActorId } from "@/lib/meta/instagram-actor-cache";
 import { getSession, isSessionValid, isMetaConnected, isMetaAdAccountAllowed } from "@/lib/session";
 import { z } from "zod";
 
@@ -18,7 +19,14 @@ export async function GET(request: NextRequest) {
 
   if (pageId) {
     try {
+      const cached = await getCachedInstagramActorId(pageId);
+      if (cached) {
+        return NextResponse.json({ instagramActorId: cached });
+      }
       const instagramActorId = await getOrCreatePageBackedInstagramAccount(pageId);
+      if (instagramActorId) {
+        await setCachedInstagramActorId(pageId, instagramActorId);
+      }
       return NextResponse.json({ instagramActorId: instagramActorId ?? null });
     } catch (err) {
       console.error("[meta/media] GET page-backed IG account error:", err);
