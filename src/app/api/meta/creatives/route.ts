@@ -62,7 +62,10 @@ export async function POST(request: NextRequest) {
     const result = await createAdCreative(adAccountId, creative as MetaAdCreativePayload);
     return NextResponse.json({ creative: result });
   } catch (err) {
-    console.error("[meta/creatives] POST error:", err);
+    console.error(
+      `[meta/creatives] POST error for adAccountId=${adAccountId} pageId=${creative.object_story_spec.page_id} instagram_actor_id=${creative.instagram_actor_id ?? "none"}:`,
+      err
+    );
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
