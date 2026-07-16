@@ -33,6 +33,22 @@ const KNOWN_TEST_CAMPAIGN_IDS = [
 ];
 const KNOWN_TEST_AD_ACCOUNT_ID = "act_1549356156312143";
 
+function CopyButton({ getText }: { getText: () => string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        await navigator.clipboard.writeText(getText());
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      className="text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded"
+    >
+      {copied ? "Copied!" : "Copy"}
+    </button>
+  );
+}
+
 export default function MetaDebugPage() {
   const { accounts, isLoading: accountsLoading } = useMetaAdAccounts();
   const { pages, isLoading: pagesLoading } = useMetaAdLimits();
@@ -171,9 +187,14 @@ export default function MetaDebugPage() {
           {cleaningUp ? "Deleting…" : "Delete test campaigns"}
         </button>
         {cleanupResult && (
-          <pre className="bg-gray-900 border border-gray-700 rounded p-4 text-xs overflow-x-auto whitespace-pre-wrap mt-3">
-            {JSON.stringify(cleanupResult, null, 2)}
-          </pre>
+          <div className="mt-3">
+            <div className="flex justify-end mb-1">
+              <CopyButton getText={() => JSON.stringify(cleanupResult, null, 2)} />
+            </div>
+            <pre className="bg-gray-900 border border-gray-700 rounded p-4 text-xs overflow-x-auto whitespace-pre-wrap">
+              {JSON.stringify(cleanupResult, null, 2)}
+            </pre>
+          </div>
         )}
       </div>
 
@@ -198,9 +219,14 @@ export default function MetaDebugPage() {
           </button>
         </div>
         {inspectResult != null && (
-          <pre className="bg-gray-900 border border-gray-700 rounded p-4 text-xs overflow-x-auto whitespace-pre-wrap mt-3">
-            {JSON.stringify(inspectResult, null, 2)}
-          </pre>
+          <div className="mt-3">
+            <div className="flex justify-end mb-1">
+              <CopyButton getText={() => JSON.stringify(inspectResult, null, 2)} />
+            </div>
+            <pre className="bg-gray-900 border border-gray-700 rounded p-4 text-xs overflow-x-auto whitespace-pre-wrap">
+              {JSON.stringify(inspectResult, null, 2)}
+            </pre>
+          </div>
         )}
       </div>
 
@@ -211,6 +237,9 @@ export default function MetaDebugPage() {
           {report.cleanupHint && (
             <div className="text-yellow-400 text-sm mb-3">{report.cleanupHint}</div>
           )}
+          <div className="flex justify-end mb-1">
+            <CopyButton getText={() => JSON.stringify(report, null, 2)} />
+          </div>
           <pre className="bg-gray-900 border border-gray-700 rounded p-4 text-xs overflow-x-auto whitespace-pre-wrap">
             {JSON.stringify(report, null, 2)}
           </pre>
