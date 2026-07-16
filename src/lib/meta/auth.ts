@@ -12,6 +12,11 @@ export function buildMetaAuthUrl(state: string): string {
     state,
     scope: "ads_management,ads_read,business_management,pages_read_engagement",
     response_type: "code",
+    // Without this, Facebook silently reuses a user's prior grant and never
+    // actually prompts for newly-added scopes on reconnect (confirmed live
+    // 2026-07-16 — pages_read_engagement was added but a reconnect still
+    // 403'd with "does not have pages_read_engagement permissions").
+    auth_type: "rerequest",
   });
   return `${OAUTH_DIALOG}?${params.toString()}`;
 }
