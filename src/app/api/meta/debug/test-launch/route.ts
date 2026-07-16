@@ -5,7 +5,7 @@ import { createCampaign } from "@/lib/meta/campaigns";
 import { createAdSet } from "@/lib/meta/adsets";
 import { uploadImage, createAdCreative } from "@/lib/meta/creatives";
 import { createAd } from "@/lib/meta/ads";
-import { getOrCreatePageBackedInstagramAccount } from "@/lib/meta/business-pages";
+import { getOrCreatePageBackedInstagramAccount, isInstagramActorUsableByAdAccount } from "@/lib/meta/business-pages";
 import type {
   MetaCampaignPayload,
   MetaAdSetPayload,
@@ -136,7 +136,17 @@ export async function POST(request: NextRequest) {
   let instagramActorId: string | undefined;
   try {
     instagramActorId = await getOrCreatePageBackedInstagramAccount(pageId);
-    steps.instagramActor = { ok: true, id: instagramActorId ?? null };
+    if (instagramActorId) {
+      const usable = await isInstagramActorUsableByAdAccount(adAccountId, instagramActorId, token);
+      if (!usable) {
+        steps.instagramActor = { ok: true, id: instagramActorId, usableByThisAdAccount: false, omittedFromCreative: true };
+        instagramActorId = undefined;
+      } else {
+        steps.instagramActor = { ok: true, id: instagramActorId, usableByThisAdAccount: true };
+      }
+    } else {
+      steps.instagramActor = { ok: true, id: null };
+    }
   } catch (err) {
     steps.instagramActor = { ok: false, error: err instanceof Error ? err.message : String(err) };
   }

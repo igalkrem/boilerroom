@@ -39,6 +39,28 @@ export async function getOrCreatePageBackedInstagramAccount(
   return created.id;
 }
 
+/**
+ * A page-backed Instagram account is only usable as `instagram_actor_id` by ad
+ * accounts whose Business Manager the page is actually owned by/shared with —
+ * creating a PBIA does not make it globally usable. Confirmed live 2026-07-16:
+ * an ad account whose business had zero entries in this exact list still 400'd
+ * with "Param instagram_actor_id must be a valid Instagram account id" for a
+ * PBIA belonging to a page owned by a different business. Must be checked per
+ * (adAccountId, instagramActorId) pair before sending it on a creative.
+ */
+export async function isInstagramActorUsableByAdAccount(
+  adAccountId: string,
+  instagramActorId: string,
+  token?: string
+): Promise<boolean> {
+  const result = await metaFetch<{ data?: { id: string }[] }>(
+    `/act_${adAccountId.replace("act_", "")}/instagram_accounts?fields=id`,
+    {},
+    token
+  );
+  return (result.data ?? []).some((a) => a.id === instagramActorId);
+}
+
 export interface BusinessPageInfo {
   name?: string;
   businessName?: string;

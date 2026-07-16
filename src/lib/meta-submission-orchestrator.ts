@@ -276,7 +276,9 @@ export async function runMetaSubmission(
       instagramActorId = instagramActorIdByPage.get(creative.pageId);
     } else {
       try {
-        const res = await fetch(`/api/meta/media?pageId=${encodeURIComponent(creative.pageId)}`);
+        const res = await fetch(
+          `/api/meta/media?pageId=${encodeURIComponent(creative.pageId)}&adAccountId=${encodeURIComponent(adAccountId)}`
+        );
         const data = await res.json();
         instagramActorId = data.instagramActorId ?? undefined;
       } catch {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { uploadImage, uploadVideo, pollVideoStatus, getVideoThumbnailUrl } from "@/lib/meta/creatives";
-import { getOrCreatePageBackedInstagramAccount } from "@/lib/meta/business-pages";
+import { getOrCreatePageBackedInstagramAccount, isInstagramActorUsableByAdAccount } from "@/lib/meta/business-pages";
 import { getCachedInstagramActorId, setCachedInstagramActorId } from "@/lib/meta/instagram-actor-cache";
 import { getSession, isSessionValid, isMetaConnected, isMetaAdAccountAllowed } from "@/lib/session";
 import { z } from "zod";
@@ -16,17 +16,34 @@ export async function GET(request: NextRequest) {
 
   const videoId = request.nextUrl.searchParams.get("videoId");
   const pageId = request.nextUrl.searchParams.get("pageId");
+  const adAccountId = request.nextUrl.searchParams.get("adAccountId");
 
   if (pageId) {
     try {
-      const cached = await getCachedInstagramActorId(pageId);
-      if (cached) {
-        return NextResponse.json({ instagramActorId: cached });
+      let instagramActorId = await getCachedInstagramActorId(pageId);
+      if (!instagramActorId) {
+        instagramActorId = await getOrCreatePageBackedInstagramAccount(pageId);
+        if (instagramActorId) {
+          await setCachedInstagramActorId(pageId, instagramActorId);
+        }
       }
-      const instagramActorId = await getOrCreatePageBackedInstagramAccount(pageId);
-      if (instagramActorId) {
-        await setCachedInstagramActorId(pageId, instagramActorId);
+
+      // A page-backed IG account is only usable by ad accounts sharing the
+      // page's Business Manager — confirmed live 2026-07-16 (Meta rejects it
+      // outright for an unrelated ad account, "Param instagram_actor_id must
+      // be a valid Instagram account id"). Verify against THIS ad account
+      // before handing it back; if unusable, fall through the same non-fatal
+      // "no Instagram identity" path as a failed/missing PBIA.
+      if (instagramActorId && adAccountId) {
+        try {
+          const usable = await isInstagramActorUsableByAdAccount(adAccountId, instagramActorId);
+          if (!usable) instagramActorId = undefined;
+        } catch (err) {
+          console.error("[meta/media] instagram actor usability check failed:", err);
+          instagramActorId = undefined;
+        }
       }
+
       return NextResponse.json({ instagramActorId: instagramActorId ?? null });
     } catch (err) {
       console.error("[meta/media] GET page-backed IG account error:", err);
