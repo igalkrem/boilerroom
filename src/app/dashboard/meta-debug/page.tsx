@@ -21,6 +21,18 @@ interface TestLaunchReport {
   detail?: string;
 }
 
+// Campaign IDs created while debugging the instagram_actor_id issue on
+// act_1549356156312143 — all PAUSED, named "ZZZ_DEBUG_TEST*". Remove this
+// list (and the button using it) once cleaned up.
+const KNOWN_TEST_CAMPAIGN_IDS = [
+  "120252843390680745",
+  "120252843474800745",
+  "120252843750620745",
+  "120252846224570745",
+  "120252846396230745",
+];
+const KNOWN_TEST_AD_ACCOUNT_ID = "act_1549356156312143";
+
 export default function MetaDebugPage() {
   const { accounts, isLoading: accountsLoading } = useMetaAdAccounts();
   const { pages, isLoading: pagesLoading } = useMetaAdLimits();
@@ -29,6 +41,26 @@ export default function MetaDebugPage() {
   const [running, setRunning] = useState(false);
   const [report, setReport] = useState<TestLaunchReport | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [cleaningUp, setCleaningUp] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState<Record<string, { ok: boolean; error?: string }> | null>(null);
+
+  const cleanup = async () => {
+    setCleaningUp(true);
+    setCleanupResult(null);
+    try {
+      const res = await fetch("/api/meta/debug/test-launch", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adAccountId: KNOWN_TEST_AD_ACCOUNT_ID, campaignIds: KNOWN_TEST_CAMPAIGN_IDS }),
+      });
+      const data = await res.json();
+      setCleanupResult(data.results ?? { _error: { ok: false, error: data.error ?? "failed" } });
+    } catch (e) {
+      setCleanupResult({ _error: { ok: false, error: e instanceof Error ? e.message : String(e) } });
+    } finally {
+      setCleaningUp(false);
+    }
+  };
 
   const run = async () => {
     if (!adAccountId || !pageId) {
@@ -106,6 +138,25 @@ export default function MetaDebugPage() {
         >
           {running ? "Running…" : "Run Test Launch"}
         </button>
+      </div>
+
+      <div className="mb-6 pt-4 border-t border-gray-700">
+        <p className="text-sm text-gray-400 mb-2">
+          Delete the {KNOWN_TEST_CAMPAIGN_IDS.length} known ZZZ_DEBUG_TEST* campaigns from this debugging session
+          ({KNOWN_TEST_AD_ACCOUNT_ID}).
+        </p>
+        <button
+          onClick={cleanup}
+          disabled={cleaningUp}
+          className="bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white px-4 py-2 rounded"
+        >
+          {cleaningUp ? "Deleting…" : "Delete test campaigns"}
+        </button>
+        {cleanupResult && (
+          <pre className="bg-gray-900 border border-gray-700 rounded p-4 text-xs overflow-x-auto whitespace-pre-wrap mt-3">
+            {JSON.stringify(cleanupResult, null, 2)}
+          </pre>
+        )}
       </div>
 
       {err && <div className="text-red-400 mb-4">{err}</div>}

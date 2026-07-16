@@ -250,3 +250,59 @@ export async function POST(request: NextRequest) {
     cleanupHint: `Everything created is PAUSED and named "ZZZ_DEBUG_TEST*" — delete campaign ${campaignId} in Ads Manager when done.`,
   });
 }
+
+// DELETE {adAccountId, campaignIds: string[]} — removes throwaway PAUSED test
+// campaigns created by this route. Same session-gating as the rest of this
+// file; the caller's own token is used, never a stored/DB one.
+export async function DELETE(request: NextRequest) {
+  const session = await getSession();
+  if (!isSessionValid(session)) {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+  }
+  if (!isMetaConnected(session)) {
+    return NextResponse.json({ error: "meta_not_connected" }, { status: 403 });
+  }
+
+  const body = await request.json().catch(() => null);
+  const parsed = z
+    .object({ adAccountId: z.string().min(1), campaignIds: z.array(z.string().min(1)).min(1) })
+    .safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
+  }
+  const { adAccountId, campaignIds } = parsed.data;
+
+  if (!isMetaAdAccountAllowed(session, adAccountId)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const token = await getValidMetaToken();
+  const results: Record<string, { ok: boolean; error?: string }> = {};
+
+  for (const campaignId of campaignIds) {
+    try {
+      // IDOR guard: fetch the campaign first and confirm it belongs to the
+      // requested (allowed) ad account before deleting anything.
+      const campaign = await metaFetch<{ id: string; account_id?: string; name?: string }>(
+        `/${campaignId}?fields=id,account_id,name`,
+        {},
+        token
+      );
+      const bareAccountId = adAccountId.replace("act_", "");
+      if (campaign.account_id !== bareAccountId) {
+        results[campaignId] = { ok: false, error: "campaign does not belong to this ad account" };
+        continue;
+      }
+      if (!campaign.name?.startsWith("ZZZ_DEBUG_TEST")) {
+        results[campaignId] = { ok: false, error: "refusing to delete a campaign not named ZZZ_DEBUG_TEST*" };
+        continue;
+      }
+      await metaFetch(`/${campaignId}`, { method: "DELETE" }, token);
+      results[campaignId] = { ok: true };
+    } catch (err) {
+      results[campaignId] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  return NextResponse.json({ results });
+}
