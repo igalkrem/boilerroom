@@ -99,6 +99,7 @@ export interface MetaAdSetPayload {
   promoted_object?: MetaPromotedObject;
   start_time?: string; // ISO 8601
   end_time?: string;
+  is_dynamic_creative?: boolean; // required true for asset_feed_spec (Flexible format)
 }
 
 export interface MetaAdSet extends MetaAdSetPayload {

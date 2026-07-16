@@ -165,6 +165,7 @@ export async function POST(request: NextRequest) {
         : {}),
       attribution_spec: [{ event_type: "CLICK_THROUGH", window_days: 1 }],
       daily_budget: 500,
+      is_dynamic_creative: true,
     };
     steps.adSetPayloadSent = adSetPayload;
     const result = await createAdSet(adAccountId, adSetPayload, token);
