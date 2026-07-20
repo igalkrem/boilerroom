@@ -238,6 +238,18 @@ export async function runMetaSubmission(
   // share the same Facebook Page.
   const instagramActorIdByPage = new Map<string, string | undefined>();
 
+  // First pass: resolve each media item's URL/thumbnail/Instagram actor, same
+  // as before — collected here instead of building a creative/ad immediately,
+  // so a 2+ item creative group can be bundled into one ad below.
+  interface ResolvedItem {
+    creative: MetaSynthesisResult["creatives"][number];
+    media: { type: "IMAGE" | "VIDEO"; imageHash?: string; videoId?: string };
+    webViewUrl: string;
+    videoThumbnailUrl?: string;
+    instagramActorId?: string;
+  }
+  const resolved: ResolvedItem[] = [];
+
   for (const creative of synthesis.creatives) {
     const media = mediaMap.get(creative.id);
     if (!media) {
@@ -288,30 +300,48 @@ export async function runMetaSubmission(
       instagramActorIdByPage.set(creative.pageId, instagramActorId);
     }
 
+    resolved.push({ creative, media, webViewUrl, videoThumbnailUrl, instagramActorId });
+  }
+
+  // synthesizeMetaCampaign() suffixes each item in a multi-asset creative
+  // group with " [n]" (see synthesize-campaign.ts) — strip it so a bundled
+  // group-ad below is named after the group, not its first item.
+  const stripIndexSuffix = (name: string) => name.replace(/ \[\d+\]$/, "");
+
+  if (resolved.length > 1) {
+    // 2+ media items in this creative group: launch as ONE Flexible ad whose
+    // creative_asset_groups_spec bundles every item's asset into a single
+    // group, instead of one ad per item — this is the Meta half of the
+    // per-platform group behavior (Snap keeps one ad per media item under the
+    // same ad squad, unchanged — see submission-orchestrator.ts). Push a
+    // single results.creatives/results.ads entry for the whole group so
+    // build-log/UI counts reflect the true "1 ad created," not one per item.
+    const seed = resolved[0];
+    const groupName = resolveChannel(stripIndexSuffix(seed.creative.name));
+
     const creativePayload: MetaAdCreativePayload = {
-      name: resolveChannel(creative.name),
-      ...(instagramActorId ? { instagram_actor_id: instagramActorId } : {}),
-      degrees_of_freedom_spec: buildAdvantagePlusCreativeFeatures(media.type),
+      name: groupName,
+      ...(seed.instagramActorId ? { instagram_actor_id: seed.instagramActorId } : {}),
+      degrees_of_freedom_spec: buildAdvantagePlusCreativeFeatures(seed.media.type),
       object_story_spec: {
-        page_id: creative.pageId,
-        ...(media.type === "IMAGE"
+        page_id: seed.creative.pageId,
+        ...(seed.media.type === "IMAGE"
           ? {
               link_data: {
-                link: webViewUrl,
-                image_hash: media.imageHash!,
-                name: creative.headline,
-                message: creative.headline,
-                // Fixed CTA — no per-preset/article configuration.
-                call_to_action: { type: "LEARN_MORE", value: { link: webViewUrl } },
+                link: seed.webViewUrl,
+                image_hash: seed.media.imageHash!,
+                name: seed.creative.headline,
+                message: seed.creative.headline,
+                call_to_action: { type: "LEARN_MORE", value: { link: seed.webViewUrl } },
               },
             }
           : {
               video_data: {
-                video_id: media.videoId!,
-                ...(videoThumbnailUrl ? { image_url: videoThumbnailUrl } : {}),
-                title: creative.headline,
-                message: creative.headline,
-                call_to_action: { type: "LEARN_MORE", value: { link: webViewUrl } },
+                video_id: seed.media.videoId!,
+                ...(seed.videoThumbnailUrl ? { image_url: seed.videoThumbnailUrl } : {}),
+                title: seed.creative.headline,
+                message: seed.creative.headline,
+                call_to_action: { type: "LEARN_MORE", value: { link: seed.webViewUrl } },
               },
             }),
       },
@@ -327,43 +357,36 @@ export async function runMetaSubmission(
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "creative creation failed");
       creativeId = data.creative.id;
-      results.creatives.push({ clientId: creative.id, snapId: "", platformId: creativeId, name: creative.name });
+      results.creatives.push({ clientId: seed.creative.id, snapId: "", platformId: creativeId, name: groupName });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      results.creatives.push({ clientId: creative.id, snapId: "", name: creative.name, error: msg });
-      continue;
+      results.creatives.push({ clientId: seed.creative.id, snapId: "", name: groupName, error: msg });
+      onStage("done");
+      return results;
     }
 
-    // Resolve {{ad.id}} placeholder — will be the ad entity ID after creation
-    // For Meta, ad.id can't be known before creation, so we leave it if present
     onStage("ads");
 
-    // "Format: Flexible" is driven by this ad-level field, not by anything on
-    // the creative — confirmed live 2026-07-20 by capturing Ads Manager's own
-    // Relay preloader payload for a known "Flexible" ad and reproducing it via
-    // a throwaway test ad. Reuses the same single image/video already used for
-    // this ad's object_story_spec above (one group is enough to trigger the
-    // label — Meta doesn't require multiple assets in the group).
+    const images = resolved.filter((r) => r.media.type === "IMAGE").map((r) => ({ hash: r.media.imageHash! }));
+    const videos = resolved
+      .filter((r) => r.media.type === "VIDEO")
+      .map((r) => ({
+        video_id: r.media.videoId!,
+        ...(r.videoThumbnailUrl ? { thumbnail_url: r.videoThumbnailUrl } : {}),
+      }));
+
     const adPayload: MetaAdPayload = {
-      name: resolveChannel(creative.name),
+      name: groupName,
       adset_id: adSetId,
       creative: { creative_id: creativeId },
-      status: creative.adStatus,
+      status: seed.creative.adStatus,
       creative_asset_groups_spec: {
         origins: ["CAG"],
         groups: [
           {
-            call_to_action: { type: "LEARN_MORE", value: { link: webViewUrl } },
-            ...(media.type === "IMAGE"
-              ? { images: [{ hash: media.imageHash! }] }
-              : {
-                  videos: [
-                    {
-                      video_id: media.videoId!,
-                      ...(videoThumbnailUrl ? { thumbnail_url: videoThumbnailUrl } : {}),
-                    },
-                  ],
-                }),
+            call_to_action: { type: "LEARN_MORE", value: { link: seed.webViewUrl } },
+            ...(images.length ? { images } : {}),
+            ...(videos.length ? { videos } : {}),
           },
         ],
       },
@@ -377,10 +400,108 @@ export async function runMetaSubmission(
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "ad creation failed");
-      results.ads.push({ clientId: creative.id, snapId: "", platformId: data.ad.id, name: creative.name });
+      results.ads.push({ clientId: seed.creative.id, snapId: "", platformId: data.ad.id, name: groupName });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      results.ads.push({ clientId: creative.id, snapId: "", name: creative.name, error: msg });
+      results.ads.push({ clientId: seed.creative.id, snapId: "", name: groupName, error: msg });
+    }
+  } else {
+    // 0 or 1 media items — unchanged single-creative/single-ad path.
+    for (const { creative, media, webViewUrl, videoThumbnailUrl, instagramActorId } of resolved) {
+      const creativePayload: MetaAdCreativePayload = {
+        name: resolveChannel(creative.name),
+        ...(instagramActorId ? { instagram_actor_id: instagramActorId } : {}),
+        degrees_of_freedom_spec: buildAdvantagePlusCreativeFeatures(media.type),
+        object_story_spec: {
+          page_id: creative.pageId,
+          ...(media.type === "IMAGE"
+            ? {
+                link_data: {
+                  link: webViewUrl,
+                  image_hash: media.imageHash!,
+                  name: creative.headline,
+                  message: creative.headline,
+                  // Fixed CTA — no per-preset/article configuration.
+                  call_to_action: { type: "LEARN_MORE", value: { link: webViewUrl } },
+                },
+              }
+            : {
+                video_data: {
+                  video_id: media.videoId!,
+                  ...(videoThumbnailUrl ? { image_url: videoThumbnailUrl } : {}),
+                  title: creative.headline,
+                  message: creative.headline,
+                  call_to_action: { type: "LEARN_MORE", value: { link: webViewUrl } },
+                },
+              }),
+        },
+      };
+
+      let creativeId = "";
+      try {
+        const res = await fetch("/api/meta/creatives", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ adAccountId, creative: creativePayload }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "creative creation failed");
+        creativeId = data.creative.id;
+        results.creatives.push({ clientId: creative.id, snapId: "", platformId: creativeId, name: creative.name });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        results.creatives.push({ clientId: creative.id, snapId: "", name: creative.name, error: msg });
+        continue;
+      }
+
+      // Resolve {{ad.id}} placeholder — will be the ad entity ID after creation
+      // For Meta, ad.id can't be known before creation, so we leave it if present
+      onStage("ads");
+
+      // "Format: Flexible" is driven by this ad-level field, not by anything on
+      // the creative — confirmed live 2026-07-20 by capturing Ads Manager's own
+      // Relay preloader payload for a known "Flexible" ad and reproducing it via
+      // a throwaway test ad. Reuses the same single image/video already used for
+      // this ad's object_story_spec above (one group is enough to trigger the
+      // label — Meta doesn't require multiple assets in the group).
+      const adPayload: MetaAdPayload = {
+        name: resolveChannel(creative.name),
+        adset_id: adSetId,
+        creative: { creative_id: creativeId },
+        status: creative.adStatus,
+        creative_asset_groups_spec: {
+          origins: ["CAG"],
+          groups: [
+            {
+              call_to_action: { type: "LEARN_MORE", value: { link: webViewUrl } },
+              ...(media.type === "IMAGE"
+                ? { images: [{ hash: media.imageHash! }] }
+                : {
+                    videos: [
+                      {
+                        video_id: media.videoId!,
+                        ...(videoThumbnailUrl ? { thumbnail_url: videoThumbnailUrl } : {}),
+                      },
+                    ],
+                  }),
+            },
+          ],
+        },
+      };
+
+      try {
+        const res = await fetch("/api/meta/ads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ adAccountId, ad: adPayload }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "ad creation failed");
+        results.ads.push({ clientId: creative.id, snapId: "", platformId: data.ad.id, name: creative.name });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        results.ads.push({ clientId: creative.id, snapId: "", name: creative.name, error: msg });
+      }
     }
   }
 
