@@ -330,8 +330,8 @@ export async function runMetaSubmission(
               link_data: {
                 link: seed.webViewUrl,
                 image_hash: seed.media.imageHash!,
-                name: seed.creative.headline,
-                message: seed.creative.headline,
+                name: seed.creative.metaHeadline || seed.creative.headline,
+                message: seed.creative.metaPrimaryText || seed.creative.headline,
                 call_to_action: { type: "LEARN_MORE", value: { link: seed.webViewUrl } },
               },
             }
@@ -339,8 +339,8 @@ export async function runMetaSubmission(
               video_data: {
                 video_id: seed.media.videoId!,
                 ...(seed.videoThumbnailUrl ? { image_url: seed.videoThumbnailUrl } : {}),
-                title: seed.creative.headline,
-                message: seed.creative.headline,
+                title: seed.creative.metaHeadline || seed.creative.headline,
+                message: seed.creative.metaPrimaryText || seed.creative.headline,
                 call_to_action: { type: "LEARN_MORE", value: { link: seed.webViewUrl } },
               },
             }),
@@ -419,8 +419,8 @@ export async function runMetaSubmission(
                 link_data: {
                   link: webViewUrl,
                   image_hash: media.imageHash!,
-                  name: creative.headline,
-                  message: creative.headline,
+                  name: creative.metaHeadline || creative.headline,
+                  message: creative.metaPrimaryText || creative.headline,
                   // Fixed CTA — no per-preset/article configuration.
                   call_to_action: { type: "LEARN_MORE", value: { link: webViewUrl } },
                 },
@@ -429,8 +429,8 @@ export async function runMetaSubmission(
                 video_data: {
                   video_id: media.videoId!,
                   ...(videoThumbnailUrl ? { image_url: videoThumbnailUrl } : {}),
-                  title: creative.headline,
-                  message: creative.headline,
+                  title: creative.metaHeadline || creative.headline,
+                  message: creative.metaPrimaryText || creative.headline,
                   call_to_action: { type: "LEARN_MORE", value: { link: webViewUrl } },
                 },
               }),

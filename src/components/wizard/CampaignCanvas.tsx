@@ -498,11 +498,8 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         }
 
         const articleForDefault = articles.find((a) => a.id === articleId);
-        const dh =
-          articleForDefault?.defaultHeadlineIndex !== undefined
-            ? articleForDefault.allowedHeadlines[articleForDefault.defaultHeadlineIndex]
-            : undefined;
-        s.toggleProviderToArticle(providerId, articleId, dh?.text, dh?.rac);
+        const dh = articleForDefault?.allowedHeadlines[0];
+        s.toggleProviderToArticle(providerId, articleId, dh?.text, dh?.rac, dh?.metaHeadline, dh?.metaPrimaryText);
 
       } else if (srcType === "article" && tgtType === "account") {
         const articleId = source.replace(/^article-/, "");
@@ -948,10 +945,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
                   ) : (
                     providerArticles.map((article) => {
                       const isSelected = selectedIds.has(article.id);
-                      const dh =
-                        article.defaultHeadlineIndex !== undefined
-                          ? article.allowedHeadlines[article.defaultHeadlineIndex]
-                          : undefined;
+                      const dh = article.allowedHeadlines[0];
                       return (
                         <button
                           key={article.id}
@@ -961,7 +955,9 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
                               articlePickerProviderId,
                               article.id,
                               dh?.text,
-                              dh?.rac
+                              dh?.rac,
+                              dh?.metaHeadline,
+                              dh?.metaPrimaryText
                             )
                           }
                           className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${

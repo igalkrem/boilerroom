@@ -66,8 +66,22 @@ interface CanvasStore {
   connectRowToProvider: (rowId: string, feedProviderId: string) => void;
   disconnectRowFromProvider: (rowId: string, feedProviderId: string) => void;
 
-  toggleProviderToArticle: (feedProviderId: string, articleId: string, defaultHeadline?: string, defaultHeadlineRac?: string) => void;
-  setArticleContent: (feedProviderId: string, articleId: string, headline: string, headlineRac?: string) => void;
+  toggleProviderToArticle: (
+    feedProviderId: string,
+    articleId: string,
+    defaultHeadline?: string,
+    defaultHeadlineRac?: string,
+    defaultMetaHeadline?: string,
+    defaultMetaPrimaryText?: string
+  ) => void;
+  setArticleContent: (
+    feedProviderId: string,
+    articleId: string,
+    headline: string,
+    headlineRac?: string,
+    metaHeadline?: string,
+    metaPrimaryText?: string
+  ) => void;
   toggleArticleToPreset: (articleId: string, presetId: string) => void;
   setDuplications: (articleId: string, presetId: string, count: number) => void;
 
@@ -247,7 +261,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       return { edges };
     }),
 
-  toggleProviderToArticle: (feedProviderId, articleId, defaultHeadline?, defaultHeadlineRac?) =>
+  toggleProviderToArticle: (feedProviderId, articleId, defaultHeadline?, defaultHeadlineRac?, defaultMetaHeadline?, defaultMetaPrimaryText?) =>
     set((s) => {
       const exists = s.edges.providerToArticle.some(
         (e) => e.feedProviderId === feedProviderId && e.articleId === articleId
@@ -258,7 +272,14 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
             ...s.edges,
             providerToArticle: [
               ...s.edges.providerToArticle,
-              { feedProviderId, articleId, headline: defaultHeadline ?? "", headlineRac: defaultHeadlineRac ?? "" },
+              {
+                feedProviderId,
+                articleId,
+                headline: defaultHeadline ?? "",
+                headlineRac: defaultHeadlineRac ?? "",
+                metaHeadline: defaultMetaHeadline ?? "",
+                metaPrimaryText: defaultMetaPrimaryText ?? "",
+              },
             ],
           },
         };
@@ -270,13 +291,19 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       return { edges: { ...s.edges, providerToArticle: newP2A, articleToPreset: newA2P } };
     }),
 
-  setArticleContent: (feedProviderId, articleId, headline, headlineRac) =>
+  setArticleContent: (feedProviderId, articleId, headline, headlineRac, metaHeadline, metaPrimaryText) =>
     set((s) => ({
       edges: {
         ...s.edges,
         providerToArticle: s.edges.providerToArticle.map((e) =>
           e.feedProviderId === feedProviderId && e.articleId === articleId
-            ? { ...e, headline, ...(headlineRac !== undefined ? { headlineRac } : {}) }
+            ? {
+                ...e,
+                headline,
+                ...(headlineRac !== undefined ? { headlineRac } : {}),
+                ...(metaHeadline !== undefined ? { metaHeadline } : {}),
+                ...(metaPrimaryText !== undefined ? { metaPrimaryText } : {}),
+              }
             : e
         ),
       },
@@ -378,7 +405,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
           (e) => e.feedProviderId === feedProviderId
         );
 
-        for (const { articleId, headline, headlineRac } of articleEdges) {
+        for (const { articleId, headline, headlineRac, metaHeadline, metaPrimaryText } of articleEdges) {
           const presetEdges = edges.articleToPreset.filter((e) => e.articleId === articleId);
           const eligibleAccounts = edges.articleToAdAccount
             .filter((e) => e.articleId === articleId)
@@ -398,6 +425,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
                   duplicationIndex: i,
                   headline,
                   headlineRac: headlineRac ?? "",
+                  metaHeadline: metaHeadline ?? "",
+                  metaPrimaryText: metaPrimaryText ?? "",
                   trafficSource: presetMap.get(presetId)?.trafficSource ?? "snap",
                 });
               }

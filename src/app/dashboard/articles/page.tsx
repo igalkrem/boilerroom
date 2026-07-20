@@ -268,11 +268,8 @@ export default function ArticlesPage() {
                       const color = isPaused ? "#6b7280" : (providerColorMap[article.feedProviderId] ?? "#94a3b8");
                       const isExpanded = expandedRows.has(article.id);
 
-                      // Headline preview: prefer default headline, fall back to first
-                      const previewHeadline =
-                        article.defaultHeadlineIndex !== undefined
-                          ? article.allowedHeadlines[article.defaultHeadlineIndex]?.text
-                          : article.allowedHeadlines[0]?.text;
+                      // Headline preview: first headline is always the default
+                      const previewHeadline = article.allowedHeadlines[0]?.text;
 
                       return (
                         <>
@@ -438,15 +435,25 @@ export default function ArticlesPage() {
                               <td colSpan={TOTAL_COLS} className="px-8 py-3">
                                 <div className="space-y-1.5">
                                   {article.allowedHeadlines.map((h, idx) => (
-                                    <div key={idx} className="flex items-center gap-3 text-xs">
+                                    <div key={idx} className="flex items-center gap-3 text-xs flex-wrap">
                                       <span className="text-gray-300 dark:text-gray-600 w-4 text-right shrink-0 font-mono">
                                         {idx + 1}.
                                       </span>
-                                      <span className="font-mono text-gray-800 dark:text-gray-200 flex-1">{h.text}</span>
+                                      <span className="font-mono text-gray-800 dark:text-gray-200 flex-1 min-w-[8rem]">{h.text}</span>
                                       {h.rac && (
                                         <span className="text-gray-400 shrink-0">
                                           rac:{" "}
                                           <span className="text-gray-600 font-medium">{h.rac}</span>
+                                        </span>
+                                      )}
+                                      {(h.metaHeadline || h.metaPrimaryText) && (
+                                        <span className="text-blue-400 shrink-0">
+                                          meta:{" "}
+                                          <span className="text-blue-600 dark:text-blue-300 font-medium">
+                                            {h.metaHeadline}
+                                            {h.metaHeadline && h.metaPrimaryText ? " — " : ""}
+                                            {h.metaPrimaryText}
+                                          </span>
                                         </span>
                                       )}
                                     </div>

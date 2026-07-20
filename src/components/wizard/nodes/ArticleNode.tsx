@@ -84,8 +84,15 @@ export function ArticleNode({ id, data }: {
                 value={ae.headline}
                 onChange={(e) => {
                   const val = e.target.value;
-                  const rac = data.article.allowedHeadlines.find((h) => h.text === val)?.rac ?? "";
-                  store.setArticleContent(ae.feedProviderId, data.article.id, val, rac);
+                  const match = data.article.allowedHeadlines.find((h) => h.text === val);
+                  store.setArticleContent(
+                    ae.feedProviderId,
+                    data.article.id,
+                    val,
+                    match?.rac ?? "",
+                    match?.metaHeadline ?? "",
+                    match?.metaPrimaryText ?? ""
+                  );
                 }}
                 className="w-full text-xs rounded-lg px-2 py-1 focus:outline-none bg-white/5 border border-white/10 text-gray-300"
               >

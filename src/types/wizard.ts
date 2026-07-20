@@ -147,6 +147,8 @@ export interface CanvasEdges {
     articleId: string;
     headline: string;
     headlineRac?: string;
+    metaHeadline?: string;
+    metaPrimaryText?: string;
   }>;
   articleToPreset: Array<{
     articleId: string;
@@ -165,5 +167,7 @@ export interface CampaignBuildItem {
   duplicationIndex: number; // 0-based within the duplication count
   headline: string;
   headlineRac: string;
+  metaHeadline: string;
+  metaPrimaryText: string;
   trafficSource: "snap" | "facebook";
 }

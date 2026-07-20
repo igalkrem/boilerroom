@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -45,6 +45,8 @@ const articleFormSchema = z.object({
     z.object({
       text: z.string().max(34, "Max 34 characters"),
       rac: z.string().max(100),
+      metaHeadline: z.string().max(200),
+      metaPrimaryText: z.string().max(600),
     })
   ),
 });
@@ -58,13 +60,6 @@ interface ArticleFormProps {
 export function ArticleForm({ article }: ArticleFormProps) {
   const router = useRouter();
   const [providers, setProviders] = useState<FeedProvider[]>([]);
-  const [defaultHeadlineIndex, setDefaultHeadlineIndex] = useState<number | undefined>(
-    article?.defaultHeadlineIndex
-  );
-
-  const toggleDefault = useCallback((i: number) => {
-    setDefaultHeadlineIndex((prev) => (prev === i ? undefined : i));
-  }, []);
 
   useEffect(() => {
     setProviders(loadFeedProviders());
@@ -103,7 +98,12 @@ export function ArticleForm({ article }: ArticleFormProps) {
           domain: article.domain ?? "",
           locale: article.locale ?? "",
           trafficSources: article.trafficSources ?? ["Snap", "Meta"],
-          allowedHeadlines: article.allowedHeadlines.map((h) => ({ text: h.text, rac: h.rac })),
+          allowedHeadlines: article.allowedHeadlines.map((h) => ({
+            text: h.text,
+            rac: h.rac,
+            metaHeadline: h.metaHeadline,
+            metaPrimaryText: h.metaPrimaryText,
+          })),
         }
       : { feedProviderId: "", slug: "", query: "", title: "", previewUrl: "", domain: "", locale: "", trafficSources: ["Snap", "Meta"], allowedHeadlines: [] },
   });
@@ -122,14 +122,7 @@ export function ArticleForm({ article }: ArticleFormProps) {
   ];
 
   const onSubmit = (data: ArticleFormValues) => {
-    // Build filtered list, tracking original indices to remap defaultHeadlineIndex
-    const filteredWithIdx = data.allowedHeadlines
-      .map((h, i) => ({ h, origIdx: i }))
-      .filter(({ h }) => h.text.trim().length > 0);
-    const savedDefaultIndex =
-      defaultHeadlineIndex !== undefined
-        ? filteredWithIdx.findIndex(({ origIdx }) => origIdx === defaultHeadlineIndex)
-        : -1;
+    const filteredHeadlines = data.allowedHeadlines.filter((h) => h.text.trim().length > 0);
 
     const saved: Article = {
       id: article?.id ?? uuid(),
@@ -142,8 +135,12 @@ export function ArticleForm({ article }: ArticleFormProps) {
       domain: data.domain || undefined,
       locale: data.locale || undefined,
       trafficSources: data.trafficSources,
-      allowedHeadlines: filteredWithIdx.map(({ h }) => ({ text: h.text.trim(), rac: h.rac.trim() })),
-      defaultHeadlineIndex: savedDefaultIndex >= 0 ? savedDefaultIndex : undefined,
+      allowedHeadlines: filteredHeadlines.map((h) => ({
+        text: h.text.trim(),
+        rac: h.rac.trim(),
+        metaHeadline: h.metaHeadline.trim(),
+        metaPrimaryText: h.metaPrimaryText.trim(),
+      })),
       createdAt: article?.createdAt ?? new Date().toISOString(),
     };
     upsertArticle(saved);
@@ -274,7 +271,7 @@ export function ArticleForm({ article }: ArticleFormProps) {
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => append({ text: "", rac: "" })}
+            onClick={() => append({ text: "", rac: "", metaHeadline: "", metaPrimaryText: "" })}
           >
             + Add Headline
           </Button>
@@ -285,20 +282,18 @@ export function ArticleForm({ article }: ArticleFormProps) {
             No headlines added — the headline field in the wizard will accept any text.
           </p>
         ) : (
-          <div className="space-y-3 max-w-md">
+          <div className="space-y-4 max-w-lg">
             {fields.map((field, i) => (
               <div key={field.id} className="space-y-1">
-                {/* Headline text row with default star + remove button */}
+                {/* Headline text row with default marker (index 0) + remove button */}
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    title={defaultHeadlineIndex === i ? "Remove default" : "Set as default"}
-                    onClick={() => toggleDefault(i)}
-                    className="shrink-0 text-lg leading-none focus:outline-none"
-                    style={{ color: defaultHeadlineIndex === i ? "#f59e0b" : "#d1d5db" }}
+                  <span
+                    title={i === 0 ? "Default headline — auto-selected in the wizard" : undefined}
+                    className="shrink-0 text-lg leading-none"
+                    style={{ color: i === 0 ? "#f59e0b" : "#d1d5db" }}
                   >
                     ★
-                  </button>
+                  </span>
                   <input
                     placeholder="Enter headline (max 34 chars)"
                     maxLength={34}
@@ -312,12 +307,7 @@ export function ArticleForm({ article }: ArticleFormProps) {
                     variant="ghost"
                     size="sm"
                     className="text-red-400 hover:text-red-600 shrink-0"
-                    onClick={() => {
-                      if (defaultHeadlineIndex === i) setDefaultHeadlineIndex(undefined);
-                      else if (defaultHeadlineIndex !== undefined && defaultHeadlineIndex > i)
-                        setDefaultHeadlineIndex(defaultHeadlineIndex - 1);
-                      remove(i);
-                    }}
+                    onClick={() => remove(i)}
                   >
                     ✕
                   </Button>
@@ -332,11 +322,26 @@ export function ArticleForm({ article }: ArticleFormProps) {
                   {...register(`allowedHeadlines.${i}.rac`)}
                   className="ml-7 w-[calc(100%-1.75rem)] px-3 py-1.5 text-xs text-gray-400 placeholder-gray-300 border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-300 focus:border-cyan-300"
                 />
+                {/* Meta section — this headline's Meta-specific copy, subordinate to the Snap headline above */}
+                <div className="ml-7 w-[calc(100%-1.75rem)] space-y-1 rounded-lg border border-blue-100 dark:border-blue-900/40 bg-blue-50/40 dark:bg-blue-900/10 p-2">
+                  <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider">Meta</p>
+                  <input
+                    placeholder="Meta headline"
+                    {...register(`allowedHeadlines.${i}.metaHeadline`)}
+                    className="w-full px-2 py-1.5 text-xs border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 placeholder-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-300 focus:border-cyan-300"
+                  />
+                  <textarea
+                    placeholder="Meta primary text"
+                    rows={2}
+                    {...register(`allowedHeadlines.${i}.metaPrimaryText`)}
+                    className="w-full px-2 py-1.5 text-xs border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 placeholder-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-300 focus:border-cyan-300 resize-none"
+                  />
+                </div>
               </div>
             ))}
             {fields.length > 0 && (
               <p className="text-xs text-gray-400">
-                ★ = default headline — auto-selected in the wizard.
+                ★ = default headline — the first headline is always used as the default in the wizard.
               </p>
             )}
           </div>

@@ -26,13 +26,14 @@ function upcast(raw: Record<string, unknown>): Article {
     locale: (raw.locale as string) ?? undefined,
     allowedHeadlines: ((raw.allowedHeadlines as unknown[]) ?? []).map((h) =>
       typeof h === "string"
-        ? { text: h, rac: "" }
+        ? { text: h, rac: "", metaHeadline: "", metaPrimaryText: "" }
         : {
             text: (h as Record<string, string>).text ?? "",
             rac: (h as Record<string, string>).rac ?? "",
+            metaHeadline: (h as Record<string, string>).metaHeadline ?? "",
+            metaPrimaryText: (h as Record<string, string>).metaPrimaryText ?? "",
           }
     ),
-    defaultHeadlineIndex: typeof raw.defaultHeadlineIndex === "number" ? raw.defaultHeadlineIndex : undefined,
     // Legacy articles predate this field — default to both platforms so
     // existing wiring (which had no restriction) keeps working unchanged.
     trafficSources:

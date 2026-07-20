@@ -233,6 +233,8 @@ export interface MetaSynthesisResult {
     pageId: string;
     webViewUrl: string;
     headline?: string;
+    metaHeadline?: string;
+    metaPrimaryText?: string;
     adStatus: "ACTIVE" | "PAUSED";
     siloAssetBlobUrl?: string;
     siloAssetMediaType?: "VIDEO" | "IMAGE";
@@ -337,6 +339,8 @@ export function synthesizeMetaCampaign(
         pageId,
         webViewUrl: urlTemplate,
         headline: item.headline,
+        metaHeadline: item.metaHeadline || item.headline,
+        metaPrimaryText: item.metaPrimaryText || item.headline,
         adStatus: preset.creativeDefaults?.adStatus ?? "PAUSED",
         siloAssetBlobUrl: asset.optimizedUrl ?? asset.originalUrl,
         siloAssetMediaType: asset.mediaType,
