@@ -243,11 +243,13 @@ export async function POST(request: NextRequest) {
   ];
 
   const adIds: string[] = [];
+  const imageHashes: Record<string, string> = {};
   for (const [label, pngBuf] of testImages) {
     let imageHash = "";
     try {
       const result = await uploadImage(adAccountId, pngBuf, `debug-test-${label}.png`, token);
       imageHash = result.hash;
+      imageHashes[label] = imageHash;
       steps[`imageUpload_${label}`] = { ok: true, hash: imageHash };
     } catch (err) {
       steps[`imageUpload_${label}`] = { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -297,11 +299,177 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Third test ad: reuse the reference account's own existing video/thumbnail
+  // (video_id 1790220378626220 / image_hash a388fcb08049e76c6137fd7a43609258,
+  // both taken from the reference "Flexible" ad's creative) with video_data +
+  // the VIDEO variant of degrees_of_freedom_spec — to test whether "Flexible"
+  // is gated on object_type being VIDEO rather than SHARE (both prior test
+  // ads, built from link_data/images, read back as object_type "SHARE" while
+  // the reference reads back as "VIDEO").
+  try {
+    const videoCreativePayload: MetaAdCreativePayload = {
+      name: "ZZZ_DEBUG_TEST creative video",
+      ...(instagramActorId ? { instagram_actor_id: instagramActorId } : {}),
+      degrees_of_freedom_spec: buildAdvantagePlusCreativeFeatures("VIDEO"),
+      object_story_spec: {
+        page_id: pageId,
+        video_data: {
+          video_id: "1790220378626220",
+          image_hash: "a388fcb08049e76c6137fd7a43609258",
+          title: "Debug test video",
+          message: "Debug test video",
+          call_to_action: { type: "LEARN_MORE", value: { link: "https://example.com/" } },
+        },
+      },
+    };
+    const creativeResult = await createAdCreative(adAccountId, videoCreativePayload, token);
+    steps.creative_video = { ok: true, id: creativeResult.id, payloadSent: videoCreativePayload };
+    try {
+      const adPayload: MetaAdPayload = {
+        name: "ZZZ_DEBUG_TEST ad video",
+        adset_id: adSetId,
+        creative: { creative_id: creativeResult.id },
+        status: "PAUSED",
+      };
+      const adResult = await createAd(adAccountId, adPayload, token);
+      adIds.push(adResult.id);
+      steps.ad_video = { ok: true, id: adResult.id };
+    } catch (err) {
+      steps.ad_video = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  } catch (err) {
+    steps.creative_video = { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+
+  // Fourth test ad: write test for creative_asset_groups_spec, discovered via
+  // a captured Relay preloader payload (BigPipe stream, operation
+  // adp_AdsManagerLiveDataAdgroupQueryPreloadingConfigNoSpecsQueryRelayPreloader)
+  // from the reference "Flexible" ad's own page load — it's a field on the AD
+  // node itself (sibling to `creative`), not the creative or the ad set (both
+  // of which were tried and ruled out earlier this session). Reference shape:
+  // { origins: ["CAG"], groups: [{ group_uuid, call_to_action, images: [],
+  // videos: [...] }] }. Reusing the two images already uploaded above as the
+  // group's asset pool, still pointing `creative` at a normal single-image
+  // creative (required field) to isolate whether this one extra top-level
+  // field is what flips the UI label.
+  if (imageHashes.red && imageHashes.green) {
+    let cagCreativeId = "";
+    try {
+      const cagCreativePayload: MetaAdCreativePayload = {
+        name: "ZZZ_DEBUG_TEST creative cag",
+        ...(instagramActorId ? { instagram_actor_id: instagramActorId } : {}),
+        degrees_of_freedom_spec: buildAdvantagePlusCreativeFeatures("IMAGE"),
+        object_story_spec: {
+          page_id: pageId,
+          link_data: {
+            link: "https://example.com/",
+            image_hash: imageHashes.red,
+            name: "Debug test cag",
+            message: "Debug test cag",
+            call_to_action: { type: "LEARN_MORE", value: { link: "https://example.com/" } },
+          },
+        },
+      };
+      const creativeResult = await createAdCreative(adAccountId, cagCreativePayload, token);
+      cagCreativeId = creativeResult.id;
+      steps.creative_cag = { ok: true, id: cagCreativeId, payloadSent: cagCreativePayload };
+    } catch (err) {
+      steps.creative_cag = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+
+    if (cagCreativeId) {
+      try {
+        const adPayload: MetaAdPayload = {
+          name: "ZZZ_DEBUG_TEST ad cag",
+          adset_id: adSetId,
+          creative: { creative_id: cagCreativeId },
+          status: "PAUSED",
+          creative_asset_groups_spec: {
+            origins: ["CAG"],
+            groups: [
+              {
+                call_to_action: { type: "LEARN_MORE", value: { link: "https://example.com/" } },
+                images: [{ hash: imageHashes.red }, { hash: imageHashes.green }],
+              },
+            ],
+          },
+        };
+        steps.ad_cag_payloadSent = adPayload;
+        const adResult = await createAd(adAccountId, adPayload, token);
+        adIds.push(adResult.id);
+        steps.ad_cag = { ok: true, id: adResult.id };
+      } catch (err) {
+        steps.ad_cag = { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+  }
+
+  // Auto-inspect: fetch back the test ads + creatives and the reference
+  // "Flexible" ad so we can compare fields side-by-side without a manual step.
+  // Broad creative field list to hunt for whatever drives the "Flexible" UI
+  // label, since object_story_spec + degrees_of_freedom_spec alone matched
+  // between reference and test but the label still didn't show — each extra
+  // group is its own isolated fetch so one invalid field name can't blank out
+  // the rest of the inspection.
+  const REFERENCE_AD_ID = "120251719284310745";
+  const CREATIVE_FIELDS_CORE =
+    "id,name,object_story_spec,asset_feed_spec,degrees_of_freedom_spec,instagram_actor_id,instagram_user_id,account_id,url_tags,authorization_category,categorization_criteria";
+  const CREATIVE_FIELDS_EXTRA =
+    "object_type,effective_object_story_id,platform_customizations,image_crops,source_instagram_media_id,effective_instagram_media_id,applink_treatment,thumbnail_url";
+
+  async function inspectAd(adId: string): Promise<Record<string, unknown>> {
+    const ad = await metaFetch<Record<string, unknown>>(
+      `/${adId}?fields=id,name,status,adset_id,creative,account_id,configured_status,effective_status,creative_asset_groups_spec`,
+      {},
+      token
+    );
+    const creativeId = (ad.creative as { id?: string } | undefined)?.id;
+    let creativeCore: unknown = null;
+    let creativeExtra: unknown = null;
+    if (creativeId) {
+      try {
+        creativeCore = await metaFetch<Record<string, unknown>>(
+          `/${creativeId}?fields=${CREATIVE_FIELDS_CORE}`,
+          {},
+          token
+        );
+      } catch (err) {
+        creativeCore = { error: err instanceof Error ? err.message : String(err) };
+      }
+      try {
+        creativeExtra = await metaFetch<Record<string, unknown>>(
+          `/${creativeId}?fields=${CREATIVE_FIELDS_EXTRA}`,
+          {},
+          token
+        );
+      } catch (err) {
+        creativeExtra = { error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+    return { ad, creativeCore, creativeExtra };
+  }
+
+  const inspection: Record<string, unknown> = {};
+  try {
+    inspection.referenceAd = await inspectAd(REFERENCE_AD_ID);
+  } catch (err) {
+    inspection.referenceAd = { error: err instanceof Error ? err.message : String(err) };
+  }
+
+  for (const adId of adIds) {
+    try {
+      inspection[`testAd_${adId}`] = await inspectAd(adId);
+    } catch (err) {
+      inspection[`testAd_${adId}`] = { error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
   return NextResponse.json({
     steps,
     campaignId,
     adSetId,
     adIds,
+    inspection,
     cleanupHint: `Everything created is PAUSED and named "ZZZ_DEBUG_TEST*" — delete campaign ${campaignId} in Ads Manager when done.`,
   });
 }

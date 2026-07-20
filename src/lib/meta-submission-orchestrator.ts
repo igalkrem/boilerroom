@@ -338,11 +338,35 @@ export async function runMetaSubmission(
     // For Meta, ad.id can't be known before creation, so we leave it if present
     onStage("ads");
 
+    // "Format: Flexible" is driven by this ad-level field, not by anything on
+    // the creative — confirmed live 2026-07-20 by capturing Ads Manager's own
+    // Relay preloader payload for a known "Flexible" ad and reproducing it via
+    // a throwaway test ad. Reuses the same single image/video already used for
+    // this ad's object_story_spec above (one group is enough to trigger the
+    // label — Meta doesn't require multiple assets in the group).
     const adPayload: MetaAdPayload = {
       name: resolveChannel(creative.name),
       adset_id: adSetId,
       creative: { creative_id: creativeId },
       status: creative.adStatus,
+      creative_asset_groups_spec: {
+        origins: ["CAG"],
+        groups: [
+          {
+            call_to_action: { type: "LEARN_MORE", value: { link: webViewUrl } },
+            ...(media.type === "IMAGE"
+              ? { images: [{ hash: media.imageHash! }] }
+              : {
+                  videos: [
+                    {
+                      video_id: media.videoId!,
+                      ...(videoThumbnailUrl ? { thumbnail_url: videoThumbnailUrl } : {}),
+                    },
+                  ],
+                }),
+          },
+        ],
+      },
     };
 
     try {

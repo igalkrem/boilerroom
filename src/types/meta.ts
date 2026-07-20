@@ -201,11 +201,28 @@ export interface MetaAdCreative extends MetaAdCreativePayload {
 
 // ─── Ads ────────────────────────────────────────────────────────────────────
 
+// "Flexible" format's real driver — confirmed 2026-07-20 via a captured Relay
+// preloader payload from Ads Manager itself (not the Graph API docs): this is
+// a field on the AD node (sibling to `creative`), not on the creative or the
+// ad set. `origins: ["CAG"]` marks it as "Creative Asset Groups"-sourced.
+export interface MetaCreativeAssetGroup {
+  group_uuid?: string;
+  call_to_action?: MetaCallToAction;
+  images?: MetaAssetFeedImage[];
+  videos?: MetaAssetFeedVideo[];
+}
+
+export interface MetaCreativeAssetGroupsSpec {
+  origins?: string[];
+  groups?: MetaCreativeAssetGroup[];
+}
+
 export interface MetaAdPayload {
   name: string;
   adset_id: string;
   creative: { creative_id: string };
   status: MetaCampaignStatus;
+  creative_asset_groups_spec?: MetaCreativeAssetGroupsSpec;
 }
 
 export interface MetaAd extends MetaAdPayload {
