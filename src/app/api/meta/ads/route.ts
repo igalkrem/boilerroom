@@ -35,6 +35,36 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Mirrors MetaCreativeAssetGroupsSpec (src/types/meta.ts) — without this,
+// Zod's default .strip() behavior silently drops creative_asset_groups_spec
+// before it reaches Meta, so the "Flexible" format label never actually
+// applies (confirmed live 2026-07-20: a real launched ad had no
+// creative_asset_groups_spec at all even though the orchestrator sent it —
+// the field never left this route).
+const creativeAssetGroupsSpecSchema = z.object({
+  origins: z.array(z.string()).optional(),
+  groups: z
+    .array(
+      z.object({
+        group_uuid: z.string().optional(),
+        call_to_action: z
+          .object({ type: z.string(), value: z.object({ link: z.string().optional() }).optional() })
+          .optional(),
+        images: z.array(z.object({ hash: z.string() })).optional(),
+        videos: z
+          .array(
+            z.object({
+              video_id: z.string(),
+              thumbnail_url: z.string().optional(),
+              thumbnail_hash: z.string().optional(),
+            })
+          )
+          .optional(),
+      })
+    )
+    .optional(),
+});
+
 const postSchema = z.object({
   adAccountId: z.string().min(1),
   ad: z.object({
@@ -42,6 +72,7 @@ const postSchema = z.object({
     adset_id: z.string().min(1),
     creative: z.object({ creative_id: z.string().min(1) }),
     status: z.enum(["ACTIVE", "PAUSED"]),
+    creative_asset_groups_spec: creativeAssetGroupsSpecSchema.optional(),
   }),
 });
 

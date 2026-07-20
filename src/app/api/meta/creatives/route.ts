@@ -6,11 +6,23 @@ import { z } from "zod";
 
 export const maxDuration = 60;
 
+// Mirrors MetaDegreesOfFreedomSpec (src/types/meta.ts) — without this, Zod's
+// default .strip() behavior silently drops degrees_of_freedom_spec before it
+// reaches Meta, so "Advantage+ creative optimizations" never actually enrolls
+// (confirmed live 2026-07-20: a real launched creative echoed back every flag
+// as OPT_OUT even though the orchestrator sent OPT_IN — the field never left
+// this route). Keys are a record, not individual optional fields, so any
+// current/future flag `buildAdvantagePlusCreativeFeatures` sets passes through.
+const degreesOfFreedomSpecSchema = z.object({
+  creative_features_spec: z.record(z.string(), z.object({ enroll_status: z.enum(["OPT_IN", "OPT_OUT"]) })),
+});
+
 const postSchema = z.object({
   adAccountId: z.string().min(1),
   creative: z.object({
     name: z.string().min(1),
     instagram_actor_id: z.string().optional(),
+    degrees_of_freedom_spec: degreesOfFreedomSpecSchema.optional(),
     object_story_spec: z.object({
       page_id: z.string().min(1),
       link_data: z.object({
