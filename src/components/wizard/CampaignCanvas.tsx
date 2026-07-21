@@ -40,6 +40,7 @@ interface CanvasAdAccount {
 import { computeAutoLayout, CanvasControls, ARTICLE_EXPANDED_H } from "./CanvasControls";
 import { CreativeGroupNode, CARD_W, CARD_GAP, DOCK_LEAD, DOCK_W, DOCK_TO_HANDLE } from "./nodes/CreativeGroupNode";
 import { ProviderNode } from "./nodes/ProviderNode";
+import { TrafficSourceNode } from "./nodes/TrafficSourceNode";
 import { RouterNode } from "./nodes/RouterNode";
 import { ArticleNode } from "./nodes/ArticleNode";
 import { AdAccountNode } from "./nodes/AdAccountNode";
@@ -51,6 +52,7 @@ const PROVIDER_COLORS = ["#3b82f6", "#f97316", "#8b5cf6", "#10b981", "#ec4899", 
 const NODE_TYPES = {
   group: CreativeGroupNode,
   provider: ProviderNode,
+  ts: TrafficSourceNode,
   router: RouterNode,
   article: ArticleNode,
   adaccount: AdAccountNode,
@@ -61,7 +63,7 @@ const EDGE_TYPES = {
   provider: ProviderEdge,
 };
 
-const COLUMN_X = { group: 0, provider: 300, router: 520, article: 740, adaccount: 1040, preset: 1320 };
+const COLUMN_X = { group: 0, provider: 300, ts: 460, router: 640, article: 860, adaccount: 1160, preset: 1440 };
 const ROW_GAP = 130;
 const ROW_CARD_STEP = 172; // CARD_W (160) + CARD_GAP (12) — used to shift row left when prepending a card
 
@@ -132,13 +134,24 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     [store.edges.articleToAdAccount]
   );
 
+  const providerHasTrafficSource = useCallback(
+    (providerId: string, ts: "snap" | "meta") =>
+      store.edges.providerToTrafficSource.some((e) => e.feedProviderId === providerId && e.trafficSource === ts),
+    [store.edges.providerToTrafficSource]
+  );
+
   const visiblePresets = useMemo(() => {
     if (!canSelectPresets) return [];
     const providerOrder = new Map(sortedByCreation.map((p, i) => [p.id, i]));
     return presets
-      .filter((p) => !p.feedProviderId || activeProviderIdsFromArticles.has(p.feedProviderId))
+      .filter((p) => {
+        if (!p.feedProviderId) return true;
+        if (!activeProviderIdsFromArticles.has(p.feedProviderId)) return false;
+        const platform = p.trafficSource === "facebook" ? "meta" : "snap";
+        return providerHasTrafficSource(p.feedProviderId, platform);
+      })
       .sort((a, b) => (providerOrder.get(a.feedProviderId ?? "") ?? 999) - (providerOrder.get(b.feedProviderId ?? "") ?? 999));
-  }, [presets, activeProviderIdsFromArticles, sortedByCreation, canSelectPresets]);
+  }, [presets, activeProviderIdsFromArticles, sortedByCreation, canSelectPresets, providerHasTrafficSource]);
   const connectedProviderIds = useMemo(
     () => new Set(store.edges.rowToProvider.map((e) => e.feedProviderId)),
     [store.edges.rowToProvider]
@@ -152,7 +165,11 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       return Math.min(...cfg.feedProviderIds.map((pid) => providerOrder.get(pid) ?? 999));
     };
     const activeProviders = sortedByCreation.filter((p) => activeProviderIdsFromArticles.has(p.id));
-    const metaAllowedIds = new Set(activeProviders.flatMap((p) => p.metaConfig?.allowedAdAccountIds ?? []));
+    const metaActiveProviders = activeProviders.filter((p) => providerHasTrafficSource(p.id, "meta"));
+    const snapActiveProviderIds = new Set(
+      activeProviders.filter((p) => providerHasTrafficSource(p.id, "snap")).map((p) => p.id)
+    );
+    const metaAllowedIds = new Set(metaActiveProviders.flatMap((p) => p.metaConfig?.allowedAdAccountIds ?? []));
     return allAccounts
       .filter((a) => {
         const cfg = adAccountConfigs.find((c) => c.id === a.id);
@@ -161,12 +178,12 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           return metaAllowedIds.has(a.id);
         }
         if (cfg && cfg.feedProviderIds.length > 0) {
-          return [...activeProviderIdsFromArticles].some((pid) => cfg.feedProviderIds.includes(pid));
+          return cfg.feedProviderIds.some((pid) => snapActiveProviderIds.has(pid));
         }
-        return activeProviderIdsFromArticles.size > 0;
+        return snapActiveProviderIds.size > 0;
       })
       .sort((a, b) => minProviderIndex(a.id) - minProviderIndex(b.id));
-  }, [allAccounts, adAccountConfigs, activeProviderIdsFromArticles, sortedByCreation]);
+  }, [allAccounts, adAccountConfigs, activeProviderIdsFromArticles, sortedByCreation, providerHasTrafficSource]);
 
   // ─── Disconnect callbacks (one per node type) ────────────────────────────────
   // Uses getState() so it reads current store without closing over the store object,
@@ -269,6 +286,27 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
             name: provider.name,
             color: providerColorMap[provider.id] ?? "#94a3b8",
             onDisconnectTarget: makeDisconnectTarget,
+          },
+        });
+      });
+    }
+
+    // Traffic Source nodes — one per connected provider, gates article picking
+    if (store.creativeRows.length > 0) {
+      sortedByCreation.forEach((provider, i) => {
+        if (!connectedProviderIds.has(provider.id)) return;
+        const nodeId = `ts-${provider.id}`;
+        nodes.push({
+          id: nodeId,
+          type: "ts",
+          position: pos("ts", i, nodeId),
+          data: {
+            feedProviderId: provider.id,
+            color: providerColorMap[provider.id] ?? "#94a3b8",
+            selected: store.edges.providerToTrafficSource
+              .filter((e) => e.feedProviderId === provider.id)
+              .map((e) => e.trafficSource),
+            onToggle: store.toggleProviderTrafficSource,
             onAddArticle: setArticlePickerProviderId,
           },
         });
@@ -348,7 +386,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     return nodes;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    store.creativeRows, store.routerNodes,
+    store.creativeRows, store.routerNodes, store.edges.providerToTrafficSource, store.toggleProviderTrafficSource,
     sortedByCreation, providerColorMap, connectedProviderIds, visibleArticles, visibleAccounts, visiblePresets,
     adAccountConfigs, articles, canSelectPresets, makeDisconnectTarget,
   ]);
@@ -372,23 +410,37 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       });
     }
 
-    // Router → Provider
+    // Provider → TrafficSource (fixed, always present once the provider is connected)
+    for (const providerId of connectedProviderIds) {
+      edges.push({
+        id: `pts-${providerId}`,
+        source: `provider-${providerId}`,
+        sourceHandle: "out",
+        target: `ts-${providerId}`,
+        targetHandle: "in",
+        type: "provider",
+        deletable: false,
+        data: { color: providerColorMap[providerId] ?? "#94a3b8" },
+      });
+    }
+
+    // Router → TrafficSource
     for (const r of store.routerNodes) {
       edges.push({
         id: `rtp-${r.id}`,
         source: r.id,
         sourceHandle: "out",
-        target: `provider-${r.feedProviderId}`,
+        target: `ts-${r.feedProviderId}`,
         targetHandle: "in",
         type: "provider",
         data: { color: providerColorMap[r.feedProviderId] ?? "#94a3b8" },
       });
     }
 
-    // Provider → Article (or Router → Article)
+    // TrafficSource → Article (or Router → Article)
     for (const e of store.edges.providerToArticle) {
       const router = store.routerNodes.find((r) => r.feedProviderId === e.feedProviderId);
-      const source = router ? router.id : `provider-${e.feedProviderId}`;
+      const source = router ? router.id : `ts-${e.feedProviderId}`;
       edges.push({
         id: `pa-${e.feedProviderId}-${e.articleId}`,
         source,
@@ -441,7 +493,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     return edges;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    store.edges, store.routerNodes,
+    store.edges, store.routerNodes, connectedProviderIds,
     providerColorMap,
   ]);
 
@@ -479,10 +531,10 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           : target.replace(/^provider-/, "");
         if (providerId) s.connectRowToProvider(rowId, providerId);
 
-      } else if ((srcType === "provider" || srcType === "router") && tgtType === "article") {
+      } else if ((srcType === "ts" || srcType === "router") && tgtType === "article") {
         const providerId = srcType === "router"
           ? s.routerNodes.find((r) => r.id === source)?.feedProviderId ?? ""
-          : source.replace(/^provider-/, "");
+          : source.replace(/^ts-/, "");
         const articleId = target.replace(/^article-/, "");
         if (!providerId) return;
 
@@ -493,8 +545,8 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         const hasRouter = s.routerNodes.some((r) => r.feedProviderId === providerId);
         if (existingArticleEdges.length >= 1 && !hasRouter) {
           const router = s.addRouter(providerId);
-          const provPos = nodePositionsRef.current[`provider-${providerId}`] ?? { x: COLUMN_X.provider, y: 0 };
-          s.setNodePosition(router.id, { x: COLUMN_X.router, y: provPos.y });
+          const tsPos = nodePositionsRef.current[`ts-${providerId}`] ?? { x: COLUMN_X.ts, y: 0 };
+          s.setNodePosition(router.id, { x: COLUMN_X.router, y: tsPos.y });
         }
 
         const articleForDefault = articles.find((a) => a.id === articleId);
@@ -554,10 +606,10 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
             ? s.routerNodes.find((r) => r.id === target)?.feedProviderId ?? ""
             : target.replace(/^provider-/, "");
           if (providerId) s.disconnectRowFromProvider(rowId, providerId);
-        } else if ((srcType === "provider" || srcType === "router") && tgtType === "article") {
+        } else if ((srcType === "ts" || srcType === "router") && tgtType === "article") {
           const providerId = srcType === "router"
             ? s.routerNodes.find((r) => r.id === source)?.feedProviderId ?? ""
-            : source.replace(/^provider-/, "");
+            : source.replace(/^ts-/, "");
           const articleId = target.replace(/^article-/, "");
           if (providerId) s.toggleProviderToArticle(providerId, articleId);
         } else if (srcType === "article" && tgtType === "account") {
@@ -723,7 +775,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       return Math.max(mx, sx + nw);
     }, 0);
     const P = maxRowHandleX + 120;
-    const dynColX = { group: 0, provider: P, router: P + 240, article: P + 480, adaccount: P + 800, preset: P + 1100 };
+    const dynColX = { group: 0, provider: P, ts: P + 200, router: P + 400, article: P + 640, adaccount: P + 960, preset: P + 1260 };
 
     // Build stable tiebreaker priorities so nodes from provider[0] always sort above provider[1].
     // Without this, routers and sibling providers land in the same dagre rank with identical
@@ -732,6 +784,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     const nodePriority: Record<string, number> = {};
     sortedByCreation.forEach((provider, i) => {
       nodePriority[`provider-${provider.id}`] = i;
+      nodePriority[`ts-${provider.id}`] = i;
       const router = s.routerNodes.find((r) => r.feedProviderId === provider.id);
       if (router) nodePriority[router.id] = i;
       s.edges.providerToArticle
@@ -906,8 +959,14 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       {/* Article picker modal */}
       {articlePickerProviderId &&
         (() => {
+          const selectedTS = store.edges.providerToTrafficSource
+            .filter((e) => e.feedProviderId === articlePickerProviderId)
+            .map((e) => e.trafficSource);
           const providerArticles = articles.filter(
-            (a) => a.feedProviderId === articlePickerProviderId && a.status !== "paused"
+            (a) =>
+              a.feedProviderId === articlePickerProviderId &&
+              a.status !== "paused" &&
+              a.trafficSources.some((t) => selectedTS.includes(t === "Meta" ? "meta" : "snap"))
           );
           const selectedIds = new Set(
             store.edges.providerToArticle

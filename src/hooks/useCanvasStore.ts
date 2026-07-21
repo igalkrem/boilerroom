@@ -3,6 +3,8 @@
 import { create } from "zustand";
 import type { CanvasEdges, CampaignBuildItem, CreativeGroup, CreativeRow } from "@/types/wizard";
 import { loadPresets } from "@/lib/presets";
+import { loadArticles } from "@/lib/articles";
+import { loadAdAccountConfigs } from "@/lib/adAccounts";
 
 // ─── Cascade helpers ──────────────────────────────────────────────────────────
 
@@ -22,6 +24,7 @@ function orphanArticle(
 function cascadeProviderRemoval(feedProviderId: string, edges: CanvasEdges): CanvasEdges {
   const removedEdges = edges.providerToArticle.filter((e) => e.feedProviderId === feedProviderId);
   const newP2A = edges.providerToArticle.filter((e) => e.feedProviderId !== feedProviderId);
+  const newP2TS = edges.providerToTrafficSource.filter((e) => e.feedProviderId !== feedProviderId);
   let newA2P = edges.articleToPreset;
   let newA2Acc = edges.articleToAdAccount;
   for (const { articleId } of removedEdges) {
@@ -31,7 +34,56 @@ function cascadeProviderRemoval(feedProviderId: string, edges: CanvasEdges): Can
       newA2Acc = newA2Acc.filter((e) => e.articleId !== articleId);
     }
   }
-  return { ...edges, providerToArticle: newP2A, articleToPreset: newA2P, articleToAdAccount: newA2Acc };
+  return {
+    ...edges,
+    providerToArticle: newP2A,
+    providerToTrafficSource: newP2TS,
+    articleToPreset: newA2P,
+    articleToAdAccount: newA2Acc,
+  };
+}
+
+// After deselecting a traffic source for a provider, drop providerToArticle edges whose
+// article no longer matches any remaining selected platform, drop articleToAdAccount edges
+// pointing at an account of the just-removed platform, and cascade-orphan any article that
+// lost all its provider connections as a result.
+function pruneTrafficSource(
+  feedProviderId: string,
+  removedTrafficSource: "snap" | "meta",
+  remainingPlatforms: Set<"snap" | "meta">,
+  edges: CanvasEdges
+): CanvasEdges {
+  const articles = loadArticles();
+  const adAccountConfigs = loadAdAccountConfigs();
+  const providerArticleIds = new Set(
+    articles.filter((a) => a.feedProviderId === feedProviderId).map((a) => a.id)
+  );
+
+  const newP2A = edges.providerToArticle.filter((e) => {
+    if (e.feedProviderId !== feedProviderId) return true;
+    const article = articles.find((a) => a.id === e.articleId);
+    if (!article) return true;
+    const articlePlatforms = article.trafficSources.map((t) => (t === "Meta" ? "meta" : "snap"));
+    return articlePlatforms.some((p) => remainingPlatforms.has(p as "snap" | "meta"));
+  });
+
+  let newA2Acc = edges.articleToAdAccount.filter((e) => {
+    if (!providerArticleIds.has(e.articleId)) return true;
+    const cfg = adAccountConfigs.find((c) => c.id === e.adAccountId);
+    return cfg?.platform !== removedTrafficSource;
+  });
+
+  let newA2P = edges.articleToPreset;
+  for (const e of edges.providerToArticle) {
+    if (e.feedProviderId !== feedProviderId) continue;
+    const stillConnected = newP2A.some((p) => p.articleId === e.articleId);
+    if (!stillConnected) {
+      newA2P = newA2P.filter((p) => p.articleId !== e.articleId);
+      newA2Acc = newA2Acc.filter((a) => a.articleId !== e.articleId);
+    }
+  }
+
+  return { ...edges, providerToArticle: newP2A, articleToAdAccount: newA2Acc, articleToPreset: newA2P };
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -65,6 +117,8 @@ interface CanvasStore {
   // Row → Provider edges
   connectRowToProvider: (rowId: string, feedProviderId: string) => void;
   disconnectRowFromProvider: (rowId: string, feedProviderId: string) => void;
+
+  toggleProviderTrafficSource: (feedProviderId: string, trafficSource: "snap" | "meta") => void;
 
   toggleProviderToArticle: (
     feedProviderId: string,
@@ -101,6 +155,7 @@ interface CanvasStore {
 
 const initialEdges: CanvasEdges = {
   rowToProvider: [],
+  providerToTrafficSource: [],
   providerToArticle: [],
   articleToPreset: [],
   articleToAdAccount: [],
@@ -259,6 +314,32 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       let edges: CanvasEdges = { ...s.edges, rowToProvider: newR2P };
       if (!providerStillConnected) edges = cascadeProviderRemoval(feedProviderId, edges);
       return { edges };
+    }),
+
+  toggleProviderTrafficSource: (feedProviderId, trafficSource) =>
+    set((s) => {
+      const exists = s.edges.providerToTrafficSource.some(
+        (e) => e.feedProviderId === feedProviderId && e.trafficSource === trafficSource
+      );
+      if (!exists) {
+        return {
+          edges: {
+            ...s.edges,
+            providerToTrafficSource: [...s.edges.providerToTrafficSource, { feedProviderId, trafficSource }],
+          },
+        };
+      }
+      const newP2TS = s.edges.providerToTrafficSource.filter(
+        (e) => !(e.feedProviderId === feedProviderId && e.trafficSource === trafficSource)
+      );
+      const remainingPlatforms = new Set(
+        newP2TS.filter((e) => e.feedProviderId === feedProviderId).map((e) => e.trafficSource)
+      );
+      const pruned = pruneTrafficSource(feedProviderId, trafficSource, remainingPlatforms, {
+        ...s.edges,
+        providerToTrafficSource: newP2TS,
+      });
+      return { edges: pruned };
     }),
 
   toggleProviderToArticle: (feedProviderId, articleId, defaultHeadline?, defaultHeadlineRac?, defaultMetaHeadline?, defaultMetaPrimaryText?) =>

@@ -142,6 +142,7 @@ export interface CreativeRow {
 
 export interface CanvasEdges {
   rowToProvider: Array<{ rowId: string; feedProviderId: string }>;
+  providerToTrafficSource: Array<{ feedProviderId: string; trafficSource: "snap" | "meta" }>;
   providerToArticle: Array<{
     feedProviderId: string;
     articleId: string;
