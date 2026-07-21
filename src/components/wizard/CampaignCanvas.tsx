@@ -64,6 +64,11 @@ const EDGE_TYPES = {
 };
 
 const COLUMN_X = { group: 0, provider: 300, ts: 460, router: 640, article: 860, adaccount: 1160, preset: 1440 };
+
+function parseTsNodeId(nodeId: string): { feedProviderId: string; platform: "snap" | "meta" } | null {
+  const m = nodeId.match(/^ts-(.+)-(snap|meta)$/);
+  return m ? { feedProviderId: m[1], platform: m[2] as "snap" | "meta" } : null;
+}
 const ROW_GAP = 130;
 const ROW_CARD_STEP = 172; // CARD_W (160) + CARD_GAP (12) — used to shift row left when prepending a card
 
@@ -77,7 +82,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   const [siloOpen, setSiloOpen] = useState(false);
   const [targetRowId, setTargetRowId] = useState<string | null>(null);
   const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
-  const [articlePickerProviderId, setArticlePickerProviderId] = useState<string | null>(null);
+  const [articlePicker, setArticlePicker] = useState<{ providerId: string; platform: "snap" | "meta" } | null>(null);
   const [providerPickerRowId, setProviderPickerRowId] = useState<string | null>(null);
   const [providers, setProviders] = useState<FeedProvider[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
@@ -201,6 +206,10 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       } else if (type === "router") {
         s.removeRouter(nodeId);
 
+      } else if (type === "ts") {
+        const parsed = parseTsNodeId(nodeId);
+        if (parsed) s.toggleProviderTrafficSource(parsed.feedProviderId, parsed.platform);
+
       } else if (type === "article") {
         const articleId = nodeId.replace(/^article-/, "");
         const incoming = s.edges.providerToArticle.filter((e) => e.articleId === articleId);
@@ -285,30 +294,42 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
             providerId: provider.id,
             name: provider.name,
             color: providerColorMap[provider.id] ?? "#94a3b8",
+            selectedTrafficSources: store.edges.providerToTrafficSource
+              .filter((e) => e.feedProviderId === provider.id)
+              .map((e) => e.trafficSource),
             onDisconnectTarget: makeDisconnectTarget,
+            onToggleTrafficSource: store.toggleProviderTrafficSource,
           },
         });
       });
     }
 
-    // Traffic Source nodes — one per connected provider, gates article picking
+    // Traffic Source nodes — one per (connected provider, active platform); up to
+    // two independent sibling nodes per provider, each gating its own article picker.
     if (store.creativeRows.length > 0) {
-      sortedByCreation.forEach((provider, i) => {
+      let tsIndex = 0;
+      sortedByCreation.forEach((provider) => {
         if (!connectedProviderIds.has(provider.id)) return;
-        const nodeId = `ts-${provider.id}`;
-        nodes.push({
-          id: nodeId,
-          type: "ts",
-          position: pos("ts", i, nodeId),
-          data: {
-            feedProviderId: provider.id,
-            color: providerColorMap[provider.id] ?? "#94a3b8",
-            selected: store.edges.providerToTrafficSource
-              .filter((e) => e.feedProviderId === provider.id)
-              .map((e) => e.trafficSource),
-            onToggle: store.toggleProviderTrafficSource,
-            onAddArticle: setArticlePickerProviderId,
-          },
+        (["snap", "meta"] as const).forEach((platform) => {
+          const active = store.edges.providerToTrafficSource.some(
+            (e) => e.feedProviderId === provider.id && e.trafficSource === platform
+          );
+          if (!active) return;
+          const nodeId = `ts-${provider.id}-${platform}`;
+          nodes.push({
+            id: nodeId,
+            type: "ts",
+            position: pos("ts", tsIndex, nodeId),
+            data: {
+              feedProviderId: provider.id,
+              platform,
+              color: providerColorMap[provider.id] ?? "#94a3b8",
+              onAddArticle: (providerId: string, tsPlatform: "snap" | "meta") =>
+                setArticlePicker({ providerId, platform: tsPlatform }),
+              onDisconnectTarget: makeDisconnectTarget,
+            },
+          });
+          tsIndex += 1;
         });
       });
     }
@@ -410,46 +431,58 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       });
     }
 
-    // Provider → TrafficSource (fixed, always present once the provider is connected)
-    for (const providerId of connectedProviderIds) {
+    // Provider → TrafficSource (fixed, one per active platform node)
+    for (const e of store.edges.providerToTrafficSource) {
       edges.push({
-        id: `pts-${providerId}`,
-        source: `provider-${providerId}`,
+        id: `pts-${e.feedProviderId}-${e.trafficSource}`,
+        source: `provider-${e.feedProviderId}`,
         sourceHandle: "out",
-        target: `ts-${providerId}`,
+        target: `ts-${e.feedProviderId}-${e.trafficSource}`,
         targetHandle: "in",
         type: "provider",
         deletable: false,
-        data: { color: providerColorMap[providerId] ?? "#94a3b8" },
+        data: { color: providerColorMap[e.feedProviderId] ?? "#94a3b8" },
       });
     }
 
-    // Router → TrafficSource
+    // Router → Provider (row-side fan-in declutter only; router no longer feeds articles —
+    // with up to two independent platform nodes per provider there's no single ts-node for
+    // a shared router to attach to on the article side)
     for (const r of store.routerNodes) {
       edges.push({
         id: `rtp-${r.id}`,
         source: r.id,
         sourceHandle: "out",
-        target: `ts-${r.feedProviderId}`,
+        target: `provider-${r.feedProviderId}`,
         targetHandle: "in",
         type: "provider",
         data: { color: providerColorMap[r.feedProviderId] ?? "#94a3b8" },
       });
     }
 
-    // TrafficSource → Article (or Router → Article)
+    // TrafficSource → Article — one edge per active, compatible platform node (an article
+    // flagged for both Snap and Meta, with both nodes active, gets two edges into one shared
+    // Article node).
     for (const e of store.edges.providerToArticle) {
-      const router = store.routerNodes.find((r) => r.feedProviderId === e.feedProviderId);
-      const source = router ? router.id : `ts-${e.feedProviderId}`;
-      edges.push({
-        id: `pa-${e.feedProviderId}-${e.articleId}`,
-        source,
-        sourceHandle: "out",
-        target: `article-${e.articleId}`,
-        targetHandle: "in",
-        type: "provider",
-        data: { color: providerColorMap[e.feedProviderId] ?? "#94a3b8" },
-      });
+      const article = articles.find((a) => a.id === e.articleId);
+      const compatiblePlatforms: ("snap" | "meta")[] = article
+        ? [...new Set(article.trafficSources.map((t) => (t === "Meta" ? "meta" : "snap")))]
+        : ["snap", "meta"];
+      for (const platform of compatiblePlatforms) {
+        const isActive = store.edges.providerToTrafficSource.some(
+          (p) => p.feedProviderId === e.feedProviderId && p.trafficSource === platform
+        );
+        if (!isActive) continue;
+        edges.push({
+          id: `pa-${e.feedProviderId}-${platform}-${e.articleId}`,
+          source: `ts-${e.feedProviderId}-${platform}`,
+          sourceHandle: "out",
+          target: `article-${e.articleId}`,
+          targetHandle: "in",
+          type: "provider",
+          data: { color: providerColorMap[e.feedProviderId] ?? "#94a3b8" },
+        });
+      }
     }
 
     // Article → AdAccount (explicit edges)
@@ -493,8 +526,8 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     return edges;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    store.edges, store.routerNodes, connectedProviderIds,
-    providerColorMap,
+    store.edges, store.routerNodes,
+    providerColorMap, articles,
   ]);
 
   const [nodes, setNodes] = useNodesState(buildNodes());
@@ -531,12 +564,11 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           : target.replace(/^provider-/, "");
         if (providerId) s.connectRowToProvider(rowId, providerId);
 
-      } else if ((srcType === "ts" || srcType === "router") && tgtType === "article") {
-        const providerId = srcType === "router"
-          ? s.routerNodes.find((r) => r.id === source)?.feedProviderId ?? ""
-          : source.replace(/^ts-/, "");
+      } else if (srcType === "ts" && tgtType === "article") {
+        const parsed = parseTsNodeId(source);
+        if (!parsed) return;
+        const { feedProviderId: providerId } = parsed;
         const articleId = target.replace(/^article-/, "");
-        if (!providerId) return;
 
         // Auto-insert router when provider already has an article edge and no router yet
         const existingArticleEdges = s.edges.providerToArticle.filter(
@@ -545,8 +577,8 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         const hasRouter = s.routerNodes.some((r) => r.feedProviderId === providerId);
         if (existingArticleEdges.length >= 1 && !hasRouter) {
           const router = s.addRouter(providerId);
-          const tsPos = nodePositionsRef.current[`ts-${providerId}`] ?? { x: COLUMN_X.ts, y: 0 };
-          s.setNodePosition(router.id, { x: COLUMN_X.router, y: tsPos.y });
+          const provPos = nodePositionsRef.current[`provider-${providerId}`] ?? { x: COLUMN_X.provider, y: 0 };
+          s.setNodePosition(router.id, { x: COLUMN_X.router, y: provPos.y });
         }
 
         const articleForDefault = articles.find((a) => a.id === articleId);
@@ -606,12 +638,10 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
             ? s.routerNodes.find((r) => r.id === target)?.feedProviderId ?? ""
             : target.replace(/^provider-/, "");
           if (providerId) s.disconnectRowFromProvider(rowId, providerId);
-        } else if ((srcType === "ts" || srcType === "router") && tgtType === "article") {
-          const providerId = srcType === "router"
-            ? s.routerNodes.find((r) => r.id === source)?.feedProviderId ?? ""
-            : source.replace(/^ts-/, "");
+        } else if (srcType === "ts" && tgtType === "article") {
+          const parsed = parseTsNodeId(source);
           const articleId = target.replace(/^article-/, "");
-          if (providerId) s.toggleProviderToArticle(providerId, articleId);
+          if (parsed) s.toggleProviderToArticle(parsed.feedProviderId, articleId);
         } else if (srcType === "article" && tgtType === "account") {
           const articleId = source.replace(/^article-/, "");
           const accountId = target.replace(/^account-/, "");
@@ -784,7 +814,8 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     const nodePriority: Record<string, number> = {};
     sortedByCreation.forEach((provider, i) => {
       nodePriority[`provider-${provider.id}`] = i;
-      nodePriority[`ts-${provider.id}`] = i;
+      nodePriority[`ts-${provider.id}-snap`] = i;
+      nodePriority[`ts-${provider.id}-meta`] = i;
       const router = s.routerNodes.find((r) => r.feedProviderId === provider.id);
       if (router) nodePriority[router.id] = i;
       s.edges.providerToArticle
@@ -957,28 +988,26 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       )}
 
       {/* Article picker modal */}
-      {articlePickerProviderId &&
+      {articlePicker &&
         (() => {
-          const selectedTS = store.edges.providerToTrafficSource
-            .filter((e) => e.feedProviderId === articlePickerProviderId)
-            .map((e) => e.trafficSource);
+          const { providerId, platform } = articlePicker;
           const providerArticles = articles.filter(
             (a) =>
-              a.feedProviderId === articlePickerProviderId &&
+              a.feedProviderId === providerId &&
               a.status !== "paused" &&
-              a.trafficSources.some((t) => selectedTS.includes(t === "Meta" ? "meta" : "snap"))
+              a.trafficSources.some((t) => (t === "Meta" ? "meta" : "snap") === platform)
           );
           const selectedIds = new Set(
             store.edges.providerToArticle
-              .filter((e) => e.feedProviderId === articlePickerProviderId)
+              .filter((e) => e.feedProviderId === providerId)
               .map((e) => e.articleId)
           );
-          const providerName =
-            providers.find((p) => p.id === articlePickerProviderId)?.name ?? "";
+          const providerName = providers.find((p) => p.id === providerId)?.name ?? "";
+          const platformLabel = platform === "meta" ? "Meta" : "Snap";
           return (
             <div
               className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-              onClick={() => setArticlePickerProviderId(null)}
+              onClick={() => setArticlePicker(null)}
             >
               <div
                 className="bg-gray-900 border border-gray-700 rounded-2xl p-4 w-80 max-h-[70vh] flex flex-col shadow-2xl"
@@ -986,11 +1015,11 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
               >
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-gray-200">
-                    Articles — {providerName}
+                    Articles — {providerName} ({platformLabel})
                   </h3>
                   <button
                     type="button"
-                    onClick={() => setArticlePickerProviderId(null)}
+                    onClick={() => setArticlePicker(null)}
                     className="text-gray-500 hover:text-gray-300 text-lg leading-none"
                   >
                     ✕
@@ -999,7 +1028,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
                 <div className="overflow-y-auto flex-1 space-y-1">
                   {providerArticles.length === 0 ? (
                     <p className="text-xs text-gray-500 text-center py-4">
-                      No articles for this provider
+                      No {platformLabel} articles for this provider
                     </p>
                   ) : (
                     providerArticles.map((article) => {
@@ -1011,7 +1040,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
                           type="button"
                           onClick={() =>
                             store.toggleProviderToArticle(
-                              articlePickerProviderId,
+                              providerId,
                               article.id,
                               dh?.text,
                               dh?.rac,
@@ -1044,7 +1073,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setArticlePickerProviderId(null)}
+                  onClick={() => setArticlePicker(null)}
                   className="mt-3 px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors w-full"
                 >
                   Done

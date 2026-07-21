@@ -8,7 +8,9 @@ export function ProviderNode({ data }: {
     providerId: string;
     name: string;
     color: string;
+    selectedTrafficSources: ("snap" | "meta")[];
     onDisconnectTarget: (nodeId: string) => void;
+    onToggleTrafficSource: (providerId: string, ts: "snap" | "meta") => void;
   };
 }) {
   const store = useCanvasStore();
@@ -17,6 +19,23 @@ export function ProviderNode({ data }: {
     (e) => e.feedProviderId === data.providerId
   ).length;
   const connected = connectedRows > 0;
+
+  const tsButton = (ts: "snap" | "meta", label: string) => {
+    const active = data.selectedTrafficSources.includes(ts);
+    return (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); data.onToggleTrafficSource(data.providerId, ts); }}
+        className={`nodrag px-2 py-1 rounded-md text-xs font-medium border transition-colors ${
+          active
+            ? "bg-blue-600/20 border-blue-500/40 text-blue-300"
+            : "bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700"
+        }`}
+      >
+        {label}
+      </button>
+    );
+  };
 
   return (
     <div
@@ -62,6 +81,12 @@ export function ProviderNode({ data }: {
           <p className="text-xs text-gray-400 mt-0.5 pl-4">
             {connectedRows} row{connectedRows !== 1 ? "s" : ""}
           </p>
+        )}
+        {connected && (
+          <div className="flex gap-1.5 mt-1.5 pl-4">
+            {tsButton("snap", "Snap")}
+            {tsButton("meta", "Meta")}
+          </div>
         )}
       </div>
     </div>
