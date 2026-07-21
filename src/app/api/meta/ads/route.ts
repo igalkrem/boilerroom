@@ -60,6 +60,8 @@ const creativeAssetGroupsSpecSchema = z.object({
             })
           )
           .optional(),
+        bodies: z.array(z.object({ text: z.string() })).optional(),
+        titles: z.array(z.object({ text: z.string() })).optional(),
       })
     )
     .optional(),

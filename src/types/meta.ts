@@ -210,6 +210,8 @@ export interface MetaCreativeAssetGroup {
   call_to_action?: MetaCallToAction;
   images?: MetaAssetFeedImage[];
   videos?: MetaAssetFeedVideo[];
+  bodies?: Array<{ text: string }>;
+  titles?: Array<{ text: string }>;
 }
 
 export interface MetaCreativeAssetGroupsSpec {
