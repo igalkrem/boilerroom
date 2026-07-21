@@ -9,6 +9,7 @@ import type {
   MetaAdPayload,
 } from "@/types/meta";
 import { buildAdvantagePlusCreativeFeatures } from "@/lib/meta/creative-features";
+import { updateMetaUpload } from "@/lib/silo";
 
 type OnStageChange = (stage: string) => void;
 
@@ -73,9 +74,15 @@ export async function runMetaSubmission(
         if (data.type === "IMAGE") {
           mediaMap.set(creative.id, { type: "IMAGE", imageHash: data.imageHash });
           results.uploadMedia.push({ clientId: creative.id, snapId: "", platformId: data.imageHash, name: creative.name });
+          if (creative.siloAssetId) {
+            updateMetaUpload(creative.siloAssetId, adAccountId, { stage: "ready", imageHash: data.imageHash });
+          }
         } else {
           mediaMap.set(creative.id, { type: "VIDEO", videoId: data.videoId });
           results.uploadMedia.push({ clientId: creative.id, snapId: "", platformId: data.videoId, name: creative.name });
+          if (creative.siloAssetId) {
+            updateMetaUpload(creative.siloAssetId, adAccountId, { stage: "ready", videoId: data.videoId });
+          }
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
