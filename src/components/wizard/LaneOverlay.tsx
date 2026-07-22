@@ -90,9 +90,12 @@ export function LaneOverlay({ lanes }: { lanes: LaneBound[] }) {
           ))}
         </defs>
 
-        {/* lane divider — fades in from 0% at each end to ~12% at the middle */}
+        {/* lane divider — fades in from 0% at each end to ~12% at the middle. Skipped when
+            the two lanes' actual content ranges overlap (e.g. they share a connected node) —
+            there's no sensible single y to draw a divider at in that case. */}
         {sorted.slice(1).map((lane, i) => {
           const prev = sorted[i];
+          if (lane.minY <= prev.maxY) return null;
           const dividerFlowY = (prev.maxY + LANE_PAD_Y + lane.minY - LANE_PAD_Y) / 2;
           const x1 = toScreen(Math.min(prev.minX, lane.minX) - LANE_PAD_X, dividerFlowY);
           const x2 = toScreen(Math.max(prev.maxX, lane.maxX) + LANE_PAD_X, dividerFlowY);

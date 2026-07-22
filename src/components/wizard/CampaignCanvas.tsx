@@ -812,6 +812,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     // Without this, routers and sibling providers land in the same dagre rank with identical
     // avgUpstreamY, making the sort non-deterministic and flipping the whole right-side cascade.
     const s = useCanvasStore.getState();
+    const providerIndexById = new Map(sortedByCreation.map((p, i) => [p.id, i]));
     const nodePriority: Record<string, number> = {};
     sortedByCreation.forEach((provider, i) => {
       nodePriority[`provider-${provider.id}`] = i;
@@ -829,6 +830,19 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         .filter((ape) => s.edges.providerToArticle.some((pe) => pe.articleId === ape.articleId && pe.feedProviderId === provider.id))
         .forEach((ape) => { nodePriority[`preset-${ape.presetId}`] = Math.min(nodePriority[`preset-${ape.presetId}`] ?? 999, i); });
     });
+    // Fallback: every account/preset gets a provider-ordered priority even before it's
+    // connected (config-derived, not edge-derived), so disconnected reference cards for
+    // one provider never sort/drift into another provider's vertical range.
+    for (const cfg of adAccountConfigs) {
+      if (nodePriority[`account-${cfg.id}`] !== undefined || cfg.feedProviderIds.length === 0) continue;
+      const idx = Math.min(...cfg.feedProviderIds.map((pid) => providerIndexById.get(pid) ?? 999));
+      if (idx !== 999) nodePriority[`account-${cfg.id}`] = idx;
+    }
+    for (const preset of presets) {
+      if (nodePriority[`preset-${preset.id}`] !== undefined || !preset.feedProviderId) continue;
+      const idx = providerIndexById.get(preset.feedProviderId);
+      if (idx !== undefined) nodePriority[`preset-${preset.id}`] = idx;
+    }
 
     const positions = computeAutoLayout(connectedNodes, currentEdges, nodePriority, expandedArticleIds);
 
@@ -895,27 +909,21 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       if (!byTypeIds[n.type]) byTypeIds[n.type] = [];
       byTypeIds[n.type].push(n.id);
     }
+    // Sort primarily by provider creation order (nodePriority), falling back to y within
+    // the same provider — guarantees an earlier-created provider's nodes always sit above
+    // a later one's in every column (ts/router/article/adaccount/preset), not just the
+    // provider column itself, eliminating cross-provider interleaving and edge crossing.
     for (const nodeIds of Object.values(byTypeIds)) {
       if (nodeIds.length <= 1) continue;
-      nodeIds.sort((a, b) => positions[a].y - positions[b].y);
+      nodeIds.sort((a, b) => {
+        const pa = nodePriority[a] ?? 999;
+        const pb = nodePriority[b] ?? 999;
+        if (pa !== pb) return pa - pb;
+        return positions[a].y - positions[b].y;
+      });
       for (let i = 1; i < nodeIds.length; i++) {
         const minY = positions[nodeIds[i - 1]].y + nodeMinGap(nodeIds[i - 1]);
         if (positions[nodeIds[i]].y < minY) positions[nodeIds[i]].y = minY;
-      }
-    }
-
-    // Enforce creation order for providers: after collision resolution (which sorts by y),
-    // do a final pass keyed on sortIndex so unconnected providers never land above an
-    // earlier-created connected provider.
-    const sortedProviders = providerNodes
-      .slice()
-      .sort((a, b) => ((a.data?.sortIndex as number) ?? 0) - ((b.data?.sortIndex as number) ?? 0));
-    for (let i = 1; i < sortedProviders.length; i++) {
-      const prev = sortedProviders[i - 1];
-      const curr = sortedProviders[i];
-      if (!positions[curr.id] || !positions[prev.id]) continue;
-      if (positions[curr.id].y < positions[prev.id].y + ROW_GAP) {
-        positions[curr.id].y = positions[prev.id].y + ROW_GAP;
       }
     }
 
@@ -947,11 +955,10 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         const r = store.routerNodes.find((rt) => rt.id === n.id);
         return r?.feedProviderId ?? null;
       }
-      if (n.type === "group") {
-        const rowId = n.data.rowId as string;
-        const edge = store.edges.rowToProvider.find((e) => e.rowId === rowId);
-        return edge?.feedProviderId ?? null;
-      }
+      // Rows are shared trunk content — a single row can fan into multiple providers
+      // (connectRowToProvider supports 1+ providers per row), so it isn't owned by any
+      // one lane. Including it pulled a lane's minX (and its label) back to the row column.
+      if (n.type === "group") return null;
       if (n.type === "article") {
         const articleId = (n.data.article as Article | undefined)?.id;
         const edge = store.edges.providerToArticle.find((e) => e.articleId === articleId);
