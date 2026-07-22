@@ -73,6 +73,33 @@ function parseTsNodeId(nodeId: string): { feedProviderId: string; platform: "sna
 const ROW_GAP = 130;
 const ROW_CARD_STEP = 172; // CARD_W (160) + CARD_GAP (12) — used to shift row left when prepending a card
 
+// Shifts each group, in a fixed stacking order, down as a rigid block until it
+// clears the previous group's bottom + gutter. Mutates `positions` in place. Used
+// both per-provider and, nested inside each provider, per-traffic-source — the
+// hard "nodes cannot cross" grid guarantee.
+function enforceBands(
+  order: string[],
+  groups: Record<string, string[]>,
+  positions: Record<string, { x: number; y: number }>,
+  heightForId: (id: string) => number,
+  gutter: number
+) {
+  let prevBottom: number | null = null;
+  for (const key of order) {
+    const ids = groups[key];
+    if (!ids?.length) continue;
+    const top = Math.min(...ids.map((id) => positions[id].y));
+    const bottom = Math.max(...ids.map((id) => positions[id].y + heightForId(id)));
+    if (prevBottom !== null && top < prevBottom + gutter) {
+      const delta: number = prevBottom + gutter - top;
+      ids.forEach((id) => { positions[id].y += delta; });
+      prevBottom = bottom + delta;
+    } else {
+      prevBottom = bottom;
+    }
+  }
+}
+
 interface CampaignCanvasProps {
   adAccountId?: string;
   onReview: () => void;
@@ -151,9 +178,15 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     const providerOrder = new Map(sortedByCreation.map((p, i) => [p.id, i]));
     return presets
       .filter((p) => {
-        if (!p.feedProviderId) return true;
-        if (!activeProviderIdsFromArticles.has(p.feedProviderId)) return false;
         const platform = p.trafficSource === "facebook" ? "meta" : "snap";
+        // Legacy/unassigned presets (feedProviderId "") used to bypass the platform
+        // check entirely — still gate them by platform instead of showing unconditionally.
+        if (!p.feedProviderId) {
+          return sortedByCreation.some(
+            (prov) => activeProviderIdsFromArticles.has(prov.id) && providerHasTrafficSource(prov.id, platform)
+          );
+        }
+        if (!activeProviderIdsFromArticles.has(p.feedProviderId)) return false;
         return providerHasTrafficSource(p.feedProviderId, platform);
       })
       .sort((a, b) => (providerOrder.get(a.feedProviderId ?? "") ?? 999) - (providerOrder.get(b.feedProviderId ?? "") ?? 999));
@@ -190,6 +223,69 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       })
       .sort((a, b) => minProviderIndex(a.id) - minProviderIndex(b.id));
   }, [allAccounts, adAccountConfigs, activeProviderIdsFromArticles, sortedByCreation, providerHasTrafficSource]);
+
+  // ─── Shared node classifiers ──────────────────────────────────────────────────
+  // Used by both handleAutoLayout's hard-band enforcement and the LaneOverlay
+  // bounding-box memo below, so the two can never disagree about which nodes
+  // belong to which provider/platform. Plain functions (not memoized) — cheap,
+  // and reading component state directly here matches the rest of this file's
+  // existing pattern (e.g. sortedByCreation/adAccountConfigs read directly inside
+  // handleAutoLayout without being listed in its deps array).
+  const providerIdForNode = (n: Node): string | null => {
+    if (n.type === "provider") return (n.data.providerId as string) ?? null;
+    if (n.type === "ts") return (n.data.feedProviderId as string) ?? null;
+    if (n.type === "router") {
+      const r = store.routerNodes.find((rt) => rt.id === n.id);
+      return r?.feedProviderId ?? null;
+    }
+    // Rows are shared trunk content — a single row can fan into multiple providers
+    // (connectRowToProvider supports 1+ providers per row), so it isn't owned by
+    // any one lane.
+    if (n.type === "group") return null;
+    if (n.type === "article") {
+      const articleId = (n.data.article as Article | undefined)?.id;
+      const edge = store.edges.providerToArticle.find((e) => e.articleId === articleId);
+      return edge?.feedProviderId ?? null;
+    }
+    if (n.type === "adaccount") {
+      const accountId = n.data.accountId as string;
+      const cfg = adAccountConfigs.find((c) => c.id === accountId);
+      return cfg?.feedProviderIds?.[0] ?? null;
+    }
+    if (n.type === "preset") {
+      const presetId = (n.data.preset as CampaignPreset | undefined)?.id;
+      return presets.find((p) => p.id === presetId)?.feedProviderId || null;
+    }
+    return null;
+  };
+
+  const nodeHeightFor = (n: Node, expandedIds: Set<string>): number => {
+    if (n.type === "group") return GROUP_CARD_H;
+    if (n.type === "router") return 36;
+    if (n.type === "article" && expandedIds.has(n.id)) return ARTICLE_EXPANDED_H;
+    return NODE_HEIGHT;
+  };
+
+  // A node's platform only matters within an already-resolved provider (used to
+  // further split a provider's band into Snap/Meta sub-bands). A node that isn't
+  // exclusively owned by one platform — a shared article fed by both of a
+  // provider's TS nodes, or the Provider/Router/Row nodes themselves — returns
+  // null and is left out of that split, same treatment as rows in providerIdForNode.
+  const platformForNode = (n: Node): "snap" | "meta" | null => {
+    if (n.type === "ts") return (n.data.platform as "snap" | "meta") ?? null;
+    if (n.type === "adaccount") return (n.data.platform as "snap" | "meta") ?? null;
+    if (n.type === "preset") {
+      const preset = presets.find((p) => p.id === (n.data.preset as CampaignPreset | undefined)?.id);
+      return preset ? (preset.trafficSource === "facebook" ? "meta" : "snap") : null;
+    }
+    if (n.type === "article") {
+      const article = n.data.article as Article | undefined;
+      if (!article) return null;
+      const platforms = new Set(article.trafficSources.map((t) => (t === "Meta" ? "meta" : "snap")));
+      return platforms.size === 1 ? ([...platforms][0] as "snap" | "meta") : null;
+    }
+    return null;
+  };
 
   // ─── Disconnect callbacks (one per node type) ────────────────────────────────
   // Uses getState() so it reads current store without closing over the store object,
@@ -927,6 +1023,37 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       }
     }
 
+    const heightForId = (id: string) => {
+      const n = currentNodes.find((nd) => nd.id === id);
+      return n ? nodeHeightFor(n, expandedArticleIds) : NODE_HEIGHT;
+    };
+
+    // Pass A: hard, non-overlapping vertical band per provider (creation order) —
+    // the guarantee LaneOverlay's bands visually represent, enforced here so a
+    // provider with few nodes in any one column (e.g. a single connected article)
+    // can't still land inside an earlier provider's range.
+    const byProviderNodeIds: Record<string, string[]> = {};
+    for (const n of currentNodes) {
+      if (!positions[n.id]) continue;
+      const pid = providerIdForNode(n);
+      if (pid) (byProviderNodeIds[pid] ??= []).push(n.id);
+    }
+    enforceBands(sortedByCreation.map((p) => p.id), byProviderNodeIds, positions, heightForId, 100);
+
+    // Pass B: within each provider's now-separated band, further split Snap content
+    // from Meta content the same way — nodes cannot cross between traffic sources.
+    for (const provider of sortedByCreation) {
+      const ids = byProviderNodeIds[provider.id];
+      if (!ids?.length) continue;
+      const byPlatform: Record<string, string[]> = { snap: [], meta: [] };
+      for (const id of ids) {
+        const n = currentNodes.find((nd) => nd.id === id);
+        const platform = n ? platformForNode(n) : null;
+        if (platform) byPlatform[platform].push(id);
+      }
+      enforceBands(["snap", "meta"], byPlatform, positions, heightForId, 60);
+    }
+
     useCanvasStore.getState().setNodePositions(positions);
     nodePositionsRef.current = { ...nodePositionsRef.current, ...positions };
     setNodes((prev) => prev.map((n) => positions[n.id] ? { ...n, position: positions[n.id] } : n));
@@ -942,46 +1069,12 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   // Per-provider lane bounding boxes, derived from the already-laid-out `nodes` state —
   // purely decorative (LaneOverlay renders outside the nodes array, never touching fitView).
   const laneBounds = useMemo((): LaneBound[] => {
-    const heightFor = (n: Node): number => {
-      if (n.type === "group") return GROUP_CARD_H;
-      if (n.type === "router") return 36;
-      if (n.type === "article" && expandedArticleIds.has(n.id)) return ARTICLE_EXPANDED_H;
-      return NODE_HEIGHT;
-    };
-    const providerIdForNode = (n: Node): string | null => {
-      if (n.type === "provider") return (n.data.providerId as string) ?? null;
-      if (n.type === "ts") return (n.data.feedProviderId as string) ?? null;
-      if (n.type === "router") {
-        const r = store.routerNodes.find((rt) => rt.id === n.id);
-        return r?.feedProviderId ?? null;
-      }
-      // Rows are shared trunk content — a single row can fan into multiple providers
-      // (connectRowToProvider supports 1+ providers per row), so it isn't owned by any
-      // one lane. Including it pulled a lane's minX (and its label) back to the row column.
-      if (n.type === "group") return null;
-      if (n.type === "article") {
-        const articleId = (n.data.article as Article | undefined)?.id;
-        const edge = store.edges.providerToArticle.find((e) => e.articleId === articleId);
-        return edge?.feedProviderId ?? null;
-      }
-      if (n.type === "adaccount") {
-        const accountId = n.data.accountId as string;
-        const cfg = adAccountConfigs.find((c) => c.id === accountId);
-        return cfg?.feedProviderIds?.[0] ?? null;
-      }
-      if (n.type === "preset") {
-        const presetId = (n.data.preset as CampaignPreset | undefined)?.id;
-        return presets.find((p) => p.id === presetId)?.feedProviderId || null;
-      }
-      return null;
-    };
-
     const byProvider: Record<string, { minX: number; maxX: number; minY: number; maxY: number }> = {};
     for (const n of nodes) {
       const pid = providerIdForNode(n);
       if (!pid) continue;
       const top = n.position.y;
-      const bottom = top + heightFor(n);
+      const bottom = top + nodeHeightFor(n, expandedArticleIds);
       const left = n.position.x;
       const right = left + (n.type === "group" ? GROUP_CARD_W : NODE_WIDTH);
       if (!byProvider[pid]) byProvider[pid] = { minX: left, maxX: right, minY: top, maxY: bottom };
