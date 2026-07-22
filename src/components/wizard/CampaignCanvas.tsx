@@ -1028,20 +1028,18 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       return n ? nodeHeightFor(n, expandedArticleIds) : NODE_HEIGHT;
     };
 
-    // Pass A: hard, non-overlapping vertical band per provider (creation order) —
-    // the guarantee LaneOverlay's bands visually represent, enforced here so a
-    // provider with few nodes in any one column (e.g. a single connected article)
-    // can't still land inside an earlier provider's range.
     const byProviderNodeIds: Record<string, string[]> = {};
     for (const n of currentNodes) {
       if (!positions[n.id]) continue;
       const pid = providerIdForNode(n);
       if (pid) (byProviderNodeIds[pid] ??= []).push(n.id);
     }
-    enforceBands(sortedByCreation.map((p) => p.id), byProviderNodeIds, positions, heightForId, 100);
 
-    // Pass B: within each provider's now-separated band, further split Snap content
-    // from Meta content the same way — nodes cannot cross between traffic sources.
+    // Pass B runs FIRST: within each provider (independent of the others), split
+    // Snap content from Meta content into non-overlapping sub-bands. This can push
+    // a provider's own bottom further down than its pre-split raw positions had it
+    // (e.g. a Meta-only account that started out, before this pass, positioned
+    // above its Snap sibling) — nodes cannot cross between traffic sources.
     for (const provider of sortedByCreation) {
       const ids = byProviderNodeIds[provider.id];
       if (!ids?.length) continue;
@@ -1053,6 +1051,14 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       }
       enforceBands(["snap", "meta"], byPlatform, positions, heightForId, 60);
     }
+
+    // Pass A runs SECOND, on the now-finalized (post-platform-split) positions —
+    // hard, non-overlapping vertical band per provider (creation order). Running
+    // this after Pass B is what makes it account for the full extent Pass B may
+    // have just pushed a provider down to; running it first (as an earlier version
+    // did) let Pass B extend a provider past the gap Pass A had already allocated,
+    // spilling into the next provider's band.
+    enforceBands(sortedByCreation.map((p) => p.id), byProviderNodeIds, positions, heightForId, 100);
 
     useCanvasStore.getState().setNodePositions(positions);
     nodePositionsRef.current = { ...nodePositionsRef.current, ...positions };
