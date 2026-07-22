@@ -37,7 +37,8 @@ interface CanvasAdAccount {
   name: string;
   platform: "snap" | "meta";
 }
-import { computeAutoLayout, CanvasControls, ARTICLE_EXPANDED_H } from "./CanvasControls";
+import { computeAutoLayout, CanvasControls, ARTICLE_EXPANDED_H, NODE_WIDTH, NODE_HEIGHT, GROUP_CARD_W, GROUP_CARD_H } from "./CanvasControls";
+import { LaneOverlay, type LaneBound } from "./LaneOverlay";
 import { CreativeGroupNode, CARD_W, CARD_GAP, DOCK_LEAD, DOCK_W, DOCK_TO_HANDLE } from "./nodes/CreativeGroupNode";
 import { ProviderNode } from "./nodes/ProviderNode";
 import { TrafficSourceNode } from "./nodes/TrafficSourceNode";
@@ -930,6 +931,81 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   const expandedArticleIds = useCanvasStore((s) => s.expandedArticleIds);
   useEffect(() => { handleAutoLayout(); }, [expandedArticleIds, handleAutoLayout]);
 
+  // Per-provider lane bounding boxes, derived from the already-laid-out `nodes` state —
+  // purely decorative (LaneOverlay renders outside the nodes array, never touching fitView).
+  const laneBounds = useMemo((): LaneBound[] => {
+    const heightFor = (n: Node): number => {
+      if (n.type === "group") return GROUP_CARD_H;
+      if (n.type === "router") return 36;
+      if (n.type === "article" && expandedArticleIds.has(n.id)) return ARTICLE_EXPANDED_H;
+      return NODE_HEIGHT;
+    };
+    const providerIdForNode = (n: Node): string | null => {
+      if (n.type === "provider") return (n.data.providerId as string) ?? null;
+      if (n.type === "ts") return (n.data.feedProviderId as string) ?? null;
+      if (n.type === "router") {
+        const r = store.routerNodes.find((rt) => rt.id === n.id);
+        return r?.feedProviderId ?? null;
+      }
+      if (n.type === "group") {
+        const rowId = n.data.rowId as string;
+        const edge = store.edges.rowToProvider.find((e) => e.rowId === rowId);
+        return edge?.feedProviderId ?? null;
+      }
+      if (n.type === "article") {
+        const articleId = (n.data.article as Article | undefined)?.id;
+        const edge = store.edges.providerToArticle.find((e) => e.articleId === articleId);
+        return edge?.feedProviderId ?? null;
+      }
+      if (n.type === "adaccount") {
+        const accountId = n.data.accountId as string;
+        const cfg = adAccountConfigs.find((c) => c.id === accountId);
+        return cfg?.feedProviderIds?.[0] ?? null;
+      }
+      if (n.type === "preset") {
+        const presetId = (n.data.preset as CampaignPreset | undefined)?.id;
+        return presets.find((p) => p.id === presetId)?.feedProviderId || null;
+      }
+      return null;
+    };
+
+    const byProvider: Record<string, { minX: number; maxX: number; minY: number; maxY: number }> = {};
+    for (const n of nodes) {
+      const pid = providerIdForNode(n);
+      if (!pid) continue;
+      const top = n.position.y;
+      const bottom = top + heightFor(n);
+      const left = n.position.x;
+      const right = left + (n.type === "group" ? GROUP_CARD_W : NODE_WIDTH);
+      if (!byProvider[pid]) byProvider[pid] = { minX: left, maxX: right, minY: top, maxY: bottom };
+      else {
+        const b = byProvider[pid];
+        b.minX = Math.min(b.minX, left);
+        b.maxX = Math.max(b.maxX, right);
+        b.minY = Math.min(b.minY, top);
+        b.maxY = Math.max(b.maxY, bottom);
+      }
+    }
+
+    return sortedByCreation
+      .filter((p) => byProvider[p.id])
+      .map((p) => {
+        const providerNode = nodes.find((n) => n.type === "provider" && n.data.providerId === p.id);
+        const tsCenters = (["snap", "meta"] as const)
+          .map((platform) => nodes.find((n) => n.id === `ts-${p.id}-${platform}`))
+          .filter((n): n is Node => !!n)
+          .map((n) => ({ x: n.position.x + NODE_WIDTH / 2, y: n.position.y + NODE_HEIGHT / 2 }));
+        return {
+          providerId: p.id,
+          name: p.name,
+          color: providerColorMap[p.id] ?? "#94a3b8",
+          ...byProvider[p.id],
+          providerRightX: providerNode ? providerNode.position.x + NODE_WIDTH : undefined,
+          tsCenters: tsCenters.length === 2 ? tsCenters : undefined,
+        };
+      });
+  }, [nodes, expandedArticleIds, store.routerNodes, store.edges.rowToProvider, store.edges.providerToArticle, adAccountConfigs, presets, sortedByCreation, providerColorMap]);
+
   const matrix = store.buildCampaignMatrix();
 
   const openAddCreative = useCallback(() => {
@@ -970,6 +1046,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           proOptions={{ hideAttribution: true }}
         >
           <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#374151" />
+          <LaneOverlay lanes={laneBounds} />
           <Controls showInteractive={false} />
           <MiniMap nodeStrokeWidth={3} zoomable pannable />
         </ReactFlow>

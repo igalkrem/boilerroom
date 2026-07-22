@@ -1,22 +1,24 @@
 "use client";
 
-import { EdgeProps, getSmoothStepPath } from "@xyflow/react";
+import { EdgeProps } from "@xyflow/react";
+
+// Single cubic bezier per edge — both control points sit at the horizontal midpoint
+// between source and target, producing a clean S-curve with no self-overlap
+// (replaces the old right-angle smooth-step routing).
+function getMidpointBezierPath(sourceX: number, sourceY: number, targetX: number, targetY: number): string {
+  const midX = (sourceX + targetX) / 2;
+  return `M${sourceX},${sourceY} C${midX},${sourceY} ${midX},${targetY} ${targetX},${targetY}`;
+}
 
 export function ProviderEdge({
   sourceX,
   sourceY,
   targetX,
   targetY,
-  sourcePosition,
-  targetPosition,
   data,
   selected,
 }: EdgeProps & { data?: { color?: string } }) {
-  const [edgePath] = getSmoothStepPath({
-    sourceX, sourceY, sourcePosition,
-    targetX, targetY, targetPosition,
-    borderRadius: 16,
-  });
+  const edgePath = getMidpointBezierPath(sourceX, sourceY, targetX, targetY);
   const color = data?.color ?? "#94a3b8";
 
   return (

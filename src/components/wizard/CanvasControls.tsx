@@ -8,6 +8,7 @@ const NODE_HEIGHT = 90;
 const GROUP_CARD_W = 340; // approx two-card row estimate for dagre
 const GROUP_CARD_H = 285;
 export const ARTICLE_EXPANDED_H = 230;
+export { NODE_WIDTH, NODE_HEIGHT, GROUP_CARD_W, GROUP_CARD_H };
 
 export function computeAutoLayout(nodes: Node[], edges: Edge[], nodePriority?: Record<string, number>, expandedArticleIds?: Set<string>): Record<string, { x: number; y: number }> {
   const g = new dagre.graphlib.Graph();
