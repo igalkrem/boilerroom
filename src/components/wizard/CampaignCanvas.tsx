@@ -1069,19 +1069,30 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   // Per-provider lane bounding boxes, derived from the already-laid-out `nodes` state —
   // purely decorative (LaneOverlay renders outside the nodes array, never touching fitView).
   const laneBounds = useMemo((): LaneBound[] => {
-    const byProvider: Record<string, { minX: number; maxX: number; minY: number; maxY: number }> = {};
+    // Global x-range across every node currently on the canvas — every lane's band
+    // (and, by extension, the divider between them) spans this same full width,
+    // regardless of how far right THIS specific provider's own content currently
+    // reaches. Without this, a provider missing content in a later column (e.g. no
+    // accounts/presets picked yet) got a band that stopped short of the full flow,
+    // so the divider between two providers looked like it only ran partway across.
+    let globalMinX = Infinity;
+    let globalMaxX = -Infinity;
+    for (const n of nodes) {
+      const left = n.position.x;
+      const right = left + (n.type === "group" ? GROUP_CARD_W : NODE_WIDTH);
+      globalMinX = Math.min(globalMinX, left);
+      globalMaxX = Math.max(globalMaxX, right);
+    }
+
+    const byProvider: Record<string, { minY: number; maxY: number }> = {};
     for (const n of nodes) {
       const pid = providerIdForNode(n);
       if (!pid) continue;
       const top = n.position.y;
       const bottom = top + nodeHeightFor(n, expandedArticleIds);
-      const left = n.position.x;
-      const right = left + (n.type === "group" ? GROUP_CARD_W : NODE_WIDTH);
-      if (!byProvider[pid]) byProvider[pid] = { minX: left, maxX: right, minY: top, maxY: bottom };
+      if (!byProvider[pid]) byProvider[pid] = { minY: top, maxY: bottom };
       else {
         const b = byProvider[pid];
-        b.minX = Math.min(b.minX, left);
-        b.maxX = Math.max(b.maxX, right);
         b.minY = Math.min(b.minY, top);
         b.maxY = Math.max(b.maxY, bottom);
       }
@@ -1099,12 +1110,14 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           providerId: p.id,
           name: p.name,
           color: providerColorMap[p.id] ?? "#94a3b8",
+          minX: globalMinX,
+          maxX: globalMaxX,
           ...byProvider[p.id],
           providerRightX: providerNode ? providerNode.position.x + NODE_WIDTH : undefined,
           tsCenters: tsCenters.length === 2 ? tsCenters : undefined,
         };
       });
-  }, [nodes, expandedArticleIds, store.routerNodes, store.edges.rowToProvider, store.edges.providerToArticle, adAccountConfigs, presets, sortedByCreation, providerColorMap]);
+  }, [nodes, expandedArticleIds, store.routerNodes, store.edges.providerToArticle, adAccountConfigs, presets, sortedByCreation, providerColorMap]);
 
   const matrix = store.buildCampaignMatrix();
 
