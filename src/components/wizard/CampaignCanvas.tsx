@@ -933,7 +933,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       return Math.max(mx, sx + nw);
     }, 0);
     const P = maxRowHandleX + 120;
-    const dynColX = { group: 0, provider: P, ts: P + 200, router: P + 400, article: P + 640, adaccount: P + 960, preset: P + 1260 };
+    const dynColX = { group: 0, provider: P, ts: P + 340, router: P + 540, article: P + 780, adaccount: P + 1100, preset: P + 1400 };
 
     // Build stable tiebreaker priorities so nodes from provider[0] always sort above provider[1].
     // Without this, routers and sibling providers land in the same dagre rank with identical

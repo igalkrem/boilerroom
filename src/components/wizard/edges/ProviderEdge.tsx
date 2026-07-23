@@ -10,7 +10,7 @@ import { EdgeProps } from "@xyflow/react";
 function getOrthogonalPath(sourceX: number, sourceY: number, targetX: number, targetY: number): string {
   if (Math.abs(sourceY - targetY) < 1.5) return `M${sourceX},${sourceY} L${targetX},${targetY}`;
   const r = 10;
-  const trunk = sourceX + Math.min(26, (targetX - sourceX) * 0.42);
+  const trunk = sourceX + Math.min(70, (targetX - sourceX) * 0.3);
   const dir = targetY > sourceY ? 1 : -1;
   const rr = Math.min(r, Math.abs(targetY - sourceY) / 2, targetX - trunk);
   return (
