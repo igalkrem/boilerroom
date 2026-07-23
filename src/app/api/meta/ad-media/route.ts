@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAd } from "@/lib/meta/ads";
 import { getAdCreative } from "@/lib/meta/creatives";
-import { resolveAdMedia } from "@/lib/meta/media-download";
+import { resolveBatchMedia, MAX_ADS, type AdWithCreative } from "@/lib/meta/media-download";
 import { getSession, isSessionValid, isMetaConnected, isMetaAdAccountAllowed } from "@/lib/session";
+import type { MetaAd } from "@/types/meta";
 import JSZip from "jszip";
 
 export const maxDuration = 120;
@@ -27,6 +28,12 @@ function extensionFor(contentType: string | null, type: "image" | "video"): stri
   return type === "image" ? "jpg" : "mp4";
 }
 
+interface AdStatus {
+  adId: string;
+  adName?: string;
+  error?: "not_found" | "forbidden";
+}
+
 export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!isSessionValid(session)) {
@@ -36,45 +43,63 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "meta_not_connected" }, { status: 403 });
   }
 
-  const adId = request.nextUrl.searchParams.get("adId");
+  const idsParam = request.nextUrl.searchParams.get("adIds") ?? request.nextUrl.searchParams.get("adId");
   const download = request.nextUrl.searchParams.get("download");
-  if (!adId) {
-    return NextResponse.json({ error: "adId required" }, { status: 400 });
+  const adIds = [...new Set((idsParam ?? "").split(",").map((s) => s.trim()).filter(Boolean))].slice(0, MAX_ADS);
+  if (adIds.length === 0) {
+    return NextResponse.json({ error: "adIds required" }, { status: 400 });
   }
 
-  let ad;
-  try {
-    ad = await getAd(adId);
-  } catch (err) {
-    console.error("[meta/ad-media] getAd failed:", err);
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
-  }
-  if (!ad.account_id || !isMetaAdAccountAllowed(session, `act_${ad.account_id}`)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
+  const statusByAdId = new Map<string, AdStatus>();
+  const adsByAdId = new Map<string, AdWithCreative>();
 
-  const creativeId = (ad.creative as { id?: string } | undefined)?.id;
-  const creative = creativeId ? await getAdCreative(creativeId).catch(() => null) : null;
+  await Promise.all(
+    adIds.map(async (adId) => {
+      let ad: MetaAd;
+      try {
+        ad = await getAd(adId);
+      } catch (err) {
+        console.error(`[meta/ad-media] getAd failed for ${adId}:`, err);
+        statusByAdId.set(adId, { adId, error: "not_found" });
+        return;
+      }
+      if (!ad.account_id || !isMetaAdAccountAllowed(session, `act_${ad.account_id}`)) {
+        statusByAdId.set(adId, { adId, error: "forbidden" });
+        return;
+      }
+      const creativeId = (ad.creative as { id?: string } | undefined)?.id;
+      const creative = creativeId ? await getAdCreative(creativeId).catch(() => null) : null;
+      adsByAdId.set(adId, { adId, ad, creative });
+      statusByAdId.set(adId, { adId, adName: ad.name });
+    })
+  );
+
+  const adStatuses = adIds.map((adId) => statusByAdId.get(adId)!);
+  const validAds = adIds.map((adId) => adsByAdId.get(adId)).filter((a): a is AdWithCreative => !!a);
+
+  if (validAds.length === 0) {
+    return NextResponse.json({ error: "no_accessible_ads", ads: adStatuses }, { status: 403 });
+  }
 
   let resolved;
   try {
-    resolved = await resolveAdMedia(ad, creative);
+    resolved = await resolveBatchMedia(validAds);
   } catch (err) {
-    console.error("[meta/ad-media] resolveAdMedia failed:", err);
+    console.error("[meta/ad-media] resolveBatchMedia failed:", err);
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 
-  const slug = slugify(ad.name);
+  const zipSlug = validAds.length === 1 ? slugify(validAds[0].ad.name) : `ads-${validAds.length}`;
 
   if (!download) {
     const items = resolved.items.map((item, idx) => ({
       key: item.key,
       type: item.type,
       url: item.url,
-      filename: `${slug}_${item.type}_${idx + 1}_${item.key.slice(0, 8)}`,
+      filename: `${item.type}_${idx + 1}_${item.key.slice(0, 8)}`,
     }));
     return NextResponse.json({
-      adName: ad.name,
+      ads: adStatuses,
       items,
       truncated: resolved.truncated,
       unresolvedCount: resolved.unresolvedCount,
@@ -92,7 +117,7 @@ export async function GET(request: NextRequest) {
         if (contentType && !contentType.startsWith("image/") && !contentType.startsWith("video/")) return;
         const buffer = Buffer.from(await res.arrayBuffer());
         const ext = extensionFor(contentType, item.type);
-        zip.file(`${slug}_${item.type}_${idx + 1}_${item.key.slice(0, 8)}.${ext}`, buffer);
+        zip.file(`${item.type}_${idx + 1}_${item.key.slice(0, 8)}.${ext}`, buffer);
         zipped++;
       } catch (err) {
         console.error(`[meta/ad-media] failed to fetch media ${item.key}:`, err);
@@ -109,7 +134,7 @@ export async function GET(request: NextRequest) {
     status: 200,
     headers: {
       "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="${slug}-media.zip"`,
+      "Content-Disposition": `attachment; filename="${zipSlug}-media.zip"`,
     },
   });
 }

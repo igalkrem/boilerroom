@@ -86,26 +86,62 @@ export async function fetchVideoUrls(
   return out;
 }
 
-export const MAX_MEDIA_ITEMS = 30;
+export const MAX_MEDIA_ITEMS = 60;
+export const MAX_ADS = 20;
 
-export async function resolveAdMedia(
-  ad: MetaAd,
-  creative: MetaAdCreative | null,
+export interface AdWithCreative {
+  adId: string;
+  ad: MetaAd;
+  creative: MetaAdCreative | null;
+}
+
+// Resolves media across MULTIPLE ads at once, deduped globally by hash/video_id
+// so an asset reused across several ads (or the same ad account) is only
+// resolved and downloaded once — this is the actual point of batching, not
+// just convenience. Image hashes are account-scoped on Meta's side (the
+// /adimages lookup requires act_<id>), so hashes are grouped by their owning
+// ad account before resolving; video ids are resolved in one global batch
+// since the video-node lookup isn't account-scoped.
+export async function resolveBatchMedia(
+  adsWithCreatives: AdWithCreative[],
   token?: string
 ): Promise<{ items: ResolvedMediaItem[]; truncated: boolean; unresolvedCount: number }> {
-  const { imageHashes, videoIds } = resolveAdMediaRefs(ad, creative);
-  const totalRefs = imageHashes.length + videoIds.length;
-  const truncated = totalRefs > MAX_MEDIA_ITEMS;
-  const cappedImageHashes = truncated ? imageHashes.slice(0, MAX_MEDIA_ITEMS) : imageHashes;
-  const cappedVideoIds = truncated
-    ? videoIds.slice(0, Math.max(0, MAX_MEDIA_ITEMS - cappedImageHashes.length))
-    : videoIds;
+  const imageHashToAccount = new Map<string, string>();
+  const allVideoIds = new Set<string>();
 
-  const adAccountId = ad.account_id ?? creative?.account_id;
-  const [imageUrls, videoUrls] = await Promise.all([
-    adAccountId ? fetchImageUrls(adAccountId, cappedImageHashes, token) : Promise.resolve(new Map<string, string>()),
+  for (const { ad, creative } of adsWithCreatives) {
+    const { imageHashes, videoIds } = resolveAdMediaRefs(ad, creative);
+    const accountId = ad.account_id ?? creative?.account_id;
+    for (const hash of imageHashes) {
+      if (accountId && !imageHashToAccount.has(hash)) imageHashToAccount.set(hash, accountId);
+    }
+    for (const videoId of videoIds) allVideoIds.add(videoId);
+  }
+
+  const allImageHashes = [...imageHashToAccount.keys()];
+  const totalRefs = allImageHashes.length + allVideoIds.size;
+  const truncated = totalRefs > MAX_MEDIA_ITEMS;
+  const cappedImageHashes = truncated ? allImageHashes.slice(0, MAX_MEDIA_ITEMS) : allImageHashes;
+  const cappedVideoIds = truncated
+    ? [...allVideoIds].slice(0, Math.max(0, MAX_MEDIA_ITEMS - cappedImageHashes.length))
+    : [...allVideoIds];
+
+  const hashesByAccount = new Map<string, string[]>();
+  for (const hash of cappedImageHashes) {
+    const accountId = imageHashToAccount.get(hash)!;
+    const list = hashesByAccount.get(accountId) ?? [];
+    list.push(hash);
+    hashesByAccount.set(accountId, list);
+  }
+
+  const [imageUrlMaps, videoUrls] = await Promise.all([
+    Promise.all(
+      [...hashesByAccount.entries()].map(([accountId, hashes]) => fetchImageUrls(accountId, hashes, token))
+    ),
     fetchVideoUrls(cappedVideoIds, token),
   ]);
+  const imageUrls = new Map<string, string>();
+  for (const map of imageUrlMaps) for (const [hash, url] of map) imageUrls.set(hash, url);
 
   const items: ResolvedMediaItem[] = [];
   for (const hash of cappedImageHashes) {
