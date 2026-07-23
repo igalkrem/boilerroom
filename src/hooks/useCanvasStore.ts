@@ -471,6 +471,9 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   buildCampaignMatrix: (): CampaignBuildItem[] => {
     const { creativeRows, creativeGroups, edges } = get();
     const presetMap = new Map(loadPresets().map((p) => [p.id, p]));
+    const adAccountConfigs = loadAdAccountConfigs();
+    const accountPlatform = (adAccountId: string) =>
+      adAccountConfigs.find((c) => c.id === adAccountId)?.platform ?? "snap";
     const items: CampaignBuildItem[] = [];
 
     for (const { rowId, feedProviderId } of edges.rowToProvider) {
@@ -487,8 +490,11 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
         for (const { articleId, platform, headline, headlineRac, metaHeadline, metaPrimaryText } of articleEdges) {
           const presetEdges = edges.articleToPreset.filter((e) => e.articleId === articleId);
+          // articleToAdAccount keys only by articleId — the same article can be picked
+          // independently for both platforms, so an account must also match this edge's own
+          // platform or a Meta account could inherit a Snap pick's headline/preset, and vice versa.
           const eligibleAccounts = edges.articleToAdAccount
-            .filter((e) => e.articleId === articleId)
+            .filter((e) => e.articleId === articleId && accountPlatform(e.adAccountId) === platform)
             .map((e) => e.adAccountId);
 
           if (eligibleAccounts.length === 0) continue;

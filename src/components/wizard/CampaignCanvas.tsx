@@ -635,13 +635,21 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       });
     }
 
-    // AdAccount → Preset (derived from articleToAdAccount + articleToPreset)
+    // AdAccount → Preset (derived from articleToAdAccount + articleToPreset). Both edge lists
+    // key only by articleId (an article can be picked independently for both platforms under
+    // the same articleId), so every join here must also match on the preset's own platform —
+    // otherwise a Meta account sharing that articleId gets wired to a Snap preset, and vice versa.
     for (const pe of store.edges.articleToPreset) {
-      const provEdge = store.edges.providerToArticle.find((e) => e.articleId === pe.articleId);
+      const preset = presets.find((p) => p.id === pe.presetId);
+      const presetPlatform = preset?.trafficSource === "facebook" ? "meta" : "snap";
+      const provEdge = store.edges.providerToArticle.find(
+        (e) => e.articleId === pe.articleId && e.platform === presetPlatform
+      );
       const color = provEdge ? (providerColorMap[provEdge.feedProviderId] ?? "#94a3b8") : "#94a3b8";
       const connectedAccounts = store.edges.articleToAdAccount
         .filter((ae) => ae.articleId === pe.articleId)
-        .map((ae) => ae.adAccountId);
+        .map((ae) => ae.adAccountId)
+        .filter((accountId) => allAccounts.find((a) => a.id === accountId)?.platform === presetPlatform);
       for (const accountId of connectedAccounts) {
         const edgeId = `ap-${accountId}-${pe.presetId}-${pe.articleId}`;
         if (!edges.some((ed) => ed.id === edgeId)) {
@@ -662,7 +670,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     store.edges, store.routerNodes,
-    providerColorMap, articles, allAccounts,
+    providerColorMap, articles, allAccounts, presets,
   ]);
 
   const [nodes, setNodes] = useNodesState(buildNodes());
