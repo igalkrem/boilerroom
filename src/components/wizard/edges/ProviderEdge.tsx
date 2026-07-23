@@ -2,18 +2,21 @@
 
 import { EdgeProps } from "@xyflow/react";
 
-// Single cubic bezier per edge — both control points sit at the horizontal midpoint
-// between source and target, producing a clean S-curve with no self-overlap
-// (replaces the old right-angle smooth-step routing). The offset has a minimum floor
-// so tight-gap edges (e.g. Provider → Traffic Source, ~24-30px of real clearance)
-// don't collapse into a pinched hook when the vertical spread is much larger than
-// the horizontal gap — below the floor, c1x/c2x cross over past each other instead.
-function getMidpointBezierPath(sourceX: number, sourceY: number, targetX: number, targetY: number): string {
-  const MIN_OFFSET = 50;
-  const offset = Math.max(Math.abs(targetX - sourceX) / 2, MIN_OFFSET);
-  const c1x = sourceX + offset;
-  const c2x = targetX - offset;
-  return `M${sourceX},${sourceY} C${c1x},${sourceY} ${c2x},${targetY} ${targetX},${targetY}`;
+// Orthogonal (90°-turn) routing: a short horizontal run out of the source, a single
+// rounded corner-pair down/up to the target's row, then a horizontal run into the
+// target. Edges in this canvas always flow left-to-right column-wise, so targetX is
+// always >= sourceX — the trunk never needs to move backward on x. Matches the
+// approved mockup's right-angle routing (replaces the earlier cubic-bezier S-curve).
+function getOrthogonalPath(sourceX: number, sourceY: number, targetX: number, targetY: number): string {
+  if (Math.abs(sourceY - targetY) < 1.5) return `M${sourceX},${sourceY} L${targetX},${targetY}`;
+  const r = 10;
+  const trunk = sourceX + Math.min(26, (targetX - sourceX) * 0.42);
+  const dir = targetY > sourceY ? 1 : -1;
+  const rr = Math.min(r, Math.abs(targetY - sourceY) / 2, targetX - trunk);
+  return (
+    `M${sourceX},${sourceY} H${trunk - rr} Q${trunk},${sourceY} ${trunk},${sourceY + dir * rr} ` +
+    `V${targetY - dir * rr} Q${trunk},${targetY} ${trunk + rr},${targetY} H${targetX}`
+  );
 }
 
 export function ProviderEdge({
@@ -24,7 +27,7 @@ export function ProviderEdge({
   data,
   selected,
 }: EdgeProps & { data?: { color?: string } }) {
-  const edgePath = getMidpointBezierPath(sourceX, sourceY, targetX, targetY);
+  const edgePath = getOrthogonalPath(sourceX, sourceY, targetX, targetY);
   const color = data?.color ?? "#94a3b8";
 
   return (

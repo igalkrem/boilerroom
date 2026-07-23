@@ -37,7 +37,7 @@ interface CanvasAdAccount {
   name: string;
   platform: "snap" | "meta";
 }
-import { computeAutoLayout, CanvasControls, ARTICLE_EXPANDED_H, NODE_WIDTH, NODE_HEIGHT, GROUP_CARD_W, GROUP_CARD_H } from "./CanvasControls";
+import { computeAutoLayout, CanvasControls, ARTICLE_EXPANDED_H, NODE_WIDTH, NODE_HEIGHT, GROUP_CARD_H } from "./CanvasControls";
 import { LaneOverlay, type LaneBound } from "./LaneOverlay";
 import { CreativeGroupNode, CARD_W, CARD_GAP, DOCK_LEAD, DOCK_W, DOCK_TO_HANDLE } from "./nodes/CreativeGroupNode";
 import { ProviderNode } from "./nodes/ProviderNode";
@@ -255,6 +255,37 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     if (n.type === "preset") {
       const presetId = (n.data.preset as CampaignPreset | undefined)?.id;
       return presets.find((p) => p.id === presetId)?.feedProviderId || null;
+    }
+    return null;
+  };
+
+  // Display-only fallback for laneBounds: a preset/adaccount with no real provider
+  // id (feedProviderId "" / feedProviderIds []) is still visible whenever *any*
+  // active provider matches its platform (see visiblePresets/visibleAccounts), but
+  // providerIdForNode returns null for it, so it would otherwise belong to no lane's
+  // bounding box. Pick the first matching active provider deterministically so the
+  // node renders inside a real lane instead of floating in the untinted gap between
+  // lanes. Never used for actual assignment/editing semantics, only for the overlay.
+  const fallbackLaneProviderId = (n: Node): string | null => {
+    if (n.type === "preset") {
+      const preset = n.data.preset as CampaignPreset | undefined;
+      if (!preset || preset.feedProviderId) return null;
+      const platform = preset.trafficSource === "facebook" ? "meta" : "snap";
+      return (
+        sortedByCreation.find(
+          (prov) => activeProviderIdsFromArticles.has(prov.id) && providerHasTrafficSource(prov.id, platform)
+        )?.id ?? null
+      );
+    }
+    if (n.type === "adaccount") {
+      if (n.data.platform === "meta") return null; // metaAllowedIds isn't tied to one provider — no reliable attribution
+      const cfg = adAccountConfigs.find((c) => c.id === (n.data.accountId as string));
+      if (cfg && cfg.feedProviderIds.length > 0) return null;
+      return (
+        sortedByCreation.find(
+          (prov) => activeProviderIdsFromArticles.has(prov.id) && providerHasTrafficSource(prov.id, "snap")
+        )?.id ?? null
+      );
     }
     return null;
   };
@@ -1116,11 +1147,16 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     // reaches. Without this, a provider missing content in a later column (e.g. no
     // accounts/presets picked yet) got a band that stopped short of the full flow,
     // so the divider between two providers looked like it only ran partway across.
+    // Row/creative (`group`) nodes are excluded, same as providerIdForNode's
+    // `group → null` — they're shared trunk content owned by no single lane, and
+    // (being the leftmost column at x:0) would otherwise drag every lane's band out
+    // to visually stretch behind the creative cards.
     let globalMinX = Infinity;
     let globalMaxX = -Infinity;
     for (const n of nodes) {
+      if (n.type === "group") continue;
       const left = n.position.x;
-      const right = left + (n.type === "group" ? GROUP_CARD_W : NODE_WIDTH);
+      const right = left + NODE_WIDTH;
       globalMinX = Math.min(globalMinX, left);
       globalMaxX = Math.max(globalMaxX, right);
     }
@@ -1132,7 +1168,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     // check (edge-based), not handleAutoLayout's connectedIds (not available here).
     const byLaneColOrphan: Record<string, Record<string, { connectedMaxY: number; orphanMinY: number }>> = {};
     for (const n of nodes) {
-      const pid = providerIdForNode(n);
+      const pid = providerIdForNode(n) ?? fallbackLaneProviderId(n);
       if (!pid) continue;
       const top = n.position.y;
       const bottom = top + nodeHeightFor(n, expandedArticleIds);
