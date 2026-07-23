@@ -3,11 +3,13 @@
 import { Handle, Position } from "@xyflow/react";
 import { useCanvasStore } from "@/hooks/useCanvasStore";
 import type { Article } from "@/types/article";
+import { SnapGhost } from "./AdAccountNode";
 
 export function ArticleNode({ id, data }: {
   id: string;
   data: {
     article: Article;
+    platform: "snap" | "meta";
     color: string;
     onDisconnectTarget: (nodeId: string) => void;
   };
@@ -15,7 +17,9 @@ export function ArticleNode({ id, data }: {
   const store = useCanvasStore();
   const expanded = useCanvasStore((s) => s.expandedArticleIds.has(id));
 
-  const articleEdges = store.edges.providerToArticle.filter((e) => e.articleId === data.article.id);
+  const articleEdges = store.edges.providerToArticle.filter(
+    (e) => e.articleId === data.article.id && e.platform === data.platform
+  );
   const connected = articleEdges.length > 0;
 
   const handleStyle = connected
@@ -45,7 +49,7 @@ export function ArticleNode({ id, data }: {
         id="in"
         className="!w-3.5 !h-3.5 !rounded-full !bg-gray-900 cursor-pointer"
         style={handleStyle}
-        onClick={() => data.onDisconnectTarget(`article-${data.article.id}`)}
+        onClick={() => data.onDisconnectTarget(`article-${data.article.id}-${data.platform}`)}
       />
       <Handle
         type="source"
@@ -57,6 +61,11 @@ export function ArticleNode({ id, data }: {
 
       <div className="flex items-start gap-2">
         <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: data.color }} />
+        {data.platform === "meta" ? (
+          <span className="shrink-0 w-4 h-4 rounded bg-blue-600 flex items-center justify-center text-[9px] font-bold text-white leading-none mt-0.5">f</span>
+        ) : (
+          <SnapGhost className="shrink-0 w-4 h-4 mt-0.5 text-yellow-400" />
+        )}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-800 dark:text-gray-200 break-words">{data.article.slug}</p>
         </div>
@@ -88,6 +97,7 @@ export function ArticleNode({ id, data }: {
                   store.setArticleContent(
                     ae.feedProviderId,
                     data.article.id,
+                    data.platform,
                     val,
                     match?.rac ?? "",
                     match?.metaHeadline ?? "",
@@ -108,7 +118,7 @@ export function ArticleNode({ id, data }: {
                 value={ae.headline}
                 placeholder="Headline (max 34 chars)"
                 onChange={(e) =>
-                  store.setArticleContent(ae.feedProviderId, data.article.id, e.target.value, "")
+                  store.setArticleContent(ae.feedProviderId, data.article.id, data.platform, e.target.value, "")
                 }
                 className="w-full text-xs rounded-lg px-2 py-1 focus:outline-none bg-white/5 border border-white/10 text-gray-300 placeholder-gray-600"
               />

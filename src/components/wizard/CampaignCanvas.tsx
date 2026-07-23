@@ -70,6 +70,10 @@ function parseTsNodeId(nodeId: string): { feedProviderId: string; platform: "sna
   const m = nodeId.match(/^ts-(.+)-(snap|meta)$/);
   return m ? { feedProviderId: m[1], platform: m[2] as "snap" | "meta" } : null;
 }
+function parseArticleNodeId(nodeId: string): { articleId: string; platform: "snap" | "meta" } | null {
+  const m = nodeId.match(/^article-(.+)-(snap|meta)$/);
+  return m ? { articleId: m[1], platform: m[2] as "snap" | "meta" } : null;
+}
 const ROW_GAP = 130;
 const ROW_CARD_STEP = 172; // CARD_W (160) + CARD_GAP (12) — used to shift row left when prepending a card
 
@@ -155,12 +159,6 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     [store.edges.providerToArticle]
   );
 
-  const visibleArticles = useMemo(() => {
-    const providerOrder = new Map(sortedByCreation.map((p, i) => [p.id, i]));
-    return articles
-      .filter((a) => store.edges.providerToArticle.some((e) => e.articleId === a.id))
-      .sort((a, b) => (providerOrder.get(a.feedProviderId) ?? 999) - (providerOrder.get(b.feedProviderId) ?? 999));
-  }, [articles, store.edges.providerToArticle, sortedByCreation]);
   // Presets are enabled once any account is wired to any article
   const canSelectPresets = useMemo(
     () => store.edges.articleToAdAccount.length > 0,
@@ -244,7 +242,8 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     if (n.type === "group") return null;
     if (n.type === "article") {
       const articleId = (n.data.article as Article | undefined)?.id;
-      const edge = store.edges.providerToArticle.find((e) => e.articleId === articleId);
+      const platform = n.data.platform as "snap" | "meta" | undefined;
+      const edge = store.edges.providerToArticle.find((e) => e.articleId === articleId && e.platform === platform);
       return edge?.feedProviderId ?? null;
     }
     if (n.type === "adaccount") {
@@ -299,8 +298,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
 
   // A node's platform only matters within an already-resolved provider (used to
   // further split a provider's band into Snap/Meta sub-bands). A node that isn't
-  // exclusively owned by one platform — a shared article fed by both of a
-  // provider's TS nodes, or the Provider/Router/Row nodes themselves — returns
+  // exclusively owned by one platform — the Provider/Router/Row nodes — returns
   // null and is left out of that split, same treatment as rows in providerIdForNode.
   const platformForNode = (n: Node): "snap" | "meta" | null => {
     if (n.type === "ts") return (n.data.platform as "snap" | "meta") ?? null;
@@ -310,10 +308,9 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       return preset ? (preset.trafficSource === "facebook" ? "meta" : "snap") : null;
     }
     if (n.type === "article") {
-      const article = n.data.article as Article | undefined;
-      if (!article) return null;
-      const platforms = new Set(article.trafficSources.map((t) => (t === "Meta" ? "meta" : "snap")));
-      return platforms.size === 1 ? ([...platforms][0] as "snap" | "meta") : null;
+      // Each article node is a single providerToArticle edge picked for exactly one
+      // platform now — data.platform is always set, no more trafficSources inference.
+      return (n.data.platform as "snap" | "meta") ?? null;
     }
     return null;
   };
@@ -339,9 +336,12 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         if (parsed) s.toggleProviderTrafficSource(parsed.feedProviderId, parsed.platform);
 
       } else if (type === "article") {
-        const articleId = nodeId.replace(/^article-/, "");
-        const incoming = s.edges.providerToArticle.filter((e) => e.articleId === articleId);
-        incoming.forEach((e) => s.toggleProviderToArticle(e.feedProviderId, articleId));
+        const parsed = parseArticleNodeId(nodeId);
+        if (!parsed) return;
+        const edge = s.edges.providerToArticle.find(
+          (e) => e.articleId === parsed.articleId && e.platform === parsed.platform
+        );
+        if (edge) s.toggleProviderToArticle(edge.feedProviderId, parsed.articleId, parsed.platform);
 
       } else if (type === "account") {
         const accountId = nodeId.replace(/^account-/, "");
@@ -476,21 +476,29 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       });
     });
 
-    // Articles (only visible ones)
-    visibleArticles.forEach((article, i) => {
-      const nodeId = `article-${article.id}`;
-      const color = providerColorMap[article.feedProviderId] ?? "#94a3b8";
-      nodes.push({
-        id: nodeId,
-        type: "article",
-        position: pos("article", i, nodeId),
-        data: {
-          article,
-          color,
-          onDisconnectTarget: makeDisconnectTarget,
-        },
+    // Articles — one node per providerToArticle edge. Each edge is an independent pick
+    // for exactly one platform, so the same article can render as two parallel nodes
+    // (one under Snap, one under Meta) rather than a single shared/merged node.
+    const articleProviderOrder = new Map(sortedByCreation.map((p, i) => [p.id, i]));
+    [...store.edges.providerToArticle]
+      .sort((a, b) => (articleProviderOrder.get(a.feedProviderId) ?? 999) - (articleProviderOrder.get(b.feedProviderId) ?? 999))
+      .forEach((edge, i) => {
+        const article = articles.find((a) => a.id === edge.articleId);
+        if (!article) return;
+        const nodeId = `article-${edge.articleId}-${edge.platform}`;
+        const color = providerColorMap[edge.feedProviderId] ?? "#94a3b8";
+        nodes.push({
+          id: nodeId,
+          type: "article",
+          position: pos("article", i, nodeId),
+          data: {
+            article,
+            platform: edge.platform,
+            color,
+            onDisconnectTarget: makeDisconnectTarget,
+          },
+        });
       });
-    });
 
     // Ad accounts (only visible ones)
     visibleAccounts.forEach((account, i) => {
@@ -535,8 +543,8 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     return nodes;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    store.creativeRows, store.routerNodes, store.edges.providerToTrafficSource, store.toggleProviderTrafficSource,
-    sortedByCreation, providerColorMap, connectedProviderIds, visibleArticles, visibleAccounts, visiblePresets,
+    store.creativeRows, store.routerNodes, store.edges.providerToTrafficSource, store.edges.providerToArticle, store.toggleProviderTrafficSource,
+    sortedByCreation, providerColorMap, connectedProviderIds, visibleAccounts, visiblePresets,
     adAccountConfigs, articles, canSelectPresets, makeDisconnectTarget,
   ]);
 
@@ -588,38 +596,37 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       });
     }
 
-    // TrafficSource → Article — one edge per active, compatible platform node (an article
-    // flagged for both Snap and Meta, with both nodes active, gets two edges into one shared
-    // Article node).
+    // TrafficSource → Article — one edge per providerToArticle edge, into that edge's own
+    // platform-specific article node (each platform's pick is independent, so this never
+    // fans two platforms into one shared node anymore).
     for (const e of store.edges.providerToArticle) {
-      const article = articles.find((a) => a.id === e.articleId);
-      const compatiblePlatforms: ("snap" | "meta")[] = article
-        ? [...new Set(article.trafficSources.map((t) => (t === "Meta" ? "meta" : "snap")))]
-        : ["snap", "meta"];
-      for (const platform of compatiblePlatforms) {
-        const isActive = store.edges.providerToTrafficSource.some(
-          (p) => p.feedProviderId === e.feedProviderId && p.trafficSource === platform
-        );
-        if (!isActive) continue;
-        edges.push({
-          id: `pa-${e.feedProviderId}-${platform}-${e.articleId}`,
-          source: `ts-${e.feedProviderId}-${platform}`,
-          sourceHandle: "out",
-          target: `article-${e.articleId}`,
-          targetHandle: "in",
-          type: "provider",
-          data: { color: providerColorMap[e.feedProviderId] ?? "#94a3b8" },
-        });
-      }
+      const isActive = store.edges.providerToTrafficSource.some(
+        (p) => p.feedProviderId === e.feedProviderId && p.trafficSource === e.platform
+      );
+      if (!isActive) continue;
+      edges.push({
+        id: `pa-${e.feedProviderId}-${e.platform}-${e.articleId}`,
+        source: `ts-${e.feedProviderId}-${e.platform}`,
+        sourceHandle: "out",
+        target: `article-${e.articleId}-${e.platform}`,
+        targetHandle: "in",
+        type: "provider",
+        data: { color: providerColorMap[e.feedProviderId] ?? "#94a3b8" },
+      });
     }
 
-    // Article → AdAccount (explicit edges)
+    // Article → AdAccount (explicit edges) — source from the article node matching the
+    // target account's own platform, so a Snap account only ever wires from the Snap pick.
     for (const e of store.edges.articleToAdAccount) {
-      const provEdge = store.edges.providerToArticle.find((p) => p.articleId === e.articleId);
+      const account = allAccounts.find((a) => a.id === e.adAccountId);
+      const provEdge = store.edges.providerToArticle.find(
+        (p) => p.articleId === e.articleId && p.platform === account?.platform
+      );
       const color = provEdge ? (providerColorMap[provEdge.feedProviderId] ?? "#94a3b8") : "#94a3b8";
+      const sourceId = provEdge ? `article-${e.articleId}-${provEdge.platform}` : `article-${e.articleId}`;
       edges.push({
         id: `aa-${e.articleId}-${e.adAccountId}`,
-        source: `article-${e.articleId}`,
+        source: sourceId,
         sourceHandle: "out",
         target: `account-${e.adAccountId}`,
         targetHandle: "in",
@@ -655,7 +662,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     store.edges, store.routerNodes,
-    providerColorMap, articles,
+    providerColorMap, articles, allAccounts,
   ]);
 
   const [nodes, setNodes] = useNodesState(buildNodes());
@@ -695,8 +702,9 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       } else if (srcType === "ts" && tgtType === "article") {
         const parsed = parseTsNodeId(source);
         if (!parsed) return;
-        const { feedProviderId: providerId } = parsed;
-        const articleId = target.replace(/^article-/, "");
+        const { feedProviderId: providerId, platform } = parsed;
+        const parsedTarget = parseArticleNodeId(target);
+        const articleId = parsedTarget?.articleId ?? target.replace(/^article-/, "");
 
         // Auto-insert router when provider already has an article edge and no router yet
         const existingArticleEdges = s.edges.providerToArticle.filter(
@@ -711,19 +719,23 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
 
         const articleForDefault = articles.find((a) => a.id === articleId);
         const dh = articleForDefault?.allowedHeadlines[0];
-        s.toggleProviderToArticle(providerId, articleId, dh?.text, dh?.rac, dh?.metaHeadline, dh?.metaPrimaryText);
+        s.toggleProviderToArticle(providerId, articleId, platform, dh?.text, dh?.rac, dh?.metaHeadline, dh?.metaPrimaryText);
 
       } else if (srcType === "article" && tgtType === "account") {
-        const articleId = source.replace(/^article-/, "");
+        const parsedSource = parseArticleNodeId(source);
+        const articleId = parsedSource?.articleId ?? source.replace(/^article-/, "");
         const accountId = target.replace(/^account-/, "");
         const article = articles.find((a) => a.id === articleId);
         const cfg = adAccountConfigs.find((c) => c.id === accountId);
         if (article && cfg && cfg.feedProviderIds.length > 0 && !cfg.feedProviderIds.includes(article.feedProviderId)) return;
-        // Platform gate: article must be assigned to the account's traffic source (if restricted)
+        // Platform gate: the article must actually have been picked for the account's own
+        // platform (a real providerToArticle edge), not merely "the article supports it."
         const account = allAccounts.find((a) => a.id === accountId);
-        if (article && account && article.trafficSources.length > 0) {
-          const articlePlatforms = article.trafficSources.map((s2) => (s2 === "Meta" ? "meta" : "snap"));
-          if (!articlePlatforms.includes(account.platform)) return;
+        if (account) {
+          const hasEdgeForPlatform = s.edges.providerToArticle.some(
+            (e) => e.articleId === articleId && e.platform === account.platform
+          );
+          if (!hasEdgeForPlatform) return;
         }
         s.toggleArticleToAdAccount(articleId, accountId);
 
@@ -768,10 +780,12 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           if (providerId) s.disconnectRowFromProvider(rowId, providerId);
         } else if (srcType === "ts" && tgtType === "article") {
           const parsed = parseTsNodeId(source);
-          const articleId = target.replace(/^article-/, "");
-          if (parsed) s.toggleProviderToArticle(parsed.feedProviderId, articleId);
+          const parsedTarget = parseArticleNodeId(target);
+          const articleId = parsedTarget?.articleId ?? target.replace(/^article-/, "");
+          if (parsed) s.toggleProviderToArticle(parsed.feedProviderId, articleId, parsed.platform);
         } else if (srcType === "article" && tgtType === "account") {
-          const articleId = source.replace(/^article-/, "");
+          const parsedSource = parseArticleNodeId(source);
+          const articleId = parsedSource?.articleId ?? source.replace(/^article-/, "");
           const accountId = target.replace(/^account-/, "");
           s.toggleArticleToAdAccount(articleId, accountId);
         } else if (srcType === "account" && tgtType === "preset") {
@@ -800,16 +814,21 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       const tgtType = target.split("-")[0];
 
       if (srcType === "article" && tgtType === "account") {
-        const articleId = source.replace(/^article-/, "");
+        const gs = useCanvasStore.getState();
+        const parsedSource = parseArticleNodeId(source);
+        const articleId = parsedSource?.articleId ?? source.replace(/^article-/, "");
         const accountId = target.replace(/^account-/, "");
         const article = articles.find((a) => a.id === articleId);
         if (!article) return false;
 
-        // Platform gate: article must be assigned to the account's traffic source (if restricted)
+        // Platform gate: the article must actually have been picked for the account's own
+        // platform (a real providerToArticle edge), not merely "the article supports it."
         const account = allAccounts.find((a) => a.id === accountId);
-        if (account && article.trafficSources.length > 0) {
-          const articlePlatforms = article.trafficSources.map((s) => (s === "Meta" ? "meta" : "snap"));
-          if (!articlePlatforms.includes(account.platform)) return false;
+        if (account) {
+          const hasEdgeForPlatform = gs.edges.providerToArticle.some(
+            (e) => e.articleId === articleId && e.platform === account.platform
+          );
+          if (!hasEdgeForPlatform) return false;
         }
 
         // Static config check
@@ -818,7 +837,6 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           return cfg.feedProviderIds.includes(article.feedProviderId);
         }
         // Dynamic fallback: if this account already has articles from a different provider, block
-        const gs = useCanvasStore.getState();
         const existingArticleIds = gs.edges.articleToAdAccount
           .filter((ae) => ae.adAccountId === accountId)
           .map((ae) => ae.articleId);
@@ -949,7 +967,10 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       if (router) nodePriority[router.id] = i;
       s.edges.providerToArticle
         .filter((e) => e.feedProviderId === provider.id)
-        .forEach((e) => { nodePriority[`article-${e.articleId}`] = Math.min(nodePriority[`article-${e.articleId}`] ?? 999, i); });
+        .forEach((e) => {
+          const key = `article-${e.articleId}-${e.platform}`;
+          nodePriority[key] = Math.min(nodePriority[key] ?? 999, i);
+        });
       s.edges.articleToAdAccount
         .filter((ae) => s.edges.providerToArticle.some((pe) => pe.articleId === ae.articleId && pe.feedProviderId === provider.id))
         .forEach((ae) => { nodePriority[`account-${ae.adAccountId}`] = Math.min(nodePriority[`account-${ae.adAccountId}`] ?? 999, i); });
@@ -1324,7 +1345,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           );
           const selectedIds = new Set(
             store.edges.providerToArticle
-              .filter((e) => e.feedProviderId === providerId)
+              .filter((e) => e.feedProviderId === providerId && e.platform === platform)
               .map((e) => e.articleId)
           );
           const providerName = providers.find((p) => p.id === providerId)?.name ?? "";
@@ -1367,6 +1388,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
                             store.toggleProviderToArticle(
                               providerId,
                               article.id,
+                              platform,
                               dh?.text,
                               dh?.rac,
                               dh?.metaHeadline,

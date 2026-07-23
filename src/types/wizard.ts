@@ -146,6 +146,7 @@ export interface CanvasEdges {
   providerToArticle: Array<{
     feedProviderId: string;
     articleId: string;
+    platform: "snap" | "meta"; // independent pick per traffic source — same article can be picked for both
     headline: string;
     headlineRac?: string;
     metaHeadline?: string;
