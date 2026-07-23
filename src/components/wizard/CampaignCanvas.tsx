@@ -1019,46 +1019,6 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       });
     }
 
-    // Accounts/presets with no position yet are orphans (no edges at all — see isOrphan
-    // below). Anchor each one to its OWN platform's traffic-source row (falling back to
-    // the article y-range only when that TS node isn't on the canvas), grouped by
-    // (type, provider, platform) so a lone Snap orphan lands near the Snap TS node and a
-    // lone Meta orphan near the Meta TS node — never both hovering around one shared
-    // midpoint that happens to sit closer to one platform than the other.
-    const articleYs = currentNodes
-      .filter((n) => n.type === "article" && positions[n.id])
-      .map((n) => positions[n.id]!.y);
-    const articleMidY = articleYs.length
-      ? (Math.min(...articleYs) + Math.max(...articleYs)) / 2
-      : 0;
-    const anchorYFor = (n: Node): number => {
-      const pid = providerIdForNode(n) ?? fallbackLaneProviderId(n);
-      const platform = platformForNode(n);
-      const tsId = pid && platform ? `ts-${pid}-${platform}` : null;
-      const tsY = tsId ? positions[tsId]?.y : undefined;
-      return tsY !== undefined ? tsY + NODE_HEIGHT / 2 : articleMidY;
-    };
-    const orphanGroupKey = (n: Node): string =>
-      `${n.type}|${providerIdForNode(n) ?? fallbackLaneProviderId(n) ?? ""}|${platformForNode(n) ?? ""}`;
-    const typeCounters: Record<string, number> = {};
-    const typeCounts: Record<string, number> = {};
-    for (const n of currentNodes) {
-      if (positions[n.id] || n.type === "provider" || !n.type) continue;
-      const key = orphanGroupKey(n);
-      typeCounts[key] = (typeCounts[key] ?? 0) + 1;
-    }
-    for (const n of currentNodes) {
-      if (positions[n.id] || n.type === "provider" || !n.type) continue;
-      const colX = dynColX[n.type as keyof typeof dynColX];
-      if (colX === undefined) continue;
-      const key = orphanGroupKey(n);
-      const idx = typeCounters[key] ?? 0;
-      typeCounters[key] = idx + 1;
-      const count = typeCounts[key];
-      const anchorY = anchorYFor(n) - NODE_HEIGHT / 2;
-      positions[n.id] = { x: colX, y: anchorY + (idx - (count - 1) / 2) * ROW_GAP };
-    }
-
     const heightForId = (id: string) => {
       const n = currentNodes.find((nd) => nd.id === id);
       return n ? nodeHeightFor(n, expandedArticleIds) : NODE_HEIGHT;
@@ -1148,6 +1108,71 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         positions[id].y = avg - heightForId(id) / 2;
       }
       resolveColumnCollisions(ids);
+    }
+
+    // Accounts/presets with no position yet are orphans (no edges at all — see isOrphan
+    // above). Seeded here, AFTER the center-anchored refinement above has finalized
+    // ts/article positions — seeding any earlier would anchor to dagre's raw, pre-
+    // refinement guess, which can land far from where ts/article actually end up
+    // rendering (this was the bug: orphans floating near the top of the canvas instead
+    // of alongside their own provider's flow). Anchor each orphan to the average y of
+    // its own provider+platform's connected article node(s) — "in front of" that
+    // platform's article(s) — falling back to that platform's ts row, then to the
+    // global article midpoint if neither exists yet. Grouped by (type, provider,
+    // platform) so a lone Snap orphan lands near the Snap article(s) and a lone Meta
+    // orphan near the Meta article(s), never both hovering around one shared midpoint
+    // that happens to sit closer to one platform than the other.
+    const articleYs = currentNodes
+      .filter((n) => n.type === "article" && positions[n.id])
+      .map((n) => positions[n.id]!.y);
+    const articleMidY = articleYs.length
+      ? (Math.min(...articleYs) + Math.max(...articleYs)) / 2
+      : 0;
+    const anchorYFor = (n: Node): number => {
+      const pid = providerIdForNode(n) ?? fallbackLaneProviderId(n);
+      const platform = platformForNode(n);
+      if (pid && platform) {
+        const articleCenters = (byTypeIds.article ?? [])
+          .filter((aid) => {
+            const an = currentNodes.find((nd) => nd.id === aid);
+            return an && (an.data.platform as "snap" | "meta" | undefined) === platform && providerIdForNode(an) === pid;
+          })
+          .map((aid) => positions[aid].y + heightForId(aid) / 2);
+        if (articleCenters.length) {
+          return articleCenters.reduce((a, b) => a + b, 0) / articleCenters.length;
+        }
+        const tsY = positions[`ts-${pid}-${platform}`]?.y;
+        if (tsY !== undefined) return tsY + NODE_HEIGHT / 2;
+      }
+      return articleMidY;
+    };
+    const orphanGroupKey = (n: Node): string =>
+      `${n.type}|${providerIdForNode(n) ?? fallbackLaneProviderId(n) ?? ""}|${platformForNode(n) ?? ""}`;
+    const typeCounters: Record<string, number> = {};
+    const typeCounts: Record<string, number> = {};
+    for (const n of currentNodes) {
+      if (positions[n.id] || n.type === "provider" || !n.type) continue;
+      const key = orphanGroupKey(n);
+      typeCounts[key] = (typeCounts[key] ?? 0) + 1;
+    }
+    const seededOrphanIds: Record<string, string[]> = {};
+    for (const n of currentNodes) {
+      if (positions[n.id] || n.type === "provider" || !n.type) continue;
+      const colX = dynColX[n.type as keyof typeof dynColX];
+      if (colX === undefined) continue;
+      const key = orphanGroupKey(n);
+      const idx = typeCounters[key] ?? 0;
+      typeCounters[key] = idx + 1;
+      const count = typeCounts[key];
+      const anchorY = anchorYFor(n) - NODE_HEIGHT / 2;
+      positions[n.id] = { x: colX, y: anchorY + (idx - (count - 1) / 2) * ROW_GAP };
+      (seededOrphanIds[n.type] ??= []).push(n.id);
+    }
+    // Merge freshly-seeded orphans back into their column and re-resolve collisions, so
+    // they never overlap the now-final connected content in the same column.
+    for (const type of ["adaccount", "preset"] as const) {
+      if (!seededOrphanIds[type]?.length) continue;
+      resolveColumnCollisions([...(byTypeIds[type] ?? []), ...seededOrphanIds[type]]);
     }
 
     const byProviderNodeIds: Record<string, string[]> = {};
