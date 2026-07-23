@@ -56,6 +56,12 @@ async function fetchPredictoWithToken(
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    // TEMP DEBUG — remove once the 401 root cause is confirmed. Never logs the
+    // token itself, only length + first/last char, to check for whitespace/
+    // truncation without exposing the secret.
+    console.error(
+      `[${label}] auth debug: len=${apiToken.length} first=${apiToken[0]} last=${apiToken[apiToken.length - 1]}`
+    );
     throw new Error(`Predicto API error ${res.status}: ${body}`);
   }
 
