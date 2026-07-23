@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getSession, isSessionValid, isAdAccountAllowed } from "@/lib/session";
+import { getSession, isSessionValid, isAdAccountAllowed, isMetaAdAccountAllowed } from "@/lib/session";
 import { runMigrations, sql } from "@/lib/db";
 import { getEurToUsd } from "@/lib/fx-rate";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
@@ -12,15 +12,144 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const adAccountId = searchParams.get("adAccountId") ?? "";
   const adSquadId = searchParams.get("adSquadId") ?? "";
+  const platform = searchParams.get("platform") === "meta" ? "meta" : "snap";
 
   if (!adAccountId || !adSquadId) {
     return NextResponse.json({ error: "missing_params" }, { status: 400 });
   }
-  if (!isAdAccountAllowed(session, adAccountId)) {
+  if (platform === "meta") {
+    if (!isMetaAdAccountAllowed(session, adAccountId)) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+  } else if (!isAdAccountAllowed(session, adAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   await runMigrations();
+
+  if (platform === "meta") {
+    const [eurToUsd, { rows }] = await Promise.all([
+      getEurToUsd(),
+      sql`
+        SELECT
+          m.ad_set_id,
+          m.ad_account_id,
+          COALESCE(NULLIF(m.ad_set_name, ''), m.ad_set_id) AS ad_set_name,
+          m.stat_date::text AS stat_date,
+          m.impressions::bigint AS impressions,
+          m.clicks::bigint AS clicks,
+          m.spend_cents::bigint AS spend_cents,
+          m.purchases::bigint AS purchases,
+          m.purchase_value_cents::bigint AS purchase_value_cents,
+          COALESCE(pf.revenue_usd, 0)               AS pfb_revenue_usd,
+          COALESCE(pf.clicks, 0)::bigint            AS pfb_clicks,
+          COALESCE(pf.funnel_clicks, 0)::bigint     AS pfb_funnel_clicks,
+          COALESCE(pf.funnel_impressions, 0)::bigint AS pfb_funnel_impressions,
+          COALESCE(pf.funnel_requests, 0)::bigint   AS pfb_funnel_requests,
+          COALESCE(pf.requests, 0)::bigint          AS pfb_requests,
+          COALESCE(pf.impressions, 0)::bigint       AS pfb_impressions,
+          COALESCE(k.earnings_eur, 0)               AS vsm_earnings_eur,
+          COALESCE(k.clicks, 0)::bigint             AS vsm_clicks,
+          COALESCE(k.funnel_clicks, 0)::bigint      AS vsm_funnel_clicks,
+          COALESCE(k.funnel_impressions, 0)::bigint AS vsm_funnel_impressions,
+          COALESCE(k.funnel_requests, 0)::bigint    AS vsm_funnel_requests,
+          COALESCE(k.ad_requests, 0)::bigint        AS vsm_requests,
+          COALESCE(k.individual_ad_impressions, 0)::bigint AS vsm_impressions,
+          COALESCE(fpc.feed_provider_id, '')        AS feed_provider_id
+        FROM meta_ad_set_stats m
+        LEFT JOIN (
+          SELECT
+            custom_channel_name,
+            record_date,
+            SUM(earnings_eur)                       AS earnings_eur,
+            SUM(clicks)::bigint                     AS clicks,
+            SUM(ad_requests)::bigint                AS ad_requests,
+            SUM(individual_ad_impressions)::bigint  AS individual_ad_impressions,
+            SUM(funnel_clicks)::bigint              AS funnel_clicks,
+            SUM(funnel_impressions)::bigint         AS funnel_impressions,
+            SUM(funnel_requests)::bigint            AS funnel_requests
+          FROM visymo_report
+          GROUP BY custom_channel_name, record_date
+        ) k
+          ON  k.custom_channel_name = m.ad_set_id
+          AND k.record_date         = m.stat_date
+        LEFT JOIN LATERAL (
+          SELECT channel_id, feed_provider_id
+          FROM (
+            SELECT channel_id, feed_provider_id, 0 AS _p
+            FROM feed_provider_channels
+            WHERE ad_squad_snap_id = m.ad_set_id
+            UNION ALL
+            SELECT channel_id, feed_provider_id, 1 AS _p
+            FROM feed_provider_channels
+            WHERE channel_id != ''
+              AND ad_squad_snap_id IS DISTINCT FROM m.ad_set_id
+              AND m.ad_set_name ILIKE '%' || REPLACE(REPLACE(channel_id, '%', '\%'), '_', '\_') || '%'
+          ) _fpc_inner
+          ORDER BY _p
+          LIMIT 1
+        ) fpc ON true
+        LEFT JOIN (
+          SELECT
+            custom_channel_id,
+            record_date,
+            SUM(revenue_usd)               AS revenue_usd,
+            SUM(clicks)::bigint            AS clicks,
+            SUM(funnel_clicks)::bigint     AS funnel_clicks,
+            SUM(funnel_impressions)::bigint AS funnel_impressions,
+            SUM(funnel_requests)::bigint   AS funnel_requests,
+            SUM(requests)::bigint          AS requests,
+            SUM(impressions)::bigint       AS impressions
+          FROM predicto_fb_report
+          GROUP BY custom_channel_id, record_date
+        ) pf
+          ON  pf.custom_channel_id = SPLIT_PART(fpc.channel_id, '+', 1)
+          AND pf.record_date       = m.stat_date
+        WHERE m.ad_account_id = ${adAccountId}
+          AND m.ad_set_id     = ${adSquadId}
+        ORDER BY m.stat_date DESC
+      `,
+    ]);
+
+    const combined: CombinedRow[] = rows.map((r) => {
+      const spendUsd = Number(r.spend_cents) / 100;
+      const purchaseValueUsd = Number(r.purchase_value_cents) / 100;
+      const visymoUsd = Number(r.vsm_earnings_eur) * eurToUsd;
+      const revenueEur = Number(r.vsm_earnings_eur);
+      const revenueUsd = Number(r.pfb_revenue_usd) + visymoUsd;
+      const roiPct = spendUsd > 0 ? (revenueUsd / spendUsd) * 100 : null;
+      return {
+        ad_squad_id: r.ad_set_id as string,
+        ad_account_id: r.ad_account_id as string,
+        ad_squad_name: r.ad_set_name as string,
+        stat_date: r.stat_date as string,
+        country_code: "",
+        impressions: Number(r.impressions),
+        swipes: 0,
+        spend_usd: spendUsd,
+        video_views: 0,
+        clicks: Number(r.clicks) + Number(r.pfb_clicks) + Number(r.vsm_clicks),
+        revenue_eur: revenueEur,
+        revenue_usd: revenueUsd,
+        roi_pct: roiPct,
+        page_views: 0,
+        ad_requests: 0,
+        matched_ad_requests: 0,
+        requests: Number(r.pfb_requests) + Number(r.vsm_requests),
+        feed_impressions: Number(r.pfb_impressions) + Number(r.vsm_impressions),
+        funnel_clicks: Number(r.pfb_funnel_clicks) + Number(r.vsm_funnel_clicks),
+        funnel_impressions: Number(r.pfb_funnel_impressions) + Number(r.vsm_funnel_impressions),
+        funnel_requests: Number(r.pfb_funnel_requests) + Number(r.vsm_funnel_requests),
+        domain_name: "",
+        feed_provider_id: r.feed_provider_id as string,
+        snap_results: Number(r.purchases),
+        snap_purchase_value_usd: purchaseValueUsd,
+        platform: "meta" as const,
+      };
+    });
+
+    return NextResponse.json({ rows: combined, eur_to_usd: eurToUsd });
+  }
 
   const [eurToUsd, { rows }] = await Promise.all([
     getEurToUsd(),

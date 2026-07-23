@@ -289,7 +289,7 @@ export function PerformanceTable({
 }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("spend_usd");
   const [sortDesc, setSortDesc] = useState(true);
-  const [drilldown, setDrilldown] = useState<{ id: string; name: string; accountId: string } | null>(null);
+  const [drilldown, setDrilldown] = useState<{ id: string; name: string; accountId: string; platform: "snap" | "meta" } | null>(null);
   const [filterQuery, setFilterQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastCheckedIdx = useRef<number | null>(null);
@@ -1618,6 +1618,7 @@ export function PerformanceTable({
                             id: r.ad_squad_id,
                             name: r.ad_squad_name,
                             accountId: detail?.ad_account_id ?? "",
+                            platform: r.platform,
                           })}
                           className="text-left text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline truncate block min-w-0"
                           title={r.ad_squad_name}
@@ -1792,6 +1793,7 @@ export function PerformanceTable({
           adSquadName={drilldown.name}
           adSquadId={drilldown.id}
           adAccountId={drilldown.accountId}
+          platform={drilldown.platform}
           squadDetail={squadDetails.get(drilldown.id)}
           onSquadPatched={(patch) => onSquadPatched?.(drilldown.id, patch)}
           onClose={() => setDrilldown(null)}

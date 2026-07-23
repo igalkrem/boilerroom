@@ -70,6 +70,7 @@ interface Props {
   adSquadName: string;
   adSquadId: string;
   adAccountId: string;
+  platform: "snap" | "meta";
   squadDetail?: SquadDetail;
   onSquadPatched?: (patch: Partial<SquadDetail>) => void;
   onClose: () => void;
@@ -110,7 +111,7 @@ function derive(r: { spend_usd: number; revenue_usd: number; impressions: number
 type DerivedRow = ReturnType<typeof derive>;
 
 export function DrilldownModal({
-  adSquadName, adSquadId, adAccountId,
+  adSquadName, adSquadId, adAccountId, platform,
   squadDetail, onSquadPatched, onClose,
   isHidden, onToggleHide,
 }: Props) {
@@ -135,14 +136,14 @@ export function DrilldownModal({
   useEffect(() => {
     setLoading(true);
     setError(false);
-    fetch(`/api/reporting/drilldown?adSquadId=${encodeURIComponent(adSquadId)}&adAccountId=${encodeURIComponent(adAccountId)}`)
+    fetch(`/api/reporting/drilldown?adSquadId=${encodeURIComponent(adSquadId)}&adAccountId=${encodeURIComponent(adAccountId)}&platform=${platform}`)
       .then((r) => r.json())
       .then((d: { rows?: CombinedRow[] }) => {
         setRows((d.rows ?? []).sort((a, b) => b.stat_date.localeCompare(a.stat_date)));
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [adSquadId, adAccountId]);
+  }, [adSquadId, adAccountId, platform]);
 
   async function readError(res: Response) {
     try {
