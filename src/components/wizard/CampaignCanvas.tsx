@@ -998,27 +998,44 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       });
     }
 
-    // Accounts/presets: center on the y-range of laid-out articles.
+    // Accounts/presets with no position yet are orphans (no edges at all — see isOrphan
+    // below). Anchor each one to its OWN platform's traffic-source row (falling back to
+    // the article y-range only when that TS node isn't on the canvas), grouped by
+    // (type, provider, platform) so a lone Snap orphan lands near the Snap TS node and a
+    // lone Meta orphan near the Meta TS node — never both hovering around one shared
+    // midpoint that happens to sit closer to one platform than the other.
     const articleYs = currentNodes
       .filter((n) => n.type === "article" && positions[n.id])
       .map((n) => positions[n.id]!.y);
     const articleMidY = articleYs.length
       ? (Math.min(...articleYs) + Math.max(...articleYs)) / 2
       : 0;
+    const anchorYFor = (n: Node): number => {
+      const pid = providerIdForNode(n) ?? fallbackLaneProviderId(n);
+      const platform = platformForNode(n);
+      const tsId = pid && platform ? `ts-${pid}-${platform}` : null;
+      const tsY = tsId ? positions[tsId]?.y : undefined;
+      return tsY !== undefined ? tsY + NODE_HEIGHT / 2 : articleMidY;
+    };
+    const orphanGroupKey = (n: Node): string =>
+      `${n.type}|${providerIdForNode(n) ?? fallbackLaneProviderId(n) ?? ""}|${platformForNode(n) ?? ""}`;
     const typeCounters: Record<string, number> = {};
     const typeCounts: Record<string, number> = {};
     for (const n of currentNodes) {
       if (positions[n.id] || n.type === "provider" || !n.type) continue;
-      typeCounts[n.type] = (typeCounts[n.type] ?? 0) + 1;
+      const key = orphanGroupKey(n);
+      typeCounts[key] = (typeCounts[key] ?? 0) + 1;
     }
     for (const n of currentNodes) {
       if (positions[n.id] || n.type === "provider" || !n.type) continue;
       const colX = dynColX[n.type as keyof typeof dynColX];
       if (colX === undefined) continue;
-      const idx = typeCounters[n.type] ?? 0;
-      typeCounters[n.type] = idx + 1;
-      const count = typeCounts[n.type];
-      positions[n.id] = { x: colX, y: articleMidY + (idx - (count - 1) / 2) * ROW_GAP };
+      const key = orphanGroupKey(n);
+      const idx = typeCounters[key] ?? 0;
+      typeCounters[key] = idx + 1;
+      const count = typeCounts[key];
+      const anchorY = anchorYFor(n) - NODE_HEIGHT / 2;
+      positions[n.id] = { x: colX, y: anchorY + (idx - (count - 1) / 2) * ROW_GAP };
     }
 
     const heightForId = (id: string) => {
@@ -1162,11 +1179,14 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     }
 
     const byProvider: Record<string, { minY: number; maxY: number }> = {};
-    // Per-lane, per-column (adaccount/preset) tracking of the seam between connected
-    // nodes and not-yet-wired ("orphan") ones — feeds the "Unassigned" divider drawn
-    // by LaneOverlay. Connectedness mirrors AdAccountNode's/PresetNode's own local
+    // Per-lane, per-column, per-platform (adaccount/preset × snap/meta) tracking of the
+    // seam between connected nodes and not-yet-wired ("orphan") ones — feeds the
+    // "Unassigned" divider drawn by LaneOverlay. Keyed by platform (not just lane+column)
+    // so a Snap unassigned strip and a Meta unassigned strip are two separate dividers,
+    // each sitting under that platform's own connected content rather than one divider
+    // shared across both. Connectedness mirrors AdAccountNode's/PresetNode's own local
     // check (edge-based), not handleAutoLayout's connectedIds (not available here).
-    const byLaneColOrphan: Record<string, Record<string, { connectedMaxY: number; orphanMinY: number }>> = {};
+    const byLaneColOrphan: Record<string, Record<string, Record<string, { connectedMaxY: number; orphanMinY: number }>>> = {};
     for (const n of nodes) {
       const pid = providerIdForNode(n) ?? fallbackLaneProviderId(n);
       if (!pid) continue;
@@ -1179,14 +1199,17 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         b.maxY = Math.max(b.maxY, bottom);
       }
       if (n.type !== "adaccount" && n.type !== "preset") continue;
+      const platform = platformForNode(n);
+      if (!platform) continue;
       const isConnected =
         n.type === "adaccount"
           ? store.edges.articleToAdAccount.some((e) => e.adAccountId === (n.data.accountId as string))
           : store.edges.articleToPreset.some((e) => e.presetId === (n.data.preset as CampaignPreset | undefined)?.id);
       const laneEntry = (byLaneColOrphan[pid] ??= {});
-      const colEntry = (laneEntry[n.type] ??= { connectedMaxY: -Infinity, orphanMinY: Infinity });
-      if (isConnected) colEntry.connectedMaxY = Math.max(colEntry.connectedMaxY, bottom);
-      else colEntry.orphanMinY = Math.min(colEntry.orphanMinY, top);
+      const colEntry = (laneEntry[n.type] ??= {});
+      const platEntry = (colEntry[platform] ??= { connectedMaxY: -Infinity, orphanMinY: Infinity });
+      if (isConnected) platEntry.connectedMaxY = Math.max(platEntry.connectedMaxY, bottom);
+      else platEntry.orphanMinY = Math.min(platEntry.orphanMinY, top);
     }
 
     return sortedByCreation
@@ -1198,14 +1221,25 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           .filter((n): n is Node => !!n)
           .map((n) => ({ x: n.position.x + NODE_WIDTH / 2, y: n.position.y + NODE_HEIGHT / 2 }));
         const orphanDividers = (["adaccount", "preset"] as const)
-          .map((col) => {
-            const entry = byLaneColOrphan[p.id]?.[col];
-            if (!entry || entry.connectedMaxY === -Infinity || entry.orphanMinY === Infinity) return null;
-            const colNode = nodes.find((n) => n.type === col);
-            if (!colNode) return null;
-            return { col, y: (entry.connectedMaxY + entry.orphanMinY) / 2, xLeft: colNode.position.x, xRight: colNode.position.x + NODE_WIDTH };
-          })
-          .filter((d): d is { col: "adaccount" | "preset"; y: number; xLeft: number; xRight: number } => d !== null);
+          .flatMap((col) =>
+            (["snap", "meta"] as const).map((platform) => {
+              const entry = byLaneColOrphan[p.id]?.[col]?.[platform];
+              if (!entry || entry.connectedMaxY === -Infinity || entry.orphanMinY === Infinity) return null;
+              const colNode = nodes.find((n) => n.type === col);
+              if (!colNode) return null;
+              return {
+                col,
+                platform,
+                y: (entry.connectedMaxY + entry.orphanMinY) / 2,
+                xLeft: colNode.position.x,
+                xRight: colNode.position.x + NODE_WIDTH,
+              };
+            })
+          )
+          .filter(
+            (d): d is { col: "adaccount" | "preset"; platform: "snap" | "meta"; y: number; xLeft: number; xRight: number } =>
+              d !== null
+          );
         return {
           providerId: p.id,
           name: p.name,

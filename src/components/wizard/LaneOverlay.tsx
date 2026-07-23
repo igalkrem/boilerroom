@@ -12,7 +12,7 @@ export interface LaneBound {
   maxY: number;
   providerRightX?: number;
   tsCenters?: { x: number; y: number }[];
-  orphanDividers?: { col: "adaccount" | "preset"; y: number; xLeft: number; xRight: number }[];
+  orphanDividers?: { col: "adaccount" | "preset"; platform: "snap" | "meta"; y: number; xLeft: number; xRight: number }[];
 }
 
 const LANE_PAD_Y = 40;
@@ -135,15 +135,18 @@ export function LaneOverlay({ lanes }: { lanes: LaneBound[] }) {
         })}
 
         {/* "Unassigned" divider — a plain (non-fading) dashed line + label marking the
-            seam, within one lane's account/preset column, between connected nodes above
-            and not-yet-wired ("orphan") nodes below. Deliberately not the fading style
-            used above, so it reads as a distinct annotation rather than a lane boundary. */}
+            seam, within one lane's account/preset column AND one platform's own half of
+            it, between that platform's connected nodes above and its not-yet-wired
+            ("orphan") nodes below. One divider per (lane, column, platform) — Snap and
+            Meta each get their own, since they're stacked in separate halves of the
+            column. Deliberately not the fading style used above, so it reads as a
+            distinct annotation rather than a lane boundary. */}
         {sorted.flatMap((lane) =>
           (lane.orphanDividers ?? []).map((od) => {
             const p1 = toScreen(od.xLeft - 6, od.y);
             const p2 = toScreen(od.xRight + 6, od.y);
             return (
-              <g key={`od-${lane.providerId}-${od.col}`}>
+              <g key={`od-${lane.providerId}-${od.col}-${od.platform}`}>
                 <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="#414d6c" strokeWidth={1} strokeDasharray="3 3" />
                 <text
                   x={p1.x}
