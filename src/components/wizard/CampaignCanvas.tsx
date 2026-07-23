@@ -1093,8 +1093,12 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     // derived from its own children, so connecting/disconnecting only ever moves that
     // branch. A node with no children (nothing to center on yet, e.g. a freshly-toggled
     // traffic source with no articles picked) keeps its existing position rather than
-    // collapsing to 0 — dagre/the base pass above already gave it a sane y. Each column
-    // is re-resolved for collisions after centering, since it can reintroduce overlap.
+    // collapsing to 0 — dagre/the base pass above already gave it a sane y, EXCEPT for
+    // `article`: a childless article (nothing wired to it yet) instead aligns with its
+    // own `ts` parent's y — otherwise it keeps dagre's raw pre-refinement guess, which
+    // has no relationship to which platform's row it actually belongs to (this was the
+    // bug: a lone Meta article rendering at the Snap row's height). Each column is
+    // re-resolved for collisions after centering, since it can reintroduce overlap.
     const childrenMap: Record<string, string[]> = {};
     for (const e of currentEdges) (childrenMap[e.source] ??= []).push(e.target);
     for (const colType of ["adaccount", "article", "ts", "provider"] as const) {
@@ -1102,10 +1106,16 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       if (!ids?.length) continue;
       for (const id of ids) {
         const kids = (childrenMap[id] ?? []).filter((k) => positions[k]);
-        if (!kids.length) continue;
-        const centers = kids.map((k) => positions[k].y + heightForId(k) / 2);
-        const avg = centers.reduce((a, b) => a + b, 0) / centers.length;
-        positions[id].y = avg - heightForId(id) / 2;
+        if (kids.length) {
+          const centers = kids.map((k) => positions[k].y + heightForId(k) / 2);
+          const avg = centers.reduce((a, b) => a + b, 0) / centers.length;
+          positions[id].y = avg - heightForId(id) / 2;
+        } else if (colType === "article") {
+          const parentId = currentEdges.find((e) => e.target === id)?.source;
+          if (parentId && positions[parentId]) {
+            positions[id].y = positions[parentId].y + heightForId(parentId) / 2 - heightForId(id) / 2;
+          }
+        }
       }
       resolveColumnCollisions(ids);
     }
@@ -1173,6 +1183,29 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     for (const type of ["adaccount", "preset"] as const) {
       if (!seededOrphanIds[type]?.length) continue;
       resolveColumnCollisions([...(byTypeIds[type] ?? []), ...seededOrphanIds[type]]);
+    }
+
+    // Per-provider Snap/Meta band separation: the sort tiebreaker above only guarantees
+    // Snap-tagged ids sort before Meta-tagged ones *within the same column* — it doesn't
+    // guarantee the two platforms' combined vertical ranges stay non-overlapping across
+    // the article/adaccount/preset columns *together*. An orphan account seeded in the
+    // adaccount column (from the pass above) and a childless article positioned in a
+    // different column (from the centering refinement above) have no cross-column check
+    // between them, so a Snap node could still land at the same height as a Meta one.
+    // Reinstates the old per-column "Pass B" band shift, generalized to span all three
+    // columns via the same generic `enforceBands` helper used for provider separation.
+    const byProviderPlatformIds: Record<string, { snap: string[]; meta: string[] }> = {};
+    for (const n of currentNodes) {
+      if (!positions[n.id]) continue;
+      if (n.type !== "article" && n.type !== "adaccount" && n.type !== "preset") continue;
+      const platform = platformForNode(n);
+      if (platform !== "snap" && platform !== "meta") continue;
+      const pid = providerIdForNode(n) ?? fallbackLaneProviderId(n);
+      if (!pid) continue;
+      (byProviderPlatformIds[pid] ??= { snap: [], meta: [] })[platform].push(n.id);
+    }
+    for (const ids of Object.values(byProviderPlatformIds)) {
+      enforceBands(["snap", "meta"], ids, positions, heightForId, 60);
     }
 
     const byProviderNodeIds: Record<string, string[]> = {};
