@@ -33,7 +33,7 @@ export async function getAd(
   token?: string
 ): Promise<MetaAd> {
   return metaFetch<MetaAd>(
-    `/${adId}?fields=id,name,status,adset_id,creative,account_id`,
+    `/${adId}?fields=id,name,status,adset_id,creative,account_id,creative_asset_groups_spec`,
     {},
     token
   );
