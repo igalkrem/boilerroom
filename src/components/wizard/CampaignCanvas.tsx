@@ -990,43 +990,96 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       positions[n.id] = { x: colX, y: articleMidY + (idx - (count - 1) / 2) * ROW_GAP };
     }
 
-    // Collision resolution: sort by y within each node-type column and enforce a minimum
-    // gap. For article nodes the gap is based on their actual dagre height (expanded or not)
-    // so expanded articles never visually overlap the node below them.
-    const nodeMinGap = (id: string): number => {
+    const heightForId = (id: string) => {
       const n = currentNodes.find((nd) => nd.id === id);
-      if (n?.type === "article" && expandedArticleIds.has(id)) return ARTICLE_EXPANDED_H + 20;
-      if (n?.type === "group") return 285 + 20; // GROUP_CARD_H + gap
-      return ROW_GAP;
+      return n ? nodeHeightFor(n, expandedArticleIds) : NODE_HEIGHT;
     };
+    // An orphan is a visible-but-not-yet-wired account/preset (no edge at all, so it's
+    // absent from connectedIds). Only these two types can be orphaned — every other
+    // type is either always-edge-backed (ts/article/router) or has no single owner
+    // (group) and is unaffected.
+    const isOrphan = (id: string): boolean => {
+      const n = currentNodes.find((nd) => nd.id === id);
+      return (n?.type === "adaccount" || n?.type === "preset") && !connectedIds.has(id);
+    };
+    const platformRank = (id: string): number => {
+      const n = currentNodes.find((nd) => nd.id === id);
+      const p = n ? platformForNode(n) : null;
+      return p === "snap" ? 0 : p === "meta" ? 1 : 0.5;
+    };
+    // Height-aware minimum gap between two vertically-adjacent nodes in the same
+    // column. An orphan following a connected sibling gets an extra section gap so
+    // it visually reads as a distinct "Unassigned" strip rather than blending into
+    // the connected list (LaneOverlay draws the divider/label at that same seam).
+    const nodeMinGap = (prevId: string, curId: string): number => {
+      const n = currentNodes.find((nd) => nd.id === prevId);
+      const base =
+        n?.type === "article" && expandedArticleIds.has(prevId)
+          ? ARTICLE_EXPANDED_H + 20
+          : n?.type === "group"
+            ? 285 + 20 // GROUP_CARD_H + gap
+            : ROW_GAP;
+      return isOrphan(curId) && !isOrphan(prevId) ? base + 30 : base;
+    };
+    // Sort a node-type column by (provider creation order, platform, connected-before-
+    // orphan, y) and push each node down to clear the previous one + the min gap.
+    // Guarantees: an earlier-created provider's nodes always sit above a later one's;
+    // within a provider, Snap always sits above Meta; within a provider+platform,
+    // connected nodes always sort above not-yet-wired ones.
+    const resolveColumnCollisions = (nodeIds: string[]) => {
+      if (nodeIds.length <= 1) return;
+      nodeIds.sort((a, b) => {
+        const pa = nodePriority[a] ?? 999;
+        const pb = nodePriority[b] ?? 999;
+        if (pa !== pb) return pa - pb;
+        const ra = platformRank(a);
+        const rb = platformRank(b);
+        if (ra !== rb) return ra - rb;
+        const oa = isOrphan(a) ? 1 : 0;
+        const ob = isOrphan(b) ? 1 : 0;
+        if (oa !== ob) return oa - ob;
+        return positions[a].y - positions[b].y;
+      });
+      for (let i = 1; i < nodeIds.length; i++) {
+        const minY = positions[nodeIds[i - 1]].y + nodeMinGap(nodeIds[i - 1], nodeIds[i]);
+        if (positions[nodeIds[i]].y < minY) positions[nodeIds[i]].y = minY;
+      }
+    };
+
     const byTypeIds: Record<string, string[]> = {};
     for (const n of currentNodes) {
       if (!positions[n.id] || !n.type) continue;
       if (!byTypeIds[n.type]) byTypeIds[n.type] = [];
       byTypeIds[n.type].push(n.id);
     }
-    // Sort primarily by provider creation order (nodePriority), falling back to y within
-    // the same provider — guarantees an earlier-created provider's nodes always sit above
-    // a later one's in every column (ts/router/article/adaccount/preset), not just the
-    // provider column itself, eliminating cross-provider interleaving and edge crossing.
-    for (const nodeIds of Object.values(byTypeIds)) {
-      if (nodeIds.length <= 1) continue;
-      nodeIds.sort((a, b) => {
-        const pa = nodePriority[a] ?? 999;
-        const pb = nodePriority[b] ?? 999;
-        if (pa !== pb) return pa - pb;
-        return positions[a].y - positions[b].y;
-      });
-      for (let i = 1; i < nodeIds.length; i++) {
-        const minY = positions[nodeIds[i - 1]].y + nodeMinGap(nodeIds[i - 1]);
-        if (positions[nodeIds[i]].y < minY) positions[nodeIds[i]].y = minY;
-      }
-    }
+    // Base/leaf pass: every column gets a collision-free y, sorted per the guarantees
+    // above. Presets have no children to center on, so this is their final position.
+    for (const nodeIds of Object.values(byTypeIds)) resolveColumnCollisions(nodeIds);
 
-    const heightForId = (id: string) => {
-      const n = currentNodes.find((nd) => nd.id === id);
-      return n ? nodeHeightFor(n, expandedArticleIds) : NODE_HEIGHT;
-    };
+    // Center-anchored refinement (Option A2): walk columns from the leaves back
+    // toward the provider column, using the actual rendered edges (`currentEdges`) to
+    // find each node's children. A node with ≥1 positioned child re-centers on the
+    // midpoint of those children's y instead of keeping its sort-derived y — a lone
+    // child stays aligned with its parent, and a branch's position is now entirely
+    // derived from its own children, so connecting/disconnecting only ever moves that
+    // branch. A node with no children (nothing to center on yet, e.g. a freshly-toggled
+    // traffic source with no articles picked) keeps its existing position rather than
+    // collapsing to 0 — dagre/the base pass above already gave it a sane y. Each column
+    // is re-resolved for collisions after centering, since it can reintroduce overlap.
+    const childrenMap: Record<string, string[]> = {};
+    for (const e of currentEdges) (childrenMap[e.source] ??= []).push(e.target);
+    for (const colType of ["adaccount", "article", "ts", "provider"] as const) {
+      const ids = byTypeIds[colType];
+      if (!ids?.length) continue;
+      for (const id of ids) {
+        const kids = (childrenMap[id] ?? []).filter((k) => positions[k]);
+        if (!kids.length) continue;
+        const centers = kids.map((k) => positions[k].y + heightForId(k) / 2);
+        const avg = centers.reduce((a, b) => a + b, 0) / centers.length;
+        positions[id].y = avg - heightForId(id) / 2;
+      }
+      resolveColumnCollisions(ids);
+    }
 
     const byProviderNodeIds: Record<string, string[]> = {};
     for (const n of currentNodes) {
@@ -1035,29 +1088,11 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
       if (pid) (byProviderNodeIds[pid] ??= []).push(n.id);
     }
 
-    // Pass B runs FIRST: within each provider (independent of the others), split
-    // Snap content from Meta content into non-overlapping sub-bands. This can push
-    // a provider's own bottom further down than its pre-split raw positions had it
-    // (e.g. a Meta-only account that started out, before this pass, positioned
-    // above its Snap sibling) — nodes cannot cross between traffic sources.
-    for (const provider of sortedByCreation) {
-      const ids = byProviderNodeIds[provider.id];
-      if (!ids?.length) continue;
-      const byPlatform: Record<string, string[]> = { snap: [], meta: [] };
-      for (const id of ids) {
-        const n = currentNodes.find((nd) => nd.id === id);
-        const platform = n ? platformForNode(n) : null;
-        if (platform) byPlatform[platform].push(id);
-      }
-      enforceBands(["snap", "meta"], byPlatform, positions, heightForId, 60);
-    }
-
-    // Pass A runs SECOND, on the now-finalized (post-platform-split) positions —
-    // hard, non-overlapping vertical band per provider (creation order). Running
-    // this after Pass B is what makes it account for the full extent Pass B may
-    // have just pushed a provider down to; running it first (as an earlier version
-    // did) let Pass B extend a provider past the gap Pass A had already allocated,
-    // spilling into the next provider's band.
+    // Hard, non-overlapping vertical band per provider (creation order), run last on
+    // the now-finalized (post-centering) positions. Per-node collisions are already
+    // guaranteed by resolveColumnCollisions above — this pass exists so LaneOverlay's
+    // band *rectangles* (which span every column for a provider) never visually
+    // overlap, even if one provider's tallest column extends past another's shortest.
     enforceBands(sortedByCreation.map((p) => p.id), byProviderNodeIds, positions, heightForId, 100);
 
     useCanvasStore.getState().setNodePositions(positions);
@@ -1091,6 +1126,11 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     }
 
     const byProvider: Record<string, { minY: number; maxY: number }> = {};
+    // Per-lane, per-column (adaccount/preset) tracking of the seam between connected
+    // nodes and not-yet-wired ("orphan") ones — feeds the "Unassigned" divider drawn
+    // by LaneOverlay. Connectedness mirrors AdAccountNode's/PresetNode's own local
+    // check (edge-based), not handleAutoLayout's connectedIds (not available here).
+    const byLaneColOrphan: Record<string, Record<string, { connectedMaxY: number; orphanMinY: number }>> = {};
     for (const n of nodes) {
       const pid = providerIdForNode(n);
       if (!pid) continue;
@@ -1102,6 +1142,15 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
         b.minY = Math.min(b.minY, top);
         b.maxY = Math.max(b.maxY, bottom);
       }
+      if (n.type !== "adaccount" && n.type !== "preset") continue;
+      const isConnected =
+        n.type === "adaccount"
+          ? store.edges.articleToAdAccount.some((e) => e.adAccountId === (n.data.accountId as string))
+          : store.edges.articleToPreset.some((e) => e.presetId === (n.data.preset as CampaignPreset | undefined)?.id);
+      const laneEntry = (byLaneColOrphan[pid] ??= {});
+      const colEntry = (laneEntry[n.type] ??= { connectedMaxY: -Infinity, orphanMinY: Infinity });
+      if (isConnected) colEntry.connectedMaxY = Math.max(colEntry.connectedMaxY, bottom);
+      else colEntry.orphanMinY = Math.min(colEntry.orphanMinY, top);
     }
 
     return sortedByCreation
@@ -1112,6 +1161,15 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           .map((platform) => nodes.find((n) => n.id === `ts-${p.id}-${platform}`))
           .filter((n): n is Node => !!n)
           .map((n) => ({ x: n.position.x + NODE_WIDTH / 2, y: n.position.y + NODE_HEIGHT / 2 }));
+        const orphanDividers = (["adaccount", "preset"] as const)
+          .map((col) => {
+            const entry = byLaneColOrphan[p.id]?.[col];
+            if (!entry || entry.connectedMaxY === -Infinity || entry.orphanMinY === Infinity) return null;
+            const colNode = nodes.find((n) => n.type === col);
+            if (!colNode) return null;
+            return { col, y: (entry.connectedMaxY + entry.orphanMinY) / 2, xLeft: colNode.position.x, xRight: colNode.position.x + NODE_WIDTH };
+          })
+          .filter((d): d is { col: "adaccount" | "preset"; y: number; xLeft: number; xRight: number } => d !== null);
         return {
           providerId: p.id,
           name: p.name,
@@ -1121,9 +1179,10 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
           ...byProvider[p.id],
           providerRightX: providerNode ? providerNode.position.x + NODE_WIDTH : undefined,
           tsCenters: tsCenters.length === 2 ? tsCenters : undefined,
+          orphanDividers: orphanDividers.length ? orphanDividers : undefined,
         };
       });
-  }, [nodes, expandedArticleIds, store.routerNodes, store.edges.providerToArticle, adAccountConfigs, presets, sortedByCreation, providerColorMap]);
+  }, [nodes, expandedArticleIds, store.routerNodes, store.edges.providerToArticle, store.edges.articleToAdAccount, store.edges.articleToPreset, adAccountConfigs, presets, sortedByCreation, providerColorMap]);
 
   const matrix = store.buildCampaignMatrix();
 

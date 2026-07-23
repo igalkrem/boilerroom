@@ -12,6 +12,7 @@ export interface LaneBound {
   maxY: number;
   providerRightX?: number;
   tsCenters?: { x: number; y: number }[];
+  orphanDividers?: { col: "adaccount" | "preset"; y: number; xLeft: number; xRight: number }[];
 }
 
 const LANE_PAD_Y = 40;
@@ -132,6 +133,33 @@ export function LaneOverlay({ lanes }: { lanes: LaneBound[] }) {
             />
           );
         })}
+
+        {/* "Unassigned" divider — a plain (non-fading) dashed line + label marking the
+            seam, within one lane's account/preset column, between connected nodes above
+            and not-yet-wired ("orphan") nodes below. Deliberately not the fading style
+            used above, so it reads as a distinct annotation rather than a lane boundary. */}
+        {sorted.flatMap((lane) =>
+          (lane.orphanDividers ?? []).map((od) => {
+            const p1 = toScreen(od.xLeft - 6, od.y);
+            const p2 = toScreen(od.xRight + 6, od.y);
+            return (
+              <g key={`od-${lane.providerId}-${od.col}`}>
+                <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="#414d6c" strokeWidth={1} strokeDasharray="3 3" />
+                <text
+                  x={p1.x}
+                  y={p1.y - 6 * zoom}
+                  fontSize={Math.max(8, 8.5 * zoom)}
+                  fontWeight={700}
+                  letterSpacing="0.1em"
+                  fill="#5c6884"
+                  style={{ textTransform: "uppercase" }}
+                >
+                  Unassigned
+                </text>
+              </g>
+            );
+          })
+        )}
       </svg>
     </div>
   );

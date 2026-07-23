@@ -36,7 +36,9 @@ export function AdAccountNode({ data }: {
           : undefined
       }
       className={`relative rounded-2xl border-2 p-3 w-44 shadow-sm transition-all select-none ${
-        connected ? "" : "border-gray-200 bg-white dark:border-gray-700 dark:bg-[#111827]"
+        connected
+          ? ""
+          : "border-dashed border-gray-300 bg-white/70 opacity-70 dark:border-gray-600 dark:bg-[#111827]/70"
       }`}
     >
       <Handle
@@ -72,13 +74,14 @@ export function AdAccountNode({ data }: {
             )}
             <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{data.name}</p>
           </div>
+          {!connected && <p className="text-[10px] italic text-gray-400 dark:text-gray-500">unassigned</p>}
         </div>
       </div>
     </div>
   );
 }
 
-function SnapGhost({ className }: { className?: string }) {
+export function SnapGhost({ className }: { className?: string }) {
   return (
     <span className={`inline-flex items-center justify-center rounded-md bg-yellow-400 ${className ?? "w-4 h-4"}`}>
       <svg viewBox="0.87 -0.8 20.14 21.67" className="w-[86%] h-[86%]" fill="#fff" stroke="#111827" strokeWidth={1.3} strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">

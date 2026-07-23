@@ -4,6 +4,7 @@ import { Handle, Position } from "@xyflow/react";
 import { useCanvasStore } from "@/hooks/useCanvasStore";
 import type { CampaignPreset } from "@/types/preset";
 import type { Article } from "@/types/article";
+import { SnapGhost } from "./AdAccountNode";
 
 export function PresetNode({ data }: {
   data: {
@@ -41,7 +42,11 @@ export function PresetNode({ data }: {
         data.disabled
           ? "opacity-40 cursor-not-allowed"
           : "cursor-pointer hover:shadow-md"
-      } ${connected ? "" : "border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-[#111827] dark:hover:border-gray-500"}`}
+      } ${
+        connected
+          ? ""
+          : "border-dashed border-gray-300 bg-white/70 opacity-70 hover:border-gray-400 dark:border-gray-600 dark:bg-[#111827]/70 dark:hover:border-gray-500"
+      }`}
       onClick={() => {
         if (data.disabled) return;
         const activeArticleIds = new Set(store.edges.providerToArticle.map((e) => e.articleId));
@@ -68,12 +73,18 @@ export function PresetNode({ data }: {
         {data.color !== "#94a3b8" && (
           <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: data.color }} />
         )}
+        {data.preset.trafficSource === "facebook" ? (
+          <span className="shrink-0 w-4 h-4 rounded bg-blue-600 flex items-center justify-center text-[9px] font-bold text-white leading-none mt-0.5">f</span>
+        ) : (
+          <SnapGhost className="shrink-0 w-4 h-4 mt-0.5 text-yellow-400" />
+        )}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{data.preset.name}</p>
           <p className="text-xs text-gray-400">
             {data.preset.adSquads[0]?.geoCountryCodes?.join(", ") ?? ""}
             {data.preset.adSquads[0]?.dailyBudgetUsd ? ` · $${data.preset.adSquads[0].dailyBudgetUsd}/day` : ""}
           </p>
+          {!connected && <p className="text-[10px] italic text-gray-400 dark:text-gray-500">unassigned</p>}
         </div>
       </div>
 
