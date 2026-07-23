@@ -23,7 +23,7 @@ interface PreviewResponse {
 }
 
 function parseAdIds(raw: string): string[] {
-  return [...new Set(raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean))];
+  return [...new Set(raw.split(/[\r\n,]+/).map((s) => s.trim()).filter(Boolean))];
 }
 
 export default function AdMediaPage() {
@@ -64,15 +64,15 @@ export default function AdMediaPage() {
     <div className="p-8 max-w-3xl mx-auto text-gray-100">
       <h1 className="text-xl font-semibold mb-2">Ad Media Downloader</h1>
       <p className="text-sm text-gray-400 mb-6">
-        Enter one or more Meta Ad IDs (one per line) to fetch every image/video used by those ads and download the
-        unique files all at once.
+        Enter one or more Meta Ad IDs — one per line, or comma-separated on a single line — to fetch every
+        image/video used by those ads and download the unique files all at once.
       </p>
 
       <div className="mb-6">
         <textarea
           className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 font-mono text-sm"
           rows={5}
-          placeholder={"Ad IDs, one per line, e.g.\n120251719284310745\n120250402621500598"}
+          placeholder={"Ad IDs, one per line or comma-separated, e.g.\n120251719284310745\n120250402621500598, 120252957783300745"}
           value={adIdsRaw}
           onChange={(e) => setAdIdsRaw(e.target.value)}
         />
