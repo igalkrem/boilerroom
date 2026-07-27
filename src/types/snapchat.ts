@@ -124,6 +124,11 @@ export interface SnapAdSquadPayload {
 export interface SnapAdSquad extends SnapAdSquadPayload {
   id: string;
   ad_account_id?: string;
+  // Legacy resolved placement, returned by Snapchat on GET but not documented on the payload type.
+  // "SNAP_ADS" = fixed default placement, fully editable. "UNSUPPORTED" = Smart/Custom placement_v2
+  // was set at create time (or added later) — the squad is now locked against direct PUTs (E2025).
+  // Confirmed live via the placement_v2 combination-search experiment, 2026-07-27.
+  placement?: string;
 }
 
 // ─── Creatives ───────────────────────────────────────────────────────────────

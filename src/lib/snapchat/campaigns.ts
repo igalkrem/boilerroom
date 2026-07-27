@@ -33,6 +33,54 @@ export async function deleteCampaign(
   await snapFetch<unknown>(`/campaigns/${campaignId}`, { method: "DELETE" });
 }
 
+// Fallback for Smart-placement ad squads: the squad itself is locked (E2025), but its wrapping
+// campaign is not. Delivery requires campaign status ACTIVE AND squad status ACTIVE, so toggling
+// the campaign is a real substitute for squad-level activate/deactivate; campaign daily_budget_micro
+// is a real substitute for squad-level budget. Bid has no campaign-level equivalent — it stays
+// squad-only and stays blocked on locked squads. Proven live via the placement_v2 combination-search
+// experiment, 2026-07-27 (5 Smart-placement squads, every strategy — budget and status both APPLIED
+// at the campaign level on every one).
+export async function updateCampaignBudgetOrStatus(
+  campaignId: string,
+  updates: { daily_budget_micro?: number; status?: "ACTIVE" | "PAUSED" },
+  expectedAdAccountId: string
+): Promise<SnapCampaign> {
+  const current = await getCampaign(campaignId);
+  if (current.ad_account_id && current.ad_account_id !== expectedAdAccountId) {
+    throw new Error("forbidden: campaign does not belong to the specified ad account");
+  }
+  const cleanUpdates = Object.fromEntries(
+    Object.entries(updates).filter(([, v]) => v !== undefined)
+  );
+  // Snapchat requires start_time/buy_model/objective_v2_properties to already be present on a
+  // campaign PUT or it rejects with E2006/E1008 — echo the campaign's own current values back.
+  const body = {
+    id: campaignId,
+    ad_account_id: expectedAdAccountId,
+    name: current.name,
+    start_time: current.start_time,
+    buy_model: current.buy_model,
+    objective_v2_properties: current.objective_v2_properties,
+    status: current.status,
+    daily_budget_micro: current.daily_budget_micro,
+    ...cleanUpdates,
+  };
+  const data = await snapFetch<{ campaigns: Array<SnapApiItem<SnapCampaign>> }>(
+    `/adaccounts/${expectedAdAccountId}/campaigns`,
+    { method: "PUT", body: JSON.stringify({ campaigns: [body] }) }
+  );
+  const item = data.campaigns?.[0];
+  if (!item) throw new Error("Campaign update failed: empty response");
+  if (item.sub_request_status !== "SUCCESS") {
+    const detail = item.error_type ?? item.error?.error_type;
+    const msg = item.message ?? item.error?.message ?? item.sub_request_error_reason ?? "";
+    console.error("[updateCampaignBudgetOrStatus] Snapchat ERROR:", { campaignId, updates, raw: item });
+    throw new Error([detail, msg].filter(Boolean).join(": ") || "Snapchat rejected the campaign update");
+  }
+  if (!item.campaign) throw new Error("Campaign update failed: no campaign in response");
+  return item.campaign;
+}
+
 export async function createCampaigns(
   adAccountId: string,
   campaigns: SnapCampaignPayload[]

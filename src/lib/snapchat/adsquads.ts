@@ -1,5 +1,6 @@
 import { snapFetch } from "./client";
 import type { SnapAdSquadPayload, SnapAdSquad, SnapBatchResponse, SnapApiItem } from "@/types/snapchat";
+import { updateCampaignBudgetOrStatus } from "./campaigns";
 
 export async function getAdSquads(campaignId: string, token?: string): Promise<SnapAdSquad[]> {
   const data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
@@ -88,6 +89,28 @@ export async function updateAdSquad(
   if (current.ad_account_id && current.ad_account_id !== expectedAdAccountId) {
     throw new Error("forbidden: ad squad does not belong to the specified ad account");
   }
+
+  // Smart-placement squads are locked against direct edits (E2025) — but only the squad itself.
+  // The wrapping campaign is not locked, and campaign-level daily_budget_micro/status are a proven
+  // substitute (delivery requires campaign status ACTIVE AND squad status ACTIVE, so toggling the
+  // campaign is equivalent to activate/deactivate). Bid has no campaign-level equivalent and stays
+  // blocked — falls through to the normal squad PUT below, which still fails with E2025 as before.
+  // Confirmed live via the placement_v2 combination-search experiment, 2026-07-27.
+  const isLocked = current.placement === "UNSUPPORTED" || Boolean(current.placement_v2);
+  if (
+    isLocked &&
+    updates.bid_micro === undefined &&
+    (updates.daily_budget_micro !== undefined || updates.status !== undefined)
+  ) {
+    await updateCampaignBudgetOrStatus(
+      current.campaign_id,
+      { daily_budget_micro: updates.daily_budget_micro, status: updates.status },
+      expectedAdAccountId
+    );
+    // The squad itself didn't change — reflect the requested values in the shape callers expect.
+    return { ...current, ...updates };
+  }
+
   // Filter undefined values — spreading undefined overrides valid values from stripForPut,
   // causing bid_micro to disappear from the PUT body and triggering E2771 on non-auto-bid squads.
   const cleanUpdates = Object.fromEntries(
