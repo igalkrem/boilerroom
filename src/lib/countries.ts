@@ -73,3 +73,10 @@ export const COUNTRY_OPTIONS = [
   { value: "UY", label: "Uruguay" },
   { value: "ZA", label: "South Africa" },
 ];
+
+// Meta requires a regional compliance declaration this app doesn't implement
+// for Thailand (under-20 age-restriction rule) and a "Universal Ads
+// Declaration" for Singapore/Taiwan — confirmed live 2026-07-27 when a
+// Worldwide-targeted ad set was rejected for Taiwan (error_subcode 3858498).
+// Worldwide country groups auto-exclude these three rather than declare them.
+export const WORLDWIDE_AUTO_EXCLUDED_COUNTRIES = ["TH", "SG", "TW"];

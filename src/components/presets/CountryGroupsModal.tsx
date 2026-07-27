@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { v4 as uuid } from "uuid";
 import { Button, Input } from "@/components/ui";
 import { MultiSelect } from "@/components/ui/MultiSelect";
-import { COUNTRY_OPTIONS } from "@/lib/countries";
+import { COUNTRY_OPTIONS, WORLDWIDE_AUTO_EXCLUDED_COUNTRIES } from "@/lib/countries";
 import {
   loadCountryGroups,
   upsertCountryGroup,
@@ -17,6 +17,10 @@ import type { CountryGroup } from "@/types/country-group";
 interface CountryGroupsModalProps {
   onClose: () => void;
 }
+
+const WORLDWIDE_AUTO_EXCLUDED_LABELS = WORLDWIDE_AUTO_EXCLUDED_COUNTRIES.map(
+  (code) => COUNTRY_OPTIONS.find((c) => c.value === code)?.label ?? code
+).join(", ");
 
 type View = "list" | "form";
 
@@ -186,6 +190,11 @@ export function CountryGroupsModal({ onClose }: CountryGroupsModalProps) {
                 />
                 🌍 Worldwide — target every country
               </label>
+              {isWorldwide && (
+                <p className="text-xs text-gray-400 -mt-2">
+                  Worldwide will not target {WORLDWIDE_AUTO_EXCLUDED_LABELS} due to Meta ad policy requirements.
+                </p>
+              )}
               {!isWorldwide && (
                 <MultiSelect
                   label="Countries"

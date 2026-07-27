@@ -9,6 +9,7 @@ import type { MetaBillingEvent, MetaOptimizationGoal, MetaPixelEvent, MetaBidStr
 import { DEFAULT_PAGE_AD_LIMIT } from "@/types/page-config";
 import { getMetaMediaRef } from "@/lib/silo";
 import { getCountryGroupById } from "@/lib/country-groups";
+import { WORLDWIDE_AUTO_EXCLUDED_COUNTRIES } from "@/lib/countries";
 
 // When a preset is linked to a Country Group, resolve the group's CURRENT
 // members at build time instead of the preset's last-saved snapshot — this is
@@ -34,10 +35,17 @@ function resolveMetaGeoTargeting(preset: CampaignPreset, fallback: string[]): Re
   if (!preset.countryGroupId) return { countryCodes: fallback, isWorldwide: false, excludedCountryCodes: [] };
   const group = getCountryGroupById(preset.countryGroupId);
   if (!group) return { countryCodes: fallback, isWorldwide: false, excludedCountryCodes: [] };
+  const isWorldwide = !!group.isWorldwide;
+  // Worldwide reaches Thailand/Singapore/Taiwan, which Meta requires a
+  // compliance declaration this app doesn't implement for — auto-exclude them
+  // instead rather than declaring them.
+  const excludedCountryCodes = isWorldwide
+    ? [...new Set([...(group.excludedCountryCodes ?? []), ...WORLDWIDE_AUTO_EXCLUDED_COUNTRIES])]
+    : group.excludedCountryCodes ?? [];
   return {
     countryCodes: group.countryCodes,
-    isWorldwide: !!group.isWorldwide,
-    excludedCountryCodes: group.excludedCountryCodes ?? [],
+    isWorldwide,
+    excludedCountryCodes,
   };
 }
 
