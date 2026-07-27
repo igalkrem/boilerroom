@@ -171,6 +171,25 @@ export async function runMetaSubmission(
     targeting.publisher_platforms = synthesis.adSet.publisherPlatforms;
   }
 
+  // Meta requires an explicit regional declaration whenever geo targeting can
+  // reach certain countries — confirmed live 2026-07-27 via a real rejection
+  // ("No Taiwan Universal Ads Declaration", error_subcode 3858498) on a
+  // Worldwide-targeted ad set. Singapore has the same requirement
+  // (error_subcode 3858550, seen earlier). Worldwide reaches both unless
+  // explicitly excluded; an explicit country list only needs the ones it
+  // actually contains.
+  const REGIONAL_DECLARATION_BY_COUNTRY: Record<string, string> = {
+    TW: "TAIWAN_UNIVERSAL",
+    SG: "SINGAPORE_UNIVERSAL",
+  };
+  const excludedSet = new Set(synthesis.adSet.geoExcludedCountryCodes);
+  const targetedCountries = synthesis.adSet.geoIsWorldwide
+    ? Object.keys(REGIONAL_DECLARATION_BY_COUNTRY).filter((c) => !excludedSet.has(c))
+    : synthesis.adSet.geoCountryCodes;
+  const regionalDeclarations = [
+    ...new Set(targetedCountries.map((c) => REGIONAL_DECLARATION_BY_COUNTRY[c]).filter(Boolean)),
+  ];
+
   const adSetPayload: MetaAdSetPayload = {
     campaign_id: campaignId,
     name: resolveChannel(synthesis.adSet.name),
@@ -187,6 +206,9 @@ export async function runMetaSubmission(
       ? new Date(synthesis.adSet.endDate).toISOString()
       : undefined,
   };
+  if (regionalDeclarations.length) {
+    adSetPayload.regional_regulated_categories = regionalDeclarations;
+  }
 
   // Omit bid_strategy/bid_amount entirely for LOWEST_COST_WITHOUT_CAP — Meta
   // defaults to it and rejects bid_amount without a matching bid_strategy.

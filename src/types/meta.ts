@@ -104,6 +104,9 @@ export interface MetaAdSetPayload {
   start_time?: string; // ISO 8601
   end_time?: string;
   is_dynamic_creative?: boolean; // required true for asset_feed_spec (Flexible format)
+  regional_regulated_categories?: string[]; // e.g. ["TAIWAN_UNIVERSAL", "SINGAPORE_UNIVERSAL"] —
+    // required whenever geo targeting can reach that country (error_subcode 3858498/3858550
+    // otherwise), confirmed live 2026-07-27 via a real Worldwide-targeted ad set rejection
 }
 
 export interface MetaAdSet extends MetaAdSetPayload {
