@@ -56,7 +56,11 @@ export interface MetaCampaign extends MetaCampaignPayload {
 // ─── Ad Sets ────────────────────────────────────────────────────────────────
 
 export interface MetaTargeting {
-  geo_locations: { countries: string[] };
+  geo_locations: {
+    countries?: string[];
+    country_groups?: string[]; // e.g. ["worldwide"] — Meta's special "target every country" value
+    excluded_countries?: string[];
+  };
   age_min?: number; // 13–65
   age_max?: number;
   genders?: number[]; // 1 = male, 2 = female; omit for all

@@ -43,6 +43,8 @@ export interface AdSquadPresetData {
 
 export interface MetaAdSetPresetData {
   geoCountryCodes: string[];
+  geoIsWorldwide?: boolean;       // true = target every country (from a linked Worldwide Country Group)
+  geoExcludedCountryCodes?: string[]; // countries excluded from targeting (from a linked Country Group)
   optimizationGoal: MetaOptimizationGoal;
   billingEvent: MetaBillingEvent;
   bidStrategy?: MetaBidStrategy; // default LOWEST_COST_WITHOUT_CAP when absent

@@ -155,8 +155,13 @@ export async function runMetaSubmission(
   onStage("adSquads");
 
   const targeting: MetaTargeting = {
-    geo_locations: { countries: synthesis.adSet.geoCountryCodes },
+    geo_locations: synthesis.adSet.geoIsWorldwide
+      ? { country_groups: ["worldwide"] }
+      : { countries: synthesis.adSet.geoCountryCodes },
   };
+  if (synthesis.adSet.geoExcludedCountryCodes.length) {
+    targeting.geo_locations.excluded_countries = synthesis.adSet.geoExcludedCountryCodes;
+  }
   if (synthesis.adSet.minAge) targeting.age_min = synthesis.adSet.minAge;
   if (synthesis.adSet.maxAge) targeting.age_max = synthesis.adSet.maxAge;
   if (synthesis.adSet.targetingGender && synthesis.adSet.targetingGender !== "ALL") {

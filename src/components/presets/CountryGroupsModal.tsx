@@ -26,6 +26,8 @@ export function CountryGroupsModal({ onClose }: CountryGroupsModalProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [countryCodes, setCountryCodes] = useState<string[]>([]);
+  const [isWorldwide, setIsWorldwide] = useState(false);
+  const [excludedCountryCodes, setExcludedCountryCodes] = useState<string[]>([]);
   const [nameError, setNameError] = useState("");
   const backdropRef = useRef<HTMLDivElement>(null);
 
@@ -48,6 +50,8 @@ export function CountryGroupsModal({ onClose }: CountryGroupsModalProps) {
     setEditingId(null);
     setName("");
     setCountryCodes([]);
+    setIsWorldwide(false);
+    setExcludedCountryCodes([]);
     setNameError("");
     setView("form");
   }
@@ -56,6 +60,8 @@ export function CountryGroupsModal({ onClose }: CountryGroupsModalProps) {
     setEditingId(group.id);
     setName(group.name);
     setCountryCodes(group.countryCodes);
+    setIsWorldwide(!!group.isWorldwide);
+    setExcludedCountryCodes(group.excludedCountryCodes ?? []);
     setNameError("");
     setView("form");
   }
@@ -65,14 +71,16 @@ export function CountryGroupsModal({ onClose }: CountryGroupsModalProps) {
       setNameError("Name is required");
       return;
     }
-    if (countryCodes.length === 0) {
+    if (!isWorldwide && countryCodes.length === 0) {
       setNameError("Select at least one country");
       return;
     }
     const group: CountryGroup = {
       id: editingId ?? uuid(),
       name: name.trim(),
-      countryCodes,
+      countryCodes: isWorldwide ? [] : countryCodes,
+      isWorldwide,
+      excludedCountryCodes: excludedCountryCodes.length ? excludedCountryCodes : undefined,
       createdAt: editingId
         ? (groups.find((g) => g.id === editingId)?.createdAt ?? new Date().toISOString())
         : new Date().toISOString(),
@@ -134,8 +142,13 @@ export function CountryGroupsModal({ onClose }: CountryGroupsModalProps) {
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{group.name}</p>
                         <p className="text-xs text-gray-400 mt-0.5 truncate">
-                          {group.countryCodes.join(", ")}
+                          {group.isWorldwide ? "🌍 Worldwide" : group.countryCodes.join(", ")}
                         </p>
+                        {!!group.excludedCountryCodes?.length && (
+                          <p className="text-xs text-gray-400 mt-0.5 truncate">
+                            excluding: {group.excludedCountryCodes.join(", ")}
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <Button size="sm" variant="secondary" onClick={() => openEdit(group)}>
@@ -164,11 +177,28 @@ export function CountryGroupsModal({ onClose }: CountryGroupsModalProps) {
                 value={name}
                 onChange={(e) => { setName(e.target.value); setNameError(""); }}
               />
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isWorldwide}
+                  onChange={(e) => { setIsWorldwide(e.target.checked); setNameError(""); }}
+                  className="rounded border-gray-300"
+                />
+                🌍 Worldwide — target every country
+              </label>
+              {!isWorldwide && (
+                <MultiSelect
+                  label="Countries"
+                  options={COUNTRY_OPTIONS}
+                  value={countryCodes}
+                  onChange={(v) => { setCountryCodes(v); setNameError(""); }}
+                />
+              )}
               <MultiSelect
-                label="Countries"
+                label="Exclude Countries (optional)"
                 options={COUNTRY_OPTIONS}
-                value={countryCodes}
-                onChange={(v) => { setCountryCodes(v); setNameError(""); }}
+                value={excludedCountryCodes}
+                onChange={setExcludedCountryCodes}
               />
               {nameError && <p className="text-xs text-red-600">{nameError}</p>}
             </div>

@@ -20,6 +20,27 @@ function resolveGeoCountryCodes(preset: CampaignPreset, fallback: string[]): str
   return group?.countryCodes ?? fallback; // group deleted/missing → fall back to last-saved snapshot
 }
 
+// Meta-only: resolves the live group's Worldwide flag and exclusions too, since
+// Meta's Graph API can express both natively (geo_locations.country_groups /
+// .excluded_countries) — unlike Snapchat, which has no such concepts and stays
+// on the flat countryCodes list above.
+interface ResolvedMetaGeoTargeting {
+  countryCodes: string[];
+  isWorldwide: boolean;
+  excludedCountryCodes: string[];
+}
+
+function resolveMetaGeoTargeting(preset: CampaignPreset, fallback: string[]): ResolvedMetaGeoTargeting {
+  if (!preset.countryGroupId) return { countryCodes: fallback, isWorldwide: false, excludedCountryCodes: [] };
+  const group = getCountryGroupById(preset.countryGroupId);
+  if (!group) return { countryCodes: fallback, isWorldwide: false, excludedCountryCodes: [] };
+  return {
+    countryCodes: group.countryCodes,
+    isWorldwide: !!group.isWorldwide,
+    excludedCountryCodes: group.excludedCountryCodes ?? [],
+  };
+}
+
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -212,6 +233,8 @@ export interface MetaSynthesisResult {
     name: string;
     status: "ACTIVE" | "PAUSED";
     geoCountryCodes: string[];
+    geoIsWorldwide: boolean;
+    geoExcludedCountryCodes: string[];
     billingEvent: MetaBillingEvent;
     optimizationGoal: MetaOptimizationGoal;
     bidStrategy?: MetaBidStrategy;
@@ -304,6 +327,7 @@ export function synthesizeMetaCampaign(
   }
 
   const multiAsset = assets.length > 1;
+  const geo = resolveMetaGeoTargeting(preset, metaAdSet.geoCountryCodes);
 
   return {
     campaign: {
@@ -313,7 +337,9 @@ export function synthesizeMetaCampaign(
     adSet: {
       name: campaignName,
       status: metaAdSet.status,
-      geoCountryCodes: resolveGeoCountryCodes(preset, metaAdSet.geoCountryCodes),
+      geoCountryCodes: geo.countryCodes,
+      geoIsWorldwide: geo.isWorldwide,
+      geoExcludedCountryCodes: geo.excludedCountryCodes,
       billingEvent: metaAdSet.billingEvent,
       optimizationGoal: metaAdSet.optimizationGoal,
       bidStrategy: metaAdSet.bidStrategy,

@@ -10,6 +10,8 @@ const countryGroupSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
   countryCodes: z.array(z.string()),
+  isWorldwide: z.boolean().optional(),
+  excludedCountryCodes: z.array(z.string()).optional(),
   createdAt: z.string(),
 });
 
@@ -73,7 +75,12 @@ export function unlinkPresetsFromGroup(groupId: string): void {
       updated.adSquads = [{ ...updated.adSquads[0], geoCountryCodes: codes }, ...updated.adSquads.slice(1)];
     }
     if (updated.metaAdSet) {
-      updated.metaAdSet = { ...updated.metaAdSet, geoCountryCodes: codes };
+      updated.metaAdSet = {
+        ...updated.metaAdSet,
+        geoCountryCodes: codes,
+        geoIsWorldwide: group?.isWorldwide,
+        geoExcludedCountryCodes: group?.excludedCountryCodes,
+      };
     }
     upsertPreset(updated);
   }

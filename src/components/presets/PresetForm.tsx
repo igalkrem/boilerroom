@@ -26,7 +26,7 @@ import type { CountryGroup } from "@/types/country-group";
 const presetFormSchema = z
   .object({
     presetName: z.string().min(1, "Preset name is required"),
-    geoCountryCodes: z.array(z.string().min(2)).min(1, "Select at least one country"),
+    geoCountryCodes: z.array(z.string().min(2)),
     trafficSource: z.enum(["snap", "facebook"]),
     optimizationGoal: z.enum([
       "PIXEL_PURCHASE", "PIXEL_SIGNUP", "PIXEL_ADD_TO_CART", "PIXEL_PAGE_VIEW", "LANDING_PAGE_VIEW",
@@ -255,6 +255,11 @@ export function PresetForm({ preset }: PresetFormProps) {
       alert("Product Set ID is required for Catalogue campaigns.");
       return;
     }
+    const linkedGroup = countryGroupId ? countryGroups.find((g) => g.id === countryGroupId) : undefined;
+    if (!linkedGroup?.isWorldwide && data.geoCountryCodes.length === 0) {
+      alert("Select at least one country (or link a Worldwide country group).");
+      return;
+    }
     const isMeta = trafficSource === "facebook";
 
     const metaOptimizationGoal: MetaOptimizationGoal = metaBidChoice === "value" ? "VALUE" : "OFFSITE_CONVERSIONS";
@@ -272,6 +277,8 @@ export function PresetForm({ preset }: PresetFormProps) {
     const metaAdSet: MetaAdSetPresetData | undefined = isMeta
       ? {
           geoCountryCodes: data.geoCountryCodes,
+          geoIsWorldwide: linkedGroup?.isWorldwide,
+          geoExcludedCountryCodes: linkedGroup?.excludedCountryCodes,
           optimizationGoal: metaOptimizationGoal,
           billingEvent: metaBillingEvent,
           bidStrategy: metaBidStrategy,
@@ -526,14 +533,17 @@ export function PresetForm({ preset }: PresetFormProps) {
           <Controller
             control={control}
             name="geoCountryCodes"
-            render={({ field }) =>
-              countryGroupId ? (
+            render={({ field }) => {
+              const linkedGroup = countryGroupId ? countryGroups.find((g) => g.id === countryGroupId) : undefined;
+              return countryGroupId ? (
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     Geo Targeting
                   </label>
                   <p className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-                    {field.value.join(", ")}{" "}
+                    {linkedGroup?.isWorldwide ? "🌍 Worldwide" : field.value.join(", ")}
+                    {!!linkedGroup?.excludedCountryCodes?.length &&
+                      ` (excluding ${linkedGroup.excludedCountryCodes.join(", ")})`}{" "}
                     <span className="text-xs text-gray-400">(from group — switch to Custom to edit)</span>
                   </p>
                 </div>
@@ -545,8 +555,8 @@ export function PresetForm({ preset }: PresetFormProps) {
                   onChange={field.onChange}
                   error={errors.geoCountryCodes?.message}
                 />
-              )
-            }
+              );
+            }}
           />
         </div>
 
