@@ -160,7 +160,7 @@ export async function runMetaSubmission(
       : { countries: synthesis.adSet.geoCountryCodes },
   };
   if (synthesis.adSet.geoExcludedCountryCodes.length) {
-    targeting.geo_locations.excluded_countries = synthesis.adSet.geoExcludedCountryCodes;
+    targeting.excluded_geo_locations = { countries: synthesis.adSet.geoExcludedCountryCodes };
   }
   if (synthesis.adSet.minAge) targeting.age_min = synthesis.adSet.minAge;
   if (synthesis.adSet.maxAge) targeting.age_max = synthesis.adSet.maxAge;
