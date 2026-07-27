@@ -675,7 +675,7 @@ export function PerformanceTable({
 
   function friendlyPatchError(raw: string): string {
     if (raw.includes("E2025") || raw.toLowerCase().includes("placement v2")) {
-      return "This ad set's placements were customized (either Smart placement, or a manual placement edit in Snapchat Ads Manager), which locks its bid against API edits. Budget and pause/activate still work — they're applied at the campaign level automatically. Bid can only be changed in Snapchat Ads Manager directly.";
+      return "This ad set's placements were customized (either Smart placement, or a manual placement edit in Snapchat Ads Manager), which locks its budget and bid against API edits. Pause/activate still works — it's applied at the campaign level automatically. Budget and bid can only be changed in Snapchat Ads Manager directly.";
     }
     if (raw.includes("catalogue_squad_readonly") || raw.toLowerCase().includes("catalogue") || raw.toLowerCase().includes("collection")) {
       return "Catalogue (Collection) campaigns cannot be edited via the Snapchat API — budget, bid, and status changes must be made in Snapchat Ads Manager directly.";

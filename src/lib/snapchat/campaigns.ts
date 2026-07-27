@@ -35,23 +35,22 @@ export async function deleteCampaign(
 
 // Fallback for Smart-placement ad squads: the squad itself is locked (E2025), but its wrapping
 // campaign is not. Delivery requires campaign status ACTIVE AND squad status ACTIVE, so toggling
-// the campaign is a real substitute for squad-level activate/deactivate; campaign daily_budget_micro
-// is a real substitute for squad-level budget. Bid has no campaign-level equivalent — it stays
-// squad-only and stays blocked on locked squads. Proven live via the placement_v2 combination-search
-// experiment, 2026-07-27 (5 Smart-placement squads, every strategy — budget and status both APPLIED
-// at the campaign level on every one).
-export async function updateCampaignBudgetOrStatus(
+// the campaign is a real substitute for squad-level activate/deactivate. (Budget is NOT handled the
+// same way here — campaign-level daily_budget_micro is a spend ceiling layered on top of the
+// squad's own budget, not a substitute for it; setting it higher than the squad's frozen budget has
+// no real effect, since the squad's own budget is still the binding constraint underneath. Confirmed
+// 2026-07-27 after live verification in Ads Manager, correcting an earlier assumption drawn only from
+// a fresh-GET read-back test — that test proved the field accepts writes, not that it governs real
+// delivery pacing. Budget therefore stays unrecoverable on locked squads, same as bid.)
+export async function updateCampaignStatus(
   campaignId: string,
-  updates: { daily_budget_micro?: number; status?: "ACTIVE" | "PAUSED" },
+  status: "ACTIVE" | "PAUSED",
   expectedAdAccountId: string
 ): Promise<SnapCampaign> {
   const current = await getCampaign(campaignId);
   if (current.ad_account_id && current.ad_account_id !== expectedAdAccountId) {
     throw new Error("forbidden: campaign does not belong to the specified ad account");
   }
-  const cleanUpdates = Object.fromEntries(
-    Object.entries(updates).filter(([, v]) => v !== undefined)
-  );
   // Snapchat requires start_time/buy_model/objective_v2_properties to already be present on a
   // campaign PUT or it rejects with E2006/E1008 — echo the campaign's own current values back.
   const body = {
@@ -61,9 +60,8 @@ export async function updateCampaignBudgetOrStatus(
     start_time: current.start_time,
     buy_model: current.buy_model,
     objective_v2_properties: current.objective_v2_properties,
-    status: current.status,
     daily_budget_micro: current.daily_budget_micro,
-    ...cleanUpdates,
+    status,
   };
   const data = await snapFetch<{ campaigns: Array<SnapApiItem<SnapCampaign>> }>(
     `/adaccounts/${expectedAdAccountId}/campaigns`,
@@ -74,7 +72,7 @@ export async function updateCampaignBudgetOrStatus(
   if (item.sub_request_status !== "SUCCESS") {
     const detail = item.error_type ?? item.error?.error_type;
     const msg = item.message ?? item.error?.message ?? item.sub_request_error_reason ?? "";
-    console.error("[updateCampaignBudgetOrStatus] Snapchat ERROR:", { campaignId, updates, raw: item });
+    console.error("[updateCampaignStatus] Snapchat ERROR:", { campaignId, status, raw: item });
     throw new Error([detail, msg].filter(Boolean).join(": ") || "Snapchat rejected the campaign update");
   }
   if (!item.campaign) throw new Error("Campaign update failed: no campaign in response");

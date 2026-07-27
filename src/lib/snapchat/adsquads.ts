@@ -1,6 +1,6 @@
 import { snapFetch } from "./client";
 import type { SnapAdSquadPayload, SnapAdSquad, SnapBatchResponse, SnapApiItem } from "@/types/snapchat";
-import { updateCampaignBudgetOrStatus } from "./campaigns";
+import { updateCampaignStatus } from "./campaigns";
 
 export async function getAdSquads(campaignId: string, token?: string): Promise<SnapAdSquad[]> {
   const data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
@@ -91,24 +91,16 @@ export async function updateAdSquad(
   }
 
   // Smart-placement squads are locked against direct edits (E2025) — but only the squad itself.
-  // The wrapping campaign is not locked, and campaign-level daily_budget_micro/status are a proven
-  // substitute (delivery requires campaign status ACTIVE AND squad status ACTIVE, so toggling the
-  // campaign is equivalent to activate/deactivate). Bid has no campaign-level equivalent and stays
-  // blocked — falls through to the normal squad PUT below, which still fails with E2025 as before.
-  // Confirmed live via the placement_v2 combination-search experiment, 2026-07-27.
+  // The wrapping campaign is not locked, and campaign status is a proven substitute for squad
+  // activate/deactivate (delivery requires campaign status ACTIVE AND squad status ACTIVE).
+  // Budget has NO campaign-level substitute — campaign-level daily_budget_micro is a spend ceiling
+  // on top of the squad's own (frozen) budget, not a replacement for it, so it stays blocked and
+  // falls through to the normal squad PUT below, same as bid. Confirmed live 2026-07-27.
   const isLocked = current.placement === "UNSUPPORTED" || Boolean(current.placement_v2);
-  if (
-    isLocked &&
-    updates.bid_micro === undefined &&
-    (updates.daily_budget_micro !== undefined || updates.status !== undefined)
-  ) {
-    await updateCampaignBudgetOrStatus(
-      current.campaign_id,
-      { daily_budget_micro: updates.daily_budget_micro, status: updates.status },
-      expectedAdAccountId
-    );
-    // The squad itself didn't change — reflect the requested values in the shape callers expect.
-    return { ...current, ...updates };
+  if (isLocked && updates.bid_micro === undefined && updates.daily_budget_micro === undefined && updates.status !== undefined) {
+    await updateCampaignStatus(current.campaign_id, updates.status, expectedAdAccountId);
+    // The squad itself didn't change — reflect the requested value in the shape callers expect.
+    return { ...current, status: updates.status };
   }
 
   // Filter undefined values — spreading undefined overrides valid values from stripForPut,
