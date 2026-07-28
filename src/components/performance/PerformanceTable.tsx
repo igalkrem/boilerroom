@@ -305,9 +305,9 @@ export function PerformanceTable({
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Filters
-  const [showFilters, setShowFilters] = useState(false);
   const [filterArticleIds, setFilterArticleIds] = useState<Set<string>>(new Set());
   const [filterProviderIds, setFilterProviderIds] = useState<Set<string>>(new Set());
+  const [filterPlatforms, setFilterPlatforms] = useState<Set<"snap" | "meta">>(new Set());
   const [filterStatuses, setFilterStatuses] = useState<Set<"ACTIVE" | "PAUSED">>(new Set());
   const [metricFilters, setMetricFilters] = useState<Array<{ id: string; metric: string; op: string; value: string }>>([]);
   const [articles, setArticles] = useState<Array<{ id: string; slug: string }>>([]);
@@ -550,6 +550,11 @@ export function PerformanceTable({
         if (!filterProviderIds.has(resolveProviderKey(r, providers))) return false;
       }
 
+      // Traffic Source (platform) filter
+      if (filterPlatforms.size > 0) {
+        if (!filterPlatforms.has(r.platform ?? "snap")) return false;
+      }
+
       // Status filter
       if (filterStatuses.size > 0) {
         const squadStatus = squadDetails.get(r.ad_squad_id)?.status ?? "ACTIVE";
@@ -572,7 +577,7 @@ export function PerformanceTable({
       return true;
     });
   }, [aggregated, filterQuery, squadDetails, hiddenSquadIds, showHidden,
-      filterArticleIds, filterProviderIds, filterStatuses, metricFilters, articles, providers]);
+      filterArticleIds, filterProviderIds, filterPlatforms, filterStatuses, metricFilters, articles, providers]);
 
   useEffect(() => {
     onFilteredRowsChange?.(filtered);
@@ -982,12 +987,14 @@ export function PerformanceTable({
   const activeFilterCount =
     filterArticleIds.size +
     filterProviderIds.size +
+    filterPlatforms.size +
     filterStatuses.size +
     metricFilters.filter(mf => mf.metric && mf.value.trim()).length;
 
   function clearAllFilters() {
     setFilterArticleIds(new Set());
     setFilterProviderIds(new Set());
+    setFilterPlatforms(new Set());
     setFilterStatuses(new Set());
     setMetricFilters([]);
   }
@@ -1072,21 +1079,6 @@ export function PerformanceTable({
               />
             </div>
 
-            {/* Filters toggle */}
-            <button
-              onClick={() => setShowFilters(v => !v)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md border transition-colors whitespace-nowrap ${
-                showFilters || activeFilterCount > 0
-                  ? "bg-blue-600 text-white border-blue-600"
-                  : "text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
-              </svg>
-              Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
-            </button>
-
             {/* Show hidden toggle */}
             {hiddenSquadIds.size > 0 && (
               <button
@@ -1129,11 +1121,13 @@ export function PerformanceTable({
           </div>
         </div>
 
-        {/* Filter panel */}
-        {showFilters && (
-          <div className="bg-gray-800/50 border-b border-gray-700 px-4 py-3">
-            <div className="flex flex-wrap items-start gap-3">
-              <span className="text-[10px] uppercase tracking-widest text-gray-500 self-center mr-1">Filters</span>
+        {/* Filter bar — always visible, grouped into labeled clusters */}
+        <div className="bg-gray-800/50 border-b border-gray-700 px-4 py-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+
+            {/* Scope group: Article + Feed Provider */}
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-900/40 border border-gray-700/60">
+              <span className="text-[9px] uppercase tracking-widest text-gray-500 font-semibold mr-0.5">Scope</span>
 
               {/* Article multi-select */}
               <div className="relative" ref={articleDropRef}>
@@ -1256,23 +1250,51 @@ export function PerformanceTable({
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* Status filter */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400 w-24 flex-shrink-0">Status</span>
-                <div className="flex gap-1.5">
-                  {(["ACTIVE", "PAUSED"] as const).map(s => (
-                    <button
-                      key={s}
-                      onClick={() => setFilterStatuses(prev => {
-                        const next = new Set(prev);
-                        if (next.has(s)) next.delete(s); else next.add(s);
-                        return next;
-                      })}
-                      className={`px-3 py-1 rounded text-xs font-medium border transition-colors ${
-                        filterStatuses.has(s)
-                          ? s === "ACTIVE"
-                            ? "bg-green-600 border-green-500 text-white"
+            {/* Source group: Traffic Source (Snap / Meta) */}
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-900/40 border border-gray-700/60">
+              <span className="text-[9px] uppercase tracking-widest text-gray-500 font-semibold mr-0.5">Source</span>
+              <div className="flex rounded-md overflow-hidden border border-gray-600">
+                {(["snap", "meta"] as const).map((p, i) => (
+                  <button
+                    key={p}
+                    onClick={() => setFilterPlatforms(prev => {
+                      const next = new Set(prev);
+                      if (next.has(p)) next.delete(p); else next.add(p);
+                      return next;
+                    })}
+                    className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium transition-colors ${
+                      i === 0 ? "border-r border-gray-600" : ""
+                    } ${
+                      filterPlatforms.has(p)
+                        ? p === "snap" ? "bg-yellow-500/20 text-yellow-400" : "bg-blue-500/20 text-blue-400"
+                        : "bg-gray-800 text-gray-400 hover:text-gray-200"
+                    }`}
+                  >
+                    <PlatformIcon platform={p} className="w-3 h-3" />
+                    {p === "snap" ? "Snap" : "Meta"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Status group */}
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-900/40 border border-gray-700/60">
+              <span className="text-[9px] uppercase tracking-widest text-gray-500 font-semibold mr-0.5">Status</span>
+              <div className="flex gap-1.5">
+                {(["ACTIVE", "PAUSED"] as const).map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setFilterStatuses(prev => {
+                      const next = new Set(prev);
+                      if (next.has(s)) next.delete(s); else next.add(s);
+                      return next;
+                    })}
+                    className={`px-3 py-1 rounded text-xs font-medium border transition-colors ${
+                      filterStatuses.has(s)
+                        ? s === "ACTIVE"
+                          ? "bg-green-600 border-green-500 text-white"
                             : "bg-yellow-600 border-yellow-500 text-white"
                           : "bg-gray-800 border-gray-600 text-gray-400 hover:border-gray-400"
                       }`}
@@ -1283,7 +1305,9 @@ export function PerformanceTable({
                 </div>
               </div>
 
-              {/* Metric filter rows */}
+            {/* Metrics group */}
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-900/40 border border-gray-700/60">
+              <span className="text-[9px] uppercase tracking-widest text-gray-500 font-semibold mr-0.5">Metrics</span>
               <div className="flex flex-col gap-1.5">
                 {metricFilters.map((mf, i) => (
                   <div key={mf.id} className="flex items-center gap-1.5">
@@ -1332,19 +1356,19 @@ export function PerformanceTable({
                   Add metric filter
                 </button>
               </div>
-
-              {/* Clear all */}
-              {activeFilterCount > 0 && (
-                <button
-                  onClick={clearAllFilters}
-                  className="ml-auto self-start text-xs text-gray-500 hover:text-red-400 underline transition-colors"
-                >
-                  Clear all
-                </button>
-              )}
             </div>
+
+            {/* Clear all */}
+            {activeFilterCount > 0 && (
+              <button
+                onClick={clearAllFilters}
+                className="ml-auto text-xs text-gray-500 hover:text-red-400 underline transition-colors"
+              >
+                Clear all
+              </button>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Bulk edit panel */}
         {showBulkEdit && hasSelection && (
