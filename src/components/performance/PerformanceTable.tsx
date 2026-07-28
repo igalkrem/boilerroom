@@ -22,7 +22,7 @@ function SnapchatLogo({ className, title }: { className?: string; title?: string
   );
 }
 
-function PlatformIcon({ platform, className }: { platform: "snap" | "meta"; className?: string }) {
+export function PlatformIcon({ platform, className }: { platform: "snap" | "meta"; className?: string }) {
   if (platform === "meta") {
     return (
       <span className={`inline-flex items-center justify-center rounded bg-blue-600 text-white font-bold leading-none ${className ?? "w-3.5 h-3.5 text-[8px]"}`}>

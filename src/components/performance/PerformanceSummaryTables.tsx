@@ -6,7 +6,10 @@ import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import type { Article } from "@/types/article";
 import type { FeedProvider } from "@/types/feed-provider";
 import type { SquadDetail } from "@/components/performance/PerformanceTable";
+import { PlatformIcon } from "@/components/performance/PerformanceTable";
 import { resolveProviderKey } from "@/lib/reporting/provider-key";
+
+const PLATFORM_COLORS: Record<"snap" | "meta", string> = { snap: "#eab308", meta: "#3b82f6" };
 
 // Same palette as CampaignCanvas — providers keep consistent colors across the app.
 const PROVIDER_COLORS = ["#3b82f6", "#f97316", "#8b5cf6", "#10b981", "#ec4899", "#f59e0b"] as const;
@@ -60,6 +63,7 @@ interface SummaryRow {
   key: string;
   label: string;
   feedLabel?: string;
+  platform?: "snap" | "meta";
   spend: number;
   revenue: number;
   profit: number;
@@ -182,6 +186,7 @@ function RoiTable({
   rows,
   totalRow,
   showFeed = false,
+  showSource = false,
   showTotal = true,
   squadDetails,
   onRowClick,
@@ -192,6 +197,7 @@ function RoiTable({
   rows: SummaryRow[];
   totalRow: SummaryRow;
   showFeed?: boolean;
+  showSource?: boolean;
   showTotal?: boolean;
   squadDetails?: Map<string, SquadDetail>;
   onRowClick?: (rowKey: string) => void;
@@ -249,6 +255,7 @@ function RoiTable({
             <tr className="border-b border-gray-700 bg-gray-800 sticky top-0 z-10">
               <th className="text-left px-3 py-1.5 font-medium text-gray-400">{labelHeader}</th>
               {showFeed && <th className="text-left px-2 py-1.5 font-medium text-gray-400">Feed</th>}
+              {showSource && <th className="text-left px-2 py-1.5 font-medium text-gray-400">Source</th>}
               <th className={thCls("spend", "text-right px-2 py-1.5")} onClick={() => handleSort("spend")}>
                 Cost {sortIndicator(sortCol, "spend", sortDir)}
               </th>
@@ -292,6 +299,14 @@ function RoiTable({
                   {showFeed && (
                     <td className="px-2 py-1.5 text-gray-400 max-w-[80px] truncate" title={r.feedLabel}>{r.feedLabel ?? "—"}</td>
                   )}
+                  {showSource && r.platform && (
+                    <td className="px-2 py-1.5 text-gray-300">
+                      <span className="inline-flex items-center gap-1.5">
+                        <PlatformIcon platform={r.platform} className="w-3.5 h-3.5 text-yellow-400" />
+                        {r.platform === "meta" ? "Meta" : "Snap"}
+                      </span>
+                    </td>
+                  )}
                   <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.spend)}</td>
                   <td className="px-2 py-1.5 text-right text-gray-300 whitespace-nowrap">{fmtMoney(r.revenue)}</td>
                   <td className={`px-2 py-1.5 text-right whitespace-nowrap ${r.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(r.profit)}</td>
@@ -314,6 +329,7 @@ function RoiTable({
               <tr className="border-t-2 border-gray-600 bg-gray-700/50">
                 <td className="px-3 py-1.5 font-semibold text-gray-100">Total</td>
                 {showFeed && <td className="px-2 py-1.5" />}
+                {showSource && <td className="px-2 py-1.5" />}
                 <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.spend)}</td>
                 <td className="px-2 py-1.5 text-right font-semibold text-gray-100 whitespace-nowrap">{fmtMoney(totalRow.revenue)}</td>
                 <td className={`px-2 py-1.5 text-right font-semibold whitespace-nowrap ${totalRow.profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtMoney(totalRow.profit)}</td>
@@ -591,6 +607,79 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
     return result.sort((a, b) => b.spend - a.spend);
   }, [internalFilteredRows, historicalRows, providers, providerColorMap, d1, d2]);
 
+  // ── Feed provider × traffic source grouping (uses internalFilteredRows) ────
+  const feedSourceSummary = useMemo<SummaryRow[]>(() => {
+    const buckets = new Map<string, CombinedRow[]>();
+    for (const row of internalFilteredRows) {
+      const key = `${resolveProviderKey(row, providers)}|||${row.platform}`;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key)!.push(row);
+    }
+    const result: SummaryRow[] = [];
+    for (const [key, groupRows] of buckets) {
+      const [pKey, platform] = key.split("|||") as [string, "snap" | "meta"];
+      const { spend, revenue } = sumRows(groupRows);
+      const provider = providers.find(p => p.id === pKey);
+      const label = provider?.name ?? (pKey === "__unknown__" ? "Unknown" : pKey);
+      const providerColor = providerColorMap.get(pKey) ?? "#6b7280";
+      const pred = (r: CombinedRow) => resolveProviderKey(r, providers) === pKey && r.platform === platform;
+      const h1 = histStats(historicalRows, d1, pred);
+      const h2 = histStats(historicalRows, d2, pred);
+      result.push({
+        key,
+        label,
+        platform,
+        spend,
+        revenue,
+        profit: revenue - spend,
+        roi: roiPct(spend, revenue),
+        roi_1d: h1 ? roiPct(h1.spend, h1.revenue) : null,
+        roi_2d: h2 ? roiPct(h2.spend, h2.revenue) : null,
+        spend_1d: h1?.spend,
+        revenue_1d: h1?.revenue,
+        spend_2d: h2?.spend,
+        revenue_2d: h2?.revenue,
+        squadIds: [...new Set(groupRows.map(r => r.ad_squad_id))],
+        providerColor,
+      });
+    }
+    return result.sort((a, b) => b.spend - a.spend);
+  }, [internalFilteredRows, historicalRows, providers, providerColorMap, d1, d2]);
+
+  // ── Traffic source grouping (uses internalFilteredRows) ───────────────────
+  const sourceSummary = useMemo<SummaryRow[]>(() => {
+    const buckets = new Map<"snap" | "meta", CombinedRow[]>();
+    for (const row of internalFilteredRows) {
+      if (!buckets.has(row.platform)) buckets.set(row.platform, []);
+      buckets.get(row.platform)!.push(row);
+    }
+    const result: SummaryRow[] = [];
+    for (const [platform, groupRows] of buckets) {
+      const { spend, revenue } = sumRows(groupRows);
+      const pred = (r: CombinedRow) => r.platform === platform;
+      const h1 = histStats(historicalRows, d1, pred);
+      const h2 = histStats(historicalRows, d2, pred);
+      result.push({
+        key: platform,
+        label: platform === "meta" ? "Meta" : "Snap",
+        platform,
+        spend,
+        revenue,
+        profit: revenue - spend,
+        roi: roiPct(spend, revenue),
+        roi_1d: h1 ? roiPct(h1.spend, h1.revenue) : null,
+        roi_2d: h2 ? roiPct(h2.spend, h2.revenue) : null,
+        spend_1d: h1?.spend,
+        revenue_1d: h1?.revenue,
+        spend_2d: h2?.spend,
+        revenue_2d: h2?.revenue,
+        squadIds: [...new Set(groupRows.map(r => r.ad_squad_id))],
+        providerColor: PLATFORM_COLORS[platform],
+      });
+    }
+    return result.sort((a, b) => b.spend - a.spend);
+  }, [internalFilteredRows, historicalRows, d1, d2]);
+
   // ── Date grouping (uses filteredLast30Rows) ────────────────────────────────
   const dateSummary = useMemo<SummaryRow[]>(() => {
     const source = filteredLast30Rows;
@@ -658,6 +747,32 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
       providerColor: "#6b7280",
     };
   }, [feedSummary, histTotals]);
+
+  const feedSourceTotal = useMemo<SummaryRow>(() => {
+    const spend = feedSourceSummary.reduce((s, r) => s + r.spend, 0);
+    const revenue = feedSourceSummary.reduce((s, r) => s + r.revenue, 0);
+    return {
+      key: "__total__", label: "Total", spend, revenue, profit: revenue - spend,
+      roi: roiPct(spend, revenue), roi_1d: histTotals.roi1, roi_2d: histTotals.roi2,
+      spend_1d: histTotals.spend_1d, revenue_1d: histTotals.revenue_1d,
+      spend_2d: histTotals.spend_2d, revenue_2d: histTotals.revenue_2d,
+      squadIds: [...new Set(feedSourceSummary.flatMap(r => r.squadIds))],
+      providerColor: "#6b7280",
+    };
+  }, [feedSourceSummary, histTotals]);
+
+  const sourceTotal = useMemo<SummaryRow>(() => {
+    const spend = sourceSummary.reduce((s, r) => s + r.spend, 0);
+    const revenue = sourceSummary.reduce((s, r) => s + r.revenue, 0);
+    return {
+      key: "__total__", label: "Total", spend, revenue, profit: revenue - spend,
+      roi: roiPct(spend, revenue), roi_1d: histTotals.roi1, roi_2d: histTotals.roi2,
+      spend_1d: histTotals.spend_1d, revenue_1d: histTotals.revenue_1d,
+      spend_2d: histTotals.spend_2d, revenue_2d: histTotals.revenue_2d,
+      squadIds: [...new Set(sourceSummary.flatMap(r => r.squadIds))],
+      providerColor: "#6b7280",
+    };
+  }, [sourceSummary, histTotals]);
 
   const dateTotal = useMemo<SummaryRow>(() => {
     const spend = dateSummary.reduce((s, r) => s + r.spend, 0);
@@ -730,28 +845,49 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
           </span>
         </div>
       )}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-4">
-        <RoiTable
-          title="By Article"
-          labelHeader="Article"
-          rows={articleSummary}
-          totalRow={articleTotal}
-          showFeed
-          squadDetails={squadDetails}
-          onRowClick={handleArticleRowClick}
-          isRowSelected={key => selectedArticleKey !== null && key.startsWith(selectedArticleKey + "|||")}
-        />
-        <RoiTable
-          title="By Feed"
-          labelHeader="Feed"
-          rows={feedSummary}
-          totalRow={feedTotal}
-          showTotal={false}
-          squadDetails={squadDetails}
-          onRowClick={handleFeedRowClick}
-          isRowSelected={key => key === selectedFeedKey}
-        />
-        <DateTable title="By Date" rows={dateSummary} totalRow={dateTotal} />
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-4">
+          <RoiTable
+            title="By Article"
+            labelHeader="Article"
+            rows={articleSummary}
+            totalRow={articleTotal}
+            showFeed
+            squadDetails={squadDetails}
+            onRowClick={handleArticleRowClick}
+            isRowSelected={key => selectedArticleKey !== null && key.startsWith(selectedArticleKey + "|||")}
+          />
+          <RoiTable
+            title="By Feed"
+            labelHeader="Feed"
+            rows={feedSummary}
+            totalRow={feedTotal}
+            showTotal={false}
+            squadDetails={squadDetails}
+            onRowClick={handleFeedRowClick}
+            isRowSelected={key => key === selectedFeedKey}
+          />
+          <RoiTable
+            title="By Traffic Source"
+            labelHeader="Source"
+            rows={sourceSummary}
+            totalRow={sourceTotal}
+            showTotal={false}
+            squadDetails={squadDetails}
+          />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-4">
+          <RoiTable
+            title="By Feed × Traffic Source"
+            labelHeader="Feed"
+            rows={feedSourceSummary}
+            totalRow={feedSourceTotal}
+            showSource
+            showTotal={false}
+            squadDetails={squadDetails}
+          />
+          <DateTable title="By Date" rows={dateSummary} totalRow={dateTotal} />
+        </div>
       </div>
     </div>
   );
