@@ -249,10 +249,10 @@ function RoiTable({
       <div className="px-3 py-2 border-b border-gray-700 flex-shrink-0">
         <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{title}</span>
       </div>
-      <div className="overflow-auto max-h-48">
+      <div>
         <table className="w-full text-xs">
           <thead>
-            <tr className="border-b border-gray-700 bg-gray-800 sticky top-0 z-10">
+            <tr className="border-b border-gray-700 bg-gray-800">
               <th className="text-left px-3 py-1.5 font-medium text-gray-400">{labelHeader}</th>
               {showFeed && <th className="text-left px-2 py-1.5 font-medium text-gray-400">Feed</th>}
               {showSource && <th className="text-left px-2 py-1.5 font-medium text-gray-400">Source</th>}
@@ -398,7 +398,7 @@ function DateTable({
       <div className="px-3 py-2 border-b border-gray-700 flex-shrink-0">
         <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{title}</span>
       </div>
-      <div className="overflow-auto max-h-48">
+      <div className="overflow-auto max-h-64">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-gray-700 bg-gray-800 sticky top-0 z-10">
@@ -459,6 +459,7 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
   const [providers, setProviders] = useState<FeedProvider[]>([]);
   const [selectedArticleKey, setSelectedArticleKey] = useState<string | null>(null);
   const [selectedFeedKey, setSelectedFeedKey] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     try {
@@ -845,50 +846,75 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
           </span>
         </div>
       )}
-      <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-4">
-          <RoiTable
-            title="By Article"
-            labelHeader="Article"
-            rows={articleSummary}
-            totalRow={articleTotal}
-            showFeed
-            squadDetails={squadDetails}
-            onRowClick={handleArticleRowClick}
-            isRowSelected={key => selectedArticleKey !== null && key.startsWith(selectedArticleKey + "|||")}
-          />
-          <RoiTable
-            title="By Feed"
-            labelHeader="Feed"
-            rows={feedSummary}
-            totalRow={feedTotal}
-            showTotal={false}
-            squadDetails={squadDetails}
-            onRowClick={handleFeedRowClick}
-            isRowSelected={key => key === selectedFeedKey}
-          />
-          <RoiTable
-            title="By Traffic Source"
-            labelHeader="Source"
-            rows={sourceSummary}
-            totalRow={sourceTotal}
-            showTotal={false}
-            squadDetails={squadDetails}
-          />
+      <button
+        type="button"
+        onClick={() => setCollapsed(c => !c)}
+        className="w-full flex items-center justify-between px-3.5 py-2 mb-3 bg-gray-800/70 hover:bg-gray-800 border border-gray-700 rounded-lg text-left transition-colors"
+      >
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-300">
+          <span className={`inline-block transition-transform ${collapsed ? "-rotate-90" : ""}`}>▾</span>
+          Breakdown
+        </span>
+        <span className="text-[11px] text-gray-500">
+          Article · Feed · Traffic Source · Feed × Source · Date
+        </span>
+      </button>
+      {!collapsed && (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap gap-4">
+            <div className="w-full lg:w-[720px] flex-shrink-0">
+              <RoiTable
+                title="By Article"
+                labelHeader="Article"
+                rows={articleSummary}
+                totalRow={articleTotal}
+                showFeed
+                squadDetails={squadDetails}
+                onRowClick={handleArticleRowClick}
+                isRowSelected={key => selectedArticleKey !== null && key.startsWith(selectedArticleKey + "|||")}
+              />
+            </div>
+            <div className="w-full lg:w-[460px] flex-shrink-0">
+              <RoiTable
+                title="By Feed"
+                labelHeader="Feed"
+                rows={feedSummary}
+                totalRow={feedTotal}
+                showTotal={false}
+                squadDetails={squadDetails}
+                onRowClick={handleFeedRowClick}
+                isRowSelected={key => key === selectedFeedKey}
+              />
+            </div>
+            <div className="w-full lg:w-[460px] flex-shrink-0">
+              <RoiTable
+                title="By Traffic Source"
+                labelHeader="Source"
+                rows={sourceSummary}
+                totalRow={sourceTotal}
+                showTotal={false}
+                squadDetails={squadDetails}
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-4">
+            <div className="w-full lg:w-[620px] flex-shrink-0">
+              <RoiTable
+                title="By Feed × Traffic Source"
+                labelHeader="Feed"
+                rows={feedSourceSummary}
+                totalRow={feedSourceTotal}
+                showSource
+                showTotal={false}
+                squadDetails={squadDetails}
+              />
+            </div>
+            <div className="w-full lg:w-[380px] flex-shrink-0">
+              <DateTable title="By Date" rows={dateSummary} totalRow={dateTotal} />
+            </div>
+          </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-4">
-          <RoiTable
-            title="By Feed × Traffic Source"
-            labelHeader="Feed"
-            rows={feedSourceSummary}
-            totalRow={feedSourceTotal}
-            showSource
-            showTotal={false}
-            squadDetails={squadDetails}
-          />
-          <DateTable title="By Date" rows={dateSummary} totalRow={dateTotal} />
-        </div>
-      </div>
+      )}
     </div>
   );
 }
