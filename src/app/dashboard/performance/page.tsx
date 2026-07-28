@@ -48,8 +48,8 @@ async function runWithConcurrency<T>(
 const ACCOUNT_SYNC_CONCURRENCY = 3;
 
 export default function PerformancePage() {
-  const { accounts } = useAdAccounts();
-  const { accounts: metaAccounts } = useMetaAdAccounts();
+  const { accounts, isLoading: snapAccountsLoading } = useAdAccounts();
+  const { accounts: metaAccounts, isLoading: metaAccountsLoading } = useMetaAdAccounts();
   const [adAccountConfigs] = useState(() => loadAdAccountConfigs());
 
   // Only fall back to "show all" for a fresh user who has never configured any
@@ -339,6 +339,11 @@ export default function PerformancePage() {
   // ── On mount: load from DB immediately (cron keeps it fresh) ──────────────
   const didLoad = useRef(false);
   useEffect(() => {
+    // Snap and Meta account lists come from two independent SWR hooks with
+    // independent network latency — gating on "either list is non-empty" raced
+    // whichever platform resolved first and permanently skipped the other,
+    // showing only Snap or only Meta data depending on which fetch won that load.
+    if (snapAccountsLoading || metaAccountsLoading) return;
     if ((activeAccounts.length > 0 || activeMetaAccounts.length > 0) && !didLoad.current) {
       didLoad.current = true;
       void loadFromDb(activeAccounts, startDate, endDate).then((count) => {
@@ -362,7 +367,7 @@ export default function PerformancePage() {
       void loadLast30Days(activeAccounts);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAccounts, activeMetaAccounts]);
+  }, [activeAccounts, activeMetaAccounts, snapAccountsLoading, metaAccountsLoading]);
 
   // ── Load squad details after rows populate ─────────────────────────────────
   useEffect(() => {
