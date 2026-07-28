@@ -15,6 +15,12 @@ type OnStageChange = (stage: string) => void;
 
 const UPLOAD_CONCURRENCY = 2;
 
+// Countries whose ad delivery Meta gates behind a regional_regulated_categories declaration.
+const REGIONAL_DECLARATION_BY_COUNTRY: Record<string, string> = {
+  TW: "TAIWAN_UNIVERSAL",
+  SG: "SINGAPORE_UNIVERSAL",
+};
+
 export async function runMetaSubmission(
   adAccountId: string,
   synthesis: MetaSynthesisResult,
@@ -171,24 +177,23 @@ export async function runMetaSubmission(
     targeting.publisher_platforms = synthesis.adSet.publisherPlatforms;
   }
 
-  // Meta requires an explicit regional declaration whenever geo targeting can
-  // reach certain countries — confirmed live 2026-07-27 via a real rejection
-  // ("No Taiwan Universal Ads Declaration", error_subcode 3858498) on a
-  // Worldwide-targeted ad set. Singapore has the same requirement
-  // (error_subcode 3858550, seen earlier). Worldwide reaches both unless
-  // explicitly excluded; an explicit country list only needs the ones it
-  // actually contains.
-  const REGIONAL_DECLARATION_BY_COUNTRY: Record<string, string> = {
-    TW: "TAIWAN_UNIVERSAL",
-    SG: "SINGAPORE_UNIVERSAL",
-  };
+  // Meta requires an explicit regional declaration whenever geo targeting reaches certain
+  // countries — confirmed live 2026-07-27 via a real rejection ("No Taiwan Universal Ads
+  // Declaration", error_subcode 3858498). Singapore has the same requirement (error_subcode
+  // 3858550). Only an explicit country list can reach this: Worldwide groups auto-exclude
+  // TH/SG/TW in resolveMetaGeoTargeting rather than declaring them, so a Worldwide ad set
+  // never targets a country that needs one.
   const excludedSet = new Set(synthesis.adSet.geoExcludedCountryCodes);
-  const targetedCountries = synthesis.adSet.geoIsWorldwide
-    ? Object.keys(REGIONAL_DECLARATION_BY_COUNTRY).filter((c) => !excludedSet.has(c))
-    : synthesis.adSet.geoCountryCodes;
-  const regionalDeclarations = [
-    ...new Set(targetedCountries.map((c) => REGIONAL_DECLARATION_BY_COUNTRY[c]).filter(Boolean)),
-  ];
+  const regionalDeclarations = synthesis.adSet.geoIsWorldwide
+    ? []
+    : [
+        ...new Set(
+          synthesis.adSet.geoCountryCodes
+            .filter((c) => !excludedSet.has(c))
+            .map((c) => REGIONAL_DECLARATION_BY_COUNTRY[c])
+            .filter(Boolean)
+        ),
+      ];
 
   const adSetPayload: MetaAdSetPayload = {
     campaign_id: campaignId,

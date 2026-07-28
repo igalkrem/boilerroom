@@ -53,13 +53,20 @@ export async function updateCampaignStatus(
   }
   // Snapchat requires start_time/buy_model/objective_v2_properties to already be present on a
   // campaign PUT or it rejects with E2006/E1008 — echo the campaign's own current values back.
+  // end_time and product_properties are echoed for the same reason: omitting a field that IS set
+  // reads to Snapchat as an attempt to null it, which either fails with E1008 or silently clears
+  // it (an omitted end_time would let the campaign run past its intended stop; an omitted
+  // product_properties would break a Catalogue campaign's catalog_id association).
+  // undefined keys are dropped by JSON.stringify, so unset fields stay unset.
   const body = {
     id: campaignId,
     ad_account_id: expectedAdAccountId,
     name: current.name,
     start_time: current.start_time,
+    end_time: current.end_time,
     buy_model: current.buy_model,
     objective_v2_properties: current.objective_v2_properties,
+    product_properties: current.product_properties,
     daily_budget_micro: current.daily_budget_micro,
     status,
   };

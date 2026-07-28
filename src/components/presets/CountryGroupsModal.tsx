@@ -79,10 +79,20 @@ export function CountryGroupsModal({ onClose }: CountryGroupsModalProps) {
       setNameError("Select at least one country");
       return;
     }
+    // A country in both lists is a contradiction Meta would have to arbitrate silently.
+    if (!isWorldwide) {
+      const overlap = countryCodes.filter((c) => excludedCountryCodes.includes(c));
+      if (overlap.length) {
+        setNameError(`Remove from one list — ${overlap.join(", ")} is both targeted and excluded`);
+        return;
+      }
+    }
     const group: CountryGroup = {
       id: editingId ?? uuid(),
       name: name.trim(),
-      countryCodes: isWorldwide ? [] : countryCodes,
+      // Kept even when Worldwide is on (targeting reads isWorldwide, not this list) so toggling
+      // Worldwide is non-destructive — otherwise the selection is gone on the next edit.
+      countryCodes,
       isWorldwide,
       excludedCountryCodes: excludedCountryCodes.length ? excludedCountryCodes : undefined,
       createdAt: editingId

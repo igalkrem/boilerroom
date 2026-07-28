@@ -255,12 +255,19 @@ export function PresetForm({ preset }: PresetFormProps) {
       alert("Product Set ID is required for Catalogue campaigns.");
       return;
     }
+    const isMeta = trafficSource === "facebook";
     const linkedGroup = countryGroupId ? countryGroups.find((g) => g.id === countryGroupId) : undefined;
-    if (!linkedGroup?.isWorldwide && data.geoCountryCodes.length === 0) {
-      alert("Select at least one country (or link a Worldwide country group).");
+    // A Worldwide group legitimately carries zero countries, but only Meta can express that
+    // (geo_locations.country_groups). Snapchat's targeting.geos has no worldwide keyword, so a Snap
+    // preset linked to a Worldwide group would launch with an empty geo list and target nobody.
+    if (linkedGroup?.isWorldwide && !isMeta) {
+      alert("Worldwide targeting is Meta-only — Snapchat needs an explicit country list. Pick a non-Worldwide country group, or switch to Custom.");
       return;
     }
-    const isMeta = trafficSource === "facebook";
+    if (!(linkedGroup?.isWorldwide && isMeta) && data.geoCountryCodes.length === 0) {
+      alert("Select at least one country (or link a Worldwide country group on a Facebook preset).");
+      return;
+    }
 
     const metaOptimizationGoal: MetaOptimizationGoal = metaBidChoice === "value" ? "VALUE" : "OFFSITE_CONVERSIONS";
     // Meta rejects VALUE optimization paired with the default LOWEST_COST_WITHOUT_CAP

@@ -56,10 +56,12 @@ export interface MetaCampaign extends MetaCampaignPayload {
 // ─── Ad Sets ────────────────────────────────────────────────────────────────
 
 export interface MetaTargeting {
-  geo_locations: {
-    countries?: string[];
-    country_groups?: string[]; // e.g. ["worldwide"] — Meta's special "target every country" value
-  };
+  // A union, not two optional keys, so an empty geo_locations (no targeting at all) can't
+  // type-check its way into a Meta rejection. country_groups takes e.g. ["worldwide"] —
+  // Meta's special "target every country" value.
+  geo_locations:
+    | { countries: string[]; country_groups?: string[] }
+    | { countries?: string[]; country_groups: string[] };
   // Exclusions are a SEPARATE sibling field, not a sub-field of geo_locations —
   // confirmed live 2026-07-27: geo_locations.excluded_countries was rejected
   // with error_subcode 1487079 ("Normalization does not allow the value

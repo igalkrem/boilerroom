@@ -674,8 +674,13 @@ export function PerformanceTable({
   }
 
   function friendlyPatchError(raw: string): string {
+    // updateAdSquad refuses a campaign-level status change it can't apply cleanly, and its
+    // messages are already user-facing — just drop the machine-readable prefix.
+    const lockedStatusPrefix = ["placement_locked_squad_paused: ", "placement_locked_shared_campaign: "]
+      .find(p => raw.startsWith(p));
+    if (lockedStatusPrefix) return raw.slice(lockedStatusPrefix.length);
     if (raw.includes("E2025") || raw.toLowerCase().includes("placement v2")) {
-      return "This ad set's placements were customized (either Smart placement, or a manual placement edit in Snapchat Ads Manager), which locks its budget and bid against API edits. Pause/activate still works — it's applied at the campaign level automatically. Budget and bid can only be changed in Snapchat Ads Manager directly.";
+      return "This ad set's placements were customized (either Smart placement, or a manual placement edit in Snapchat Ads Manager), which locks its budget and bid against API edits. Budget and bid can only be changed in Snapchat Ads Manager directly. Pause/activate is applied to the wrapping campaign instead, which works when that campaign holds only this ad set and the ad set isn't already paused at its own level.";
     }
     if (raw.includes("catalogue_squad_readonly") || raw.toLowerCase().includes("catalogue") || raw.toLowerCase().includes("collection")) {
       return "Catalogue (Collection) campaigns cannot be edited via the Snapchat API — budget, bid, and status changes must be made in Snapchat Ads Manager directly.";

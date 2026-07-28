@@ -3,7 +3,7 @@ import type { CampaignBuildItem } from "@/types/wizard";
 import type { CampaignFormData, AdSquadFormData, CreativeFormData } from "@/types/wizard";
 import type { FeedProvider } from "@/types/feed-provider";
 import type { Article } from "@/types/article";
-import type { CampaignPreset } from "@/types/preset";
+import type { CampaignPreset, MetaAdSetPresetData } from "@/types/preset";
 import type { SiloAsset } from "@/types/silo";
 import type { MetaBillingEvent, MetaOptimizationGoal, MetaPixelEvent, MetaBidStrategy } from "@/types/meta";
 import { DEFAULT_PAGE_AD_LIMIT } from "@/types/page-config";
@@ -22,8 +22,9 @@ function resolveGeoCountryCodes(preset: CampaignPreset, fallback: string[]): str
 }
 
 // Meta-only: resolves the live group's Worldwide flag and exclusions too, since
-// Meta's Graph API can express both natively (geo_locations.country_groups /
-// .excluded_countries) — unlike Snapchat, which has no such concepts and stays
+// Meta's Graph API can express both natively (geo_locations.country_groups and
+// the separate excluded_geo_locations sibling — NOT geo_locations.excluded_countries,
+// which Meta rejects) — unlike Snapchat, which has no such concepts and stays
 // on the flat countryCodes list above.
 interface ResolvedMetaGeoTargeting {
   countryCodes: string[];
@@ -31,21 +32,38 @@ interface ResolvedMetaGeoTargeting {
   excludedCountryCodes: string[];
 }
 
-function resolveMetaGeoTargeting(preset: CampaignPreset, fallback: string[]): ResolvedMetaGeoTargeting {
-  if (!preset.countryGroupId) return { countryCodes: fallback, isWorldwide: false, excludedCountryCodes: [] };
+// Worldwide reaches Thailand/Singapore/Taiwan, which Meta requires a compliance
+// declaration this app doesn't implement for — auto-exclude them instead of
+// declaring them. Applied to the live group and the snapshot alike.
+function withWorldwideExclusions(isWorldwide: boolean, explicit: string[] | undefined): string[] {
+  const base = explicit ?? [];
+  return isWorldwide ? [...new Set([...base, ...WORLDWIDE_AUTO_EXCLUDED_COUNTRIES])] : base;
+}
+
+// The snapshot (metaAdSet.geoIsWorldwide / .geoExcludedCountryCodes) is written by
+// PresetForm on save and by unlinkPresetsFromGroup when a group is deleted — it MUST be
+// read back here, not just the flat country list. A Worldwide group stores countryCodes: [],
+// so falling back to the country list alone would leave an unlinked preset targeting nobody.
+function resolveMetaGeoTargeting(
+  preset: CampaignPreset,
+  snapshot: Pick<MetaAdSetPresetData, "geoCountryCodes" | "geoIsWorldwide" | "geoExcludedCountryCodes">
+): ResolvedMetaGeoTargeting {
+  const fromSnapshot = (): ResolvedMetaGeoTargeting => {
+    const isWorldwide = !!snapshot.geoIsWorldwide;
+    return {
+      countryCodes: snapshot.geoCountryCodes,
+      isWorldwide,
+      excludedCountryCodes: withWorldwideExclusions(isWorldwide, snapshot.geoExcludedCountryCodes),
+    };
+  };
+  if (!preset.countryGroupId) return fromSnapshot();
   const group = getCountryGroupById(preset.countryGroupId);
-  if (!group) return { countryCodes: fallback, isWorldwide: false, excludedCountryCodes: [] };
+  if (!group) return fromSnapshot(); // group deleted/missing → last-saved snapshot
   const isWorldwide = !!group.isWorldwide;
-  // Worldwide reaches Thailand/Singapore/Taiwan, which Meta requires a
-  // compliance declaration this app doesn't implement for — auto-exclude them
-  // instead rather than declaring them.
-  const excludedCountryCodes = isWorldwide
-    ? [...new Set([...(group.excludedCountryCodes ?? []), ...WORLDWIDE_AUTO_EXCLUDED_COUNTRIES])]
-    : group.excludedCountryCodes ?? [];
   return {
     countryCodes: group.countryCodes,
     isWorldwide,
-    excludedCountryCodes,
+    excludedCountryCodes: withWorldwideExclusions(isWorldwide, group.excludedCountryCodes),
   };
 }
 
@@ -335,7 +353,7 @@ export function synthesizeMetaCampaign(
   }
 
   const multiAsset = assets.length > 1;
-  const geo = resolveMetaGeoTargeting(preset, metaAdSet.geoCountryCodes);
+  const geo = resolveMetaGeoTargeting(preset, metaAdSet);
 
   return {
     campaign: {

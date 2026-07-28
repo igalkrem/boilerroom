@@ -91,16 +91,42 @@ export async function updateAdSquad(
   }
 
   // Smart-placement squads are locked against direct edits (E2025) — but only the squad itself.
-  // The wrapping campaign is not locked, and campaign status is a proven substitute for squad
-  // activate/deactivate (delivery requires campaign status ACTIVE AND squad status ACTIVE).
+  // The wrapping campaign is not locked, and campaign status can substitute for squad
+  // activate/deactivate, because delivery requires campaign status ACTIVE AND squad status ACTIVE.
   // Budget has NO campaign-level substitute — campaign-level daily_budget_micro is a spend ceiling
   // on top of the squad's own (frozen) budget, not a replacement for it, so it stays blocked and
   // falls through to the normal squad PUT below, same as bid. Confirmed live 2026-07-27.
-  const isLocked = current.placement === "UNSUPPORTED" || Boolean(current.placement_v2);
-  if (isLocked && updates.bid_micro === undefined && updates.daily_budget_micro === undefined && updates.status !== undefined) {
+  //
+  // Only `placement === "UNSUPPORTED"` is a verified lock signal. placement_v2 is echoed back by
+  // GET, so treating any truthy value as a lock risks misclassifying ordinary editable squads and
+  // silently converting their squad-level status toggles into campaign-wide ones.
+  const isLocked = current.placement === "UNSUPPORTED";
+  if (isLocked && updates.status !== undefined) {
+    // The AND-gate cuts both ways. Pausing the campaign reliably stops delivery, but activating it
+    // only starts delivery when the squad's own (frozen) status is already ACTIVE — otherwise the
+    // campaign goes live and the squad still blocks it. Reporting success there would show
+    // "Active" in the dashboard for a squad that can never serve.
+    if (updates.status === "ACTIVE" && current.status !== "ACTIVE") {
+      throw new Error(
+        "placement_locked_squad_paused: This ad set's placements were customized, which freezes its own status at PAUSED. Activating its campaign cannot start delivery on its own — reactivate the ad set in Snapchat Ads Manager."
+      );
+    }
+    // Campaign status applies to EVERY squad under the campaign, so only take this path when the
+    // campaign wraps this squad alone. Otherwise it would silently pause or resume siblings the
+    // user never touched. App-created campaigns are 1:1, but squads created in Ads Manager are not.
+    const siblings = await getAdSquads(current.campaign_id);
+    if (siblings.length > 1) {
+      throw new Error(
+        `placement_locked_shared_campaign: This ad set's placements were customized, so its status can only be changed at the campaign level — but its campaign holds ${siblings.length} ad sets and that would change all of them. Change it in Snapchat Ads Manager instead.`
+      );
+    }
     await updateCampaignStatus(current.campaign_id, updates.status, expectedAdAccountId);
-    // The squad itself didn't change — reflect the requested value in the shape callers expect.
-    return { ...current, status: updates.status };
+    // The squad's own fields are unchanged; only report the status we actually achieved.
+    if (updates.daily_budget_micro === undefined && updates.bid_micro === undefined) {
+      return { ...current, status: updates.status };
+    }
+    // A combined edit got its status applied above; budget/bid are still locked, so fall through
+    // to the squad PUT and let them fail loudly (E2025) rather than silently dropping them.
   }
 
   // Filter undefined values — spreading undefined overrides valid values from stripForPut,
