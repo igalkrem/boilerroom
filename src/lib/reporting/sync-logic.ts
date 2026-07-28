@@ -141,7 +141,13 @@ export async function syncAccount(
   endDate: string,
   timezone: string,
   accessToken?: string, // undefined = use session (normal user request); string = cron token
-  force = false
+  force = false,
+  // Bypasses ONLY the per-account Snapchat stats cooldown (`shouldSkip`), not
+  // the Visymo/Predicto feed-level :15/:46 window gates (`shouldSkipFeed`) —
+  // lets cron re-check this account's Snapchat stats on every tick while still
+  // keeping each global feed on its own once-per-window cadence. `force` alone
+  // (dashboard "Force Refresh") still bypasses everything, unchanged.
+  forceStatsOnly = false
 ): Promise<SyncResult> {
   await runMigrations();
 
@@ -254,7 +260,7 @@ export async function syncAccount(
   // ── Snapchat ──────────────────────────────────────────────────────────────
   const snapDatesToFetch: string[] = [];
   for (const date of dates) {
-    if (!force && await shouldSkip("snapchat", date, adAccountId)) {
+    if (!force && !forceStatsOnly && await shouldSkip("snapchat", date, adAccountId)) {
       snapchatSkipped++;
     } else {
       snapDatesToFetch.push(date);
@@ -423,7 +429,10 @@ export async function syncMetaAccount(
   startDate: string,
   endDate: string,
   accessToken: string,
-  force = false
+  force = false,
+  // See syncAccount()'s matching param — bypasses only the per-account Meta
+  // stats cooldown, not Predicto FB's :46 feed window.
+  forceStatsOnly = false
 ): Promise<MetaSyncResult> {
   await runMigrations();
 
@@ -436,7 +445,7 @@ export async function syncMetaAccount(
 
   const datesToFetch: string[] = [];
   for (const date of dates) {
-    if (!force && await shouldSkip("meta", date, adAccountId)) {
+    if (!force && !forceStatsOnly && await shouldSkip("meta", date, adAccountId)) {
       skipped++;
     } else {
       datesToFetch.push(date);

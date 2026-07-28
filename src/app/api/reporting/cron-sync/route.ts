@@ -113,7 +113,10 @@ export async function GET(request: NextRequest) {
       await Promise.allSettled(
         accountsToSync.map(async ({ id, timezone }) => {
           try {
-            await syncAccount(id, startDate, today, timezone || "America/Los_Angeles", accessToken, true);
+            // force=false so Visymo/Predicto still only refresh on their own :15/:46
+            // window (see isVisymoRun above); forceStatsOnly=true still re-checks this
+            // account's own Snapchat stats every tick regardless of the 60-min cooldown.
+            await syncAccount(id, startDate, today, timezone || "America/Los_Angeles", accessToken, false, true);
             totalAccounts++;
           } catch (err) {
             console.error(`[cron-sync] sync failed for account ${id}:`, err);
@@ -137,7 +140,8 @@ export async function GET(request: NextRequest) {
       await Promise.allSettled(
         user.ad_account_ids.map(async ({ id }) => {
           try {
-            await syncMetaAccount(id, startDate, today, user.access_token, true);
+            // Same split as syncAccount() above — Predicto FB keeps its :46 window.
+            await syncMetaAccount(id, startDate, today, user.access_token, false, true);
             totalMetaAccounts++;
           } catch (err) {
             console.error(`[cron-sync] Meta sync failed for account ${id}:`, err);
