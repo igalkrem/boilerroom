@@ -157,6 +157,10 @@ function PresetCard({
               <span className="text-gray-400 dark:text-gray-500">Budget</span>
               <span className="text-gray-600 dark:text-gray-300 font-mono">{budgetText(sq0)}</span>
             </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-gray-400 dark:text-gray-500">Device</span>
+              <span className="text-gray-600 dark:text-gray-300">{deviceText(sq0)}</span>
+            </div>
           </>
         )}
       </div>
