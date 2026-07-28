@@ -364,6 +364,33 @@ export default function TrafficSourcesPage() {
     [unifiedAccounts, isAccountHidden]
   );
 
+  // Exports every account regardless of the current search/platform filter —
+  // this is a full-list export, not a "download what's on screen" one.
+  const handleExportAccountsCsv = () => {
+    const headers = ["Platform", "Name", "Account ID", "Business Manager / Org", "Timezone", "Currency", "Status"];
+    const rows = unifiedAccounts.map((a) =>
+      [
+        a.platform === "snap" ? "Snap" : "Meta",
+        `"${(a.name || "").replace(/"/g, '""')}"`,
+        a.id,
+        `"${(a.org || "").replace(/"/g, '""')}"`,
+        a.timezone || "",
+        a.currency || "",
+        isAccountHidden(a.id) ? "Hidden" : "Active",
+      ].join(",")
+    );
+    const content = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "ad-accounts.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   // ---- Facebook Pages derived state ----
   const pageCfgById = useMemo(() => {
     const m = new Map<string, PageConfig>();
@@ -941,6 +968,13 @@ export default function TrafficSourcesPage() {
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                onClick={handleExportAccountsCsv}
+                className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
+                ⬇ Export CSV
+              </button>
             </div>
           </div>
 
