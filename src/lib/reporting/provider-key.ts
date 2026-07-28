@@ -9,7 +9,7 @@ interface ProviderKeyRow {
 // Three-tier provider resolution used by both PerformanceTable and PerformanceSummaryTables.
 // Tier 1: feed_provider_id from DB (set via feed_provider_channels LATERAL JOIN)
 // Tier 2: domain_name matched against provider.domains[].baseDomain (Visymo campaigns)
-// Tier 3: ad_account_id matched against provider.snapConfig.allowedAdAccountIds (all others)
+// Tier 3: ad_account_id matched against provider.snapConfig/.metaConfig.allowedAdAccountIds (all others)
 export function resolveProviderKey(r: ProviderKeyRow, providers: FeedProvider[]): string {
   if (r.feed_provider_id) return r.feed_provider_id;
   if (r.domain_name) {
@@ -24,7 +24,8 @@ export function resolveProviderKey(r: ProviderKeyRow, providers: FeedProvider[])
   }
   if (r.ad_account_id) {
     const match = providers.find(p =>
-      p.snapConfig?.allowedAdAccountIds?.includes(r.ad_account_id)
+      p.snapConfig?.allowedAdAccountIds?.includes(r.ad_account_id) ||
+      p.metaConfig?.allowedAdAccountIds?.includes(r.ad_account_id)
     );
     if (match) return match.id;
   }
