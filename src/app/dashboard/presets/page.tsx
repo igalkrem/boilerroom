@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { loadPresets, deletePreset, duplicatePreset } from "@/lib/presets";
 import { loadFeedProviders } from "@/lib/feed-providers";
@@ -11,30 +11,6 @@ import type { CampaignPreset, AdSquadPresetData } from "@/types/preset";
 import type { FeedProvider } from "@/types/feed-provider";
 import type { SavedPixel } from "@/types/pixel";
 import type { CountryGroup } from "@/types/country-group";
-
-function DataRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-[10px] text-gray-400 uppercase tracking-wide">{label}</p>
-      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">{value}</p>
-    </div>
-  );
-}
-
-function TrafficSourceBadge({ source }: { source: "snap" | "facebook" }) {
-  if (source === "facebook") {
-    return (
-      <span className="text-[10px] font-semibold bg-blue-50 text-blue-600 border border-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-700 px-2 py-0.5 rounded-full shrink-0">
-        Facebook
-      </span>
-    );
-  }
-  return (
-    <span className="text-[10px] font-semibold bg-yellow-50 text-yellow-700 border border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700 px-2 py-0.5 rounded-full shrink-0">
-      Snap
-    </span>
-  );
-}
 
 function geoText(preset: CampaignPreset, groupMap: Record<string, CountryGroup>): string {
   if (preset.countryGroupId) {
@@ -70,6 +46,145 @@ function deviceText(sq?: AdSquadPresetData): string {
   return labels[sq.targetingDeviceType] ?? sq.targetingDeviceType;
 }
 
+interface FeedColumn {
+  providerId: string;
+  providerName: string;
+  providerMissing: boolean;
+  snap: CampaignPreset[];
+  facebook: CampaignPreset[];
+}
+
+function buildFeedColumns(
+  presets: CampaignPreset[],
+  providerMap: Record<string, FeedProvider>
+): FeedColumn[] {
+  const columns = new Map<string, FeedColumn>();
+  for (const preset of presets) {
+    const providerId = preset.feedProviderId || "__none__";
+    const provider = preset.feedProviderId ? providerMap[preset.feedProviderId] : undefined;
+    if (!columns.has(providerId)) {
+      columns.set(providerId, {
+        providerId,
+        providerName: provider?.name ?? (preset.feedProviderId ? "Unknown feed" : "No feed"),
+        providerMissing: Boolean(preset.feedProviderId) && !provider,
+        snap: [],
+        facebook: [],
+      });
+    }
+    const column = columns.get(providerId)!;
+    if ((preset.trafficSource ?? "snap") === "facebook") {
+      column.facebook.push(preset);
+    } else {
+      column.snap.push(preset);
+    }
+  }
+  return Array.from(columns.values()).sort(
+    (a, b) => b.snap.length + b.facebook.length - (a.snap.length + a.facebook.length)
+  );
+}
+
+function PlatformGroup({
+  source,
+  count,
+  children,
+}: {
+  source: "snap" | "facebook";
+  count: number;
+  children: ReactNode;
+}) {
+  return (
+    <div className="mb-3 last:mb-0">
+      <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
+        <span
+          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+            source === "facebook" ? "bg-blue-500" : "bg-yellow-500"
+          }`}
+        />
+        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+          {source === "facebook" ? "Facebook" : "Snap"} · {count}
+        </span>
+        <span className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+      </div>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+function PresetCard({
+  preset,
+  pixelMap,
+  groupMap,
+  onEdit,
+  onDuplicate,
+  onDelete,
+}: {
+  preset: CampaignPreset;
+  pixelMap: Record<string, SavedPixel>;
+  groupMap: Record<string, CountryGroup>;
+  onEdit: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}) {
+  const sq0 = preset.adSquads?.[0];
+  const isFacebook = (preset.trafficSource ?? "snap") === "facebook";
+  const pixelName = sq0?.pixelId ? (pixelMap[sq0.pixelId]?.name ?? sq0.pixelId) : null;
+
+  return (
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2.5">
+      <p className="text-xs font-semibold text-gray-900 dark:text-gray-100 leading-snug mb-1.5">{preset.name}</p>
+
+      <div className="space-y-1 text-[11px]">
+        {isFacebook ? (
+          <div className="flex justify-between gap-2">
+            <span className="text-gray-400 dark:text-gray-500">Geo</span>
+            <span className="text-gray-600 dark:text-gray-300 text-right truncate">
+              {geoText(preset, groupMap)}
+            </span>
+          </div>
+        ) : (
+          <>
+            {pixelName && (
+              <div className="flex justify-between gap-2">
+                <span className="text-gray-400 dark:text-gray-500">Pixel</span>
+                <span className="text-gray-600 dark:text-gray-300 truncate">{pixelName}</span>
+              </div>
+            )}
+            <div className="flex justify-between gap-2">
+              <span className="text-gray-400 dark:text-gray-500">Bid</span>
+              <span className="text-gray-600 dark:text-gray-300 font-mono">{bidText(sq0)}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-gray-400 dark:text-gray-500">Budget</span>
+              <span className="text-gray-600 dark:text-gray-300 font-mono">{budgetText(sq0)}</span>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2.5 mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+        <button
+          onClick={onEdit}
+          className="text-[11px] font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+        >
+          Edit
+        </button>
+        <button
+          onClick={onDuplicate}
+          className="text-[11px] font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+        >
+          Duplicate
+        </button>
+        <button
+          onClick={onDelete}
+          className="text-[11px] font-medium text-red-400 hover:text-red-600 ml-auto"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function PresetsPage() {
   const router = useRouter();
   const [presets, setPresets] = useState<CampaignPreset[]>([]);
@@ -101,8 +216,6 @@ export default function PresetsPage() {
     duplicatePreset(id);
     setPresets(loadPresets());
   }
-
-  const btnBase = "text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors dark:border-gray-600 dark:text-gray-400";
 
   return (
     <div className="space-y-6">
@@ -140,64 +253,61 @@ export default function PresetsPage() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {presets.map((preset) => {
-            const sq0 = preset.adSquads?.[0];
-            const providerName = providerMap[preset.feedProviderId]?.name;
-            const pixelName = sq0?.pixelId ? (pixelMap[sq0.pixelId]?.name ?? sq0.pixelId) : "—";
+        <div className="flex gap-4 overflow-x-auto pb-2">
+          {buildFeedColumns(presets, providerMap).map((column) => (
+            <div
+              key={column.providerId}
+              className="shrink-0 w-64 bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-xl p-3"
+            >
+              <h3 className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2.5 px-0.5">
+                <span className={column.providerMissing ? "text-amber-600 dark:text-amber-400" : ""}>
+                  {column.providerName}
+                </span>
+                <span className="font-mono font-medium text-gray-400 dark:text-gray-500">
+                  {column.snap.length + column.facebook.length}
+                </span>
+              </h3>
 
-            return (
-              <div
-                key={preset.id}
-                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden flex flex-col"
-              >
-                {/* Header */}
-                <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-2 border-b border-gray-100 dark:border-gray-700">
-                  <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug">{preset.name}</h2>
-                  <TrafficSourceBadge source={preset.trafficSource ?? "snap"} />
-                </div>
+              {column.snap.length > 0 && (
+                <PlatformGroup source="snap" count={column.snap.length}>
+                  {column.snap.map((preset) => (
+                    <PresetCard
+                      key={preset.id}
+                      preset={preset}
+                      pixelMap={pixelMap}
+                      groupMap={groupMap}
+                      onEdit={() => router.push(`/dashboard/presets/${preset.id}/edit`)}
+                      onDuplicate={() => handleDuplicate(preset.id)}
+                      onDelete={() => handleDelete(preset.id, preset.name)}
+                    />
+                  ))}
+                </PlatformGroup>
+              )}
 
-                {/* Provider warning */}
-                {preset.feedProviderId && !providerMap[preset.feedProviderId] && (
-                  <div className="px-4 py-1.5 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-800">
-                    <span className="text-xs text-amber-600 dark:text-amber-400">Provider not found</span>
-                  </div>
-                )}
+              {column.facebook.length > 0 && (
+                <PlatformGroup source="facebook" count={column.facebook.length}>
+                  {column.facebook.map((preset) => (
+                    <PresetCard
+                      key={preset.id}
+                      preset={preset}
+                      pixelMap={pixelMap}
+                      groupMap={groupMap}
+                      onEdit={() => router.push(`/dashboard/presets/${preset.id}/edit`)}
+                      onDuplicate={() => handleDuplicate(preset.id)}
+                      onDelete={() => handleDelete(preset.id, preset.name)}
+                    />
+                  ))}
+                </PlatformGroup>
+              )}
+            </div>
+          ))}
 
-                {/* Data grid */}
-                <div className="px-4 py-3 grid grid-cols-2 gap-x-6 gap-y-3 flex-1">
-                  <DataRow label="Feed" value={providerName ?? "—"} />
-                  <DataRow label="Geo" value={geoText(preset, groupMap)} />
-                  <DataRow label="Pixel" value={pixelName} />
-                  <DataRow label="Bid" value={bidText(sq0)} />
-                  <DataRow label="Budget" value={budgetText(sq0)} />
-                  <DataRow label="Device" value={deviceText(sq0)} />
-                </div>
-
-                {/* Actions */}
-                <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700 flex items-center gap-2">
-                  <button
-                    onClick={() => router.push(`/dashboard/presets/${preset.id}/edit`)}
-                    className={`${btnBase} border-gray-200 text-gray-600 hover:border-gray-300 hover:text-gray-900`}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDuplicate(preset.id)}
-                    className={`${btnBase} border-gray-200 text-gray-600 hover:border-gray-300 hover:text-gray-900`}
-                  >
-                    Duplicate
-                  </button>
-                  <button
-                    onClick={() => handleDelete(preset.id, preset.name)}
-                    className={`${btnBase} border-red-100 text-red-500 hover:border-red-200 hover:text-red-600 ml-auto`}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          <button
+            onClick={() => router.push("/dashboard/feed-providers")}
+            className="shrink-0 w-64 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl flex items-center justify-center text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-400 transition-colors"
+          >
+            + Add feed provider
+          </button>
         </div>
       )}
 
