@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import { loadPresets, deletePreset, duplicatePreset } from "@/lib/presets";
 import { loadFeedProviders } from "@/lib/feed-providers";
 import { loadPixels } from "@/lib/pixels";
+import { loadMetaPixels } from "@/lib/meta-pixels";
 import { loadCountryGroups } from "@/lib/country-groups";
 import { CountryGroupsModal } from "@/components/presets/CountryGroupsModal";
-import type { CampaignPreset, AdSquadPresetData } from "@/types/preset";
+import type { CampaignPreset, AdSquadPresetData, MetaAdSetPresetData } from "@/types/preset";
 import type { FeedProvider } from "@/types/feed-provider";
 import type { SavedPixel } from "@/types/pixel";
+import type { SavedMetaPixel } from "@/types/meta-pixel";
 import type { CountryGroup } from "@/types/country-group";
 
 function geoText(preset: CampaignPreset, groupMap: Record<string, CountryGroup>): string {
@@ -44,6 +46,22 @@ function deviceText(sq?: AdSquadPresetData): string {
   if (!sq || !sq.targetingDeviceType || sq.targetingDeviceType === "ALL") return "All";
   const labels: Record<string, string> = { MOBILE: "Mobile", WEB: "Web" };
   return labels[sq.targetingDeviceType] ?? sq.targetingDeviceType;
+}
+
+function metaBidText(metaAdSet?: MetaAdSetPresetData): string {
+  if (!metaAdSet) return "—";
+  if (metaAdSet.bidStrategy === "COST_CAP" && metaAdSet.bidAmountCents) {
+    return `Cost cap $${(metaAdSet.bidAmountCents / 100).toFixed(2)}`;
+  }
+  if (metaAdSet.bidStrategy === "LOWEST_COST_WITH_MIN_ROAS" && metaAdSet.roasFloor) {
+    return `ROAS floor ${(metaAdSet.roasFloor * 100).toFixed(0)}%`;
+  }
+  return "Lowest cost";
+}
+
+function metaBudgetText(metaAdSet?: MetaAdSetPresetData): string {
+  if (!metaAdSet || !metaAdSet.dailyBudgetCents) return "—";
+  return `$${(metaAdSet.dailyBudgetCents / 100).toFixed(2)}/day`;
 }
 
 interface FeedColumn {
@@ -85,27 +103,35 @@ function buildFeedColumns(
 
 function PlatformGroup({
   source,
-  count,
   children,
 }: {
   source: "snap" | "facebook";
-  count: number;
   children: ReactNode;
 }) {
   return (
-    <div className="mb-3 last:mb-0">
-      <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
+    <div className="mb-5 last:mb-0">
+      <div className="flex items-center gap-2 mb-3">
         <span
-          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-            source === "facebook" ? "bg-blue-500" : "bg-yellow-500"
+          className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
+            source === "facebook"
+              ? "bg-blue-50 text-blue-600 dark:bg-blue-900/25 dark:text-blue-400"
+              : "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/25 dark:text-yellow-400"
           }`}
-        />
-        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-          {source === "facebook" ? "Facebook" : "Snap"} · {count}
+        >
+          {source === "facebook" ? "Facebook" : "Snap"}
         </span>
         <span className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
       </div>
-      <div className="space-y-2">{children}</div>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function StatRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1.5 border-b border-gray-100 dark:border-gray-700 last:border-none">
+      <span className="text-[11px] uppercase tracking-wide text-gray-400 dark:text-gray-500">{label}</span>
+      <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 text-right truncate">{value}</span>
     </div>
   );
 }
@@ -113,6 +139,7 @@ function PlatformGroup({
 function PresetCard({
   preset,
   pixelMap,
+  metaPixelMap,
   groupMap,
   onEdit,
   onDuplicate,
@@ -120,6 +147,7 @@ function PresetCard({
 }: {
   preset: CampaignPreset;
   pixelMap: Record<string, SavedPixel>;
+  metaPixelMap: Record<string, SavedMetaPixel>;
   groupMap: Record<string, CountryGroup>;
   onEdit: () => void;
   onDuplicate: () => void;
@@ -127,60 +155,42 @@ function PresetCard({
 }) {
   const sq0 = preset.adSquads?.[0];
   const isFacebook = (preset.trafficSource ?? "snap") === "facebook";
-  const pixelName = sq0?.pixelId ? (pixelMap[sq0.pixelId]?.name ?? sq0.pixelId) : null;
+  const pixelName = isFacebook
+    ? preset.metaAdSet?.pixelId
+      ? metaPixelMap[preset.metaAdSet.pixelId]?.name ?? preset.metaAdSet.pixelId
+      : "—"
+    : sq0?.pixelId
+      ? pixelMap[sq0.pixelId]?.name ?? sq0.pixelId
+      : "—";
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2.5">
-      <p className="text-xs font-semibold text-gray-900 dark:text-gray-100 leading-snug mb-1.5">{preset.name}</p>
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug mb-3">{preset.name}</p>
 
-      <div className="space-y-1 text-[11px]">
-        {isFacebook ? (
-          <div className="flex justify-between gap-2">
-            <span className="text-gray-400 dark:text-gray-500">Geo</span>
-            <span className="text-gray-600 dark:text-gray-300 text-right truncate">
-              {geoText(preset, groupMap)}
-            </span>
-          </div>
-        ) : (
-          <>
-            {pixelName && (
-              <div className="flex justify-between gap-2">
-                <span className="text-gray-400 dark:text-gray-500">Pixel</span>
-                <span className="text-gray-600 dark:text-gray-300 truncate">{pixelName}</span>
-              </div>
-            )}
-            <div className="flex justify-between gap-2">
-              <span className="text-gray-400 dark:text-gray-500">Bid</span>
-              <span className="text-gray-600 dark:text-gray-300 font-mono">{bidText(sq0)}</span>
-            </div>
-            <div className="flex justify-between gap-2">
-              <span className="text-gray-400 dark:text-gray-500">Budget</span>
-              <span className="text-gray-600 dark:text-gray-300 font-mono">{budgetText(sq0)}</span>
-            </div>
-            <div className="flex justify-between gap-2">
-              <span className="text-gray-400 dark:text-gray-500">Device</span>
-              <span className="text-gray-600 dark:text-gray-300">{deviceText(sq0)}</span>
-            </div>
-          </>
-        )}
+      <div>
+        {isFacebook && <StatRow label="Geo group" value={geoText(preset, groupMap)} />}
+        <StatRow label="Pixel" value={pixelName} />
+        <StatRow label="Bid" value={isFacebook ? metaBidText(preset.metaAdSet) : bidText(sq0)} />
+        <StatRow label="Budget" value={isFacebook ? metaBudgetText(preset.metaAdSet) : budgetText(sq0)} />
+        <StatRow label="Device" value={isFacebook ? "All" : deviceText(sq0)} />
       </div>
 
-      <div className="flex items-center gap-2.5 mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+      <div className="flex items-center gap-2 mt-3.5">
         <button
           onClick={onEdit}
-          className="text-[11px] font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+          className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
         >
           Edit
         </button>
         <button
           onClick={onDuplicate}
-          className="text-[11px] font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+          className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
         >
           Duplicate
         </button>
         <button
           onClick={onDelete}
-          className="text-[11px] font-medium text-red-400 hover:text-red-600 ml-auto"
+          className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg text-red-500 hover:text-red-600 ml-auto transition-colors"
         >
           Delete
         </button>
@@ -194,6 +204,7 @@ export default function PresetsPage() {
   const [presets, setPresets] = useState<CampaignPreset[]>([]);
   const [providerMap, setProviderMap] = useState<Record<string, FeedProvider>>({});
   const [pixelMap, setPixelMap] = useState<Record<string, SavedPixel>>({});
+  const [metaPixelMap, setMetaPixelMap] = useState<Record<string, SavedMetaPixel>>({});
   const [groupMap, setGroupMap] = useState<Record<string, CountryGroup>>({});
   const [showCountryGroups, setShowCountryGroups] = useState(false);
 
@@ -207,6 +218,8 @@ export default function PresetsPage() {
     setProviderMap(Object.fromEntries(providers.map((p) => [p.id, p])));
     const pixels = loadPixels();
     setPixelMap(Object.fromEntries(pixels.map((px) => [px.pixelId, px])));
+    const metaPixels = loadMetaPixels();
+    setMetaPixelMap(Object.fromEntries(metaPixels.map((px) => [px.pixelId, px])));
     reloadGroups();
   }, []);
 
@@ -257,28 +270,28 @@ export default function PresetsPage() {
           </button>
         </div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-2">
+        <div className="flex items-start gap-5 overflow-x-auto pb-2">
           {buildFeedColumns(presets, providerMap).map((column) => (
             <div
               key={column.providerId}
-              className="shrink-0 w-64 bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-xl p-3"
+              className="shrink-0 w-[300px] bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-2xl p-[18px]"
             >
-              <h3 className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2.5 px-0.5">
-                <span className={column.providerMissing ? "text-amber-600 dark:text-amber-400" : ""}>
-                  {column.providerName}
-                </span>
-                <span className="font-mono font-medium text-gray-400 dark:text-gray-500">
-                  {column.snap.length + column.facebook.length}
-                </span>
+              <h3 className={`text-sm font-bold ${column.providerMissing ? "text-amber-600 dark:text-amber-400" : "text-gray-900 dark:text-gray-100"}`}>
+                {column.providerName}
               </h3>
+              <p className="text-[11.5px] text-gray-400 dark:text-gray-500 mb-4">
+                {column.snap.length + column.facebook.length} preset
+                {column.snap.length + column.facebook.length !== 1 ? "s" : ""}
+              </p>
 
               {column.snap.length > 0 && (
-                <PlatformGroup source="snap" count={column.snap.length}>
+                <PlatformGroup source="snap">
                   {column.snap.map((preset) => (
                     <PresetCard
                       key={preset.id}
                       preset={preset}
                       pixelMap={pixelMap}
+                      metaPixelMap={metaPixelMap}
                       groupMap={groupMap}
                       onEdit={() => router.push(`/dashboard/presets/${preset.id}/edit`)}
                       onDuplicate={() => handleDuplicate(preset.id)}
@@ -289,12 +302,13 @@ export default function PresetsPage() {
               )}
 
               {column.facebook.length > 0 && (
-                <PlatformGroup source="facebook" count={column.facebook.length}>
+                <PlatformGroup source="facebook">
                   {column.facebook.map((preset) => (
                     <PresetCard
                       key={preset.id}
                       preset={preset}
                       pixelMap={pixelMap}
+                      metaPixelMap={metaPixelMap}
                       groupMap={groupMap}
                       onEdit={() => router.push(`/dashboard/presets/${preset.id}/edit`)}
                       onDuplicate={() => handleDuplicate(preset.id)}
@@ -308,7 +322,7 @@ export default function PresetsPage() {
 
           <button
             onClick={() => router.push("/dashboard/feed-providers")}
-            className="shrink-0 w-64 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl flex items-center justify-center text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-400 transition-colors"
+            className="shrink-0 self-stretch w-40 border border-dashed border-gray-300 dark:border-gray-600 rounded-2xl flex items-center justify-center text-xs font-medium text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-400 transition-colors"
           >
             + Add feed provider
           </button>
