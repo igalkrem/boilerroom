@@ -271,54 +271,59 @@ export default function PresetsPage() {
         </div>
       ) : (
         <div className="flex items-start gap-5 overflow-x-auto pb-2">
-          {buildFeedColumns(presets, providerMap).map((column) => (
-            <div
-              key={column.providerId}
-              className="shrink-0 w-[300px] bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-2xl p-[18px]"
-            >
-              <h3 className={`text-sm font-bold ${column.providerMissing ? "text-amber-600 dark:text-amber-400" : "text-gray-900 dark:text-gray-100"}`}>
-                {column.providerName}
-              </h3>
-              <p className="text-[11.5px] text-gray-400 dark:text-gray-500 mb-4">
-                {column.snap.length + column.facebook.length} preset
-                {column.snap.length + column.facebook.length !== 1 ? "s" : ""}
-              </p>
+          {buildFeedColumns(presets, providerMap).map((column) => {
+            const hasBoth = column.snap.length > 0 && column.facebook.length > 0;
+            return (
+              <div
+                key={column.providerId}
+                className={`shrink-0 ${hasBoth ? "w-[560px]" : "w-[300px]"} bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-2xl p-[18px]`}
+              >
+                <h3 className={`text-sm font-bold ${column.providerMissing ? "text-amber-600 dark:text-amber-400" : "text-gray-900 dark:text-gray-100"}`}>
+                  {column.providerName}
+                </h3>
+                <p className="text-[11.5px] text-gray-400 dark:text-gray-500 mb-4">
+                  {column.snap.length + column.facebook.length} preset
+                  {column.snap.length + column.facebook.length !== 1 ? "s" : ""}
+                </p>
 
-              {column.snap.length > 0 && (
-                <PlatformGroup source="snap">
-                  {column.snap.map((preset) => (
-                    <PresetCard
-                      key={preset.id}
-                      preset={preset}
-                      pixelMap={pixelMap}
-                      metaPixelMap={metaPixelMap}
-                      groupMap={groupMap}
-                      onEdit={() => router.push(`/dashboard/presets/${preset.id}/edit`)}
-                      onDuplicate={() => handleDuplicate(preset.id)}
-                      onDelete={() => handleDelete(preset.id, preset.name)}
-                    />
-                  ))}
-                </PlatformGroup>
-              )}
+                <div className={hasBoth ? "grid grid-cols-2 gap-5 items-start" : undefined}>
+                  {column.snap.length > 0 && (
+                    <PlatformGroup source="snap">
+                      {column.snap.map((preset) => (
+                        <PresetCard
+                          key={preset.id}
+                          preset={preset}
+                          pixelMap={pixelMap}
+                          metaPixelMap={metaPixelMap}
+                          groupMap={groupMap}
+                          onEdit={() => router.push(`/dashboard/presets/${preset.id}/edit`)}
+                          onDuplicate={() => handleDuplicate(preset.id)}
+                          onDelete={() => handleDelete(preset.id, preset.name)}
+                        />
+                      ))}
+                    </PlatformGroup>
+                  )}
 
-              {column.facebook.length > 0 && (
-                <PlatformGroup source="facebook">
-                  {column.facebook.map((preset) => (
-                    <PresetCard
-                      key={preset.id}
-                      preset={preset}
-                      pixelMap={pixelMap}
-                      metaPixelMap={metaPixelMap}
-                      groupMap={groupMap}
-                      onEdit={() => router.push(`/dashboard/presets/${preset.id}/edit`)}
-                      onDuplicate={() => handleDuplicate(preset.id)}
-                      onDelete={() => handleDelete(preset.id, preset.name)}
-                    />
-                  ))}
-                </PlatformGroup>
-              )}
-            </div>
-          ))}
+                  {column.facebook.length > 0 && (
+                    <PlatformGroup source="facebook">
+                      {column.facebook.map((preset) => (
+                        <PresetCard
+                          key={preset.id}
+                          preset={preset}
+                          pixelMap={pixelMap}
+                          metaPixelMap={metaPixelMap}
+                          groupMap={groupMap}
+                          onEdit={() => router.push(`/dashboard/presets/${preset.id}/edit`)}
+                          onDuplicate={() => handleDuplicate(preset.id)}
+                          onDelete={() => handleDelete(preset.id, preset.name)}
+                        />
+                      ))}
+                    </PlatformGroup>
+                  )}
+                </div>
+              </div>
+            );
+          })}
 
           <button
             onClick={() => router.push("/dashboard/feed-providers")}
