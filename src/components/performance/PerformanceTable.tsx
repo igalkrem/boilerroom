@@ -68,7 +68,21 @@ export interface SquadDetail {
   status: "ACTIVE" | "PAUSED";
   campaign_id?: string;   // Meta only — parent campaign id, for Ads Manager deep-link
   business_id?: string;   // Meta only — Business Manager id, for Ads Manager deep-link
+  bid_strategy?: string;  // Snap: AUTO_BID | LOWEST_COST_WITH_MAX_BID | TARGET_COST — Meta: LOWEST_COST_WITHOUT_CAP | COST_CAP | LOWEST_COST_WITH_MIN_ROAS
+  roas_average_floor?: number; // Meta only — ROAS target ×10000 (bid_constraints.roas_average_floor), only set when bid_strategy is LOWEST_COST_WITH_MIN_ROAS
 }
+
+// Bid strategies with no user-settable bid value — Bid column shows the strategy pill and a dash.
+const NO_BID_TARGET_STRATEGIES = new Set(["AUTO_BID", "LOWEST_COST_WITHOUT_CAP"]);
+
+const BID_STRATEGY_PILLS: Record<string, { label: string; cls: string }> = {
+  TARGET_COST: { label: "TARGET COST", cls: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" },
+  AUTO_BID: { label: "AUTO BID", cls: "text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800" },
+  LOWEST_COST_WITH_MAX_BID: { label: "MAX BID", cls: "text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20 border-cyan-200 dark:border-cyan-800" },
+  LOWEST_COST_WITH_MIN_ROAS: { label: "ROAS", cls: "text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800" },
+  COST_CAP: { label: "COST CAP", cls: "text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20 border-cyan-200 dark:border-cyan-800" },
+  LOWEST_COST_WITHOUT_CAP: { label: "LOWEST COST", cls: "text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700/40 border-gray-200 dark:border-gray-600" },
+};
 
 interface Props {
   rows: CombinedRow[];
@@ -407,8 +421,10 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
   // Inline budget/bid editing
   const [editingBudget, setEditingBudget] = useState<string | null>(null);
   const [editingBid, setEditingBid] = useState<string | null>(null);
+  const [editingRoas, setEditingRoas] = useState<string | null>(null);
   const [budgetDraft, setBudgetDraft] = useState("");
   const [bidDraft, setBidDraft] = useState("");
+  const [roasDraft, setRoasDraft] = useState("");
   const [savingInline, setSavingInline] = useState<string | null>(null);
   const [inlineError, setInlineError] = useState<string | null>(null);
 
@@ -774,6 +790,36 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
     }
     setSavingInline(null);
     setEditingBid(null);
+  }
+
+  async function saveRoas(squadId: string) {
+    const pct = parseFloat(roasDraft);
+    if (isNaN(pct) || pct <= 0) { setInlineError("ROAS target must be > 0%"); return; }
+    const detail = squadDetails.get(squadId);
+    if (!detail) return;
+    const oldValue = `${Math.round((detail.roas_average_floor ?? 0) / 100)}%`;
+    setSavingInline(squadId + "_roas");
+    setInlineError(null);
+    const floor = Math.round(pct * 100);
+    try {
+      const res = await fetch("/api/meta/adsets", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adAccountId: detail.ad_account_id,
+          adSetId: squadId,
+          updates: { bid_strategy: "LOWEST_COST_WITH_MIN_ROAS", bid_constraints: { roas_average_floor: floor } },
+        }),
+      });
+      if (!res.ok) throw new Error(await readPatchError(res));
+      onSquadPatched?.(squadId, { roas_average_floor: floor });
+      addChangeEntry({ squadId, field: "bid", oldValue, newValue: `${pct}%`, timestamp: new Date().toISOString() });
+      onSquadUpdated();
+    } catch (err) {
+      setInlineError(`ROAS target save failed: ${err instanceof Error ? err.message : "unknown"}`);
+    }
+    setSavingInline(null);
+    setEditingRoas(null);
   }
 
   async function toggleStatus(squadId: string) {
@@ -1759,22 +1805,78 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
                       ) : <span className="text-xs text-gray-300">…</span>}
                     </td>
 
-                    {/* Bid inline */}
+                    {/* Bid inline — shows whatever the row's bid strategy actually targets */}
                     <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                      {detail ? (
-                        editingBid === r.ad_squad_id ? (
-                          <input
-                            autoFocus
-                            type="number" min={0.01} step={0.01}
-                            value={bidDraft}
-                            onChange={(e) => setBidDraft(e.target.value)}
-                            onBlur={() => void saveBid(r.ad_squad_id)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") void saveBid(r.ad_squad_id);
-                              if (e.key === "Escape") setEditingBid(null);
-                            }}
-                            className="w-16 border border-blue-400 rounded px-1.5 py-0.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-800 dark:text-gray-100"
-                          />
+                      {detail ? (() => {
+                        const strategy = detail.bid_strategy;
+                        const pillCfg = strategy ? BID_STRATEGY_PILLS[strategy] : undefined;
+                        const pill = pillCfg ? (
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border tracking-wide whitespace-nowrap ${pillCfg.cls}`}>
+                            {pillCfg.label}
+                          </span>
+                        ) : null;
+
+                        if (strategy === "LOWEST_COST_WITH_MIN_ROAS") {
+                          return editingRoas === r.ad_squad_id ? (
+                            <span className="flex items-center gap-1">
+                              {pill}
+                              <input
+                                autoFocus
+                                type="number" min={1} step={1}
+                                value={roasDraft}
+                                onChange={(e) => setRoasDraft(e.target.value)}
+                                onBlur={() => void saveRoas(r.ad_squad_id)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") void saveRoas(r.ad_squad_id);
+                                  if (e.key === "Escape") setEditingRoas(null);
+                                }}
+                                className="w-14 border border-blue-400 rounded px-1.5 py-0.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-800 dark:text-gray-100"
+                              />
+                              <span className="text-xs text-gray-400">%</span>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setRoasDraft(String(Math.round((detail.roas_average_floor ?? 0) / 100)));
+                                setEditingRoas(r.ad_squad_id);
+                                setInlineError(null);
+                              }}
+                              className="group flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                            >
+                              {pill}
+                              {savingInline === r.ad_squad_id + "_roas" ? "…" : `${Math.round((detail.roas_average_floor ?? 0) / 100)}%`}
+                              <svg className="w-3 h-3 text-gray-300 dark:text-gray-600 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.536-6.536a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
+                              </svg>
+                            </button>
+                          );
+                        }
+
+                        if (strategy && NO_BID_TARGET_STRATEGIES.has(strategy)) {
+                          return (
+                            <span className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+                              {pill}
+                              —
+                            </span>
+                          );
+                        }
+
+                        return editingBid === r.ad_squad_id ? (
+                          <span className="flex items-center gap-1">
+                            {pill}
+                            <input
+                              autoFocus
+                              type="number" min={0.01} step={0.01}
+                              value={bidDraft}
+                              onChange={(e) => setBidDraft(e.target.value)}
+                              onBlur={() => void saveBid(r.ad_squad_id)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") void saveBid(r.ad_squad_id);
+                                if (e.key === "Escape") setEditingBid(null);
+                              }}
+                              className="w-16 border border-blue-400 rounded px-1.5 py-0.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-800 dark:text-gray-100"
+                            />
+                          </span>
                         ) : (
                           <button
                             onClick={() => {
@@ -1782,15 +1884,16 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
                               setEditingBid(r.ad_squad_id);
                               setInlineError(null);
                             }}
-                            className="group flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                            className="group flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
                           >
+                            {pill}
                             {savingInline === r.ad_squad_id + "_bid" ? "…" : fmt$(microToDollar(detail.bid_micro))}
                             <svg className="w-3 h-3 text-gray-300 dark:text-gray-600 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.536-6.536a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
                             </svg>
                           </button>
-                        )
-                      ) : <span className="text-xs text-gray-300">…</span>}
+                        );
+                      })() : <span className="text-xs text-gray-300">…</span>}
                     </td>
 
                     {/* Metric cells — ordered by columnOrder */}

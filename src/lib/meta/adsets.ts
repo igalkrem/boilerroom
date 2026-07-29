@@ -53,7 +53,7 @@ export async function getAdSet(
 
 export async function updateAdSet(
   adSetId: string,
-  updates: Partial<Pick<MetaAdSetPayload, "name" | "status" | "daily_budget" | "bid_amount">>,
+  updates: Partial<Pick<MetaAdSetPayload, "name" | "status" | "daily_budget" | "bid_amount" | "bid_strategy" | "bid_constraints">>,
   expectedAdAccountId: string,
   token?: string
 ): Promise<{ success: boolean }> {

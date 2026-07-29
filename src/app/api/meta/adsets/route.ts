@@ -19,6 +19,8 @@ const patchSchema = z.object({
     status: z.enum(["ACTIVE", "PAUSED"]).optional(),
     daily_budget: z.number().optional(),
     bid_amount: z.number().optional(),
+    bid_strategy: z.enum(["LOWEST_COST_WITHOUT_CAP", "COST_CAP", "LOWEST_COST_WITH_MIN_ROAS"]).optional(),
+    bid_constraints: z.object({ roas_average_floor: z.number() }).optional(),
   }),
 });
 
