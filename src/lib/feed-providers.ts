@@ -18,6 +18,18 @@ const PROVIDER_BADGE_FALLBACK =
 export function getFeedProviderBadgeClasses(providerName: string): string {
   return PROVIDER_BADGE_COLORS[providerName.trim().toLowerCase()] ?? PROVIDER_BADGE_FALLBACK;
 }
+
+// Background-only wash of the same per-provider hue, for surfaces (e.g. a card header) that
+// need the color tint but must keep their own text color rather than inheriting the badge's.
+const PROVIDER_WASH_COLORS: Record<string, string> = {
+  vizymo: "bg-orange-50 dark:bg-orange-900/20",
+  predicto: "bg-blue-50 dark:bg-blue-900/20",
+};
+const PROVIDER_WASH_FALLBACK = "bg-cyan-50 dark:bg-cyan-900/20";
+
+export function getFeedProviderWashClasses(providerName: string): string {
+  return PROVIDER_WASH_COLORS[providerName.trim().toLowerCase()] ?? PROVIDER_WASH_FALLBACK;
+}
 const KV_KEY = "br_feed_providers";
 
 const legacySchema = z.object({

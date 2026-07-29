@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
-import { loadFeedProviders, deleteFeedProvider, getFeedProviderBadgeClasses } from "@/lib/feed-providers";
+import { loadFeedProviders, deleteFeedProvider, getFeedProviderBadgeClasses, getFeedProviderWashClasses } from "@/lib/feed-providers";
 import type { FeedProvider } from "@/types/feed-provider";
 import { FeedProviderModal } from "@/components/feed-providers/FeedProviderModal";
 
@@ -67,6 +67,7 @@ function ProviderCard({
   );
   const pixelCount = provider.snapConfig.allowedPixelIds.length + (meta?.allowedPixelIds.length ?? 0);
   const badgeClasses = getFeedProviderBadgeClasses(provider.name);
+  const washClasses = getFeedProviderWashClasses(provider.name);
 
   return (
     <div
@@ -74,7 +75,7 @@ function ProviderCard({
       onClick={onEdit}
     >
       {/* Header */}
-      <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-2 border-b border-gray-100 dark:border-gray-700">
+      <div className={`px-4 pt-4 pb-3 flex items-start justify-between gap-2 border-b border-gray-100 dark:border-gray-700 ${washClasses}`}>
         <div className="min-w-0">
           <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug truncate">
             {provider.name}
