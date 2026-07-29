@@ -12,7 +12,6 @@ interface SyncStatusData {
   visymo: FeedStatus;
   predicto: FeedStatus;
   predicto_fb?: FeedStatus;
-  unassigned?: { count: number; snapLastSynced: string | null };
 }
 
 function minutesAgo(ts: string | null): number | null {
@@ -75,19 +74,6 @@ function FeedRow({ name, status, statsLabel = "snap" }: { name: string; status: 
   );
 }
 
-// Ad accounts not yet assigned to a feed provider (no allowedAdAccountIds match, no
-// DB-derivable network) — these sync every cron tick regardless of provider window,
-// so their Snap sync time is shown on its own rather than folded into Visymo/Predicto.
-function UnassignedRow({ count, snapLastSynced }: { count: number; snapLastSynced: string | null }) {
-  const statsDot = snapLastSynced ? "green" : "gray";
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-gray-500 w-16 text-right">Unassigned ({count})</span>
-      <StatusPill label="snap" ts={snapLastSynced} dotColor={statsDot} />
-    </div>
-  );
-}
-
 interface SyncStatusBarProps {
   onForceRefresh: () => void;
   syncing: boolean;
@@ -137,12 +123,6 @@ export function SyncStatusBar({
                   <FeedRow name="Predicto FB" status={status.predicto_fb} statsLabel="meta" />
                 </>
               )}
-            {status.unassigned && status.unassigned.count > 0 && (
-              <>
-                <span className="text-gray-700">|</span>
-                <UnassignedRow count={status.unassigned.count} snapLastSynced={status.unassigned.snapLastSynced} />
-              </>
-            )}
           </>
         ) : (
           <span className="text-gray-600 text-xs">Loading sync status…</span>

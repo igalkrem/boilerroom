@@ -81,21 +81,14 @@ export async function GET() {
   const networkMap = await Promise.all(accountIds.map((id) => getNetworkForAccount(id, providerMap).then((n) => ({ id, n }))));
   const krAccountIds = networkMap.filter((x) => x.n === "visymo").map((x) => x.id);
   const predAccountIds = networkMap.filter((x) => x.n === "predicto").map((x) => x.id);
-  // Accounts not yet classified by DB data — include in both groups so they show some status
-  const unknownIds = networkMap.filter((x) => x.n === "unknown").map((x) => x.id);
-
   // Predicto FB pairs with Meta stats (Facebook traffic), so its "in sync" dot
   // compares against the newest Meta stat sync across the user's Meta accounts.
   const metaAccountIds: string[] = session.metaAllowedAdAccountIds ?? [];
 
-  // Unknown accounts sync on every cron tick (both provider windows), so folding them
-  // into krAccountIds/predAccountIds would make both providers show the same freshest
-  // timestamp regardless of which one actually last synced — report them separately instead.
-  const [krSnapTs, predSnapTs, metaTs, unassignedSnapTs] = await Promise.all([
+  const [krSnapTs, predSnapTs, metaTs] = await Promise.all([
     maxSnapSyncForAccounts(krAccountIds),
     maxSnapSyncForAccounts(predAccountIds),
     maxSyncForAccounts("meta", metaAccountIds),
-    maxSnapSyncForAccounts(unknownIds),
   ]);
 
   function inSync(feedTs: string | null, statsTs: string | null): boolean {
@@ -118,10 +111,6 @@ export async function GET() {
       feedLastSynced: predictoFbFeedTs,
       snapLastSynced: metaTs,
       inSync: inSync(predictoFbFeedTs, metaTs),
-    },
-    unassigned: {
-      count: unknownIds.length,
-      snapLastSynced: unassignedSnapTs,
     },
   });
 }
