@@ -5,6 +5,7 @@ import { createCampaigns, deleteCampaign, getCampaign } from "@/lib/snapchat/cam
 import { createAdSquads, updateAdSquad, deleteAdSquad } from "@/lib/snapchat/adsquads";
 import { snapFetch } from "@/lib/snapchat/client";
 import type { SnapAdSquadPayload, OptimizationGoal } from "@/types/snapchat";
+import { debugRoutesEnabled } from "@/lib/debug-routes";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TEMPORARY DIAGNOSTIC ROUTE — Smart Placements (placement_v2) investigation.
@@ -85,6 +86,9 @@ function sanitizeSnapError(raw: unknown): string {
 }
 
 export async function POST(request: NextRequest) {
+  if (!debugRoutesEnabled()) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   const session = await getSession();
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });

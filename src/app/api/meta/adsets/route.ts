@@ -33,11 +33,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "meta_not_connected" }, { status: 403 });
   }
 
-  // Single ad set by ID (used by the meta-debug "Inspect Ad Set" tool)
+  // Single ad set by ID (used by the meta-debug "Inspect Ad Set" tool).
+  // The id alone carries no account, so fetch first and then authorize against the
+  // session's allow-list. Note account_id comes back BARE while
+  // metaAllowedAdAccountIds stores the act_ prefix.
   const adSetId = request.nextUrl.searchParams.get("adSetId");
   if (adSetId) {
     try {
       const adSet = await getAdSet(adSetId);
+      if (!adSet.account_id || !isMetaAdAccountAllowed(session, `act_${adSet.account_id}`)) {
+        return NextResponse.json({ error: "forbidden" }, { status: 403 });
+      }
       return NextResponse.json({ adSet });
     } catch (err) {
       console.error("[meta/adsets] GET by adSetId error:", err);

@@ -84,7 +84,9 @@ export async function POST(request: NextRequest) {
   }
 
   const rawBody = await request.text();
-  if (rawBody.length > MAX_BODY_BYTES) {
+  // String.length counts UTF-16 code units, not bytes — a payload of non-ASCII
+  // characters could be up to 3x the intended limit. Measure actual bytes.
+  if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
     return NextResponse.json({ error: "payload_too_large" }, { status: 413 });
   }
 

@@ -91,3 +91,19 @@ export async function snapFetch<T>(
 
   return res.json() as Promise<T>;
 }
+
+/**
+ * Snapchat entity ids are interpolated straight into API paths
+ * (e.g. `/media/${mediaId}/upload`). Anything containing a slash, dot-segment,
+ * scheme or userinfo could redirect that request elsewhere on the host, so ids
+ * arriving from a request body must be shape-checked first.
+ *
+ * Deliberately permissive about the id FORMAT (Snapchat returns UUIDs today, but
+ * pinning to 36 hex chars would break the upload path if that ever changes) while
+ * still excluding every character needed to escape the path segment.
+ */
+export const SNAP_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+export function isValidSnapId(id: string): boolean {
+  return SNAP_ID_RE.test(id);
+}

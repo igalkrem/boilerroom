@@ -14,6 +14,7 @@ export interface GoogleTokenResponse {
 export interface GoogleUser {
   sub: string;    // Google user ID
   email: string;
+  email_verified?: boolean; // OIDC userinfo claim; gates sign-in in auth/google/callback
   name: string;
   picture?: string;
 }

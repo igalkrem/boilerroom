@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAds, getAd } from "@/lib/snapchat/ads";
+import { getAdSquad } from "@/lib/snapchat/adsquads";
+import { getCampaign } from "@/lib/snapchat/campaigns";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import type { SnapAdPayload } from "@/types/snapchat";
 import { z } from "zod";
@@ -70,6 +72,25 @@ export async function POST(request: NextRequest) {
 
   if (!isAdAccountAllowed(session, adAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  // adAccountId alone does not constrain adSquadId. SnapAdSquad.ad_account_id is
+  // optional in Snapchat's response, so when it's absent fall back to the squad's
+  // campaign (SnapCampaign.ad_account_id IS required) rather than allowing the
+  // write through unverified.
+  try {
+    const squad = await getAdSquad(adSquadId);
+    let owner = squad.ad_account_id;
+    if (!owner) {
+      const campaign = await getCampaign(squad.campaign_id);
+      owner = campaign.ad_account_id;
+    }
+    if (!owner || owner !== adAccountId) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+  } catch (err) {
+    console.error("[snapchat/ads] ad squad verification failed:", err);
+    return NextResponse.json({ error: "invalid_ad_squad_id" }, { status: 422 });
   }
 
   try {

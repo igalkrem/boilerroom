@@ -22,17 +22,25 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
   // Verify the ad squad belongs to an ad account the session is allowed to access.
   // This prevents an authenticated user from linking a foreign squad ID to their channel,
   // which would corrupt the Predicto revenue JOIN to show another user's revenue.
-  if (isSnapchatConnected(session)) {
-    try {
-      const token = await getValidAccessToken();
-      const squad = await getAdSquad(body.adSquadId, token);
-      if (squad.ad_account_id && !isAdAccountAllowed(session, squad.ad_account_id)) {
-        return NextResponse.json({ error: "forbidden" }, { status: 403 });
-      }
-    } catch (err) {
-      console.error("[link-squad] squad verification failed:", err);
-      return NextResponse.json({ error: "invalid_ad_squad_id" }, { status: 422 });
+  //
+  // A Snapchat connection is REQUIRED, not optional: this verification is the only
+  // thing standing between the write below and an arbitrary squad id, so it must
+  // never be skippable. Previously it was wrapped in `if (isSnapchatConnected(...))`,
+  // so simply never connecting Snapchat (or disconnecting) bypassed it entirely.
+  if (!isSnapchatConnected(session)) {
+    return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
+  }
+  try {
+    const token = await getValidAccessToken();
+    const squad = await getAdSquad(body.adSquadId, token);
+    // Fail closed when Snapchat omits ad_account_id — an unverifiable squad is not
+    // a verified one.
+    if (!squad.ad_account_id || !isAdAccountAllowed(session, squad.ad_account_id)) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
+  } catch (err) {
+    console.error("[link-squad] squad verification failed:", err);
+    return NextResponse.json({ error: "invalid_ad_squad_id" }, { status: 422 });
   }
 
   await runMigrations();

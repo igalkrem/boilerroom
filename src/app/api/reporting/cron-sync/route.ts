@@ -8,20 +8,24 @@ import { getProviderNetworkMap } from "@/lib/reporting/provider-network";
 
 async function getAccountNetwork(
   adAccountId: string,
-  providerMap: Map<string, "visymo" | "predicto">
+  providerMap: Map<string, "visymo" | "predicto">,
+  googleUserId: string
 ): Promise<"visymo" | "predicto" | "unknown"> {
   // 1. Explicit provider config (authoritative — no DB data required)
   const fromProvider = providerMap.get(adAccountId);
   if (fromProvider) return fromProvider;
 
-  // 2. DB join fallback for accounts not yet configured with revenueSource
+  // 2. DB join fallback for accounts not yet configured with revenueSource.
+  //    The feed_provider_channels join is scoped to this user — otherwise another
+  //    tenant's channel rows can classify this account's network.
   const [kr, pred] = await Promise.all([
     sql`SELECT 1 FROM snapchat_ad_squad_stats sas
         INNER JOIN visymo_report kr ON kr.custom_channel_name = sas.ad_squad_id
         WHERE sas.ad_account_id = ${adAccountId} LIMIT 1`,
     sql`SELECT 1 FROM snapchat_ad_squad_stats sas
         INNER JOIN feed_provider_channels fpc ON fpc.ad_squad_snap_id = sas.ad_squad_id
-        WHERE sas.ad_account_id = ${adAccountId} LIMIT 1`,
+        WHERE sas.ad_account_id = ${adAccountId}
+          AND fpc.google_user_id = ${googleUserId} LIMIT 1`,
   ]);
   if (kr.rows.length > 0) return "visymo";
   if (pred.rows.length > 0) return "predicto";
@@ -102,7 +106,7 @@ export async function GET(request: NextRequest) {
         user.ad_account_ids.map(async ({ id, timezone }) => ({
           id,
           timezone,
-          network: await getAccountNetwork(id, providerMap),
+          network: await getAccountNetwork(id, providerMap, user.google_user_id),
         }))
       );
 

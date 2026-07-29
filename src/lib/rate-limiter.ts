@@ -1,7 +1,11 @@
 // Simple token-bucket rate limiter: max 10 req/s per Snapchat API limit.
 // Works within a single Node.js process.
 
-const MAX_RPS = parseInt(process.env.SNAPCHAT_RATE_LIMIT_RPS ?? "10", 10);
+// A non-numeric env value made parseInt return NaN, which made INTERVAL_MS NaN and
+// disabled throttling entirely (every comparison against NaN is false). Fall back
+// to the default instead of silently going unlimited.
+const parsedRps = parseInt(process.env.SNAPCHAT_RATE_LIMIT_RPS ?? "10", 10);
+const MAX_RPS = Number.isFinite(parsedRps) && parsedRps > 0 ? parsedRps : 10;
 const INTERVAL_MS = 1000 / MAX_RPS;
 
 let lastCallTime = 0;

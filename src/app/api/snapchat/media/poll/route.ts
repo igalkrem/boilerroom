@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkMediaStatus } from "@/lib/snapchat/media";
+import { isValidSnapId } from "@/lib/snapchat/client";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 
 export async function POST(request: NextRequest) {
@@ -19,6 +20,10 @@ export async function POST(request: NextRequest) {
 
   if (!mediaId || !adAccountId) {
     return NextResponse.json({ error: "missing_params" }, { status: 400 });
+  }
+
+  if (!isValidSnapId(mediaId)) {
+    return NextResponse.json({ error: "invalid_media_id" }, { status: 400 });
   }
 
   if (!isAdAccountAllowed(session, adAccountId)) {

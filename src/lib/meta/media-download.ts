@@ -76,7 +76,7 @@ export async function fetchVideoUrls(
   const out = new Map<string, string>();
   if (videoIds.length === 0) return out;
   const res = await metaFetch<VideoSourceResponse>(
-    `/?ids=${videoIds.join(",")}&fields=id,source`,
+    `/?ids=${encodeURIComponent(videoIds.join(","))}&fields=id,source`,
     {},
     token
   );

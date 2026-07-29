@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getValidAccessToken } from "@/lib/snapchat/client";
+import { getValidAccessToken, isValidSnapId } from "@/lib/snapchat/client";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import { rateLimitedCall } from "@/lib/rate-limiter";
 
@@ -31,6 +31,11 @@ export async function POST(request: NextRequest) {
 
   if (!file || !mediaId || !adAccountId) {
     return NextResponse.json({ error: "missing_params" }, { status: 400 });
+  }
+
+  // mediaId is interpolated into the Snapchat API path below — shape-check it.
+  if (!isValidSnapId(mediaId)) {
+    return NextResponse.json({ error: "invalid_media_id" }, { status: 400 });
   }
 
   if (!isAdAccountAllowed(session, adAccountId)) {

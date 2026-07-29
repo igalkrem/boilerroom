@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
-import { getValidAccessToken } from "@/lib/snapchat/client";
+import { getValidAccessToken, SNAP_ID_RE } from "@/lib/snapchat/client";
 import { rateLimitedFetch } from "@/lib/rate-limiter";
 import { z } from "zod";
 
@@ -10,7 +10,7 @@ const BASE_URL = "https://adsapi.snapchat.com/v1";
 
 const bodySchema = z.object({
   adAccountId: z.string().min(1),
-  mediaId: z.string().min(1),
+  mediaId: z.string().regex(SNAP_ID_RE, "invalid mediaId"),
   fileName: z.string().min(1),
   fileSize: z.number().int().positive().max(500_000_000),
   numberOfParts: z.number().int().min(1).max(1000),

@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual } from "crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from "crypto";
 
 // SESSION_SECRET is a 64-char hex string (32 bytes) — reuse as AES-256-GCM key.
 // Both the DB dump AND the SESSION_SECRET must be compromised to get usable tokens.
@@ -42,9 +42,11 @@ export function verifyCronSecret(header: string | null): boolean {
   }
   if (!header) return false;
   const expected = `Bearer ${secret}`;
-  try {
-    return timingSafeEqual(Buffer.from(header), Buffer.from(expected));
-  } catch {
-    return false; // buffers differ in length
-  }
+  // Hash both sides to a fixed 32 bytes before comparing. timingSafeEqual THROWS on
+  // a length mismatch, and returning from that catch is observably faster than a
+  // full byte comparison — which leaked the expected header's length. Hashing makes
+  // every input take the same path regardless of length.
+  const a = createHash("sha256").update(header).digest();
+  const b = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(a, b);
 }

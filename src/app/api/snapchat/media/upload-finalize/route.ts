@@ -22,13 +22,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "snapchat_not_connected" }, { status: 403 });
   }
 
-  let accessToken: string;
-  try {
-    accessToken = await getValidAccessToken();
-  } catch {
-    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
-  }
-
+  // Validate and authorize BEFORE touching the token. Fetching (and possibly
+  // refreshing) a token for a request that is about to be rejected does upstream
+  // work on an unauthorized caller's behalf and can rotate the refresh token.
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
@@ -38,6 +34,13 @@ export async function POST(request: NextRequest) {
 
   if (!isAdAccountAllowed(session, adAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  let accessToken: string;
+  try {
+    accessToken = await getValidAccessToken();
+  } catch {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
 
   // Use the server-pinned finalizePath stored at upload-init time — ignore the client-supplied value.

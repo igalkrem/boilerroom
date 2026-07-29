@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, isSessionValid } from "@/lib/session";
+import { isOwnBlobUrl } from "@/lib/blob-host";
 import { put } from "@vercel/blob";
 import { z } from "zod";
 import { execFile } from "child_process";
@@ -15,10 +16,7 @@ const bodySchema = z.object({
   blobUrl: z
     .string()
     .url()
-    .refine(
-      (url) => new URL(url).hostname.endsWith(".vercel-storage.com"),
-      { message: "blobUrl must be a Vercel Blob URL" }
-    ),
+    .refine(isOwnBlobUrl, { message: "blobUrl must be a Vercel Blob URL" }),
   fileName: z.string().min(1).max(200),
 });
 
@@ -37,7 +35,11 @@ export async function POST(request: NextRequest) {
   const { blobUrl, fileName } = parsed.data;
 
   const id = uuid();
-  const ext = fileName.split(".").pop()?.toLowerCase() || "mp4";
+  // fileName is caller-supplied and unconstrained in charset, so the extension is
+  // stripped to bare alphanumerics before it reaches a filesystem path — otherwise
+  // `x.mp4/../../evil` yields an ext containing slashes and escapes /tmp.
+  const rawExt = fileName.split(".").pop()?.toLowerCase() ?? "";
+  const ext = /^[a-z0-9]{1,8}$/.test(rawExt) ? rawExt : "mp4";
   const inputPath = `/tmp/${id}_in.${ext}`;
   const outputPath = `/tmp/${id}_out.mp4`;
 
@@ -53,13 +55,21 @@ export async function POST(request: NextRequest) {
     // Run native FFmpeg — ultrafast preset is ~3× faster than "fast" with negligible quality difference
     const ffmpegPath: string = (await import("@ffmpeg-installer/ffmpeg")).default.path;
     await execFileAsync(ffmpegPath, [
+      // `-i` is passed as its own argv entry and inputPath is a server-generated
+      // /tmp path, so a caller cannot smuggle extra FFmpeg options in. Keep the
+      // argv-array form — never migrate this to exec() or add shell: true.
       "-i", inputPath,
       "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
       "-c:a", "aac", "-b:a", "128k",
       "-movflags", "+faststart",
       "-y",
       outputPath,
-    ]);
+    ], {
+      // FFmpeg parses untrusted media. Without these a crafted input can pin the
+      // function for its full 300s maxDuration or balloon memory via stderr.
+      timeout: 240_000,
+      maxBuffer: 8 * 1024 * 1024,
+    });
 
     // Upload transcoded H.264 result to Vercel Blob
     const transcoded = await readFile(outputPath);

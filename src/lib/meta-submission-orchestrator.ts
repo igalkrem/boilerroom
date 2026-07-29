@@ -309,7 +309,9 @@ export async function runMetaSubmission(
     let videoThumbnailUrl: string | undefined;
     if (media.type === "VIDEO") {
       try {
-        const res = await fetch(`/api/meta/media?videoId=${encodeURIComponent(media.videoId!)}`);
+        const res = await fetch(
+          `/api/meta/media?videoId=${encodeURIComponent(media.videoId!)}&adAccountId=${encodeURIComponent(adAccountId)}`
+        );
         const data = await res.json();
         videoThumbnailUrl = data.thumbnailUrl ?? undefined;
       } catch {

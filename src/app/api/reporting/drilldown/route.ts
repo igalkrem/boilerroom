@@ -27,6 +27,9 @@ export async function GET(request: NextRequest) {
 
   await runMigrations();
 
+  // See combined/route.ts — feed_provider_channels reads must be tenant-scoped.
+  const userId = session.googleUserId ?? "";
+
   if (platform === "meta") {
     const [eurToUsd, { rows }] = await Promise.all([
       getEurToUsd(),
@@ -78,13 +81,17 @@ export async function GET(request: NextRequest) {
           FROM (
             SELECT channel_id, feed_provider_id, 0 AS _p
             FROM feed_provider_channels
-            WHERE ad_squad_snap_id = m.ad_set_id
+            WHERE google_user_id = ${userId}
+              AND ad_squad_snap_id = m.ad_set_id
             UNION ALL
             SELECT channel_id, feed_provider_id, 1 AS _p
             FROM feed_provider_channels
-            WHERE channel_id != ''
+            WHERE google_user_id = ${userId}
+              AND channel_id != ''
               AND ad_squad_snap_id IS DISTINCT FROM m.ad_set_id
-              AND m.ad_set_name ILIKE '%' || REPLACE(REPLACE(channel_id, '%', '\%'), '_', '\_') || '%'
+              AND m.ad_set_name ILIKE
+                  '%' || REPLACE(REPLACE(REPLACE(channel_id, '!', '!!'), '%', '!%'), '_', '!_') || '%'
+                  ESCAPE '!'
           ) _fpc_inner
           ORDER BY _p
           LIMIT 1
@@ -108,6 +115,7 @@ export async function GET(request: NextRequest) {
         WHERE m.ad_account_id = ${adAccountId}
           AND m.ad_set_id     = ${adSquadId}
         ORDER BY m.stat_date DESC
+        LIMIT 800
       `,
     ]);
 
@@ -209,13 +217,17 @@ export async function GET(request: NextRequest) {
         FROM (
           SELECT channel_id, feed_provider_id, 0 AS _p
           FROM feed_provider_channels
-          WHERE ad_squad_snap_id = s.ad_squad_id
+          WHERE google_user_id = ${userId}
+            AND ad_squad_snap_id = s.ad_squad_id
           UNION ALL
           SELECT channel_id, feed_provider_id, 1 AS _p
           FROM feed_provider_channels
-          WHERE channel_id != ''
+          WHERE google_user_id = ${userId}
+            AND channel_id != ''
             AND ad_squad_snap_id IS DISTINCT FROM s.ad_squad_id
-            AND s.ad_squad_name ILIKE '%' || REPLACE(REPLACE(channel_id, '%', '\%'), '_', '\_') || '%'
+            AND s.ad_squad_name ILIKE
+                '%' || REPLACE(REPLACE(REPLACE(channel_id, '!', '!!'), '%', '!%'), '_', '!_') || '%'
+                ESCAPE '!'
         ) _fpc_inner
         ORDER BY _p
         LIMIT 1
@@ -239,6 +251,7 @@ export async function GET(request: NextRequest) {
       WHERE s.ad_account_id = ${adAccountId}
         AND s.ad_squad_id   = ${adSquadId}
       ORDER BY s.stat_date DESC
+      LIMIT 800
     `,
   ]);
 

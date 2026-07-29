@@ -7,20 +7,23 @@ export const dynamic = "force-dynamic";
 
 async function getNetworkForAccount(
   id: string,
-  providerMap: Map<string, "visymo" | "predicto">
+  providerMap: Map<string, "visymo" | "predicto">,
+  googleUserId: string
 ): Promise<"visymo" | "predicto" | "unknown"> {
   // 1. Explicit provider config (authoritative)
   const fromProvider = providerMap.get(id);
   if (fromProvider) return fromProvider;
 
-  // 2. DB join fallback
+  // 2. DB join fallback — scoped to this user so another tenant's channel rows
+  //    cannot classify this account's network.
   const [kr, pred] = await Promise.all([
     sql`SELECT 1 FROM snapchat_ad_squad_stats sas
         INNER JOIN visymo_report kr ON kr.custom_channel_name = sas.ad_squad_id
         WHERE sas.ad_account_id = ${id} LIMIT 1`,
     sql`SELECT 1 FROM snapchat_ad_squad_stats sas
         INNER JOIN feed_provider_channels fpc ON fpc.ad_squad_snap_id = sas.ad_squad_id
-        WHERE sas.ad_account_id = ${id} LIMIT 1`,
+        WHERE sas.ad_account_id = ${id}
+          AND fpc.google_user_id = ${googleUserId} LIMIT 1`,
   ]);
   if (kr.rows.length > 0) return "visymo";
   if (pred.rows.length > 0) return "predicto";
@@ -78,7 +81,7 @@ export async function GET() {
     : null;
 
   const providerMap = await getProviderNetworkMap(session.googleUserId ?? "");
-  const networkMap = await Promise.all(accountIds.map((id) => getNetworkForAccount(id, providerMap).then((n) => ({ id, n }))));
+  const networkMap = await Promise.all(accountIds.map((id) => getNetworkForAccount(id, providerMap, session.googleUserId ?? "").then((n) => ({ id, n }))));
   const krAccountIds = networkMap.filter((x) => x.n === "visymo").map((x) => x.id);
   const predAccountIds = networkMap.filter((x) => x.n === "predicto").map((x) => x.id);
   // Predicto FB pairs with Meta stats (Facebook traffic), so its "in sync" dot

@@ -58,7 +58,9 @@ export async function updateAdSet(
   token?: string
 ): Promise<{ success: boolean }> {
   const adSet = await getAdSet(adSetId, token);
-  if (adSet.account_id && adSet.account_id !== expectedAdAccountId.replace("act_", "")) {
+  // Fail closed: getAdSet requests account_id explicitly and MetaAdSet types it as
+  // required, so a missing value means "unverifiable", not "authorized".
+  if (!adSet.account_id || adSet.account_id !== expectedAdAccountId.replace("act_", "")) {
     throw new Error("forbidden: ad set does not belong to the specified ad account");
   }
   return metaFetch<{ success: boolean }>(
@@ -77,7 +79,9 @@ export async function deleteAdSet(
   token?: string
 ): Promise<void> {
   const adSet = await getAdSet(adSetId, token);
-  if (adSet.account_id && adSet.account_id !== expectedAdAccountId.replace("act_", "")) {
+  // Fail closed: getAdSet requests account_id explicitly and MetaAdSet types it as
+  // required, so a missing value means "unverifiable", not "authorized".
+  if (!adSet.account_id || adSet.account_id !== expectedAdAccountId.replace("act_", "")) {
     throw new Error("forbidden: ad set does not belong to the specified ad account");
   }
   await metaFetch<{ success: boolean }>(

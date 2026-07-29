@@ -3,6 +3,7 @@ import { uploadImage, uploadVideo, pollVideoStatus, getVideoThumbnailUrl } from 
 import { getOrCreatePageBackedInstagramAccount, isInstagramActorUsableByAdAccount } from "@/lib/meta/business-pages";
 import { getCachedInstagramActorId, setCachedInstagramActorId } from "@/lib/meta/instagram-actor-cache";
 import { getSession, isSessionValid, isMetaConnected, isMetaAdAccountAllowed } from "@/lib/session";
+import { isOwnBlobUrl } from "@/lib/blob-host";
 import { z } from "zod";
 
 export async function GET(request: NextRequest) {
@@ -17,6 +18,19 @@ export async function GET(request: NextRequest) {
   const videoId = request.nextUrl.searchParams.get("videoId");
   const pageId = request.nextUrl.searchParams.get("pageId");
   const adAccountId = request.nextUrl.searchParams.get("adAccountId");
+
+  // An allowed adAccountId is REQUIRED on both branches. Previously this GET was
+  // gated only by "is a Meta account connected", so any signed-in caller could
+  // pass an arbitrary pageId and have getOrCreatePageBackedInstagramAccount()
+  // *create* a PBIA on any page the app token could reach, or read the thumbnail
+  // of any video id. There is no page allow-list in the session, so ownership of
+  // the ad account making the request is the available control.
+  if (!adAccountId) {
+    return NextResponse.json({ error: "adAccountId required" }, { status: 400 });
+  }
+  if (!isMetaAdAccountAllowed(session, adAccountId)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   if (pageId) {
     try {
@@ -69,20 +83,14 @@ export const maxDuration = 120;
 const imageSchema = z.object({
   adAccountId: z.string().min(1),
   type: z.literal("IMAGE"),
-  blobUrl: z.string().url().refine(
-    (url) => url.includes(".vercel-storage.com"),
-    "blobUrl must be a Vercel Blob URL"
-  ),
+  blobUrl: z.string().url().refine(isOwnBlobUrl, "blobUrl must be a Vercel Blob URL"),
   fileName: z.string().min(1),
 });
 
 const videoSchema = z.object({
   adAccountId: z.string().min(1),
   type: z.literal("VIDEO"),
-  blobUrl: z.string().url().refine(
-    (url) => url.includes(".vercel-storage.com"),
-    "blobUrl must be a Vercel Blob URL"
-  ),
+  blobUrl: z.string().url().refine(isOwnBlobUrl, "blobUrl must be a Vercel Blob URL"),
   title: z.string().min(1),
 });
 

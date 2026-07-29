@@ -1,9 +1,10 @@
 import { del, list, getDownloadUrl } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, isSessionValid } from "@/lib/session";
+import { isOwnBlobUrl } from "@/lib/blob-host";
 import { z } from "zod";
 
-const BLOB_HOST = "blob.vercel-storage.com";
+// Host pinning lives in @/lib/blob-host so all five blob-consuming routes agree.
 
 const bodySchema = z.object({
   urls: z.array(z.string().min(1)).min(1).max(10),
@@ -46,13 +47,7 @@ export async function DELETE(request: NextRequest) {
   const { urls } = parsed.data;
 
   // Validate all URLs are Vercel Blob hostnames before the ownership check
-  const invalidHost = urls.filter((u) => {
-    try {
-      return !new URL(u).hostname.endsWith(BLOB_HOST);
-    } catch {
-      return true;
-    }
-  });
+  const invalidHost = urls.filter((u) => !isOwnBlobUrl(u));
   if (invalidHost.length > 0) {
     return NextResponse.json({ error: "invalid_urls" }, { status: 422 });
   }

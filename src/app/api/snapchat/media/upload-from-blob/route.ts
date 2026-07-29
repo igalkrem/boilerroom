@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
-import { getValidAccessToken } from "@/lib/snapchat/client";
+import { isOwnBlobUrl } from "@/lib/blob-host";
+import { getValidAccessToken, SNAP_ID_RE } from "@/lib/snapchat/client";
 import { refreshAccessToken } from "@/lib/snapchat/auth";
 import { rateLimitedFetch } from "@/lib/rate-limiter";
 import { z } from "zod";
@@ -16,11 +17,8 @@ const bodySchema = z.object({
   blobUrl: z
     .string()
     .url()
-    .refine(
-      (url) => new URL(url).hostname.endsWith(".vercel-storage.com"),
-      { message: "blobUrl must be a Vercel Blob URL" }
-    ),
-  mediaId: z.string().min(1),
+    .refine(isOwnBlobUrl, { message: "blobUrl must be a Vercel Blob URL" }),
+  mediaId: z.string().regex(SNAP_ID_RE, "invalid mediaId"),
   adAccountId: z.string().min(1),
   fileName: z.string().min(1).max(100).optional(),
 });

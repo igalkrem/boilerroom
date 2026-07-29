@@ -10,6 +10,7 @@ const errorMessages: Record<string, string> = {
   invalid_state: "Security check failed. Please try again.",
   token_exchange_failed: "Could not connect to Google. Please try again.",
   access_denied: "Access was denied. Please allow the required permissions.",
+  not_authorized: "This account isn't authorized for BoilerRoom. Sign in with your Adcore account.",
 };
 
 export default async function LoginPage({ searchParams }: Props) {

@@ -15,6 +15,7 @@ import type {
 } from "@/types/meta";
 import { z } from "zod";
 import { deflateSync } from "zlib";
+import { debugRoutesEnabled } from "@/lib/debug-routes";
 
 export const maxDuration = 60;
 
@@ -70,6 +71,9 @@ function createTestPng(width: number, height: number, r: number, g: number, b: n
 // touches any token but the signed-in user's own. Everything it creates is
 // PAUSED and named for easy manual cleanup in Ads Manager.
 export async function POST(request: NextRequest) {
+  if (!debugRoutesEnabled()) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   const session = await getSession();
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
@@ -478,6 +482,9 @@ export async function POST(request: NextRequest) {
 // campaigns created by this route. Same session-gating as the rest of this
 // file; the caller's own token is used, never a stored/DB one.
 export async function DELETE(request: NextRequest) {
+  if (!debugRoutesEnabled()) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   const session = await getSession();
   if (!isSessionValid(session)) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });

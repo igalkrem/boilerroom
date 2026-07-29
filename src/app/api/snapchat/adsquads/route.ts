@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdSquads, deleteAdSquad, getAdSquad, getAdSquadsForAccount, updateAdSquad, setAdSquadPlacement } from "@/lib/snapchat/adsquads";
+import { getCampaign } from "@/lib/snapchat/campaigns";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import type { SnapAdSquadPayload } from "@/types/snapchat";
 import { z } from "zod";
@@ -74,6 +75,19 @@ export async function POST(request: NextRequest) {
 
   if (!isAdAccountAllowed(session, adAccountId)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  // The ad-account check does not constrain campaignId at all — without this the
+  // guard above is decorative on the create path: pass any owned adAccountId and
+  // any campaignId you like. The sibling GET handler already verifies this way.
+  try {
+    const campaign = await getCampaign(campaignId);
+    if (!campaign.ad_account_id || campaign.ad_account_id !== adAccountId) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+  } catch (err) {
+    console.error("[snapchat/adsquads] campaign verification failed:", err);
+    return NextResponse.json({ error: "invalid_campaign_id" }, { status: 422 });
   }
 
   try {

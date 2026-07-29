@@ -46,7 +46,8 @@ export async function updateAd(
   token?: string
 ): Promise<{ success: boolean }> {
   const ad = await getAd(adId, token);
-  if (ad.account_id && ad.account_id !== expectedAdAccountId.replace("act_", "")) {
+  // Fail closed — a missing account_id means "unverifiable", not "authorized".
+  if (!ad.account_id || ad.account_id !== expectedAdAccountId.replace("act_", "")) {
     throw new Error("forbidden: ad does not belong to the specified ad account");
   }
   return metaFetch<{ success: boolean }>(
