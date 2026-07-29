@@ -11,7 +11,7 @@ import { KpiSummaryBar } from "@/components/performance/KpiSummaryBar";
 import { PerformanceSummaryTables } from "@/components/performance/PerformanceSummaryTables";
 import { SyncStatusBar } from "@/components/performance/SyncStatusBar";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
-import type { SquadDetail, AggrRow } from "@/components/performance/PerformanceTable";
+import type { SquadDetail, AggrRow, PerformanceTableHandle } from "@/components/performance/PerformanceTable";
 import type { SnapAdAccount } from "@/types/snapchat";
 import { useMetaAdAccounts } from "@/hooks/useMetaAdAccounts";
 
@@ -85,6 +85,8 @@ export default function PerformancePage() {
 
   const [kpiRows, setKpiRows] = useState<AggrRow[]>([]);
   const [summaryFilter, setSummaryFilter] = useState<{ squadIds: Set<string>; label: string } | null>(null);
+  const [activeFilterCount, setActiveFilterCount] = useState(0);
+  const performanceTableRef = useRef<PerformanceTableHandle>(null);
   const [syncRefreshTrigger, setSyncRefreshTrigger] = useState(0);
 
   const tableRows = useMemo(
@@ -388,6 +390,10 @@ export default function PerformancePage() {
     });
   }
 
+  function shiftDateRange(days: number) {
+    handleDateChange(dateMinus(startDate, -days), dateMinus(endDate, -days));
+  }
+
   function handleManualRefresh() {
     void syncAndReload(activeAccounts, startDate, endDate, true, false);
     void loadLast30Days(activeAccounts);
@@ -409,6 +415,33 @@ export default function PerformancePage() {
 
       <div className="flex flex-wrap gap-3 mb-5 items-center">
         <DateRangePicker startDate={startDate} endDate={endDate} onChange={handleDateChange} />
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => shiftDateRange(-1)}
+            title="Previous day"
+            className="w-8 h-8 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <button
+            onClick={() => shiftDateRange(1)}
+            title="Next day"
+            className="w-8 h-8 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+        <button
+          onClick={() => performanceTableRef.current?.clearAllFilters()}
+          disabled={activeFilterCount === 0}
+          className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-gray-800 transition-colors whitespace-nowrap"
+        >
+          Clear filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+        </button>
         {loading && !syncing && (
           <div className="flex items-center gap-1.5 text-gray-400 text-sm">
             <Spinner />
@@ -435,6 +468,7 @@ export default function PerformancePage() {
             onFilterChange={setSummaryFilter}
           />
           <PerformanceTable
+          ref={performanceTableRef}
           rows={tableRows}
           eurToUsd={eurToUsd}
           visibleColumns={visibleColumns}
@@ -447,6 +481,7 @@ export default function PerformancePage() {
           onSquadUpdated={() => void loadSquadDetails(activeAccounts)}
           onSquadPatched={updateSquadDetail}
           onFilteredRowsChange={setKpiRows}
+          onActiveFilterCountChange={setActiveFilterCount}
         />
         </>
       )}

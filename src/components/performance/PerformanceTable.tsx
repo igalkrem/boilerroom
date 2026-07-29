@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
@@ -76,6 +76,11 @@ interface Props {
   onSquadUpdated: () => void;
   onSquadPatched?: (squadId: string, patch: Partial<SquadDetail>) => void;
   onFilteredRowsChange?: (rows: AggrRow[]) => void;
+  onActiveFilterCountChange?: (count: number) => void;
+}
+
+export interface PerformanceTableHandle {
+  clearAllFilters: () => void;
 }
 
 type SortKey =
@@ -283,10 +288,11 @@ function SortArrow({ active, desc }: { active: boolean; desc: boolean }) {
   );
 }
 
-export function PerformanceTable({
+export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(function PerformanceTable({
   rows, eurToUsd, visibleColumns, onColumnsChange, columnOrder, onColumnOrderChange,
   squadDetails, historicalRows, startDate, onSquadUpdated, onSquadPatched, onFilteredRowsChange,
-}: Props) {
+  onActiveFilterCountChange,
+}: Props, ref) {
   const [sortKey, setSortKey] = useState<SortKey>("spend_usd");
   const [sortDesc, setSortDesc] = useState(true);
   const [drilldown, setDrilldown] = useState<{ id: string; name: string; accountId: string; platform: "snap" | "meta" } | null>(null);
@@ -990,6 +996,12 @@ export function PerformanceTable({
     filterPlatforms.size +
     filterStatuses.size +
     metricFilters.filter(mf => mf.metric && mf.value.trim()).length;
+
+  useEffect(() => {
+    onActiveFilterCountChange?.(activeFilterCount);
+  }, [activeFilterCount, onActiveFilterCountChange]);
+
+  useImperativeHandle(ref, () => ({ clearAllFilters }));
 
   function clearAllFilters() {
     setFilterArticleIds(new Set());
@@ -1832,4 +1844,4 @@ export function PerformanceTable({
       )}
     </>
   );
-}
+});
