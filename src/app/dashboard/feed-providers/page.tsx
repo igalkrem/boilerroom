@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
-import { loadFeedProviders, deleteFeedProvider } from "@/lib/feed-providers";
+import { loadFeedProviders, deleteFeedProvider, getFeedProviderBadgeClasses } from "@/lib/feed-providers";
 import type { FeedProvider } from "@/types/feed-provider";
 import { FeedProviderModal } from "@/components/feed-providers/FeedProviderModal";
 
@@ -40,33 +40,6 @@ function PlatformChip({ platform }: { platform: "snap" | "meta" }) {
   );
 }
 
-// Revenue source drives payout routing (cron sync window). Visymo = orange, Predicto = blue,
-// unset = neutral — independent of which traffic-source platform(s) the provider runs.
-function revenueSourceInfo(provider: FeedProvider): { key: "visymo" | "predicto" | "none"; label: string } {
-  const raw = provider.snapConfig.revenueSource ?? provider.metaConfig?.revenueSource;
-  if (raw === "visymo") return { key: "visymo", label: "Visymo" };
-  if (raw === "predicto" || raw === "predicto_fb") return { key: "predicto", label: "Predicto" };
-  return { key: "none", label: "Not set" };
-}
-
-const REVENUE_TAG_CLASSES: Record<"visymo" | "predicto" | "none", string> = {
-  visymo: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800",
-  predicto: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800",
-  none: "bg-gray-50 text-gray-500 border-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600",
-};
-
-const REVENUE_HEADER_CLASSES: Record<"visymo" | "predicto" | "none", string> = {
-  visymo: "bg-orange-50/60 dark:bg-orange-900/10",
-  predicto: "bg-blue-50/60 dark:bg-blue-900/10",
-  none: "",
-};
-
-const REVENUE_DOT_CLASSES: Record<"visymo" | "predicto" | "none", string> = {
-  visymo: "bg-orange-500",
-  predicto: "bg-blue-500",
-  none: "bg-gray-400",
-};
-
 function ProviderCard({
   provider,
   onEdit,
@@ -93,7 +66,7 @@ function ProviderCard({
       meta.urlConfig?.baseUrl)
   );
   const pixelCount = provider.snapConfig.allowedPixelIds.length + (meta?.allowedPixelIds.length ?? 0);
-  const revenue = revenueSourceInfo(provider);
+  const badgeClasses = getFeedProviderBadgeClasses(provider.name);
 
   return (
     <div
@@ -101,7 +74,7 @@ function ProviderCard({
       onClick={onEdit}
     >
       {/* Header */}
-      <div className={`px-4 pt-4 pb-3 flex items-start justify-between gap-2 border-b border-gray-100 dark:border-gray-700 ${REVENUE_HEADER_CLASSES[revenue.key]}`}>
+      <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-2 border-b border-gray-100 dark:border-gray-700">
         <div className="min-w-0">
           <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug truncate">
             {provider.name}
@@ -119,11 +92,10 @@ function ProviderCard({
         </span>
       </div>
 
-      {/* Revenue source + platform row */}
+      {/* Feed color + platform row */}
       <div className="px-4 pt-2.5 pb-2.5 flex items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-700">
-        <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${REVENUE_TAG_CLASSES[revenue.key]}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${REVENUE_DOT_CLASSES[revenue.key]}`} />
-          {revenue.label}
+        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium border truncate max-w-[140px] ${badgeClasses}`}>
+          {provider.name}
         </span>
         <div className="flex items-center gap-1">
           <PlatformChip platform="snap" />
