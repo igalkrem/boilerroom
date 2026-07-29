@@ -7,6 +7,7 @@ import { AssetCard } from "@/components/silo/AssetCard";
 import { AssetPreviewModal } from "@/components/silo/AssetPreviewModal";
 import { SnapchatUploadModal } from "@/components/silo/SnapchatUploadModal";
 import { MetaUploadModal } from "@/components/silo/MetaUploadModal";
+import { TagFilterBar } from "@/components/silo/TagFilterBar";
 import { loadAssets, deleteAsset, upsertAsset } from "@/lib/silo";
 import { loadTags } from "@/lib/silo-tags";
 import type { SiloAsset, SiloTag } from "@/types/silo";
@@ -88,14 +89,19 @@ export default function SiloPage() {
 
   const tagMap = Object.fromEntries(tags.map((t) => [t.id, t.name]));
 
-  const filtered = assets
-    .filter((a) => {
-      if (search && !a.name.toLowerCase().includes(search.toLowerCase())) return false;
-      if (filterTag && a.tagId !== filterTag) return false;
-      if (filterType && a.mediaType !== filterType) return false;
-      if (filterStatus && a.status !== filterStatus) return false;
-      return true;
-    })
+  const preTagFiltered = assets.filter((a) => {
+    if (search && !a.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterType && a.mediaType !== filterType) return false;
+    if (filterStatus && a.status !== filterStatus) return false;
+    return true;
+  });
+
+  const tagCounts = Object.fromEntries(
+    tags.map((t) => [t.id, preTagFiltered.filter((a) => a.tagId === t.id).length])
+  );
+
+  const filtered = preTagFiltered
+    .filter((a) => !filterTag || a.tagId === filterTag)
     .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
 
   const grouped = useMemo(() => {
@@ -192,30 +198,35 @@ export default function SiloPage() {
       )}
 
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
-        <div className="flex-1 min-w-[200px]">
-          <Input
-            placeholder="Search by name…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+      <div className="space-y-3">
+        <Input
+          placeholder="Search by name…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <TagFilterBar
+            tags={tags}
+            activeTagId={filterTag}
+            onChange={setFilterTag}
+            counts={tagCounts}
+            totalCount={preTagFiltered.length}
           />
+          <div className="flex gap-3 ml-auto">
+            <select className={selectCls} value={filterType} onChange={(e) => setFilterType(e.target.value as "" | "IMAGE" | "VIDEO")}>
+              <option value="">All types</option>
+              <option value="IMAGE">Images</option>
+              <option value="VIDEO">Videos</option>
+            </select>
+            <select className={selectCls} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}>
+              <option value="">All statuses</option>
+              <option value="ready">Ready</option>
+              <option value="processing">Processing</option>
+              <option value="failed">Failed</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
         </div>
-        <select className={selectCls} value={filterTag} onChange={(e) => setFilterTag(e.target.value)}>
-          <option value="">All tags</option>
-          {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
-        <select className={selectCls} value={filterType} onChange={(e) => setFilterType(e.target.value as "" | "IMAGE" | "VIDEO")}>
-          <option value="">All types</option>
-          <option value="IMAGE">Images</option>
-          <option value="VIDEO">Videos</option>
-        </select>
-        <select className={selectCls} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}>
-          <option value="">All statuses</option>
-          <option value="ready">Ready</option>
-          <option value="processing">Processing</option>
-          <option value="failed">Failed</option>
-          <option value="archived">Archived</option>
-        </select>
       </div>
 
       {/* Grid */}

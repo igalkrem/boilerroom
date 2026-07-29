@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { loadAssets, getSnapMediaId } from "@/lib/silo";
 import { loadTags } from "@/lib/silo-tags";
 import { AssetCard } from "./AssetCard";
+import { TagFilterBar } from "./TagFilterBar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import type { SiloAsset, SiloTag } from "@/types/silo";
@@ -36,12 +37,17 @@ export function SiloBrowser({ isOpen, onClose, onSelect, adAccountId, multiSelec
 
   const tagMap = Object.fromEntries(tags.map((t) => [t.id, t.name]));
 
-  const filtered = assets.filter((a) => {
+  const preTagFiltered = assets.filter((a) => {
     if (search && !a.name.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterTag && a.tagId !== filterTag) return false;
     if (filterType && a.mediaType !== filterType) return false;
     return true;
   });
+
+  const tagCounts = Object.fromEntries(
+    tags.map((t) => [t.id, preTagFiltered.filter((a) => a.tagId === t.id).length])
+  );
+
+  const filtered = preTagFiltered.filter((a) => !filterTag || a.tagId === filterTag);
 
   // Sort: cached for this ad account first, then by upload date desc
   const sorted = [...filtered].sort((a, b) => {
@@ -84,33 +90,30 @@ export function SiloBrowser({ isOpen, onClose, onSelect, adAccountId, multiSelec
         </div>
 
         {/* Filters */}
-        <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-700 flex gap-3 flex-wrap">
-          <div className="flex-1 min-w-[180px]">
-            <Input
-              placeholder="Search by name…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+        <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-700 space-y-3">
+          <Input
+            placeholder="Search by name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <TagFilterBar
+              tags={tags}
+              activeTagId={filterTag}
+              onChange={setFilterTag}
+              counts={tagCounts}
+              totalCount={preTagFiltered.length}
             />
+            <select
+              className="ml-auto border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-300 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value as "" | "IMAGE" | "VIDEO")}
+            >
+              <option value="">All types</option>
+              <option value="IMAGE">Images</option>
+              <option value="VIDEO">Videos</option>
+            </select>
           </div>
-          <select
-            className="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-300 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-            value={filterTag}
-            onChange={(e) => setFilterTag(e.target.value)}
-          >
-            <option value="">All tags</option>
-            {tags.map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-          <select
-            className="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-300 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value as "" | "IMAGE" | "VIDEO")}
-          >
-            <option value="">All types</option>
-            <option value="IMAGE">Images</option>
-            <option value="VIDEO">Videos</option>
-          </select>
         </div>
 
         {/* Grid */}

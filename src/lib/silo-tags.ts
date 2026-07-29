@@ -67,3 +67,26 @@ export function consumeNextIndex(tagId: string): number {
 export function buildAssetName(tag: SiloTag, index: number): string {
   return `${tag.prefix}_v_${String(index).padStart(3, "0")}`;
 }
+
+// Deterministic per-tag color, hashed from the tag id so the same tag always
+// renders the same color without needing a stored `color` field.
+const TAG_COLOR_PALETTE = [
+  { dot: "bg-indigo-500", active: "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-700" },
+  { dot: "bg-emerald-500", active: "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700" },
+  { dot: "bg-orange-500", active: "bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-700" },
+  { dot: "bg-fuchsia-500", active: "bg-fuchsia-50 dark:bg-fuchsia-900/30 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-200 dark:border-fuchsia-700" },
+  { dot: "bg-rose-500", active: "bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-700" },
+  { dot: "bg-sky-500", active: "bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-700" },
+  { dot: "bg-amber-500", active: "bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700" },
+  { dot: "bg-teal-500", active: "bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-700" },
+];
+
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+export function getTagColorClasses(tagId: string): { dot: string; active: string } {
+  return TAG_COLOR_PALETTE[hashString(tagId) % TAG_COLOR_PALETTE.length];
+}
