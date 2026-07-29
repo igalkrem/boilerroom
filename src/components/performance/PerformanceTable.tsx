@@ -12,6 +12,13 @@ import { ColumnSelector } from "./ColumnSelector";
 
 const PROVIDER_COLORS = ["#3b82f6", "#f97316", "#8b5cf6", "#10b981", "#ec4899", "#f59e0b"] as const;
 
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function SnapchatLogo({ className, title }: { className?: string; title?: string }) {
   return (
     <span title={title} className={`inline-flex items-center justify-center rounded-md bg-yellow-400 ${className ?? "w-4 h-4"}`}>
@@ -1594,11 +1601,12 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
                 const trafficUrl = buildTrafficSourceUrl(r, detail);
 
                 const stripeColor = providerColorMap[resolveProviderKey(r, providers)] ?? "transparent";
+                const washColor = stripeColor !== "transparent" ? hexToRgba(stripeColor, 0.06) : "transparent";
 
                 return (
                   <tr
                     key={r.ad_squad_id}
-                    style={{ boxShadow: `inset 3px 0 0 ${stripeColor}` }}
+                    style={{ boxShadow: `inset 3px 0 0 ${stripeColor}, inset 0 0 0 9999px ${washColor}` }}
                     className={`transition-colors ${
                       isHidden ? "opacity-40" : ""
                     } ${
