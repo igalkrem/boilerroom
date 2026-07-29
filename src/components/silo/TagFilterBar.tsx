@@ -15,17 +15,17 @@ export function TagFilterBar({ tags, activeTagId, onChange, counts, totalCount }
   if (tags.length === 0) return null;
 
   return (
-    <div className="flex gap-1.5 flex-wrap bg-gray-100 dark:bg-gray-900/60 rounded-xl p-1">
+    <div className="flex gap-2 flex-wrap bg-gray-100 dark:bg-gray-900/60 rounded-xl p-1.5">
       <button
         type="button"
         onClick={() => onChange("")}
-        className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+        className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm ${
           activeTagId === ""
             ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
-            : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600"
         }`}
       >
-        All <span className="font-normal opacity-70 tabular-nums">{totalCount}</span>
+        All <span className="font-semibold opacity-70 tabular-nums">{totalCount}</span>
       </button>
       {tags.map((tag) => {
         const active = activeTagId === tag.id;
@@ -35,13 +35,15 @@ export function TagFilterBar({ tags, activeTagId, onChange, counts, totalCount }
             key={tag.id}
             type="button"
             onClick={() => onChange(active ? "" : tag.id)}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium border transition-colors flex items-center gap-1.5 ${
-              active ? colors.active : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            className={`px-4 py-2 rounded-lg text-sm font-bold border transition-colors shadow-sm flex items-center gap-2 ${
+              active
+                ? colors.active
+                : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600"
             }`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${colors.dot}`} />
+            <span className={`w-2 h-2 rounded-full shrink-0 ${colors.dot}`} />
             {tag.name}
-            <span className="font-normal opacity-70 tabular-nums">{counts[tag.id] ?? 0}</span>
+            <span className="font-semibold opacity-70 tabular-nums">{counts[tag.id] ?? 0}</span>
           </button>
         );
       })}
