@@ -391,6 +391,7 @@ export default function PerformancePage() {
   }
 
   function shiftDateRange(days: number) {
+    if (days > 0 && endDate >= todayStr()) return;
     handleDateChange(dateMinus(startDate, -days), dateMinus(endDate, -days));
   }
 
@@ -427,8 +428,9 @@ export default function PerformancePage() {
           </button>
           <button
             onClick={() => shiftDateRange(1)}
+            disabled={endDate >= todayStr()}
             title="Next day"
-            className="w-8 h-8 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            className="w-8 h-8 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-gray-800 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
