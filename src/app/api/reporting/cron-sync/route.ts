@@ -95,7 +95,8 @@ export async function GET(request: NextRequest) {
       }
 
       // Classify accounts by network, then only sync the ones relevant to this window.
-      // Unknown accounts (no data yet) are included in both windows as a fallback.
+      // Unassigned accounts (no feed provider config, no DB-derivable network) are
+      // skipped entirely — they aren't synced until they're assigned to a provider.
       const providerMap = await getProviderNetworkMap(user.google_user_id);
       const classified = await Promise.all(
         user.ad_account_ids.map(async ({ id, timezone }) => ({
@@ -106,8 +107,7 @@ export async function GET(request: NextRequest) {
       );
 
       const accountsToSync = classified.filter(({ network }) =>
-        network === "unknown" ||
-        (isVisymoRun ? network === "visymo" : network === "predicto")
+        isVisymoRun ? network === "visymo" : network === "predicto"
       );
 
       await Promise.allSettled(
