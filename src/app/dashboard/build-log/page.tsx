@@ -131,7 +131,7 @@ export default function BuildLogPage() {
 
       {sessions.length > 0 && (
         <div className="relative">
-          <div className="grid" style={{ gridTemplateColumns: "140px 1fr" }}>
+          <div className="grid" style={{ gridTemplateColumns: "170px 1fr" }}>
             {/* Timeline spine spans full grid height via border-left on left column */}
             {sessions.map((session, idx) => {
               const showDate = idx === 0 || dayKey(session.timestamp) !== dayKey(sessions[idx - 1].timestamp);
@@ -185,9 +185,13 @@ function SessionRow({
       <div className={`relative flex items-center justify-end gap-2 pt-4 pr-3 ${!isLast || expanded ? "pb-4" : ""}`}>
         {/* Vertical line, aligned under the dot */}
         <div className="absolute top-0 bottom-0 w-0.5 bg-gray-700" style={{ right: "18px" }} />
-        <div className="text-right leading-tight">
-          <div className="text-sm font-medium text-gray-200 h-[18px]">{showDate ? fmtDateOnly(session.timestamp) : ""}</div>
-          <div className="text-xs font-mono text-gray-500">{fmtHHMM(session.timestamp)}</div>
+        <div className="flex items-center gap-2">
+          {showDate && (
+            <span className="text-xs font-medium text-blue-300 bg-blue-900/40 px-2.5 py-1 rounded-full whitespace-nowrap">
+              {fmtDateOnly(session.timestamp)}
+            </span>
+          )}
+          <span className="text-xs font-mono text-gray-500 whitespace-nowrap">{fmtHHMM(session.timestamp)}</span>
         </div>
         {/* Dot */}
         <div className={`relative z-10 w-3 h-3 rounded-full shrink-0 ${dotColor} ring-4 ring-gray-950`} />
