@@ -726,6 +726,21 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
     return filtered.find(r => r.ad_squad_id === squadId)?.platform ?? "snap";
   }
 
+  // Some providers' Meta ad sets report bid_constraints.roas_average_floor at an inflated
+  // scale (e.g. Predicto's Meta pixel writes it 100x too high). This divisor is a display-only
+  // correction set per-provider in FeedProviderModal's Meta tab — it never changes the value
+  // actually stored/sent to Meta, only how the dashboard's Bid column renders and round-trips it.
+  function getRoasDivisor(row: { feed_provider_id: string; domain_name: string; ad_account_id: string }): number {
+    const providerId = resolveProviderKey(row, providers);
+    const provider = providers.find(p => p.id === providerId);
+    return provider?.metaConfig?.roasDisplayDivisor || 1;
+  }
+
+  function getRoasDivisorBySquadId(squadId: string): number {
+    const row = filtered.find(r => r.ad_squad_id === squadId);
+    return row ? getRoasDivisor(row) : 1;
+  }
+
   async function saveBudget(squadId: string) {
     const dollars = parseFloat(budgetDraft);
     if (isNaN(dollars) || dollars <= 0) { setInlineError("Budget must be > $0"); return; }
@@ -797,10 +812,11 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
     if (isNaN(pct) || pct <= 0) { setInlineError("ROAS target must be > 0%"); return; }
     const detail = squadDetails.get(squadId);
     if (!detail) return;
-    const oldValue = `${Math.round((detail.roas_average_floor ?? 0) / 100)}%`;
+    const divisor = getRoasDivisorBySquadId(squadId);
+    const oldValue = `${Math.round((detail.roas_average_floor ?? 0) / 100 / divisor)}%`;
     setSavingInline(squadId + "_roas");
     setInlineError(null);
-    const floor = Math.round(pct * 100);
+    const floor = Math.round(pct * divisor * 100);
     try {
       const res = await fetch("/api/meta/adsets", {
         method: "PATCH",
@@ -1817,6 +1833,8 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
                         ) : null;
 
                         if (strategy === "LOWEST_COST_WITH_MIN_ROAS") {
+                          const roasDivisor = getRoasDivisor(r);
+                          const displayPct = Math.round((detail.roas_average_floor ?? 0) / 100 / roasDivisor);
                           return editingRoas === r.ad_squad_id ? (
                             <span className="flex items-center gap-1">
                               {pill}
@@ -1837,14 +1855,14 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
                           ) : (
                             <button
                               onClick={() => {
-                                setRoasDraft(String(Math.round((detail.roas_average_floor ?? 0) / 100)));
+                                setRoasDraft(String(displayPct));
                                 setEditingRoas(r.ad_squad_id);
                                 setInlineError(null);
                               }}
                               className="group flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
                             >
                               {pill}
-                              {savingInline === r.ad_squad_id + "_roas" ? "…" : `${Math.round((detail.roas_average_floor ?? 0) / 100)}%`}
+                              {savingInline === r.ad_squad_id + "_roas" ? "…" : `${displayPct}%`}
                               <svg className="w-3 h-3 text-gray-300 dark:text-gray-600 group-hover:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.536-6.536a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
                               </svg>

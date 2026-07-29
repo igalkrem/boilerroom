@@ -53,6 +53,11 @@ export interface FeedProvider {
     revenueSource?: "predicto_fb" | "visymo"; // Facebook-traffic revenue source (informational — Meta syncs every cron run)
     urlConfig?: UrlConfig; // per-source URL parameters
     channelConfig?: ChannelConfig; // per-source channel pool setup
+    // Display-only correction for providers whose ad sets report bid_constraints.roas_average_floor
+    // at an inflated scale (e.g. Predicto's Meta pixel writes it 100x too high). Divides the
+    // Performance dashboard's displayed ROAS percentage only — never sent to Meta or used anywhere
+    // else. Defaults to 1 (no correction) when unset.
+    roasDisplayDivisor?: number;
   };
   // Domains — one shared list, each domain tagged with the traffic sources allowed to use it
   domains: FeedProviderDomain[];

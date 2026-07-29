@@ -98,6 +98,30 @@ export function MetaTab({ metaConfig, onChange, domains, onDomainsChange, feedPr
         </p>
       </div>
 
+      {/* Dashboard ROAS display divisor */}
+      <div>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Dashboard ROAS Display</p>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={metaConfig.roasDisplayDivisor ?? 1}
+            onChange={(e) => {
+              const n = parseFloat(e.target.value);
+              onChange({ ...metaConfig, roasDisplayDivisor: isNaN(n) || n < 1 ? 1 : n });
+            }}
+            className="w-20 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm text-center bg-white dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          <span className="text-xs text-gray-400">divides the ROAS % shown on the Performance dashboard</span>
+        </div>
+        <p className="text-xs text-gray-400 mt-1">
+          Some providers&rsquo; ad sets report a ROAS target that&rsquo;s inflated by a fixed factor (e.g. Predicto&rsquo;s
+          Meta pixel writes it 100x too high). Set this to correct how it <em>displays</em> in the dashboard&rsquo;s
+          Bid column — it never changes the actual value stored or sent to Meta.
+        </p>
+      </div>
+
       {/* Assigned Ad Accounts */}
       <div>
         <div className="flex items-center justify-between mb-2">
