@@ -990,6 +990,20 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
     onSquadUpdated();
   }
 
+  function hideSelected() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setHiddenSquadIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      localStorage.setItem("br_perf_hidden_squads", JSON.stringify([...next]));
+      return next;
+    });
+    setSelectedIds(new Set());
+    setShowBulkEdit(false);
+    setBulkError(null);
+  }
+
   const allSelected = filtered.length > 0 && filtered.every(r => selectedIds.has(r.ad_squad_id));
 
   function toggleSelectAll() {
@@ -1586,6 +1600,21 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
                     Apply
                   </button>
                 </div>
+              </div>
+
+              {/* Ignore card */}
+              <div className="bg-amber-900/10 border border-amber-800/60 rounded-lg px-3 py-2 flex flex-col gap-2">
+                <span className="text-[10px] uppercase tracking-widest text-amber-500 font-medium">Ignore</span>
+                <p className="text-xs text-gray-400 max-w-[180px]">
+                  Hide the {selectedIds.size} selected campaign{selectedIds.size === 1 ? "" : "s"} from the dashboard.
+                </p>
+                <button
+                  onClick={hideSelected}
+                  disabled={bulkSaving}
+                  className="px-3 py-1 text-xs bg-amber-600 text-white rounded hover:bg-amber-500 disabled:opacity-50 font-medium transition-colors self-start"
+                >
+                  Ignore {selectedIds.size}
+                </button>
               </div>
 
             </div>
