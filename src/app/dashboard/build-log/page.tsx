@@ -10,12 +10,17 @@ function fmtDollars(micro?: number): string {
   return `$${(micro / 1_000_000).toFixed(2)}`;
 }
 
-function fmtSessionHeader(iso: string): string {
+function fmtDateOnly(iso: string): string {
   try {
-    const d = new Date(iso);
-    const date = d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-    const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
-    return `${date} — ${time}`;
+    return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  } catch {
+    return iso;
+  }
+}
+
+function dayKey(iso: string): string {
+  try {
+    return new Date(iso).toDateString();
   } catch {
     return iso;
   }
@@ -126,18 +131,22 @@ export default function BuildLogPage() {
 
       {sessions.length > 0 && (
         <div className="relative">
-          <div className="grid" style={{ gridTemplateColumns: "80px 1fr" }}>
+          <div className="grid" style={{ gridTemplateColumns: "140px 1fr" }}>
             {/* Timeline spine spans full grid height via border-left on left column */}
-            {sessions.map((session, idx) => (
-              <SessionRow
-                key={session.id}
-                session={session}
-                expanded={expandedIds.has(session.id)}
-                onToggle={() => toggleExpanded(session.id)}
-                onSquadUpdated={reloadFromStorage}
-                isLast={idx === sessions.length - 1}
-              />
-            ))}
+            {sessions.map((session, idx) => {
+              const showDate = idx === 0 || dayKey(session.timestamp) !== dayKey(sessions[idx - 1].timestamp);
+              return (
+                <SessionRow
+                  key={session.id}
+                  session={session}
+                  showDate={showDate}
+                  expanded={expandedIds.has(session.id)}
+                  onToggle={() => toggleExpanded(session.id)}
+                  onSquadUpdated={reloadFromStorage}
+                  isLast={idx === sessions.length - 1}
+                />
+              );
+            })}
           </div>
         </div>
       )}
@@ -147,12 +156,14 @@ export default function BuildLogPage() {
 
 function SessionRow({
   session,
+  showDate,
   expanded,
   onToggle,
   onSquadUpdated,
   isLast,
 }: {
   session: BuildLogSession;
+  showDate: boolean;
   expanded: boolean;
   onToggle: () => void;
   onSquadUpdated: () => void;
@@ -171,12 +182,15 @@ function SessionRow({
   return (
     <>
       {/* Timeline column */}
-      <div className={`relative flex flex-col items-center pt-4 ${!isLast || expanded ? "pb-4" : ""}`}>
-        {/* Vertical line */}
-        <div className="absolute left-1/2 top-0 bottom-0 -translate-x-1/2 w-0.5 bg-gray-700" />
+      <div className={`relative flex items-center justify-end gap-2 pt-4 pr-3 ${!isLast || expanded ? "pb-4" : ""}`}>
+        {/* Vertical line, aligned under the dot */}
+        <div className="absolute top-0 bottom-0 w-0.5 bg-gray-700" style={{ right: "18px" }} />
+        <div className="text-right leading-tight">
+          <div className="text-sm font-medium text-gray-200 h-[18px]">{showDate ? fmtDateOnly(session.timestamp) : ""}</div>
+          <div className="text-xs font-mono text-gray-500">{fmtHHMM(session.timestamp)}</div>
+        </div>
         {/* Dot */}
-        <div className={`relative z-10 w-3 h-3 rounded-full ${dotColor} ring-4 ring-gray-950`} />
-        <div className="relative z-10 mt-2 text-xs font-mono text-gray-400">{fmtHHMM(session.timestamp)}</div>
+        <div className={`relative z-10 w-3 h-3 rounded-full shrink-0 ${dotColor} ring-4 ring-gray-950`} />
       </div>
 
       {/* Content column */}
@@ -194,7 +208,6 @@ function SessionRow({
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
-          <span className="text-sm font-medium text-gray-200">{fmtSessionHeader(session.timestamp)}</span>
           <span className="text-xs text-gray-500">
             {session.squads.length} squad{session.squads.length !== 1 ? "s" : ""}
           </span>
