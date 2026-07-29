@@ -88,10 +88,14 @@ export async function GET() {
   // compares against the newest Meta stat sync across the user's Meta accounts.
   const metaAccountIds: string[] = session.metaAllowedAdAccountIds ?? [];
 
-  const [krSnapTs, predSnapTs, metaTs] = await Promise.all([
-    maxSnapSyncForAccounts([...krAccountIds, ...unknownIds]),
-    maxSnapSyncForAccounts([...predAccountIds, ...unknownIds]),
+  // Unknown accounts sync on every cron tick (both provider windows), so folding them
+  // into krAccountIds/predAccountIds would make both providers show the same freshest
+  // timestamp regardless of which one actually last synced — report them separately instead.
+  const [krSnapTs, predSnapTs, metaTs, unassignedSnapTs] = await Promise.all([
+    maxSnapSyncForAccounts(krAccountIds),
+    maxSnapSyncForAccounts(predAccountIds),
     maxSyncForAccounts("meta", metaAccountIds),
+    maxSnapSyncForAccounts(unknownIds),
   ]);
 
   function inSync(feedTs: string | null, statsTs: string | null): boolean {
@@ -114,6 +118,10 @@ export async function GET() {
       feedLastSynced: predictoFbFeedTs,
       snapLastSynced: metaTs,
       inSync: inSync(predictoFbFeedTs, metaTs),
+    },
+    unassigned: {
+      count: unknownIds.length,
+      snapLastSynced: unassignedSnapTs,
     },
   });
 }
