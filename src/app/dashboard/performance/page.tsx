@@ -417,54 +417,53 @@ export default function PerformancePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Performance</h1>
-      <p className="text-sm text-gray-500 mb-4">
-        Full-funnel metrics — Snapchat &amp; Meta spend joined with Visymo revenue.
-      </p>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Performance</h1>
 
-      <SyncStatusBar
-        onForceRefresh={handleManualRefresh}
-        syncing={syncing}
-        loading={loading}
-        refreshTrigger={syncRefreshTrigger}
-      />
-
-      <div className="flex flex-wrap gap-3 mb-5 items-center">
-        <DateRangePicker startDate={startDate} endDate={endDate} onChange={handleDateChange} />
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => shiftDateRange(-1)}
-            title="Previous day"
-            className="w-8 h-8 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <button
-            onClick={() => shiftDateRange(1)}
-            disabled={endDate >= todayStr()}
-            title="Next day"
-            className="w-8 h-8 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-gray-800 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
-        <button
-          onClick={() => performanceTableRef.current?.clearAllFilters()}
-          disabled={activeFilterCount === 0}
-          className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-gray-800 transition-colors whitespace-nowrap"
-        >
-          Clear filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
-        </button>
-        {loading && !syncing && (
-          <div className="flex items-center gap-1.5 text-gray-400 text-sm">
-            <Spinner />
-            Loading…
+      <div className="flex flex-wrap gap-3 mb-5 items-center justify-between">
+        <div className="flex flex-wrap gap-3 items-center">
+          <DateRangePicker startDate={startDate} endDate={endDate} onChange={handleDateChange} />
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => shiftDateRange(-1)}
+              title="Previous day"
+              className="w-8 h-8 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <button
+              onClick={() => shiftDateRange(1)}
+              disabled={endDate >= todayStr()}
+              title="Next day"
+              className="w-8 h-8 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-gray-800 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
-        )}
+          <button
+            onClick={() => performanceTableRef.current?.clearAllFilters()}
+            disabled={activeFilterCount === 0}
+            className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-gray-800 transition-colors whitespace-nowrap"
+          >
+            Clear filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+          </button>
+          {loading && !syncing && (
+            <div className="flex items-center gap-1.5 text-gray-400 text-sm">
+              <Spinner />
+              Loading…
+            </div>
+          )}
+        </div>
+
+        <SyncStatusBar
+          onForceRefresh={handleManualRefresh}
+          syncing={syncing}
+          loading={loading}
+          refreshTrigger={syncRefreshTrigger}
+        />
       </div>
 
       {error && <Alert type="error" className="mb-4">{error}</Alert>}
