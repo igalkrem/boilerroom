@@ -284,8 +284,11 @@ export function DrilldownModal({
   const isActive = localDetail?.status === "ACTIVE";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
 
         {/* header */}
         <div className="flex items-start justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
