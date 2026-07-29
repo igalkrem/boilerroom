@@ -252,7 +252,7 @@ function RoiTable({
       <div className="px-3 py-2 border-b border-gray-700 flex-shrink-0">
         <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{title}</span>
       </div>
-      <div>
+      <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-gray-700 bg-gray-800">
@@ -900,8 +900,8 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
         </span>
       </button>
       {!collapsed && (
-        <div className="max-w-[1180px] mx-auto grid grid-cols-12 gap-4">
-          <div className="col-span-12 lg:col-span-6">
+        <div className="max-w-[1400px] mx-auto grid grid-cols-12 gap-4">
+          <div className="col-span-12">
             <RoiTable
               title="By Article"
               labelHeader="Article"
@@ -914,7 +914,7 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
               isRowSelected={key => selectedArticleKey !== null && key.startsWith(selectedArticleKey + "|||")}
             />
           </div>
-          <div className="col-span-12 lg:col-span-3">
+          <div className="col-span-12 lg:col-span-6">
             <RoiTable
               title="By Feed"
               labelHeader="Feed"
@@ -926,7 +926,7 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
               isRowSelected={key => key === selectedFeedKey}
             />
           </div>
-          <div className="col-span-12 lg:col-span-3">
+          <div className="col-span-12 lg:col-span-6">
             <RoiTable
               title="By Traffic Source"
               labelHeader="Source"
