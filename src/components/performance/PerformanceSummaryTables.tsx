@@ -8,6 +8,7 @@ import type { FeedProvider } from "@/types/feed-provider";
 import type { SquadDetail } from "@/components/performance/PerformanceTable";
 import { PlatformIcon } from "@/components/performance/PerformanceTable";
 import { resolveProviderKey } from "@/lib/reporting/provider-key";
+import { getFeedProviderBadgeClasses } from "@/lib/feed-providers";
 
 const PLATFORM_COLORS: Record<"snap" | "meta", string> = { snap: "#eab308", meta: "#3b82f6" };
 
@@ -188,6 +189,7 @@ function RoiTable({
   showFeed = false,
   showSource = false,
   showTotal = true,
+  showPlatformIcon = false,
   squadDetails,
   onRowClick,
   isRowSelected,
@@ -199,6 +201,7 @@ function RoiTable({
   showFeed?: boolean;
   showSource?: boolean;
   showTotal?: boolean;
+  showPlatformIcon?: boolean;
   squadDetails?: Map<string, SquadDetail>;
   onRowClick?: (rowKey: string) => void;
   isRowSelected?: (rowKey: string) => boolean;
@@ -294,10 +297,26 @@ function RoiTable({
                     style={{ borderLeft: `3px solid ${r.providerColor}` }}
                     title={r.label}
                   >
-                    {r.label}
+                    {showPlatformIcon && r.platform ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <PlatformIcon platform={r.platform} className="w-3.5 h-3.5 text-yellow-400" />
+                        {r.label}
+                      </span>
+                    ) : r.label}
                   </td>
                   {showFeed && (
-                    <td className="px-2 py-1.5 text-gray-400 max-w-[80px] truncate" title={r.feedLabel}>{r.feedLabel ?? "—"}</td>
+                    <td className="px-2 py-1.5 max-w-[100px]">
+                      {r.feedLabel ? (
+                        <span
+                          className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10.5px] font-medium border truncate max-w-full ${getFeedProviderBadgeClasses(r.feedLabel)}`}
+                          title={r.feedLabel}
+                        >
+                          {r.feedLabel}
+                        </span>
+                      ) : (
+                        <span className="text-gray-500">—</span>
+                      )}
+                    </td>
                   )}
                   {showSource && r.platform && (
                     <td className="px-2 py-1.5 text-gray-300">
@@ -457,9 +476,13 @@ function DateTable({
 export function PerformanceSummaryTables({ rows, historicalRows, startDate, last30Rows, squadDetails, onFilterChange }: Props) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [providers, setProviders] = useState<FeedProvider[]>([]);
-  const [selectedArticleKey, setSelectedArticleKey] = useState<string | null>(null);
-  const [selectedFeedKey, setSelectedFeedKey] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const [selection, setSelection] = useState<{ type: "article" | "feed" | "source" | "feedSource"; key: string } | null>(null);
+  const [collapsed, setCollapsed] = useState(true);
+
+  const selectedArticleKey = selection?.type === "article" ? selection.key : null;
+  const selectedFeedKey = selection?.type === "feed" ? selection.key : null;
+  const selectedSourceKey = selection?.type === "source" ? selection.key : null;
+  const selectedFeedSourceKey = selection?.type === "feedSource" ? selection.key : null;
 
   useEffect(() => {
     try {
@@ -536,40 +559,36 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
 
   // ── Rows filtered by active selection (used by feedSummary + dateSummary) ──
   // Placed after articleSummary (no cycle: articleSummary ← rows; this ← rows + articleSummary)
-  const internalFilteredRows = useMemo(() => {
-    if (!selectedArticleKey && !selectedFeedKey) return rows;
-    let filtered = rows;
-    if (selectedArticleKey) {
-      const ids = new Set(
-        articleSummary
-          .filter(r => r.key.startsWith(selectedArticleKey + "|||"))
-          .flatMap(r => r.squadIds)
-      );
-      filtered = filtered.filter(r => ids.has(r.ad_squad_id));
-    }
-    if (selectedFeedKey) {
-      filtered = filtered.filter(r => resolveProviderKey(r, providers) === selectedFeedKey);
-    }
-    return filtered;
-  }, [rows, selectedArticleKey, selectedFeedKey, articleSummary, providers]);
-
-  const filteredLast30Rows = useMemo(() => {
-    const source = last30Rows ?? rows;
-    if (!selectedArticleKey && !selectedFeedKey) return source;
+  function applySelectionFilter(source: CombinedRow[]): CombinedRow[] {
+    if (!selection) return source;
     let filtered = source;
-    if (selectedArticleKey) {
+    if (selection.type === "article") {
       const ids = new Set(
         articleSummary
-          .filter(r => r.key.startsWith(selectedArticleKey + "|||"))
+          .filter(r => r.key.startsWith(selection.key + "|||"))
           .flatMap(r => r.squadIds)
       );
       filtered = filtered.filter(r => ids.has(r.ad_squad_id));
-    }
-    if (selectedFeedKey) {
-      filtered = filtered.filter(r => resolveProviderKey(r, providers) === selectedFeedKey);
+    } else if (selection.type === "feed") {
+      filtered = filtered.filter(r => resolveProviderKey(r, providers) === selection.key);
+    } else if (selection.type === "source") {
+      filtered = filtered.filter(r => r.platform === selection.key);
+    } else if (selection.type === "feedSource") {
+      const [pKey, platform] = selection.key.split("|||");
+      filtered = filtered.filter(r => resolveProviderKey(r, providers) === pKey && r.platform === platform);
     }
     return filtered;
-  }, [last30Rows, rows, selectedArticleKey, selectedFeedKey, articleSummary, providers]);
+  }
+
+  const internalFilteredRows = useMemo(
+    () => applySelectionFilter(rows),
+    [rows, selection, articleSummary, providers]
+  );
+
+  const filteredLast30Rows = useMemo(
+    () => applySelectionFilter(last30Rows ?? rows),
+    [last30Rows, rows, selection, articleSummary, providers]
+  );
 
   // ── Feed provider grouping (uses internalFilteredRows) ────────────────────
   const feedSummary = useMemo<SummaryRow[]>(() => {
@@ -788,42 +807,64 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
 
   // ── Click handlers ────────────────────────────────────────────────────────
 
+  type SelectionType = "article" | "feed" | "source" | "feedSource";
+
+  function toggleSelection(type: SelectionType, key: string, label: string, squadIds: Set<string>) {
+    const isSame = selection?.type === type && selection.key === key;
+    if (isSame) {
+      setSelection(null);
+      onFilterChange?.(null);
+    } else {
+      setSelection({ type, key });
+      onFilterChange?.({ squadIds, label });
+    }
+  }
+
   function handleArticleRowClick(rowKey: string) {
     const articleId = rowKey.split("|||")[0];
-    const newKey = selectedArticleKey === articleId ? null : articleId;
-    setSelectedArticleKey(newKey);
-    setSelectedFeedKey(null);
-    if (newKey) {
-      const matching = articleSummary.filter(r => r.key.startsWith(newKey + "|||"));
-      const squadIds = new Set(matching.flatMap(r => r.squadIds));
-      onFilterChange?.({ squadIds, label: matching[0]?.label ?? "article" });
-    } else {
-      onFilterChange?.(null);
-    }
+    const matching = articleSummary.filter(r => r.key.startsWith(articleId + "|||"));
+    const squadIds = new Set(matching.flatMap(r => r.squadIds));
+    toggleSelection("article", articleId, matching[0]?.label ?? "Article", squadIds);
   }
 
   function handleFeedRowClick(rowKey: string) {
-    const newKey = selectedFeedKey === rowKey ? null : rowKey;
-    setSelectedFeedKey(newKey);
-    setSelectedArticleKey(null);
-    if (newKey) {
-      // Compute from raw rows directly — avoids stale feedSummary while article filter clears
-      const squadIds = new Set(
-        rows.filter(r => resolveProviderKey(r, providers) === newKey).map(r => r.ad_squad_id)
-      );
-      const feedRow = feedSummary.find(r => r.key === newKey);
-      onFilterChange?.({ squadIds, label: feedRow?.label ?? newKey });
-    } else {
-      onFilterChange?.(null);
-    }
+    // Compute from raw rows directly — avoids stale feedSummary while another filter clears
+    const squadIds = new Set(
+      rows.filter(r => resolveProviderKey(r, providers) === rowKey).map(r => r.ad_squad_id)
+    );
+    const feedRow = feedSummary.find(r => r.key === rowKey);
+    toggleSelection("feed", rowKey, feedRow?.label ?? rowKey, squadIds);
+  }
+
+  function handleSourceRowClick(rowKey: string) {
+    const squadIds = new Set(
+      rows.filter(r => r.platform === rowKey).map(r => r.ad_squad_id)
+    );
+    toggleSelection("source", rowKey, rowKey === "meta" ? "Meta" : "Snap", squadIds);
+  }
+
+  function handleFeedSourceRowClick(rowKey: string) {
+    const [pKey, platform] = rowKey.split("|||");
+    const squadIds = new Set(
+      rows.filter(r => resolveProviderKey(r, providers) === pKey && r.platform === platform).map(r => r.ad_squad_id)
+    );
+    const fsRow = feedSourceSummary.find(r => r.key === rowKey);
+    const label = `${fsRow?.label ?? pKey} · ${platform === "meta" ? "Meta" : "Snap"}`;
+    toggleSelection("feedSource", rowKey, label, squadIds);
   }
 
   // ── Filter chip label ─────────────────────────────────────────────────────
-  const filterLabel = selectedArticleKey
-    ? (articleSummary.find(r => r.key.startsWith(selectedArticleKey + "|||"))?.label ?? "Article")
-    : selectedFeedKey
-    ? (feedSummary.find(r => r.key === selectedFeedKey)?.label ?? "Feed")
-    : null;
+  const filterLabel = !selection
+    ? null
+    : selection.type === "article"
+    ? (articleSummary.find(r => r.key.startsWith(selection.key + "|||"))?.label ?? "Article")
+    : selection.type === "feed"
+    ? (feedSummary.find(r => r.key === selection.key)?.label ?? "Feed")
+    : selection.type === "source"
+    ? (selection.key === "meta" ? "Meta" : "Snap")
+    : (feedSourceSummary.find(r => r.key === selection.key)?.label
+        ? `${feedSourceSummary.find(r => r.key === selection.key)!.label} · ${feedSourceSummary.find(r => r.key === selection.key)!.platform === "meta" ? "Meta" : "Snap"}`
+        : "Feed × Source");
 
   return (
     <div className="mt-4 mb-6">
@@ -834,8 +875,7 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
             {filterLabel}
             <button
               onClick={() => {
-                setSelectedArticleKey(null);
-                setSelectedFeedKey(null);
+                setSelection(null);
                 onFilterChange?.(null);
               }}
               className="ml-1 text-blue-400 hover:text-white leading-none"
@@ -860,58 +900,60 @@ export function PerformanceSummaryTables({ rows, historicalRows, startDate, last
         </span>
       </button>
       {!collapsed && (
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap gap-4">
-            <div className="w-full lg:w-[720px] flex-shrink-0">
-              <RoiTable
-                title="By Article"
-                labelHeader="Article"
-                rows={articleSummary}
-                totalRow={articleTotal}
-                showFeed
-                squadDetails={squadDetails}
-                onRowClick={handleArticleRowClick}
-                isRowSelected={key => selectedArticleKey !== null && key.startsWith(selectedArticleKey + "|||")}
-              />
-            </div>
-            <div className="w-full lg:w-[460px] flex-shrink-0">
-              <RoiTable
-                title="By Feed"
-                labelHeader="Feed"
-                rows={feedSummary}
-                totalRow={feedTotal}
-                showTotal={false}
-                squadDetails={squadDetails}
-                onRowClick={handleFeedRowClick}
-                isRowSelected={key => key === selectedFeedKey}
-              />
-            </div>
-            <div className="w-full lg:w-[460px] flex-shrink-0">
-              <RoiTable
-                title="By Traffic Source"
-                labelHeader="Source"
-                rows={sourceSummary}
-                totalRow={sourceTotal}
-                showTotal={false}
-                squadDetails={squadDetails}
-              />
-            </div>
+        <div className="max-w-[1180px] mx-auto grid grid-cols-12 gap-4">
+          <div className="col-span-12 lg:col-span-6">
+            <RoiTable
+              title="By Article"
+              labelHeader="Article"
+              rows={articleSummary}
+              totalRow={articleTotal}
+              showFeed
+              showTotal={false}
+              squadDetails={squadDetails}
+              onRowClick={handleArticleRowClick}
+              isRowSelected={key => selectedArticleKey !== null && key.startsWith(selectedArticleKey + "|||")}
+            />
           </div>
-          <div className="flex flex-wrap gap-4">
-            <div className="w-full lg:w-[620px] flex-shrink-0">
-              <RoiTable
-                title="By Feed × Traffic Source"
-                labelHeader="Feed"
-                rows={feedSourceSummary}
-                totalRow={feedSourceTotal}
-                showSource
-                showTotal={false}
-                squadDetails={squadDetails}
-              />
-            </div>
-            <div className="w-full lg:w-[380px] flex-shrink-0">
-              <DateTable title="By Date" rows={dateSummary} totalRow={dateTotal} />
-            </div>
+          <div className="col-span-12 lg:col-span-3">
+            <RoiTable
+              title="By Feed"
+              labelHeader="Feed"
+              rows={feedSummary}
+              totalRow={feedTotal}
+              showTotal={false}
+              squadDetails={squadDetails}
+              onRowClick={handleFeedRowClick}
+              isRowSelected={key => key === selectedFeedKey}
+            />
+          </div>
+          <div className="col-span-12 lg:col-span-3">
+            <RoiTable
+              title="By Traffic Source"
+              labelHeader="Source"
+              rows={sourceSummary}
+              totalRow={sourceTotal}
+              showTotal={false}
+              showPlatformIcon
+              squadDetails={squadDetails}
+              onRowClick={handleSourceRowClick}
+              isRowSelected={key => key === selectedSourceKey}
+            />
+          </div>
+          <div className="col-span-12 lg:col-span-7">
+            <RoiTable
+              title="By Feed × Traffic Source"
+              labelHeader="Feed"
+              rows={feedSourceSummary}
+              totalRow={feedSourceTotal}
+              showSource
+              showTotal={false}
+              squadDetails={squadDetails}
+              onRowClick={handleFeedSourceRowClick}
+              isRowSelected={key => key === selectedFeedSourceKey}
+            />
+          </div>
+          <div className="col-span-12 lg:col-span-5">
+            <DateTable title="By Date" rows={dateSummary} totalRow={dateTotal} />
           </div>
         </div>
       )}
