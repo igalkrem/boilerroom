@@ -59,6 +59,15 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
         return NextResponse.json({ error: "forbidden" }, { status: 403 });
       }
     } catch (err) {
+      // Meta has no token refresh (~60 d lifetime), so an expired token is a routine
+      // operational state — not a bad ad set id. Reporting it as one sends the operator
+      // hunting for an id the orchestrator itself just created. Same reasoning as the
+      // parent-id verification in /api/snapchat/{adsquads,ads}.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "meta_token_expired" || msg === "meta_not_connected") {
+        console.error("[link-squad] meta token unusable:", msg);
+        return NextResponse.json({ error: msg }, { status: 401 });
+      }
       console.error("[link-squad] meta ad set verification failed:", err);
       return NextResponse.json({ error: "invalid_ad_squad_id" }, { status: 422 });
     }
