@@ -5,6 +5,7 @@ import { getAdSquadsByAccount } from "@/lib/snapchat/adsquads";
 import { getAdSquadStats } from "@/lib/snapchat/stats";
 import { getAdSetsByAccount } from "@/lib/meta/adsets";
 import { getAccountInsights } from "@/lib/meta/stats";
+import { getAdAccountCurrency } from "@/lib/meta/adaccounts";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -474,6 +475,10 @@ export async function syncMetaAccount(
     // Meta Insights API returns data at account level with ad set breakdown
     const rows = await getAccountInsights(adAccountId, fetchStart, fetchEnd, accessToken);
 
+    // Insights amounts are in the account's billing currency. Record it per row and
+    // convert at read time rather than baking a rate into stored values.
+    const currency = await getAdAccountCurrency(adAccountId, accessToken);
+
     const adSetNameMap = new Map(adSets.map((s) => [s.id, s.name]));
 
     for (const row of rows) {
@@ -507,10 +512,10 @@ export async function syncMetaAccount(
       await sql`
         INSERT INTO meta_ad_set_stats
           (ad_set_id, ad_account_id, stat_date, ad_set_name,
-           impressions, clicks, spend_cents, purchases, purchase_value_cents, fetched_at)
+           impressions, clicks, spend_cents, purchases, purchase_value_cents, currency, fetched_at)
         VALUES
           (${adSetId}, ${adAccountId}, ${statDate}, ${name},
-           ${impressions}, ${clicks}, ${spendCents}, ${purchases}, ${purchaseValueCents}, NOW())
+           ${impressions}, ${clicks}, ${spendCents}, ${purchases}, ${purchaseValueCents}, ${currency}, NOW())
         ON CONFLICT (ad_set_id, stat_date)
         DO UPDATE SET
           ad_set_name = EXCLUDED.ad_set_name,
@@ -519,6 +524,7 @@ export async function syncMetaAccount(
           spend_cents = EXCLUDED.spend_cents,
           purchases = EXCLUDED.purchases,
           purchase_value_cents = EXCLUDED.purchase_value_cents,
+          currency = EXCLUDED.currency,
           fetched_at = NOW()
       `;
     }

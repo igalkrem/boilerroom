@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getSession, isSessionValid, isAdAccountAllowed, isMetaAdAccountAllowed } from "@/lib/session";
 import { runMigrations, sql } from "@/lib/db";
-import { getEurToUsd } from "@/lib/fx-rate";
+import { getEurToUsd, getRateToUsd } from "@/lib/fx-rate";
 
 export interface CombinedRow {
   ad_squad_id: string;
@@ -124,18 +124,25 @@ export async function GET(request: NextRequest) {
           SELECT channel_id, feed_provider_id, 0 AS _p
           FROM feed_provider_channels
           WHERE google_user_id = ${userId}
+            AND LOWER(traffic_source) = 'snap'
             AND ad_squad_snap_id = s.ad_squad_id
           UNION ALL
           SELECT channel_id, feed_provider_id, 1 AS _p
           FROM feed_provider_channels
           WHERE google_user_id = ${userId}
+            AND LOWER(traffic_source) = 'snap'
             AND channel_id != ''
             AND ad_squad_snap_id IS DISTINCT FROM s.ad_squad_id
             AND s.ad_squad_name ILIKE
                 '%' || REPLACE(REPLACE(REPLACE(channel_id, '!', '!!'), '%', '!%'), '_', '!_') || '%'
                 ESCAPE '!'
         ) _fpc_inner
-        ORDER BY _p
+        -- channel_id/feed_provider_id break ties within a priority tier. The unique
+        -- constraint permits one channel_id under several feed_provider_ids, and an
+        -- unordered LIMIT 1 let Postgres return a different provider between runs —
+        -- which silently changes summary grouping, the provider filter, and which
+        -- roasDisplayDivisor applies to an editable cell.
+        ORDER BY _p, channel_id, feed_provider_id
         LIMIT 1
       ) fpc ON true
       LEFT JOIN (
@@ -174,6 +181,7 @@ export async function GET(request: NextRequest) {
         m.spend_cents::bigint AS spend_cents,
         m.purchases::bigint AS purchases,
         m.purchase_value_cents::bigint AS purchase_value_cents,
+        m.currency AS currency,
         COALESCE(pf.revenue_usd, 0)               AS pfb_revenue_usd,
         COALESCE(pf.clicks, 0)::bigint            AS pfb_clicks,
         COALESCE(pf.funnel_clicks, 0)::bigint     AS pfb_funnel_clicks,
@@ -213,18 +221,20 @@ export async function GET(request: NextRequest) {
           SELECT channel_id, feed_provider_id, 0 AS _p
           FROM feed_provider_channels
           WHERE google_user_id = ${userId}
+            AND LOWER(traffic_source) IN ('meta', 'facebook')
             AND ad_squad_snap_id = m.ad_set_id
           UNION ALL
           SELECT channel_id, feed_provider_id, 1 AS _p
           FROM feed_provider_channels
           WHERE google_user_id = ${userId}
+            AND LOWER(traffic_source) IN ('meta', 'facebook')
             AND channel_id != ''
             AND ad_squad_snap_id IS DISTINCT FROM m.ad_set_id
             AND m.ad_set_name ILIKE
                 '%' || REPLACE(REPLACE(REPLACE(channel_id, '!', '!!'), '%', '!%'), '_', '!_') || '%'
                 ESCAPE '!'
         ) _fpc_inner
-        ORDER BY _p
+        ORDER BY _p, channel_id, feed_provider_id
         LIMIT 1
       ) fpc ON true
       LEFT JOIN (
@@ -294,9 +304,18 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  // Meta Insights amounts are denominated in the ad account's billing currency, which
+  // is recorded per row. Resolve every distinct rate up front — the push loop below is
+  // synchronous, and awaiting per row would serialise a fetch per stat row.
+  const metaRates = new Map<string, number>();
+  for (const cur of new Set(metaResult.rows.map((r) => String(r.currency ?? "USD").toUpperCase()))) {
+    metaRates.set(cur, await getRateToUsd(cur));
+  }
+
   for (const r of metaResult.rows) {
-    const spendUsd = Number(r.spend_cents) / 100;
-    const purchaseValueUsd = Number(r.purchase_value_cents) / 100;
+    const toUsd = metaRates.get(String(r.currency ?? "USD").toUpperCase()) ?? 1;
+    const spendUsd = (Number(r.spend_cents) / 100) * toUsd;
+    const purchaseValueUsd = (Number(r.purchase_value_cents) / 100) * toUsd;
     // Revenue/ROI come from the sell-side feeds for Facebook traffic — Predicto FB
     // (joined by channel) and Visymo (joined directly by ad_set_id; EUR→USD).
     // Only one is non-zero per ad set in practice (a provider uses one source),
@@ -313,10 +332,16 @@ export async function GET(request: NextRequest) {
       stat_date: r.stat_date as string,
       country_code: "",
       impressions: Number(r.impressions),
-      swipes: 0,
+      // `swipes` is the PLATFORM click metric (Snap swipes / Meta link clicks) and
+      // `clicks` is SELL-SIDE only. Meta's own clicks previously went into `clicks`,
+      // summing two unrelated funnels into one column and leaving swipes at 0 — which
+      // also made per-row ctr/cpc/cvr/fill_rate permanently "—" for Meta rows and
+      // diluted the portfolio CTR in KpiSummaryBar (Meta impressions in the
+      // denominator, no Meta clicks in the numerator).
+      swipes: Number(r.clicks),
       spend_usd: spendUsd,
       video_views: 0,
-      clicks: Number(r.clicks) + Number(r.pfb_clicks) + Number(r.vsm_clicks),
+      clicks: Number(r.pfb_clicks) + Number(r.vsm_clicks),
       revenue_eur: revenueEur,
       revenue_usd: revenueUsd,
       roi_pct: roiPct,

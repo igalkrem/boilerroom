@@ -117,8 +117,10 @@ export function MetaTab({ metaConfig, onChange, domains, onDomainsChange, feedPr
         </div>
         <p className="text-xs text-gray-400 mt-1">
           Some providers&rsquo; ad sets report a ROAS target that&rsquo;s inflated by a fixed factor (e.g. Predicto&rsquo;s
-          Meta pixel writes it 100x too high). Set this to correct how it <em>displays</em> in the dashboard&rsquo;s
-          Bid column — it never changes the actual value stored or sent to Meta.
+          Meta pixel writes it 100x too high). This divides the value shown in the dashboard&rsquo;s Bid column, and
+          multiplies it back when you save — so editing a cell writes <strong>{metaConfig.roasDisplayDivisor ?? 1}×</strong>{" "}
+          the percentage you type. That keeps the ad set on the scale it already uses; it does not fix the inflation.
+          To actually fix it, correct the ROAS floors at the source and set this back to 1.
         </p>
       </div>
 

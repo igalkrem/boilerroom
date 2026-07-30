@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import type { FeedProvider } from "@/types/feed-provider";
 import { resolveProviderKey } from "@/lib/reporting/provider-key";
+import { deriveMetrics, NO_BID_TARGET_STRATEGIES, ROAS_FLOOR_STRATEGY } from "@/lib/reporting/metrics";
 import { addChangeEntry, getEntriesForSquad } from "@/lib/campaign-changelog";
 import { DrilldownModal } from "./DrilldownModal";
 import { ColumnSelector } from "./ColumnSelector";
@@ -71,9 +72,6 @@ export interface SquadDetail {
   bid_strategy?: string;  // Snap: AUTO_BID | LOWEST_COST_WITH_MAX_BID | TARGET_COST — Meta: LOWEST_COST_WITHOUT_CAP | COST_CAP | LOWEST_COST_WITH_MIN_ROAS
   roas_average_floor?: number; // Meta only — ROAS target ×10000 (bid_constraints.roas_average_floor), only set when bid_strategy is LOWEST_COST_WITH_MIN_ROAS
 }
-
-// Bid strategies with no user-settable bid value — Bid column shows the strategy pill and a dash.
-const NO_BID_TARGET_STRATEGIES = new Set(["AUTO_BID", "LOWEST_COST_WITHOUT_CAP"]);
 
 const BID_STRATEGY_PILLS: Record<string, { label: string; cls: string }> = {
   TARGET_COST: { label: "TARGET COST", cls: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" },
@@ -425,6 +423,8 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
   const [budgetDraft, setBudgetDraft] = useState("");
   const [bidDraft, setBidDraft] = useState("");
   const [roasDraft, setRoasDraft] = useState("");
+  // What the draft was seeded with, so saveRoas can tell "edited" from "clicked away".
+  const [roasDraftInitial, setRoasDraftInitial] = useState("");
   const [savingInline, setSavingInline] = useState<string | null>(null);
   const [inlineError, setInlineError] = useState<string | null>(null);
 
@@ -543,15 +543,7 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
             revenue_3d: m3?.revenue ?? null,
           };
         })(),
-        rpc: a.funnel_clicks >= 10 && a.clicks > 0 ? a.revenue_usd / a.clicks : null,
-        cpm: a.impressions > 0 ? (a.spend_usd / a.impressions) * 1000 : null,
-        cpc: a.swipes > 0 ? a.spend_usd / a.swipes : null,
-        ctr: a.impressions > 0 ? (a.swipes / a.impressions) * 100 : null,
-        rpr: a.funnel_clicks >= 10 && a.snap_results > 0 ? a.revenue_usd / a.snap_results : null,
-        fill_rate: a.swipes > 0 ? (a.funnel_impressions / a.swipes) * 100 : null,
-        profit: a.revenue_usd - a.spend_usd,
-        cvr: a.swipes > 0 ? (a.funnel_clicks / a.swipes) * 100 : null,
-        snap_cost_per_result: a.snap_results > 0 ? a.spend_usd / a.snap_results : null,
+        ...deriveMetrics(a),
       }))
       .sort((a, b) => {
         const av = a[sortKey] ?? -Infinity;
@@ -727,9 +719,16 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
   }
 
   // Some providers' Meta ad sets report bid_constraints.roas_average_floor at an inflated
-  // scale (e.g. Predicto's Meta pixel writes it 100x too high). This divisor is a display-only
-  // correction set per-provider in FeedProviderModal's Meta tab — it never changes the value
-  // actually stored/sent to Meta, only how the dashboard's Bid column renders and round-trips it.
+  // scale (e.g. Predicto's Meta pixel writes it 100x too high). This divisor, set per-provider
+  // in FeedProviderModal's Meta tab, divides on read (`/100/divisor`) and MULTIPLIES BACK IN
+  // on save (`pct * divisor * 100` in saveRoas).
+  //
+  // It is therefore NOT display-only — the value written to Meta is always `divisor ×` the
+  // percentage shown in the cell. At divisor 100 a cell reading "90%" stores 900000. That is
+  // intentional only insofar as it preserves whatever scale a provider's ad sets already use;
+  // it does not correct anything, because Meta returns exactly what was stored. If the stored
+  // floors really are inflated, correct them once at the source and set the divisor back to 1
+  // rather than perpetuating the inflation on every save.
   function getRoasDivisor(row: { feed_provider_id: string; domain_name: string; ad_account_id: string }): number {
     const providerId = resolveProviderKey(row, providers);
     const provider = providers.find(p => p.id === providerId);
@@ -739,6 +738,15 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
   function getRoasDivisorBySquadId(squadId: string): number {
     const row = filtered.find(r => r.ad_squad_id === squadId);
     return row ? getRoasDivisor(row) : 1;
+  }
+
+  // Renders the stored floor without destroying sub-percent precision. Math.round()
+  // here was the other half of the rewrite bug: it made 90.5% display as 91, and the
+  // editor then saved 91 back. Trailing ".00" is trimmed so whole percentages still
+  // read as "90%" rather than "90.00%".
+  function roasDisplayValue(floor: number | undefined, divisor: number): string {
+    const v = (floor ?? 0) / 100 / divisor;
+    return v.toFixed(2).replace(/\.?0+$/, "");
   }
 
   async function saveBudget(squadId: string) {
@@ -812,8 +820,12 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
     if (isNaN(pct) || pct <= 0) { setInlineError("ROAS target must be > 0%"); return; }
     const detail = squadDetails.get(squadId);
     if (!detail) return;
+    // This fires from onBlur, so it runs on a bare click-away with nothing edited.
+    // Without this guard that PATCHes Meta with the re-encoded draft — and since the
+    // draft was seeded from a rounded display value, a stored 9050 came back as 9100.
+    if (roasDraft === roasDraftInitial) { setEditingRoas(null); return; }
     const divisor = getRoasDivisorBySquadId(squadId);
-    const oldValue = `${Math.round((detail.roas_average_floor ?? 0) / 100 / divisor)}%`;
+    const oldValue = `${roasDisplayValue(detail.roas_average_floor, divisor)}%`;
     setSavingInline(squadId + "_roas");
     setInlineError(null);
     const floor = Math.round(pct * divisor * 100);
@@ -1861,15 +1873,15 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
                           </span>
                         ) : null;
 
-                        if (strategy === "LOWEST_COST_WITH_MIN_ROAS") {
+                        if (strategy === ROAS_FLOOR_STRATEGY) {
                           const roasDivisor = getRoasDivisor(r);
-                          const displayPct = Math.round((detail.roas_average_floor ?? 0) / 100 / roasDivisor);
+                          const displayPct = roasDisplayValue(detail.roas_average_floor, roasDivisor);
                           return editingRoas === r.ad_squad_id ? (
                             <span className="flex items-center gap-1">
                               {pill}
                               <input
                                 autoFocus
-                                type="number" min={1} step={1}
+                                type="number" min={0.01} step={0.01}
                                 value={roasDraft}
                                 onChange={(e) => setRoasDraft(e.target.value)}
                                 onBlur={() => void saveRoas(r.ad_squad_id)}
@@ -1884,7 +1896,8 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
                           ) : (
                             <button
                               onClick={() => {
-                                setRoasDraft(String(displayPct));
+                                setRoasDraft(displayPct);
+                                setRoasDraftInitial(displayPct);
                                 setEditingRoas(r.ad_squad_id);
                                 setInlineError(null);
                               }}

@@ -6,6 +6,7 @@ import type { SquadDetail } from "./PerformanceTable";
 import { Spinner } from "@/components/ui";
 import { ColumnSelector } from "./ColumnSelector";
 import { addChangeEntry, getEntriesForSquad } from "@/lib/campaign-changelog";
+import { deriveMetrics, NO_BID_TARGET_STRATEGIES, type MetricInputs } from "@/lib/reporting/metrics";
 
 const DRILLDOWN_COLUMNS = [
   { key: "spend",                  label: "Spend" },
@@ -94,17 +95,23 @@ function RoiPill({ pct }: { pct: number | null }) {
   );
 }
 
-function derive(r: { spend_usd: number; revenue_usd: number; impressions: number; swipes: number; funnel_clicks: number; funnel_impressions: number; clicks: number; snap_results: number }) {
+// Delegates to the single shared definition so this panel can never disagree with the
+// main table again. It previously computed cpc as spend/clicks (SELL-SIDE) while the
+// table used spend/swipes (PLATFORM), so the same ad set showed two different CPCs, and
+// it dropped the funnel-volume gate on rpc. Only the local key names are kept —
+// `cpr` is this panel's name for `snap_cost_per_result`.
+function derive(r: MetricInputs) {
+  const m = deriveMetrics(r);
   return {
-    profit:    r.revenue_usd - r.spend_usd,
-    rpr:       r.snap_results > 0 ? r.revenue_usd / r.snap_results : null,
-    cpr:       r.snap_results > 0 ? r.spend_usd   / r.snap_results : null,
-    rpc:       r.clicks > 0       ? r.revenue_usd / r.clicks       : null,
-    cpm:       r.impressions > 0  ? (r.spend_usd / r.impressions) * 1000 : null,
-    cpc:       r.clicks > 0       ? r.spend_usd / r.clicks                : null,
-    cvr:       r.swipes > 0       ? (r.funnel_clicks / r.swipes) * 100   : null,
-    ctr:       r.impressions > 0  ? (r.swipes / r.impressions) * 100      : null,
-    fill_rate: r.swipes > 0       ? (r.funnel_impressions / r.swipes) * 100 : null,
+    profit:    m.profit,
+    rpr:       m.rpr,
+    cpr:       m.snap_cost_per_result,
+    rpc:       m.rpc,
+    cpm:       m.cpm,
+    cpc:       m.cpc,
+    cvr:       m.cvr,
+    ctr:       m.ctr,
+    fill_rate: m.fill_rate,
   };
 }
 
@@ -159,10 +166,17 @@ export function DrilldownModal({
     const oldValue = `$${microToDollar(localDetail.daily_budget_micro).toFixed(2)}`;
     setSaving("budget"); setPatchError(null);
     const micro = dollarToMicro(dollars);
-    const res = await fetch("/api/snapchat/adsquads", {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ adAccountId, squadId: adSquadId, daily_budget_micro: micro }),
-    });
+    // `platform` is not decoration: adSquadId is a Meta ad set id on the meta path,
+    // and Snapchat's /adsquads cannot resolve it. Mirrors PerformanceTable.saveBudget.
+    const res = platform === "meta"
+      ? await fetch("/api/meta/adsets", {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ adAccountId, adSetId: adSquadId, updates: { daily_budget: Math.round(dollars * 100) } }),
+        })
+      : await fetch("/api/snapchat/adsquads", {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ adAccountId, squadId: adSquadId, daily_budget_micro: micro }),
+        });
     setSaving(null);
     if (!res.ok) { setPatchError(await readError(res)); return; }
     const patch = { daily_budget_micro: micro };
@@ -180,10 +194,15 @@ export function DrilldownModal({
     const oldValue = `$${microToDollar(localDetail.bid_micro).toFixed(2)}`;
     setSaving("bid"); setPatchError(null);
     const micro = dollarToMicro(dollars);
-    const res = await fetch("/api/snapchat/adsquads", {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ adAccountId, squadId: adSquadId, bid_micro: micro }),
-    });
+    const res = platform === "meta"
+      ? await fetch("/api/meta/adsets", {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ adAccountId, adSetId: adSquadId, updates: { bid_amount: Math.round(dollars * 100) } }),
+        })
+      : await fetch("/api/snapchat/adsquads", {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ adAccountId, squadId: adSquadId, bid_micro: micro }),
+        });
     setSaving(null);
     if (!res.ok) { setPatchError(await readError(res)); return; }
     const patch = { bid_micro: micro };
@@ -199,10 +218,15 @@ export function DrilldownModal({
     const oldStatus = localDetail.status;
     const newStatus = oldStatus === "ACTIVE" ? "PAUSED" : "ACTIVE";
     setSaving("status"); setPatchError(null);
-    const res = await fetch("/api/snapchat/adsquads", {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ adAccountId, squadId: adSquadId, status: newStatus }),
-    });
+    const res = platform === "meta"
+      ? await fetch("/api/meta/adsets", {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ adAccountId, adSetId: adSquadId, updates: { status: newStatus } }),
+        })
+      : await fetch("/api/snapchat/adsquads", {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ adAccountId, squadId: adSquadId, status: newStatus }),
+        });
     setSaving(null);
     if (!res.ok) { setPatchError(await readError(res)); return; }
     const patch = { status: newStatus } as Partial<SquadDetail>;
@@ -368,7 +392,12 @@ export function DrilldownModal({
 
             <div className="flex items-center gap-1">
               <span className="text-xs text-gray-500 dark:text-gray-400">Bid:</span>
-              {editingBid ? (
+              {/* Strategies with no user-settable bid get a dash, matching the main table.
+                  Without this the modal offered a bid editor for LOWEST_COST_WITHOUT_CAP /
+                  AUTO_BID ad sets, where the platform rejects the write. */}
+              {localDetail.bid_strategy && NO_BID_TARGET_STRATEGIES.has(localDetail.bid_strategy) ? (
+                <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
+              ) : editingBid ? (
                 <>
                   <input
                     type="number" step="0.01" min="0.01"

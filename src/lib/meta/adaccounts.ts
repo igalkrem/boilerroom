@@ -4,6 +4,28 @@ const GRAPH_BASE = "https://graph.facebook.com/v19.0";
 
 export type { MetaAdAccount };
 
+/**
+ * The billing currency for one ad account. Needed by the reporting sync because
+ * Insights reports spend and action values in this currency, not USD.
+ *
+ * Falls back to "USD" rather than throwing: a missing currency must not abort a
+ * stats sync, and USD matches every account that has synced to date.
+ */
+export async function getAdAccountCurrency(adAccountId: string, accessToken: string): Promise<string> {
+  const id = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
+  try {
+    const res = await fetch(
+      `${GRAPH_BASE}/${id}?fields=currency&access_token=${encodeURIComponent(accessToken)}`
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    const data = (await res.json()) as { currency?: string };
+    return data.currency?.toUpperCase() || "USD";
+  } catch (err) {
+    console.warn(`[meta/adaccounts] currency lookup failed for ${id}, assuming USD:`, err);
+    return "USD";
+  }
+}
+
 export async function getMetaAdAccounts(accessToken: string): Promise<MetaAdAccount[]> {
   const accounts: MetaAdAccount[] = [];
   let url: string | null =
