@@ -54,7 +54,9 @@ function buildDemographics(sq: AdSquadFormData): Pick<SnapAdSquadPayload["target
   const hasAge = sq.minAge || sq.maxAge;
   if (hasGender || hasAge) {
     out.demographics = [{
-      ...(hasGender ? { genders: [sq.targetingGender as "MALE" | "FEMALE"] } : {}),
+      // `gender`, singular, bare string — NOT `genders: [...]`. Confirmed on the
+      // targeting reference parameter table and every example targeting spec.
+      ...(hasGender ? { gender: sq.targetingGender as "MALE" | "FEMALE" } : {}),
       ...(sq.minAge ? { min_age: sq.minAge } : {}),
       ...(sq.maxAge ? { max_age: sq.maxAge } : {}),
     }];

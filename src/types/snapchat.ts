@@ -80,9 +80,12 @@ export interface SnapAdSquadPayload {
   targeting: {
     geos: Array<{ country_code: string }>;
     demographics?: Array<{
+      // min_age/max_age are quoted integer strings ("13".."55"), per the docs' own
+      // parameter table and examples — not numbers.
       min_age?: string;
       max_age?: string;
-      genders?: Array<"MALE" | "FEMALE">;
+      // Singular, bare string. The docs also allow "OTHER", which the UI does not offer.
+      gender?: "MALE" | "FEMALE";
     }>;
     devices?: Array<{
       os_type?: "iOS" | "ANDROID" | "WEB";

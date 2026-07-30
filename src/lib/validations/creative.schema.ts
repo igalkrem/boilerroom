@@ -50,11 +50,21 @@ export const creativeSchema = z
       } else {
         try {
           const parsed = new URL(data.webViewUrl);
-          if (!/^https?:$/.test(parsed.protocol)) {
+          // Snapchat requires an SSL-enabled web view URL and caps it at 2048 chars.
+          // The cap is the live risk: buildUrlTemplate() appends an unbounded
+          // macro-expanded query string, so a long provider URL can overrun it.
+          if (parsed.protocol !== "https:") {
             ctx.addIssue({
               code: "custom",
               path: ["webViewUrl"],
-              message: "URL must use http or https",
+              message: "URL must use https — Snapchat requires an SSL-enabled web view URL",
+            });
+          }
+          if (data.webViewUrl.length > 2048) {
+            ctx.addIssue({
+              code: "custom",
+              path: ["webViewUrl"],
+              message: `URL is ${data.webViewUrl.length} characters — Snapchat's limit is 2048`,
             });
           }
         } catch {
