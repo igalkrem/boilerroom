@@ -35,16 +35,22 @@ function clampToFuture(iso: string): string {
 // WEB_VIEW creative type pairs with REMOTE_WEBPAGE ad type — confirmed via live Snapchat UI-created campaign.
 // Previously we used SNAP_AD for both (workaround after E1008 when pairing WEB_VIEW creative with SNAP_AD ad).
 // REMOTE_WEBPAGE is the correct ad type for WEB_VIEW creatives; call_to_action is valid on WEB_VIEW creatives.
+// DEEP_LINK was removed 2026-07-30: the payload only ever carried deep_link_uri,
+// while the API also requires app_name, icon_media_id and one of ios_app_id/
+// android_app_url, plus campaign measurement_spec — so a DEEP_LINK creative would
+// have been rejected AFTER the campaign and ad squads were already created. No UI
+// ever reached it, and a deep link carries no channel_id, so it earns no
+// reconcilable feed revenue. APP_INSTALL was removed earlier for the same reason.
+// Note this is the creative-level type only: SnapCreativeElementPayload keeps its
+// own interaction_type: "WEB_VIEW" | "DEEP_LINK" for Collection ad buttons.
 const INTERACTION_TYPE_MAP: Record<string, CreativeType> = {
   SWIPE_TO_OPEN: "SNAP_AD",
   WEB_VIEW: "WEB_VIEW",
-  DEEP_LINK: "DEEP_LINK",
 };
 
 const AD_TYPE_MAP: Record<string, "SNAP_AD" | "REMOTE_WEBPAGE"> = {
   WEB_VIEW: "REMOTE_WEBPAGE",
   SNAP_AD: "SNAP_AD",
-  DEEP_LINK: "SNAP_AD",
 };
 
 function buildDemographics(sq: AdSquadFormData): Pick<SnapAdSquadPayload["targeting"], "demographics" | "devices"> {
@@ -530,10 +536,6 @@ export async function runSubmission(
       web_view_properties:
         cr.interactionType === "WEB_VIEW" && cr.webViewUrl
           ? { url: cr.webViewUrl }
-          : undefined,
-      deep_link_properties:
-        cr.interactionType === "DEEP_LINK" && cr.deepLinkUrl
-          ? { deep_link_uri: cr.deepLinkUrl }
           : undefined,
     };
   });

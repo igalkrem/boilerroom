@@ -18,10 +18,8 @@ export const creativeSchema = z
     interactionType: z.enum([
       "SWIPE_TO_OPEN",
       "WEB_VIEW",
-      "DEEP_LINK",
     ]),
     webViewUrl: z.string().optional(),
-    deepLinkUrl: z.string().optional(),
     // Ad settings
     adStatus: z.enum(["ACTIVE", "PAUSED"]),
     siloAssetId: z.string().optional(),
@@ -74,21 +72,6 @@ export const creativeSchema = z
             message: "Must be a valid URL",
           });
         }
-      }
-    }
-    if (data.interactionType === "DEEP_LINK") {
-      if (!data.deepLinkUrl || data.deepLinkUrl.trim() === "") {
-        ctx.addIssue({
-          code: "custom",
-          path: ["deepLinkUrl"],
-          message: "Deep link URL is required",
-        });
-      } else if (/^(javascript|data):/i.test(data.deepLinkUrl.trim())) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["deepLinkUrl"],
-          message: "Invalid URL scheme",
-        });
       }
     }
   });

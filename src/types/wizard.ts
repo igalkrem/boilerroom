@@ -48,8 +48,7 @@ export interface AdSquadFormData {
 
 export type InteractionType =
   | "SWIPE_TO_OPEN"
-  | "WEB_VIEW"
-  | "DEEP_LINK";
+  | "WEB_VIEW";
 
 export interface CreativeFormData {
   id: string; // client-side UUID
@@ -70,7 +69,6 @@ export interface CreativeFormData {
   // Interaction
   interactionType: InteractionType;
   webViewUrl?: string;
-  deepLinkUrl?: string;
   articleId?: string; // references Article.id; drives URL auto-fill + headline constraint in Step 3
   // Ad settings
   adStatus: "ACTIVE" | "PAUSED";

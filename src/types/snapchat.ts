@@ -139,7 +139,6 @@ export interface SnapAdSquad extends SnapAdSquadPayload {
 export type CreativeType =
   | "SNAP_AD"
   | "WEB_VIEW"
-  | "DEEP_LINK"
   | "COLLECTION";
 
 export interface SnapCreativePayload {
@@ -152,7 +151,6 @@ export interface SnapCreativePayload {
   brand_name?: string;
   profile_properties: { profile_id: string };
   web_view_properties?: { url: string };
-  deep_link_properties?: { deep_link_uri: string };
   // Catalogue (Dynamic Collection Ads). The hero is a static uploaded media (render_type STATIC);
   // the product tiles below it are rendered dynamically from the product set via the template.
   render_type?: "STATIC" | "DYNAMIC";
@@ -166,6 +164,12 @@ export interface SnapCreativePayload {
 
 export interface SnapCreative extends SnapCreativePayload {
   id: string;
+  // Read-only here on purpose. BoilerRoom never CREATES a deep-link creative (the
+  // branch was removed 2026-07-30), but a creative built in Snap's Ads Manager can
+  // carry this field, and the PATCH path in api/snapchat/creatives/[id] re-sends the
+  // existing creative's properties when updating its web view URL. Without this the
+  // edit would silently strip deep_link_properties off someone else's creative.
+  deep_link_properties?: { deep_link_uri: string };
 }
 
 // ─── Creative Elements & Interaction Zones (Collection Ads) ────────────────────
