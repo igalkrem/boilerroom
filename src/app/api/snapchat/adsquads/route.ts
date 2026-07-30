@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdSquads, deleteAdSquad, getAdSquad, getAdSquadsForAccount, updateAdSquad, setAdSquadPlacement } from "@/lib/snapchat/adsquads";
 import { getCampaign } from "@/lib/snapchat/campaigns";
+import { isEntityNotFound } from "@/lib/snapchat/errors";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import type { SnapAdSquadPayload } from "@/types/snapchat";
 import { z } from "zod";
@@ -86,8 +87,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
   } catch (err) {
-    console.error("[snapchat/adsquads] campaign verification failed:", err);
-    return NextResponse.json({ error: "invalid_campaign_id" }, { status: 422 });
+    if (isEntityNotFound(err)) {
+      console.error("[snapchat/adsquads] campaign not found:", err);
+      return NextResponse.json({ error: "invalid_campaign_id" }, { status: 422 });
+    }
+    // Upstream fault, not an authz decision. The campaignId was returned by our own
+    // stage-1 create moments earlier, so reporting it as invalid sends the operator
+    // looking for a bad id that does not exist.
+    console.error("[snapchat/adsquads] campaign verification unavailable:", err);
+    return NextResponse.json({ error: "verification_unavailable" }, { status: 503 });
   }
 
   try {

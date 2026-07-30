@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
       // be a valid Instagram account id"). Verify against THIS ad account
       // before handing it back; if unusable, fall through the same non-fatal
       // "no Instagram identity" path as a failed/missing PBIA.
-      if (instagramActorId && adAccountId) {
+      if (instagramActorId) {
         try {
           const usable = await isInstagramActorUsableByAdAccount(adAccountId, instagramActorId);
           if (!usable) instagramActorId = undefined;

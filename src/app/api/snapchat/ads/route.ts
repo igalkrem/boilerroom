@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAds, getAd } from "@/lib/snapchat/ads";
 import { getAdSquad } from "@/lib/snapchat/adsquads";
 import { getCampaign } from "@/lib/snapchat/campaigns";
+import { isEntityNotFound } from "@/lib/snapchat/errors";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import type { SnapAdPayload } from "@/types/snapchat";
 import { z } from "zod";
@@ -89,8 +90,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
   } catch (err) {
-    console.error("[snapchat/ads] ad squad verification failed:", err);
-    return NextResponse.json({ error: "invalid_ad_squad_id" }, { status: 422 });
+    if (isEntityNotFound(err)) {
+      console.error("[snapchat/ads] ad squad not found:", err);
+      return NextResponse.json({ error: "invalid_ad_squad_id" }, { status: 422 });
+    }
+    // Upstream fault, not an authz decision — see the adsquads route for why this
+    // distinction matters to the orchestrator's partial-failure reporting.
+    console.error("[snapchat/ads] ad squad verification unavailable:", err);
+    return NextResponse.json({ error: "verification_unavailable" }, { status: 503 });
   }
 
   try {

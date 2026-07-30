@@ -84,8 +84,10 @@ export async function getVideoThumbnailUrl(
   videoId: string,
   token?: string
 ): Promise<string | undefined> {
+  // Both fields named explicitly rather than relying on the edge's default set,
+  // which is undocumented and can shift with a Graph version bump.
   const result = await metaFetch<{ data: Array<{ uri: string; is_preferred?: boolean }> }>(
-    `/${videoId}/thumbnails`,
+    `/${videoId}/thumbnails?fields=uri,is_preferred`,
     {},
     token
   );

@@ -161,12 +161,15 @@ export interface MetaCreativeFeatureEnrollment {
   enroll_status: "OPT_IN" | "OPT_OUT";
 }
 
+// No `standard_enhancements` key: Meta hard-rejects it with error_subcode 3858504
+// ("the standard enhancements feature is deprecated"). The creatives route validates
+// creative_features_spec as a z.record, so anything declared here has an unguarded
+// path to the wire — keep the field unrepresentable rather than merely undocumented.
 export interface MetaCreativeFeaturesSpec {
   advantage_plus_creative?: MetaCreativeFeatureEnrollment;
   inline_comment?: MetaCreativeFeatureEnrollment;
   product_extensions?: MetaCreativeFeatureEnrollment;
   site_extensions?: MetaCreativeFeatureEnrollment;
-  standard_enhancements?: MetaCreativeFeatureEnrollment;
   text_optimizations?: MetaCreativeFeatureEnrollment;
   video_auto_crop?: MetaCreativeFeatureEnrollment;
 }
@@ -199,10 +202,16 @@ export interface MetaAssetFeedSpec {
   ad_formats?: string[];
 }
 
+// Write payload. Every optional key here MUST have a matching key in
+// /api/meta/creatives' Zod schema — it is a closed z.object with no .passthrough(),
+// so a field the orchestrator sets but the schema omits is silently stripped and the
+// create still returns HTTP 200. Deliberately no `asset_feed_spec`: that is the
+// "Dynamic creative" feature (it also requires is_dynamic_creative on the ad set),
+// whereas this app uses "Flexible" via creative_asset_groups_spec on the ad node.
+// It stays on the read type below because existing ads may have been built with it.
 export interface MetaAdCreativePayload {
   name: string;
   object_story_spec?: MetaObjectStorySpec;
-  asset_feed_spec?: MetaAssetFeedSpec;
   instagram_actor_id?: string; // page-backed Instagram identity — see getOrCreatePageBackedInstagramAccount
   degrees_of_freedom_spec?: MetaDegreesOfFreedomSpec; // "Flexible" format + Advantage+ creative — see above
 }
@@ -210,6 +219,9 @@ export interface MetaAdCreativePayload {
 export interface MetaAdCreative extends MetaAdCreativePayload {
   id: string;
   account_id?: string;
+  // Read-only here: getAdCreative requests it, and extractCreativeMedia() reads it to
+  // pull assets out of ads that were built with Dynamic creative elsewhere.
+  asset_feed_spec?: MetaAssetFeedSpec;
 }
 
 // ─── Ads ────────────────────────────────────────────────────────────────────

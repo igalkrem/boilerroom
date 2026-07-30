@@ -16,9 +16,14 @@ type OnStageChange = (stage: string) => void;
 const UPLOAD_CONCURRENCY = 2;
 
 // Countries whose ad delivery Meta gates behind a regional_regulated_categories declaration.
+// Only reached by a CUSTOM country list — the Worldwide path auto-excludes all three via
+// WORLDWIDE_AUTO_EXCLUDED_COUNTRIES and correctly sends no declaration.
+// The full enum also carries BRAZIL_REGULATION and a *_FINSERV family; add those only
+// alongside a real launch that needs them.
 const REGIONAL_DECLARATION_BY_COUNTRY: Record<string, string> = {
   TW: "TAIWAN_UNIVERSAL",
   SG: "SINGAPORE_UNIVERSAL",
+  TH: "THAILAND_UNIVERSAL",
 };
 
 export async function runMetaSubmission(
@@ -261,8 +266,18 @@ export async function runMetaSubmission(
           channelId,
           adSquadId: adSetId,
           campaignSnapId: campaignId,
+          // Without this the route verifies the id against Snapchat and always 404s.
+          platform: "meta",
         }),
-      }).catch(() => {});
+      })
+        .then((res) => {
+          if (!res.ok) {
+            console.warn(
+              `[meta-orchestrator] link-squad failed (non-fatal): HTTP ${res.status} — channel ${channelId} will show "Squad unknown" until backfilled`
+            );
+          }
+        })
+        .catch((err) => console.warn("[meta-orchestrator] link-squad failed (non-fatal):", String(err)));
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

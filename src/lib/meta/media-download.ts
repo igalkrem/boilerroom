@@ -54,8 +54,12 @@ export async function fetchImageUrls(
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (hashes.length === 0) return out;
+  // `url` must be named explicitly: Graph only returns fields you ask for, and the
+  // AdImage reference marks `hash` as the sole default. Without it every entry.url
+  // is undefined, imageUrls comes back empty, and /api/meta/ad-media?download=1
+  // reports 502 no_media_downloaded with nothing in the log to explain why.
   const res = await metaFetch<AdImagesResponse>(
-    `/act_${adAccountId.replace("act_", "")}/adimages?hashes=${encodeURIComponent(JSON.stringify(hashes))}`,
+    `/act_${adAccountId.replace("act_", "")}/adimages?fields=hash,url&hashes=${encodeURIComponent(JSON.stringify(hashes))}`,
     {},
     token
   );
@@ -76,7 +80,8 @@ export async function fetchVideoUrls(
   const out = new Map<string, string>();
   if (videoIds.length === 0) return out;
   const res = await metaFetch<VideoSourceResponse>(
-    `/?ids=${encodeURIComponent(videoIds.join(","))}&fields=id,source`,
+    // Encode the elements, not the separator — Graph splits `ids` on a literal comma.
+    `/?ids=${videoIds.map(encodeURIComponent).join(",")}&fields=id,source`,
     {},
     token
   );

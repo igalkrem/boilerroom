@@ -369,8 +369,21 @@ export async function runSubmission(
     fetch("/api/feed-providers/channels/link-squad", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channelId, adSquadId: firstAdSquadId, campaignSnapId: firstCampaignId }),
-    }).catch((err) => console.warn("[orchestrator] link-squad failed (non-fatal):", String(err)));
+      body: JSON.stringify({
+        channelId,
+        adSquadId: firstAdSquadId,
+        campaignSnapId: firstCampaignId,
+        platform: "snap",
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) {
+          console.warn(
+            `[orchestrator] link-squad failed (non-fatal): HTTP ${res.status} — channel ${channelId} will show "Squad unknown" until backfilled`
+          );
+        }
+      })
+      .catch((err) => console.warn("[orchestrator] link-squad failed (non-fatal):", String(err)));
   }
 
   // ── Resolve {{channel.id}} macro ─────────────────────────────────────────
