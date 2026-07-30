@@ -2007,6 +2007,13 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
           adAccountId={drilldown.accountId}
           platform={drilldown.platform}
           squadDetail={squadDetails.get(drilldown.id)}
+          // The provider's roasDisplayDivisor lives here, so format the label here and
+          // pass it down rather than duplicating the divisor round-trip in the modal.
+          roasLabel={
+            squadDetails.get(drilldown.id)?.bid_strategy === ROAS_FLOOR_STRATEGY
+              ? `${roasDisplayValue(squadDetails.get(drilldown.id)?.roas_average_floor, getRoasDivisorBySquadId(drilldown.id))}%`
+              : undefined
+          }
           onSquadPatched={(patch) => onSquadPatched?.(drilldown.id, patch)}
           onClose={() => setDrilldown(null)}
           isHidden={hiddenSquadIds.has(drilldown.id)}

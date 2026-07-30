@@ -6,7 +6,7 @@ import type { SquadDetail } from "./PerformanceTable";
 import { Spinner } from "@/components/ui";
 import { ColumnSelector } from "./ColumnSelector";
 import { addChangeEntry, getEntriesForSquad } from "@/lib/campaign-changelog";
-import { deriveMetrics, NO_BID_TARGET_STRATEGIES, type MetricInputs } from "@/lib/reporting/metrics";
+import { deriveMetrics, NO_BID_TARGET_STRATEGIES, ROAS_FLOOR_STRATEGY, type MetricInputs } from "@/lib/reporting/metrics";
 
 const DRILLDOWN_COLUMNS = [
   { key: "spend",                  label: "Spend" },
@@ -73,6 +73,9 @@ interface Props {
   adAccountId: string;
   platform: "snap" | "meta";
   squadDetail?: SquadDetail;
+  // Pre-formatted ROAS target (already divisor-corrected by PerformanceTable). Only
+  // set for LOWEST_COST_WITH_MIN_ROAS ad sets; read-only in this panel.
+  roasLabel?: string;
   onSquadPatched?: (patch: Partial<SquadDetail>) => void;
   onClose: () => void;
   isHidden?: boolean;
@@ -119,7 +122,7 @@ type DerivedRow = ReturnType<typeof derive>;
 
 export function DrilldownModal({
   adSquadName, adSquadId, adAccountId, platform,
-  squadDetail, onSquadPatched, onClose,
+  squadDetail, roasLabel, onSquadPatched, onClose,
   isHidden, onToggleHide,
 }: Props) {
   const [rows, setRows]       = useState<CombinedRow[]>([]);
@@ -391,11 +394,27 @@ export function DrilldownModal({
             </div>
 
             <div className="flex items-center gap-1">
-              <span className="text-xs text-gray-500 dark:text-gray-400">Bid:</span>
-              {/* Strategies with no user-settable bid get a dash, matching the main table.
-                  Without this the modal offered a bid editor for LOWEST_COST_WITHOUT_CAP /
-                  AUTO_BID ad sets, where the platform rejects the write. */}
-              {localDetail.bid_strategy && NO_BID_TARGET_STRATEGIES.has(localDetail.bid_strategy) ? (
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {localDetail.bid_strategy === ROAS_FLOOR_STRATEGY ? "ROAS:" : "Bid:"}
+              </span>
+              {/* Two kinds of ad set have no editable bid here, and both must be excluded
+                  or the modal offers a control whose write the platform rejects:
+                    - AUTO_BID / LOWEST_COST_WITHOUT_CAP have no bid value at all.
+                    - LOWEST_COST_WITH_MIN_ROAS carries its target in
+                      bid_constraints.roas_average_floor, NOT bid_amount. Editing it as a
+                      bid sent bid_amount to an ad set that ignores it, and the value
+                      rendered as "$0.00" because bid_micro is 0 for these.
+                  The main table has a dedicated ROAS editor; this panel shows the value
+                  read-only and defers editing to the table rather than duplicating the
+                  divisor round-trip logic. */}
+              {localDetail.bid_strategy === ROAS_FLOOR_STRATEGY ? (
+                <span
+                  className="text-xs font-medium text-gray-800 dark:text-gray-200"
+                  title="Edit the ROAS target from the Bid column in the main table"
+                >
+                  {roasLabel ?? "—"}
+                </span>
+              ) : localDetail.bid_strategy && NO_BID_TARGET_STRATEGIES.has(localDetail.bid_strategy) ? (
                 <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
               ) : editingBid ? (
                 <>
