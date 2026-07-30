@@ -14,14 +14,13 @@ import type { CombinedRow } from "@/app/api/reporting/combined/route";
 import type { SquadDetail, AggrRow, PerformanceTableHandle } from "@/components/performance/PerformanceTable";
 import type { SnapAdAccount } from "@/types/snapchat";
 import { useMetaAdAccounts } from "@/hooks/useMetaAdAccounts";
+import { localTodayStr, shiftDateStr } from "@/lib/date-utils";
 
-function todayStr() { return new Date().toISOString().slice(0, 10); }
+// Viewer's local calendar — the UTC date rolled the default forward a day for
+// anyone west of UTC, landing the dashboard on a date with no data yet.
+function todayStr() { return localTodayStr(); }
 
-function dateMinus(dateStr: string, days: number) {
-  const d = new Date(dateStr + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() - days);
-  return d.toISOString().slice(0, 10);
-}
+function dateMinus(dateStr: string, days: number) { return shiftDateStr(dateStr, -days); }
 
 // Run async tasks over items with a cap on how many run at once. Snapchat's
 // rate limiter (rate-limiter.ts) is per-serverless-invocation, not global —

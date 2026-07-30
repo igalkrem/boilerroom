@@ -3,6 +3,7 @@ import { createAdCreative } from "@/lib/meta/creatives";
 import { getSession, isSessionValid, isMetaConnected, isMetaAdAccountAllowed } from "@/lib/session";
 import type { MetaAdCreativePayload } from "@/types/meta";
 import { z } from "zod";
+import { invalidRequest } from "@/lib/api/validation-error";
 
 export const maxDuration = 60;
 
@@ -21,7 +22,7 @@ const postSchema = z.object({
   adAccountId: z.string().min(1),
   creative: z.object({
     name: z.string().min(1),
-    instagram_actor_id: z.string().optional(),
+    instagram_user_id: z.string().optional(),
     degrees_of_freedom_spec: degreesOfFreedomSpecSchema.optional(),
     object_story_spec: z.object({
       page_id: z.string().min(1),
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = postSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
+    return invalidRequest(parsed.error);
   }
 
   const { adAccountId, creative } = parsed.data;
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ creative: result });
   } catch (err) {
     console.error(
-      `[meta/creatives] POST error for adAccountId=${adAccountId} pageId=${creative.object_story_spec.page_id} instagram_actor_id=${creative.instagram_actor_id ?? "none"}:`,
+      `[meta/creatives] POST error for adAccountId=${adAccountId} pageId=${creative.object_story_spec.page_id} instagram_user_id=${creative.instagram_user_id ?? "none"}:`,
       err
     );
     return NextResponse.json({ error: "internal_error" }, { status: 500 });

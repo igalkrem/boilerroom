@@ -1,4 +1,4 @@
-// ─── Meta Graph API v19.0 — Type definitions ───────────────────────────────
+// ─── Meta Graph API — Type definitions (version pinned in lib/meta/graph-version.ts) ───
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
 
@@ -216,7 +216,7 @@ export interface MetaAssetFeedSpec {
 export interface MetaAdCreativePayload {
   name: string;
   object_story_spec?: MetaObjectStorySpec;
-  instagram_actor_id?: string; // page-backed Instagram identity — see getOrCreatePageBackedInstagramAccount
+  instagram_user_id?: string; // page-backed Instagram identity — see getOrCreatePageBackedInstagramAccount
   degrees_of_freedom_spec?: MetaDegreesOfFreedomSpec; // "Flexible" format + Advantage+ creative — see above
 }
 

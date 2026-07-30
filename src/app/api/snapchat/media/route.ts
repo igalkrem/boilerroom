@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createMediaEntity } from "@/lib/snapchat/media";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import { z } from "zod";
+import { invalidRequest } from "@/lib/api/validation-error";
 
 const bodySchema = z.object({
   adAccountId: z.string().min(1),
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
+    return invalidRequest(parsed.error);
   }
   const { adAccountId, name, type } = parsed.data;
 

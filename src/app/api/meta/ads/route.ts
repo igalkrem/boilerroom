@@ -4,6 +4,7 @@ import { getAdCreative } from "@/lib/meta/creatives";
 import { getSession, isSessionValid, isMetaConnected, isMetaAdAccountAllowed } from "@/lib/session";
 import type { MetaAdPayload } from "@/types/meta";
 import { z } from "zod";
+import { invalidRequest } from "@/lib/api/validation-error";
 
 export const maxDuration = 60;
 
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = postSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
+    return invalidRequest(parsed.error);
   }
 
   const { adAccountId, ad } = parsed.data;
@@ -128,7 +129,7 @@ export async function PATCH(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
+    return invalidRequest(parsed.error);
   }
 
   const { adAccountId, adId, updates } = parsed.data;

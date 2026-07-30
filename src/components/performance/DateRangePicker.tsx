@@ -1,16 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { localTodayStr, localDaysAgoStr } from "@/lib/date-utils";
 
 // ── Date utilities ──────────────────────────────────────────────────────────
+// Both of these read the viewer's LOCAL calendar. Using the UTC date made the
+// picker default to tomorrow for anyone west of UTC after mid-afternoon.
 
-function todayStr() { return new Date().toISOString().slice(0, 10); }
+function todayStr() { return localTodayStr(); }
 
-function daysAgo(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
-}
+function daysAgo(n: number) { return localDaysAgoStr(n); }
 
 function toDateStr(year: number, month: number, day: number) {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;

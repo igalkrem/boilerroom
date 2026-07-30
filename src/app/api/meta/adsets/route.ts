@@ -3,12 +3,46 @@ import { createAdSet, getAdSet, getAdSetsByAccount, updateAdSet } from "@/lib/me
 import { getSession, isSessionValid, isMetaConnected, isMetaAdAccountAllowed } from "@/lib/session";
 import type { MetaAdSetPayload } from "@/types/meta";
 import { z } from "zod";
+import { invalidRequest } from "@/lib/api/validation-error";
 
 export const maxDuration = 60;
 
+// SEC-20: `adSet` was z.record(z.string(), z.unknown()) — structurally unvalidated.
+// The fix is deliberately NOT a closed z.object: this is the live create path for the
+// Meta orchestrator's full payload (targeting, promoted_object, asset_feed_spec, the
+// regional_regulated_categories added for Worldwide targeting...), and a closed object
+// would SILENTLY STRIP any field omitted here and still return HTTP 200 — the exact
+// class of bug that shipped before. `.passthrough()` type-checks what we know and
+// forwards the rest untouched.
+//
+// The account is pinned by createAdSet's path (`/act_${adAccountId}/adsets`), so a
+// smuggled account_id in the body cannot redirect the write; adAccountId itself is
+// still checked against the session allow-list below.
+const adSetShape = z
+  .object({
+    campaign_id: z.string().min(1),
+    name: z.string().min(1),
+    status: z.enum(["ACTIVE", "PAUSED"]),
+    billing_event: z.string().min(1),
+    optimization_goal: z.string().min(1),
+    targeting: z.object({}).passthrough(),
+    bid_strategy: z.enum(["LOWEST_COST_WITHOUT_CAP", "COST_CAP", "LOWEST_COST_WITH_MIN_ROAS"]).optional(),
+    // Meta takes these in minor units. Reject negatives and fractions outright: a
+    // fractional budget is silently truncated by Graph, which is how a $10.50 intent
+    // becomes an unnoticed $10.00 spend cap.
+    bid_amount: z.number().int().nonnegative().optional(),
+    daily_budget: z.number().int().positive().optional(),
+    lifetime_budget: z.number().int().positive().optional(),
+    bid_constraints: z.object({ roas_average_floor: z.number().positive() }).passthrough().optional(),
+    is_dynamic_creative: z.boolean().optional(),
+    start_time: z.string().optional(),
+    end_time: z.string().optional(),
+  })
+  .passthrough();
+
 const postSchema = z.object({
   adAccountId: z.string().min(1),
-  adSet: z.record(z.string(), z.unknown()),
+  adSet: adSetShape,
 });
 
 const patchSchema = z.object({
@@ -83,7 +117,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = postSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
+    return invalidRequest(parsed.error);
   }
 
   const { adAccountId, adSet } = parsed.data;
@@ -112,7 +146,7 @@ export async function PATCH(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
+    return invalidRequest(parsed.error);
   }
 
   const { adAccountId, adSetId, updates } = parsed.data;

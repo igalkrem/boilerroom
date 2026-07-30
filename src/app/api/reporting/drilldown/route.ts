@@ -73,6 +73,9 @@ export async function GET(request: NextRequest) {
             SUM(funnel_impressions)::bigint         AS funnel_impressions,
             SUM(funnel_requests)::bigint            AS funnel_requests
           FROM visymo_report
+          WHERE record_date BETWEEN
+            (SELECT MIN(stat_date) FROM meta_ad_set_stats WHERE ad_set_id = ${adSquadId})
+            AND (SELECT MAX(stat_date) FROM meta_ad_set_stats WHERE ad_set_id = ${adSquadId})
           GROUP BY custom_channel_name, record_date
         ) k
           ON  k.custom_channel_name = m.ad_set_id
@@ -111,6 +114,9 @@ export async function GET(request: NextRequest) {
             SUM(requests)::bigint          AS requests,
             SUM(impressions)::bigint       AS impressions
           FROM predicto_fb_report
+          WHERE record_date BETWEEN
+            (SELECT MIN(stat_date) FROM meta_ad_set_stats WHERE ad_set_id = ${adSquadId})
+            AND (SELECT MAX(stat_date) FROM meta_ad_set_stats WHERE ad_set_id = ${adSquadId})
           GROUP BY custom_channel_id, record_date
         ) pf
           ON  pf.custom_channel_id = SPLIT_PART(fpc.channel_id, '+', 1)
@@ -222,6 +228,9 @@ export async function GET(request: NextRequest) {
           SUM(funnel_requests)::bigint            AS funnel_requests,
           MIN(NULLIF(domain_name, ''))            AS domain_name
         FROM visymo_report
+        WHERE record_date BETWEEN
+          (SELECT MIN(stat_date) FROM snapchat_ad_squad_stats WHERE ad_squad_id = ${adSquadId})
+          AND (SELECT MAX(stat_date) FROM snapchat_ad_squad_stats WHERE ad_squad_id = ${adSquadId})
         GROUP BY custom_channel_name, record_date
       ) k
         ON  s.ad_squad_id  = k.custom_channel_name
@@ -260,6 +269,9 @@ export async function GET(request: NextRequest) {
           SUM(requests)::bigint          AS requests,
           SUM(impressions)::bigint       AS impressions
         FROM predicto_report
+        WHERE record_date BETWEEN
+          (SELECT MIN(stat_date) FROM snapchat_ad_squad_stats WHERE ad_squad_id = ${adSquadId})
+          AND (SELECT MAX(stat_date) FROM snapchat_ad_squad_stats WHERE ad_squad_id = ${adSquadId})
         GROUP BY custom_channel_id, record_date
       ) p
         ON  p.custom_channel_id = SPLIT_PART(fpc.channel_id, '+', 1)

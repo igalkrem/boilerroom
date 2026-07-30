@@ -1,6 +1,6 @@
 import type { MetaAdAccount } from "@/types/meta";
 
-const GRAPH_BASE = "https://graph.facebook.com/v19.0";
+import { GRAPH_BASE } from "./graph-version";
 
 export type { MetaAdAccount };
 

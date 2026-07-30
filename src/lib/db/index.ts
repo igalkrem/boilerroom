@@ -7,9 +7,35 @@ export { sql };
 
 let migrated = false;
 
+// SEC-21: serialise the DDL across concurrent cold starts.
+//
+// `migrated` is per-instance, so a deploy that wakes N serverless instances at once
+// runs this whole block N times in parallel. "IF NOT EXISTS" is not atomic against a
+// concurrent identical CREATE — Postgres raises duplicate_table/duplicate_object, and
+// the ALTER TABLE RENAME above is outright racy: two instances can both observe
+// kingsroad_report present and visymo_report absent, and the loser's rename fails.
+// A session-level advisory lock makes one instance do the work while the others wait,
+// then find everything already in place. The key is an arbitrary constant, unique to
+// this migration routine.
+// Plain number, not a BigInt literal: tsconfig targets below ES2020. Comfortably
+// inside Number.MAX_SAFE_INTEGER and inside Postgres bigint.
+const MIGRATION_LOCK_KEY = 8274512930001;
+
 export async function runMigrations(): Promise<void> {
   if (migrated) return;
 
+  await sql`SELECT pg_advisory_lock(${String(MIGRATION_LOCK_KEY)}::bigint)`;
+  try {
+    await runMigrationsLocked();
+    migrated = true;
+  } finally {
+    // Always release: a serverless instance can be reused, and @vercel/postgres
+    // pools connections, so a held session lock would deadlock the next cold start.
+    await sql`SELECT pg_advisory_unlock(${String(MIGRATION_LOCK_KEY)}::bigint)`;
+  }
+}
+
+async function runMigrationsLocked(): Promise<void> {
   // Idempotent kingsroad_report → visymo_report rename. MUST run before the
   // statement loop below — migrations.sql's `CREATE TABLE IF NOT EXISTS
   // visymo_report` would otherwise pre-create an empty table and make the
@@ -70,8 +96,6 @@ export async function runMigrations(): Promise<void> {
         UNIQUE (channel_id, feed_provider_id, google_user_id, traffic_source)
     `;
   }
-
-  migrated = true;
 }
 
 // ─── Channel types ─────────────────────────────────────────────────────────
@@ -363,11 +387,28 @@ export async function getAllUserTokens(): Promise<UserTokenRow[]> {
     ad_account_ids: Array<{ id: string; timezone: string }>;
   }>`SELECT google_user_id, refresh_token_enc, ad_account_ids FROM user_snapchat_tokens`;
 
-  return rows.map((r) => ({
-    google_user_id: r.google_user_id,
-    refresh_token: decryptToken(r.refresh_token_enc),
-    ad_account_ids: r.ad_account_ids ?? [],
-  }));
+  // SEC-13: decrypt per row, not in one map that throws on the first bad ciphertext.
+  // The cron sweep calls this for EVERY tenant, so a single row encrypted under a
+  // rotated SESSION_SECRET (or truncated in storage) used to abort the whole sweep —
+  // every other tenant's reporting silently stopped updating. Skip the bad row loudly
+  // and keep going.
+  const out: UserTokenRow[] = [];
+  for (const r of rows) {
+    try {
+      out.push({
+        google_user_id: r.google_user_id,
+        refresh_token: decryptToken(r.refresh_token_enc),
+        ad_account_ids: r.ad_account_ids ?? [],
+      });
+    } catch (err) {
+      console.error(
+        `[db] skipping user ${r.google_user_id}: stored Snapchat refresh token could not be decrypted ` +
+          `(re-connect required). Other users are unaffected.`,
+        err
+      );
+    }
+  }
+  return out;
 }
 
 export async function deleteUserToken(googleUserId: string): Promise<void> {
@@ -425,13 +466,51 @@ export async function getAllUserMetaTokens(): Promise<UserMetaTokenRow[]> {
     expires_at: number;
   }>`SELECT google_user_id, meta_user_id, access_token_enc, ad_account_ids, expires_at FROM user_meta_tokens`;
 
-  return rows.map((r) => ({
-    google_user_id: r.google_user_id,
-    meta_user_id: r.meta_user_id,
-    access_token: decryptToken(r.access_token_enc),
-    ad_account_ids: r.ad_account_ids ?? [],
-    expires_at: Number(r.expires_at),
-  }));
+  // Same per-row isolation as getAllUserSnapchatTokens — see SEC-13 note there.
+  const out: UserMetaTokenRow[] = [];
+  for (const r of rows) {
+    try {
+      out.push({
+        google_user_id: r.google_user_id,
+        meta_user_id: r.meta_user_id,
+        access_token: decryptToken(r.access_token_enc),
+        ad_account_ids: r.ad_account_ids ?? [],
+        expires_at: Number(r.expires_at),
+      });
+    } catch (err) {
+      console.error(
+        `[db] skipping user ${r.google_user_id}: stored Meta access token could not be decrypted ` +
+          `(re-connect required). Other users are unaffected.`,
+        err
+      );
+    }
+  }
+  return out;
+}
+
+/**
+ * The ad account id lists PERSISTED for one user, ids only — no token decryption.
+ *
+ * **NOT AN ALLOW-LIST.** `report_sync_log` and the stats tables are keyed by the
+ * STORED list, because the cron iterates `getAllUserSnapchatTokens()` /
+ * `getAllUserMetaTokens()`, while the session carries the LIVE list from
+ * `/me/adaccounts`. The two have been observed to drift (33 entries each, different
+ * contents). Unioning them is correct for a MAX-over-timestamps display; gating
+ * access on the union would grant a stale account. For authorization use
+ * `isAdAccountAllowed` / `isMetaAdAccountAllowed` against the session only.
+ */
+export async function getStoredAdAccountIds(
+  googleUserId: string
+): Promise<{ snap: string[]; meta: string[] }> {
+  const [snapRes, metaRes] = await Promise.all([
+    sql<{ ad_account_ids: Array<{ id: string }> | null }>`
+      SELECT ad_account_ids FROM user_snapchat_tokens WHERE google_user_id = ${googleUserId}`,
+    sql<{ ad_account_ids: Array<{ id: string }> | null }>`
+      SELECT ad_account_ids FROM user_meta_tokens WHERE google_user_id = ${googleUserId}`,
+  ]);
+  const ids = (rows: Array<{ ad_account_ids: Array<{ id: string }> | null }>) =>
+    (rows[0]?.ad_account_ids ?? []).map((a) => a?.id).filter((id): id is string => Boolean(id));
+  return { snap: ids(snapRes.rows), meta: ids(metaRes.rows) };
 }
 
 export async function deleteUserMetaToken(googleUserId: string): Promise<void> {

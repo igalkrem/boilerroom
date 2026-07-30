@@ -7,6 +7,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { writeFile, readFile, unlink } from "fs/promises";
 import { v4 as uuid } from "uuid";
+import { invalidRequest } from "@/lib/api/validation-error";
 
 export const maxDuration = 300;
 
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
+    return invalidRequest(parsed.error);
   }
 
   const { blobUrl, fileName } = parsed.data;

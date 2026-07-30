@@ -338,8 +338,11 @@ export async function runMetaSubmission(
     // no real IG account is connected — Meta uses the page's page-backed
     // Instagram account (the "Use Facebook Page" option). Confirmed live
     // 2026-07-16 via GET /api/meta/ads against a reference ad: its creative
-    // carries `instagram_user_id` (read-back name for the write field
-    // `instagram_actor_id`) even though no professional IG account is linked.
+    // carries an Instagram identity even though no professional IG account is
+    // linked. The field is `instagram_user_id` for both read and write as of
+    // v22.0 — the old write name `instagram_actor_id` is unsupported. Verified
+    // 2026-07-30 on v25.0: real creatives return instagram_user_id populated and
+    // instagram_actor_id empty. Read paths still request both names.
     let instagramActorId: string | undefined;
     if (instagramActorIdByPage.has(creative.pageId)) {
       instagramActorId = instagramActorIdByPage.get(creative.pageId);
@@ -377,7 +380,7 @@ export async function runMetaSubmission(
 
     const creativePayload: MetaAdCreativePayload = {
       name: groupName,
-      ...(seed.instagramActorId ? { instagram_actor_id: seed.instagramActorId } : {}),
+      ...(seed.instagramActorId ? { instagram_user_id: seed.instagramActorId } : {}),
       degrees_of_freedom_spec: buildAdvantagePlusCreativeFeatures(seed.media.type),
       object_story_spec: {
         page_id: seed.creative.pageId,
@@ -468,7 +471,7 @@ export async function runMetaSubmission(
     for (const { creative, media, webViewUrl, videoThumbnailUrl, instagramActorId } of resolved) {
       const creativePayload: MetaAdCreativePayload = {
         name: resolveChannel(creative.name),
-        ...(instagramActorId ? { instagram_actor_id: instagramActorId } : {}),
+        ...(instagramActorId ? { instagram_user_id: instagramActorId } : {}),
         degrees_of_freedom_spec: buildAdvantagePlusCreativeFeatures(media.type),
         object_story_spec: {
           page_id: creative.pageId,

@@ -1,9 +1,8 @@
-// Facebook Graph API v19.0 — OAuth helpers for Meta Ads connection.
+// OAuth helpers for the Meta Ads connection. Graph version comes from graph-version.ts.
 // Meta issues long-lived tokens (~60 days). No refresh token exists —
 // users must re-authenticate after expiry.
 
-const GRAPH_BASE = "https://graph.facebook.com/v19.0";
-const OAUTH_DIALOG = "https://www.facebook.com/v19.0/dialog/oauth";
+import { GRAPH_BASE, OAUTH_DIALOG } from "./graph-version";
 
 export function buildMetaAuthUrl(state: string): string {
   const params = new URLSearchParams({

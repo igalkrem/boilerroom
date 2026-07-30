@@ -31,7 +31,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
     return NextResponse.json(jsonResponse);
-  } catch {
+  } catch (err) {
+    // A name over 200 chars (or with characters the sanitizer left in) fails
+    // CATALOGUE_PATH_RE and used to surface as a bare "internal_error", which
+    // reads as a server fault and gives the user nothing to act on. The path
+    // shape is client-controlled, so name it as a bad request.
+    if (err instanceof Error && err.message === "invalid_pathname") {
+      return NextResponse.json(
+        { error: "invalid_filename", detail: "File name must be 1-200 characters of letters, digits, dot, underscore or hyphen." },
+        { status: 400 }
+      );
+    }
     return NextResponse.json({ error: "internal_error" }, { status: 400 });
   }
 }

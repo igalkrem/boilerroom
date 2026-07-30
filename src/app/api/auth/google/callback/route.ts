@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeGoogleCode, fetchGoogleUser } from "@/lib/google/auth";
 import { getSession } from "@/lib/session";
+import { getAppUrl } from "@/lib/app-url";
 
 // Only accounts on this email domain may sign in. Without this gate ANY Google
 // account became a fully provisioned tenant, which turned every per-tenant
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getAppUrl();
 
   if (error) {
     return NextResponse.redirect(`${appUrl}/login?error=${encodeURIComponent(error)}`);

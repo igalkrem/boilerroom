@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sql, runMigrations } from "@/lib/db";
+import { sql, runMigrations, getStoredAdAccountIds } from "@/lib/db";
 import { getSession, isSessionValid } from "@/lib/session";
 import { getProviderNetworkMap } from "@/lib/reporting/provider-network";
 
@@ -59,7 +59,21 @@ export async function GET() {
   // syncMetaAccount(), which are the usual triggers for runMigrations().
   await runMigrations();
 
-  const accountIds: string[] = session.allowedAdAccountIds ?? [];
+  // Union of the LIVE session list with the STORED list, for both platforms. The
+  // session list is empty until /api/auth/... populates it, and maxSyncForAccounts
+  // short-circuits to null on an empty array, so a status fetch that beat the ad
+  // accounts fetch rendered the pills as "—" even though sync data existed. The
+  // stats/log rows are keyed by the stored list anyway (the cron iterates it), and
+  // the two lists drift.
+  //
+  // This union is display-only: every value derived from it is a MAX over
+  // timestamps. Do NOT reuse it as an allow-list here or in combined/drilldown —
+  // see the warning on getStoredAdAccountIds.
+  const stored = await getStoredAdAccountIds(session.googleUserId ?? "");
+  const unionIds = (live: string[] | undefined, persisted: string[]) =>
+    [...new Set([...(live ?? []), ...persisted])];
+
+  const accountIds: string[] = unionIds(session.allowedAdAccountIds, stored.snap);
 
   const [krFeed, predFeed, predFbFeed] = await Promise.all([
     sql`SELECT MAX(last_synced) as ts FROM report_sync_log
@@ -86,7 +100,7 @@ export async function GET() {
   const predAccountIds = networkMap.filter((x) => x.n === "predicto").map((x) => x.id);
   // Predicto FB pairs with Meta stats (Facebook traffic), so its "in sync" dot
   // compares against the newest Meta stat sync across the user's Meta accounts.
-  const metaAccountIds: string[] = session.metaAllowedAdAccountIds ?? [];
+  const metaAccountIds: string[] = unionIds(session.metaAllowedAdAccountIds, stored.meta);
 
   const [krSnapTs, predSnapTs, metaTs] = await Promise.all([
     maxSnapSyncForAccounts(krAccountIds),

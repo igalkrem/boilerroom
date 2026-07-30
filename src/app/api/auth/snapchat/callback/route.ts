@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exchangeCodeForTokens } from "@/lib/snapchat/auth";
 import { getSession, isSessionValid } from "@/lib/session";
 import { upsertUserToken } from "@/lib/db";
+import { getAppUrl } from "@/lib/app-url";
 
 const SNAPCHAT_API_BASE = "https://adsapi.snapchat.com/v1";
 
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getAppUrl();
 
   if (error) {
     return NextResponse.redirect(`${appUrl}/dashboard/traffic-sources?error=${encodeURIComponent(error)}`);

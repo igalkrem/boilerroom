@@ -5,6 +5,7 @@ import { getCachedInstagramActorId, setCachedInstagramActorId } from "@/lib/meta
 import { getSession, isSessionValid, isMetaConnected, isMetaAdAccountAllowed } from "@/lib/session";
 import { isOwnBlobUrl } from "@/lib/blob-host";
 import { z } from "zod";
+import { invalidRequest } from "@/lib/api/validation-error";
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
+    return invalidRequest(parsed.error);
   }
 
   const { adAccountId } = parsed.data;

@@ -3,6 +3,7 @@ import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } f
 import { getValidAccessToken } from "@/lib/snapchat/client";
 import { rateLimitedFetch } from "@/lib/rate-limiter";
 import { z } from "zod";
+import { invalidRequest } from "@/lib/api/validation-error";
 
 export const maxDuration = 60;
 
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
+    return invalidRequest(parsed.error);
   }
   const { adAccountId, uploadId } = parsed.data;
 

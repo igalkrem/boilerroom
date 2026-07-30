@@ -3,6 +3,7 @@ import { createCreativeElements } from "@/lib/snapchat/collection";
 import { getSession, isSessionValid, isSnapchatConnected, isAdAccountAllowed } from "@/lib/session";
 import type { SnapCreativeElementPayload } from "@/types/snapchat";
 import { z } from "zod";
+import { invalidRequest } from "@/lib/api/validation-error";
 
 export const maxDuration = 60;
 
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
+    return invalidRequest(parsed.error);
   }
   const { adAccountId, elements } = parsed.data as unknown as {
     adAccountId: string;

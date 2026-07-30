@@ -6,6 +6,7 @@ import { createAdSquads, updateAdSquad, deleteAdSquad } from "@/lib/snapchat/ads
 import { snapFetch } from "@/lib/snapchat/client";
 import type { SnapAdSquadPayload, OptimizationGoal } from "@/types/snapchat";
 import { debugRoutesEnabled } from "@/lib/debug-routes";
+import { invalidRequest } from "@/lib/api/validation-error";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TEMPORARY DIAGNOSTIC ROUTE — Smart Placements (placement_v2) investigation.
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 400 });
+    return invalidRequest(parsed.error, 400);
   }
   const { adAccountId, pixelId } = parsed.data;
 

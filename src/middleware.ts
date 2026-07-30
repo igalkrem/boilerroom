@@ -52,6 +52,29 @@ const BUCKETS: Bucket[] = [
   { prefix: "/api/data", limit: 120, windowMs: 60_000 },
 ];
 
+// SEC-26: CSRF protection rested entirely on the session cookie's SameSite=lax.
+// Lax still permits a cross-site top-level POST navigation, and covers nothing if a
+// future change relaxes it, so check the Origin on state-changing methods too.
+//
+// Deliberately only rejects a PRESENT-and-mismatched Origin. A missing Origin is not
+// treated as hostile: some clients omit it on same-origin requests, and failing closed
+// there would break them for no gain — a cross-site browser POST always sends one.
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+function isCrossSiteWrite(req: NextRequest): boolean {
+  if (SAFE_METHODS.has(req.method)) return false;
+  const origin = req.headers.get("origin");
+  if (!origin) return false;
+  // Compare against the forwarded host: behind Vercel's proxy nextUrl.host can be an
+  // internal hostname that would never equal the browser-visible origin.
+  const expected = req.headers.get("x-forwarded-host") ?? req.nextUrl.host;
+  try {
+    return new URL(origin).host !== expected;
+  } catch {
+    return true; // unparseable Origin header — not something a normal client sends
+  }
+}
+
 function getClientIp(req: NextRequest): string {
   return (
     req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
@@ -68,6 +91,11 @@ export function middleware(req: NextRequest) {
   // outcome than anything the limit would prevent. No bucket matches it today; this
   // guard keeps that true if someone later adds a broad /api/reporting/ bucket.
   if (path === "/api/reporting/cron-sync") return NextResponse.next();
+
+  // Runs for every /api/* path in the matcher, not just rate-limited ones.
+  if (isCrossSiteWrite(req)) {
+    return NextResponse.json({ error: "cross_site_request_blocked" }, { status: 403 });
+  }
 
   const bucket = BUCKETS.find((b) => path.startsWith(b.prefix));
   if (!bucket) return NextResponse.next();
@@ -101,17 +129,10 @@ export function middleware(req: NextRequest) {
   return NextResponse.next();
 }
 
-// Broader than BUCKETS so adding a bucket does not also require a matcher edit.
-// Paths that match here but no bucket fall straight through.
+// All of /api/* — broader than BUCKETS on purpose. Paths with no matching bucket fall
+// straight through the rate limiter, but they still get the SEC-26 Origin check, which
+// only works if the middleware actually runs for them. The previous narrower list left
+// /api/feed-providers/*, /api/presets/* and others with no CSRF guard at all.
 export const config = {
-  matcher: [
-    "/api/auth/:path*",
-    "/api/silo/:path*",
-    "/api/catalogue/:path*",
-    "/api/reporting/:path*",
-    "/api/meta/:path*",
-    "/api/snapchat/media/:path*",
-    "/api/data",
-    "/api/debug/:path*",
-  ],
+  matcher: ["/api/:path*"],
 };

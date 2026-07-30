@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession, isSessionValid } from "@/lib/session";
 import { deleteUserMetaToken } from "@/lib/db";
+import { GRAPH_BASE } from "@/lib/meta/graph-version";
 
 export async function POST() {
   const session = await getSession();
@@ -13,7 +14,7 @@ export async function POST() {
   if (session.metaAccessToken && session.metaUserId) {
     try {
       await fetch(
-        `https://graph.facebook.com/v19.0/${session.metaUserId}/permissions?access_token=${encodeURIComponent(session.metaAccessToken)}`,
+        `${GRAPH_BASE}/${session.metaUserId}/permissions?access_token=${encodeURIComponent(session.metaAccessToken)}`,
         { method: "DELETE" }
       );
     } catch (err) {

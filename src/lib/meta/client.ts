@@ -1,7 +1,7 @@
 import { getSession, isSessionValid, isMetaConnected } from "@/lib/session";
 import { rateLimitedFetch } from "@/lib/rate-limiter";
 
-const GRAPH_BASE = "https://graph.facebook.com/v19.0";
+import { GRAPH_BASE } from "./graph-version";
 
 export async function getValidMetaToken(): Promise<string> {
   const session = await getSession();

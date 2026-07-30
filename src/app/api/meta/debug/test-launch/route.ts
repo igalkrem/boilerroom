@@ -16,6 +16,7 @@ import type {
 import { z } from "zod";
 import { deflateSync } from "zlib";
 import { debugRoutesEnabled } from "@/lib/debug-routes";
+import { invalidRequest } from "@/lib/api/validation-error";
 
 export const maxDuration = 60;
 
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
     .object({ adAccountId: z.string().min(1), pageId: z.string().min(1) })
     .safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
+    return invalidRequest(parsed.error);
   }
   const { adAccountId, pageId } = parsed.data;
 
@@ -264,7 +265,7 @@ export async function POST(request: NextRequest) {
     try {
       const creativePayload: MetaAdCreativePayload = {
         name: `ZZZ_DEBUG_TEST creative ${label}`,
-        ...(instagramActorId ? { instagram_actor_id: instagramActorId } : {}),
+        ...(instagramActorId ? { instagram_user_id: instagramActorId } : {}),
         degrees_of_freedom_spec: buildAdvantagePlusCreativeFeatures("IMAGE"),
         object_story_spec: {
           page_id: pageId,
@@ -313,7 +314,7 @@ export async function POST(request: NextRequest) {
   try {
     const videoCreativePayload: MetaAdCreativePayload = {
       name: "ZZZ_DEBUG_TEST creative video",
-      ...(instagramActorId ? { instagram_actor_id: instagramActorId } : {}),
+      ...(instagramActorId ? { instagram_user_id: instagramActorId } : {}),
       degrees_of_freedom_spec: buildAdvantagePlusCreativeFeatures("VIDEO"),
       object_story_spec: {
         page_id: pageId,
@@ -361,7 +362,7 @@ export async function POST(request: NextRequest) {
     try {
       const cagCreativePayload: MetaAdCreativePayload = {
         name: "ZZZ_DEBUG_TEST creative cag",
-        ...(instagramActorId ? { instagram_actor_id: instagramActorId } : {}),
+        ...(instagramActorId ? { instagram_user_id: instagramActorId } : {}),
         degrees_of_freedom_spec: buildAdvantagePlusCreativeFeatures("IMAGE"),
         object_story_spec: {
           page_id: pageId,
@@ -498,7 +499,7 @@ export async function DELETE(request: NextRequest) {
     .object({ adAccountId: z.string().min(1), campaignIds: z.array(z.string().min(1)).min(1) })
     .safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 422 });
+    return invalidRequest(parsed.error);
   }
   const { adAccountId, campaignIds } = parsed.data;
 

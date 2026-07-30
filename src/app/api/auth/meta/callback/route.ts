@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exchangeCodeForToken, exchangeForLongLivedToken, getMetaUserId } from "@/lib/meta/auth";
 import { getSession, isSessionValid } from "@/lib/session";
 import { upsertUserMetaToken } from "@/lib/db";
+import { getAppUrl } from "@/lib/app-url";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getAppUrl();
   const redirectBase = `${appUrl}/dashboard/traffic-sources`;
 
   if (error) {

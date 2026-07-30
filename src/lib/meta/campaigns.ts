@@ -46,7 +46,9 @@ export async function updateCampaign(
   token?: string
 ): Promise<{ success: boolean }> {
   const campaign = await getCampaign(campaignId, token);
-  if (campaign.account_id && campaign.account_id !== expectedAdAccountId.replace("act_", "")) {
+  // META-9: fail CLOSED. This used to be `if (campaign.account_id && ...)`, so a
+  // response missing account_id skipped the check entirely and allowed the write.
+  if (campaign.account_id !== expectedAdAccountId.replace("act_", "")) {
     throw new Error("forbidden: campaign does not belong to the specified ad account");
   }
   return metaFetch<{ success: boolean }>(
@@ -65,7 +67,9 @@ export async function deleteCampaign(
   token?: string
 ): Promise<void> {
   const campaign = await getCampaign(campaignId, token);
-  if (campaign.account_id && campaign.account_id !== expectedAdAccountId.replace("act_", "")) {
+  // META-9: fail CLOSED. This used to be `if (campaign.account_id && ...)`, so a
+  // response missing account_id skipped the check entirely and allowed the write.
+  if (campaign.account_id !== expectedAdAccountId.replace("act_", "")) {
     throw new Error("forbidden: campaign does not belong to the specified ad account");
   }
   await metaFetch<{ success: boolean }>(
