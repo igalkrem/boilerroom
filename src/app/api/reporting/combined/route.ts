@@ -269,9 +269,36 @@ export async function GET(request: NextRequest) {
 
   const combined: CombinedRow[] = [];
 
+  // DR-7: both arms compute revenue as visymo + predicto, which is only correct while
+  // an entity monetizes on exactly ONE feed — a provider uses one revenue source, and
+  // a channel belongs to one provider. That invariant held across all 6,856 rows with
+  // spend when this was checked (2026-07-30: 0 overlaps; 949 visymo-only and 1,211
+  // predicto-only on Snap, 12 and 25 on Meta), but nothing enforces it.
+  //
+  // If both legs ever report for the same entity/date, the invariant has broken —
+  // almost certainly a config error, e.g. an ad set id reused as a Visymo channel name
+  // while its channel is also linked to a Predicto provider — and the row's revenue is
+  // DOUBLE COUNTED, inflating ROI and profit on the numbers used to decide spend.
+  //
+  // Deliberately detect-and-report rather than pick a leg: choosing the "right" source
+  // requires knowing which feed genuinely served the traffic, and guessing wrong would
+  // silently DELETE real revenue — a worse failure than a flagged overstatement.
+  let dualFeedRows = 0;
+  const noteDualFeed = (arm: "snap" | "meta", entityId: string, date: string, visymo: number, predicto: number) => {
+    if (visymo > 0 && predicto > 0) {
+      dualFeedRows++;
+      console.error(
+        `[reporting/combined] DUAL-FEED REVENUE (${arm}) — ${entityId} on ${date} reports BOTH ` +
+          `visymo=${visymo} and predicto=${predicto}. Revenue for this row is the sum and is ` +
+          `therefore double counted. Check whether this entity's channel is mapped to two providers.`
+      );
+    }
+  };
+
   for (const r of snapResult.rows) {
     const spendUsd = Number(r.spend_micro) / 1_000_000;
     const revenueEur = Number(r.earnings_eur);
+    noteDualFeed("snap", String(r.ad_squad_id), String(r.stat_date), revenueEur, Number(r.predicto_revenue_usd));
     const revenueUsd = revenueEur * eurToUsd + Number(r.predicto_revenue_usd);
     const roiPct = spendUsd > 0 ? (revenueUsd / spendUsd) * 100 : null;
     combined.push({
@@ -318,11 +345,12 @@ export async function GET(request: NextRequest) {
     const purchaseValueUsd = (Number(r.purchase_value_cents) / 100) * toUsd;
     // Revenue/ROI come from the sell-side feeds for Facebook traffic — Predicto FB
     // (joined by channel) and Visymo (joined directly by ad_set_id; EUR→USD).
-    // Only one is non-zero per ad set in practice (a provider uses one source),
-    // so summing is safe and mirrors the Snap query. Meta's own pixel value stays
-    // in snap_results / snap_purchase_value_usd (Results / Purchase Value).
+    // Summing relies on the one-feed-per-entity invariant enforced by noteDualFeed
+    // above; it is checked per row rather than merely assumed. Meta's own pixel value
+    // stays in snap_results / snap_purchase_value_usd (Results / Purchase Value).
     const visymoUsd = Number(r.vsm_earnings_eur) * eurToUsd;
     const revenueEur = Number(r.vsm_earnings_eur);
+    noteDualFeed("meta", String(r.ad_set_id), String(r.stat_date), revenueEur, Number(r.pfb_revenue_usd));
     const revenueUsd = Number(r.pfb_revenue_usd) + visymoUsd;
     const roiPct = spendUsd > 0 ? (revenueUsd / spendUsd) * 100 : null;
     combined.push({
@@ -366,6 +394,16 @@ export async function GET(request: NextRequest) {
     if (dateCmp !== 0) return dateCmp;
     return b.spend_usd - a.spend_usd;
   });
+
+  // One greppable aggregate in addition to the per-row detail above. Deliberately not
+  // added to the response body: nothing in the UI consumes it, and an unread field is
+  // the same half-built trap as the DEEP_LINK branch that was removed today.
+  if (dualFeedRows > 0) {
+    console.error(
+      `[reporting/combined] ${dualFeedRows} of ${combined.length} rows had revenue from BOTH feeds ` +
+        `and are double counted. ROI and profit are overstated for those rows.`
+    );
+  }
 
   return NextResponse.json({ rows: combined, eur_to_usd: eurToUsd });
 }
