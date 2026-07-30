@@ -72,8 +72,9 @@ Run every item. Mark PASS or flag with severity.
 
 ### Campaigns
 - `objective_v2_properties.objective_v2_type` is `"SALES"` — not legacy `objective` field
-- `daily_budget_micro` minimum is 20,000,000 (= $20)
-- `lifetime_spend_cap_micro` is NOT present on `SnapCampaignPayload` or in any campaign payload
+- Campaign `daily_budget_micro` minimum is 20,000,000 (= $20). The **ad-squad** `daily_budget_micro` minimum is 5,000,000 (= $5) — different floor, don't conflate them.
+- The Snapchat create routes validate with `z.array(z.record(z.string(), z.unknown()))`, not closed `z.object`s, so the Meta-style silent-strip hazard does **not** exist here. The flip side: the routes perform no server-side enum or type validation at all, so every value guarantee rests on `synthesize-campaign.ts` and `src/lib/validations/*.schema.ts`.
+- `lifetime_spend_cap_micro` is NOT present on `SnapCampaignPayload` or in any campaign payload. Note this is an app choice, not an API constraint — the campaigns doc lists the field as a valid optional campaign field.
 - `lifetime_budget_micro` is NOT present on `SnapCampaignPayload` (ad-squad only field)
 - `spend_cap_type` is NOT present on `SnapCampaignPayload` (ad-squad only field)
 
@@ -85,20 +86,21 @@ Run every item. Mark PASS or flag with severity.
 - `pacing_type` is hardcoded to `"STANDARD"`
 - Valid `optimization_goal` values are exactly: `PIXEL_PURCHASE`, `PIXEL_SIGNUP`, `PIXEL_ADD_TO_CART`, `PIXEL_PAGE_VIEW`, `LANDING_PAGE_VIEW` — no others (SWIPES, IMPRESSIONS, etc. cause E2844)
 - `frequency_cap_max_impressions`, `frequency_cap_time_period`, `shareable` are NOT present on `SnapAdSquadPayload`
-- `devices[].device_type` is `"MOBILE"` or `"WEB"` — no other values
-- `os_type` is optional and only sent when device is MOBILE
+- `devices[].device_type` is `"MOBILE"` or `"TABLET"` — `"WEB"` is an `os_type` value, not a `device_type`. The app sends only `{os_type, operation}` and never `device_type` at all, which is valid.
+- `os_type` is `iOS`, `ANDROID`, or `WEB`; multiple INCLUDE entries OR together
 
 ### Creatives
-- `type` is always `"SNAP_AD"` — never `"WEB_VIEW"` (E1008 confirmed hard constraint)
+- `type` is `"SNAP_AD"` or `"WEB_VIEW"` (or `"COLLECTION"` for catalogue ads). `WEB_VIEW` creative paired with a `REMOTE_WEBPAGE` ad is the doc-correct pairing for a web-destination campaign and is confirmed live — see `INTERACTION_TYPE_MAP`/`AD_TYPE_MAP` in `submission-orchestrator.ts`. Do not report the pairing as a defect.
 - `profile_properties.profile_id` is present, non-null, and is a plain `string` type — not optional, no `Record<string, unknown>` union (E2652 if absent, E2006 if null)
 - `call_to_action` is NOT sent on SNAP_AD creatives (E2002 "call to action must be null")
 - `headline` max 34 characters is enforced
 - `web_view_properties.url` is used for WEB_VIEW interaction type
-- `deep_link_properties.deep_link_url` is used for DEEP_LINK/APP_INSTALL interaction types
+- `deep_link_properties.deep_link_uri` (`_uri`, not `_url`) is used for DEEP_LINK interaction types. The docs also mark `app_name` (max 30) and `icon_media_id` required, plus one of `ios_app_id`/`android_app_url`, and campaign `measurement_spec`. The app sends only `deep_link_uri`, but no UI reaches the branch — `synthesize-campaign.ts` hardcodes `WEB_VIEW`.
 - `shareable` is NOT present on `SnapCreativePayload`
 
 ### Ads
-- `type` is always `"SNAP_AD"` — not `"WEB_VIEW"`, `"DEEP_LINK"`, or `"APP_INSTALL"` (E2002)
+- `type` is `"SNAP_AD"`, `"REMOTE_WEBPAGE"` (the web-destination pairing above), or `"COLLECTION"`. `"DEEP_LINK"`/`"APP_INSTALL"` are not used by this app.
+- `render_type` is documented as a read-only response attribute, but a live Collection launch returned E2841 without it. The app sends it for catalogue ads only — trust the live evidence over the doc here.
 - `web_view_properties` is NOT sent on the Ad payload (lives on Creative only)
 - `deep_link_properties` is NOT sent on the Ad payload (lives on Creative only)
 - Ad payload contains only: `ad_squad_id`, `creative_id`, `name`, `type`, `status`
@@ -111,14 +113,14 @@ Run every item. Mark PASS or flag with severity.
 ### Media Upload
 - Chunk size is 4 MB — NOT 5 MB (Vercel 4.5 MB payload limit)
 - File name is sanitized to `[a-zA-Z0-9._\-]` before POST to create media entity
-- Poll retry loop (90 × 2s) runs in `uploadMediaToSnapchat.ts` (client-side) — NOT inside a Vercel serverless function
+- Poll retry loop (150 × 2s = 5 min) runs in `uploadMediaToSnapchat.ts` (client-side) — NOT inside a Vercel serverless function
 
 ---
 
 ## EMBEDDED FIELD NOTES (fallback ground truth when live docs unavailable)
 
 - Campaign objective: `objective_v2_properties.objective_v2_type` = `"SALES"` (hardcoded). Legacy `objective` field is deprecated.
-- Campaign budget: only `daily_budget_micro` supported. `lifetime_spend_cap_micro`, `lifetime_budget_micro`, `spend_cap_type` are NOT valid on campaigns.
+- Campaign budget: only `daily_budget_micro` is sent. `lifetime_budget_micro` and `spend_cap_type` are ad-squad-only fields; `lifetime_spend_cap_micro` IS a valid campaign field per the docs but this app deliberately never sends it.
 - Ad squad `conversion_location` = `"WEB"` (hardcoded). `pacing_type` = `"STANDARD"` (hardcoded).
 - Valid optimization goals for SALES+WEB: `PIXEL_PURCHASE`, `PIXEL_SIGNUP`, `PIXEL_ADD_TO_CART`, `PIXEL_PAGE_VIEW`, `LANDING_PAGE_VIEW` only. Goals from other objectives (SWIPES, IMPRESSIONS) cause E2844.
 - Ad squad pixel: only `pixel_id` sent. `pixel_conversion_event` is NOT a valid API field (E1001).
