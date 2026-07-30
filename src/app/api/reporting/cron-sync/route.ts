@@ -62,6 +62,14 @@ export async function GET(request: NextRequest) {
   const today = todayStr();
   const startDate = nDaysAgoStr(1); // today + yesterday
 
+  // Fetched before the Snap loop because channel status sync needs both tokens: a
+  // user's in-use channels can span Snap and Meta, and each channel must be checked
+  // against the platform that issued its ad_squad_snap_id.
+  const metaTokens = await getAllUserMetaTokens();
+  const metaTokenByUser = new Map(
+    metaTokens.filter((u) => Date.now() <= u.expires_at).map((u) => [u.google_user_id, u.access_token])
+  );
+
   // :15 run = Visymo window (sync Visymo feed + Visymo Snap accounts)
   // :46 run = Predicto window  (sync Predicto feed + Predicto Snap accounts)
   const isVisymoRun = new Date().getUTCMinutes() < 30;
@@ -89,7 +97,10 @@ export async function GET(request: NextRequest) {
       // Update paused_since for all in-use channels before normalizeChannelStatuses
       // runs lazily on next assignChannel/listChannels call.
       try {
-        const channelSync = await syncChannelPausedStatus(user.google_user_id, accessToken);
+        const channelSync = await syncChannelPausedStatus(user.google_user_id, {
+          snapAccessToken: accessToken,
+          metaAccessToken: metaTokenByUser.get(user.google_user_id),
+        });
         if (channelSync.checked > 0) {
           console.log(`[cron-sync] channel sync for ${user.google_user_id}:`, channelSync);
         }
@@ -132,9 +143,25 @@ export async function GET(request: NextRequest) {
     })
   );
 
+  // Meta-connected users with no Snapchat token never enter the loop above, so their
+  // Meta channels would never have paused_since maintained at all.
+  const snapUserIds = new Set(userTokens.map((u) => u.google_user_id));
+  await Promise.allSettled(
+    [...metaTokenByUser].map(async ([googleUserId, metaAccessToken]) => {
+      if (snapUserIds.has(googleUserId)) return;
+      try {
+        const channelSync = await syncChannelPausedStatus(googleUserId, { metaAccessToken });
+        if (channelSync.checked > 0) {
+          console.log(`[cron-sync] channel sync (Meta-only) for ${googleUserId}:`, channelSync);
+        }
+      } catch (err) {
+        console.error(`[cron-sync] Meta-only channel status sync failed for user ${googleUserId}:`, err);
+      }
+    })
+  );
+
   // ── Meta account sync ──────────────────────────────────────────────────────
   let totalMetaAccounts = 0;
-  const metaTokens = await getAllUserMetaTokens();
   await Promise.allSettled(
     metaTokens.map(async (user) => {
       if (Date.now() > user.expires_at) {

@@ -306,11 +306,16 @@ export async function bulkForceChannelStatus(
 }
 
 export async function getInUseChannelsWithoutSquadId(googleUserId: string): Promise<ChannelRow[]> {
+  // campaign_snap_id <> '' matters: both orchestrators assign a channel with
+  // campaignSnapId: "" and only fill in the real id later via link-squad. An empty
+  // string passes IS NOT NULL, so without this filter the backfill pass below issues
+  // a lookup against campaign "" on every tick and logs a guaranteed failure.
   const { rows } = await sql<ChannelRow>`
     SELECT * FROM feed_provider_channels
     WHERE google_user_id       = ${googleUserId}
       AND status               = 'in-use'
       AND campaign_snap_id     IS NOT NULL
+      AND campaign_snap_id     <> ''
       AND ad_squad_snap_id     IS NULL
     ORDER BY in_use_since ASC
   `;

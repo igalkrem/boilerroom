@@ -118,6 +118,10 @@ export interface MetaAdSetPayload {
 export interface MetaAdSet extends MetaAdSetPayload {
   id: string;
   account_id: string;
+  // Delivery status, distinct from the admin `status` field: an ad set with
+  // status ACTIVE reads CAMPAIGN_PAUSED here when its parent campaign is paused.
+  // Only requested by endpoints that ask for it explicitly (getAdSet/getAdSets).
+  effective_status?: string;
 }
 
 // ─── Ad Creatives ───────────────────────────────────────────────────────────
