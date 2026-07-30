@@ -33,6 +33,9 @@ const adSetShape = z
     bid_amount: z.number().int().nonnegative().optional(),
     daily_budget: z.number().int().positive().optional(),
     lifetime_budget: z.number().int().positive().optional(),
+    // No upper bound on purpose: with a provider's roasDisplayDivisor at 100 a
+    // legitimate "90%" cell stores 900000, so no single ceiling is correct here.
+    // See lib/roas-floor.ts.
     bid_constraints: z.object({ roas_average_floor: z.number().positive() }).passthrough().optional(),
     is_dynamic_creative: z.boolean().optional(),
     start_time: z.string().optional(),
@@ -54,7 +57,9 @@ const patchSchema = z.object({
     daily_budget: z.number().optional(),
     bid_amount: z.number().optional(),
     bid_strategy: z.enum(["LOWEST_COST_WITHOUT_CAP", "COST_CAP", "LOWEST_COST_WITH_MIN_ROAS"]).optional(),
-    bid_constraints: z.object({ roas_average_floor: z.number() }).optional(),
+    // Positive-only is the one safe tightening here (it was a bare z.number(), so
+    // zero and negatives passed). No ceiling — see the create path above.
+    bid_constraints: z.object({ roas_average_floor: z.number().positive() }).optional(),
   }),
 });
 

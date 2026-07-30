@@ -13,6 +13,7 @@ import type { FeedProvider } from "@/types/feed-provider";
 import type { SavedPixel } from "@/types/pixel";
 import type { SavedMetaPixel } from "@/types/meta-pixel";
 import type { CountryGroup } from "@/types/country-group";
+import { formatRoasPercent } from "@/lib/roas-floor";
 
 function geoText(preset: CampaignPreset, groupMap: Record<string, CountryGroup>): string {
   if (preset.countryGroupId) {
@@ -54,7 +55,11 @@ function metaBidText(metaAdSet?: MetaAdSetPresetData): string {
     return `Cost cap $${(metaAdSet.bidAmountCents / 100).toFixed(2)}`;
   }
   if (metaAdSet.bidStrategy === "LOWEST_COST_WITH_MIN_ROAS" && metaAdSet.roasFloor) {
-    return `ROAS floor ${(metaAdSet.roasFloor * 100).toFixed(0)}%`;
+    // Percentage of the stored RATIO. Note two conventions coexist across saved
+    // presets (0.9 and 90) because the orchestrator applies no roasDisplayDivisor —
+    // whether a value is right depends on the provider. Not flagged as an error here
+    // for that reason; see lib/roas-floor.ts.
+    return `ROAS floor ${formatRoasPercent(metaAdSet.roasFloor)}`;
   }
   return "Lowest cost";
 }

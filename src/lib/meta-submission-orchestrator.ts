@@ -10,6 +10,7 @@ import type {
 } from "@/types/meta";
 import { buildAdvantagePlusCreativeFeatures } from "@/lib/meta/creative-features";
 import { updateMetaUpload } from "@/lib/silo";
+import { toRoasAverageFloor } from "@/lib/roas-floor";
 
 type OnStageChange = (stage: string) => void;
 
@@ -234,7 +235,7 @@ export async function runMetaSubmission(
       // through bid_amount instead (at *1000 and *10000 scale) and both failed
       // with "Bid Strategy Doesn't Support Value Optimization" — wrong field,
       // not wrong scale.
-      adSetPayload.bid_constraints = { roas_average_floor: Math.round(synthesis.adSet.roasFloor * 10000) };
+      adSetPayload.bid_constraints = { roas_average_floor: toRoasAverageFloor(synthesis.adSet.roasFloor) };
     }
   }
 

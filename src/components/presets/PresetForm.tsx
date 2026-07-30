@@ -18,6 +18,7 @@ import type { CampaignPreset, MetaAdSetPresetData } from "@/types/preset";
 import type { SavedPixel } from "@/types/pixel";
 import type { SavedMetaPixel } from "@/types/meta-pixel";
 import type { FeedProvider } from "@/types/feed-provider";
+import { formatRoasPercent, toRoasAverageFloor } from "@/lib/roas-floor";
 import type { MetaOptimizationGoal, MetaBillingEvent, MetaPixelEvent, MetaBidStrategy } from "@/types/meta";
 import type { CountryGroup } from "@/types/country-group";
 
@@ -747,17 +748,28 @@ export function PresetForm({ preset }: PresetFormProps) {
             {metaBidChoice === "value" && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  ROAS Goal (optional)
+                  ROAS Goal — ratio, not percent (optional)
                 </label>
                 <input
                   type="number"
-                  min={0.1}
+                  min={0.01}
                   step={0.1}
                   value={metaRoasGoal ?? ""}
                   onChange={(e) => setMetaRoasGoal(e.target.value ? Number(e.target.value) : undefined)}
                   placeholder="e.g. 0.9 = 90%, 4 = 400% return"
                   className={selectCls}
                 />
+                {/* Echo the entered ratio back as a percentage, so the ratio-vs-percent
+                    ambiguity is visible while typing. Informational only — deliberately
+                    NOT a validity judgement: the correct magnitude depends on the feed
+                    provider's roasDisplayDivisor, so a value like 90 is right for a
+                    divisor-100 provider and wrong for a divisor-1 one. See lib/roas-floor.ts. */}
+                {metaRoasGoal !== undefined && (
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    = {formatRoasPercent(metaRoasGoal)} return — sent as roas_average_floor{" "}
+                    {toRoasAverageFloor(metaRoasGoal)}
+                  </p>
+                )}
               </div>
             )}
 
