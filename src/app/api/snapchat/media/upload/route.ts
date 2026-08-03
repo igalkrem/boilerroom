@@ -17,13 +17,11 @@ export async function POST(request: NextRequest) {
   }
 
 
-  let accessToken: string;
-  try {
-    accessToken = await getValidAccessToken();
-  } catch {
-    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
-  }
-
+  // CR-11: validate and authorize BEFORE touching the token. getValidAccessToken() used
+  // to run here, above the parse and above isAdAccountAllowed — so a caller who was
+  // about to be rejected still caused a token fetch on the session owner's behalf, and
+  // a refresh at that point ROTATES the Snapchat refresh token. Same ordering as
+  // upload-init/upload-finalize/upload-from-blob.
   const formData = await request.formData();
   const file = formData.get("file") as File | null;
   const mediaId = formData.get("mediaId") as string | null;
@@ -45,6 +43,13 @@ export async function POST(request: NextRequest) {
   const ALLOWED_MIME_TYPES = ["video/mp4", "image/jpeg", "image/png", "image/gif"];
   if (!ALLOWED_MIME_TYPES.includes(file.type)) {
     return NextResponse.json({ error: "unsupported_file_type" }, { status: 400 });
+  }
+
+  let accessToken: string;
+  try {
+    accessToken = await getValidAccessToken();
+  } catch {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
 
   // Correct Snapchat upload endpoint: /media/{media_id}/upload (no /adaccounts/ prefix)

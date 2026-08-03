@@ -92,12 +92,28 @@ export async function POST(request: NextRequest) {
   }
 
   // Pin paths server-side so upload-chunk and upload-finalize ignore the client's copy.
-  session.pendingUploads = session.pendingUploads ?? {};
-  session.pendingUploads[data.upload_id] = {
+  //
+  // CR-13: read the session again rather than reusing the snapshot from the top of the
+  // handler. getValidAccessToken() above takes its own getSession() and, on a refresh,
+  // saves new snapAccessToken/snapRefreshToken/snapExpiresAt to that instance. Saving the
+  // older snapshot writes the pre-refresh values back — and since Snapchat ROTATES
+  // refresh tokens, that leaves the cookie holding one Snapchat already invalidated,
+  // breaking the connection for every later request.
+  //
+  // Unlike upload-finalize, this save CANNOT be moved before the token fetch: upload_id
+  // only exists after the Snapchat call. So this relies on a second getSession()
+  // observing the cookie written earlier in the same request. I could not verify that
+  // read-after-write behaviour on Next's cookie store, so treat this as unproven — but it
+  // is never WORSE than the previous code, which unconditionally wrote a stale snapshot.
+  // If token loss is ever observed here, the fix is to have getValidAccessToken() return
+  // its session so callers can mutate that instance directly.
+  const freshSession = await getSession();
+  freshSession.pendingUploads = freshSession.pendingUploads ?? {};
+  freshSession.pendingUploads[data.upload_id] = {
     addPath: normalizedAddPath,
     finalizePath: normalizedFinalizePath,
   };
-  await session.save();
+  await freshSession.save();
 
   return NextResponse.json({
     ...data,

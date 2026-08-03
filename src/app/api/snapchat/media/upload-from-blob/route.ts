@@ -87,11 +87,18 @@ export async function POST(request: NextRequest) {
     // giving up — mirrors the same pattern in snapFetch() for 401s.
     if (snapRes.status === 401 || snapRes.status === 403) {
       try {
-        const tokens = await refreshAccessToken(session.snapRefreshToken!);
-        session.snapAccessToken = tokens.access_token;
-        if (tokens.refresh_token) session.snapRefreshToken = tokens.refresh_token;
-        session.snapExpiresAt = Date.now() + tokens.expires_in * 1000;
-        await session.save();
+        // CR-13: read the session again instead of reusing the snapshot from the top of
+        // the handler. getValidAccessToken() above may already have refreshed and, since
+        // Snapchat ROTATES refresh tokens, the snapshot's snapRefreshToken can be the
+        // old one Snapchat has since invalidated — refreshing with it fails, so the
+        // retry that exists specifically to rescue this request could never succeed.
+        // Saving the stale snapshot would also write pre-refresh token values back.
+        const freshSession = await getSession();
+        const tokens = await refreshAccessToken(freshSession.snapRefreshToken!);
+        freshSession.snapAccessToken = tokens.access_token;
+        if (tokens.refresh_token) freshSession.snapRefreshToken = tokens.refresh_token;
+        freshSession.snapExpiresAt = Date.now() + tokens.expires_in * 1000;
+        await freshSession.save();
 
         const retryForm = new FormData();
         retryForm.append("file", new Blob([arrayBuffer], { type: contentType }), fileName ?? "media");

@@ -32,8 +32,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
 
+  // SEC-24 flagged `pageIds` as unconstrained while `accountIds` is checked. Re-examined:
+  // it does not leak. The ads_volume sweep below only ever covers session-owned accounts
+  // (see the IDOR guard), and any page not seen in those accounts keeps its default 0 —
+  // so passing another tenant's page id returns 0 and reveals nothing about it. A page
+  // that DOES report a count is by definition running ads in the caller's own accounts.
+  //
+  // What is worth bounding is the array size: it becomes a Set held for the whole sweep
+  // and is echoed back key-by-key in the response.
+  const MAX_PAGE_IDS = 500; // far above any real launch; the ad-limits UI tops out near 250
   const pageIds = Array.isArray(body.pageIds)
-    ? body.pageIds.filter((x): x is string => typeof x === "string")
+    ? body.pageIds.filter((x): x is string => typeof x === "string").slice(0, MAX_PAGE_IDS)
     : [];
   if (pageIds.length === 0) return NextResponse.json({ counts: {} });
 

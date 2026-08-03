@@ -13,10 +13,14 @@ export async function POST(request: NextRequest) {
   }
 
 
-  const { mediaId, adAccountId } = (await request.json()) as {
-    mediaId: string;
-    adAccountId: string;
-  };
+  // Guarded parse: an unguarded await request.json() throws on a malformed body and
+  // surfaces as an unhandled 500 rather than the 400 this clearly is.
+  const body = (await request.json().catch(() => null)) as {
+    mediaId?: string;
+    adAccountId?: string;
+  } | null;
+  const mediaId = body?.mediaId;
+  const adAccountId = body?.adAccountId;
 
   if (!mediaId || !adAccountId) {
     return NextResponse.json({ error: "missing_params" }, { status: 400 });

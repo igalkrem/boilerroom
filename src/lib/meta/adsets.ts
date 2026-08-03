@@ -21,7 +21,11 @@ export async function getAdSets(
   token?: string
 ): Promise<MetaAdSet[]> {
   const data = await metaFetch<{ data: MetaAdSet[] }>(
-    `/${campaignId}/adsets?fields=id,name,status,effective_status,targeting,billing_event,optimization_goal,bid_amount,daily_budget,lifetime_budget,promoted_object,start_time,end_time,campaign_id,account_id`,
+    // META-5: bid_strategy and bid_constraints are requested explicitly. MetaAdSet
+    // declares both, but Graph only returns what `fields=` names — and their absence
+    // from a GET is precisely what hid the ROAS bug where a LOWEST_COST_WITH_MIN_ROAS
+    // ad set read back as having no bid target at all.
+    `/${campaignId}/adsets?fields=id,name,status,effective_status,targeting,billing_event,optimization_goal,bid_strategy,bid_amount,bid_constraints,daily_budget,lifetime_budget,promoted_object,start_time,end_time,campaign_id,account_id`,
     {},
     token
   );

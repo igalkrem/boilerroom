@@ -212,6 +212,42 @@ export default function PerformancePage() {
     isRefreshing.current = false;
   }, [loadFromDb, activeMetaAccounts]);
 
+  /**
+   * DR-10: heal a range whose cached rows may be stale.
+   *
+   * `loadFromDb(...).then(count => count === 0 && sync())` only re-syncs when EVERY
+   * account returns zero rows for the range. A range holding partial data — some
+   * accounts synced, or a day the cron only half-covered — has count > 0 and was
+   * therefore served from cache indefinitely, with no path back to fresh numbers short
+   * of the manual refresh button.
+   *
+   * The mount path already had this feed-overdue safety net; the date-change path did
+   * not. Keyed on feed freshness rather than on "any rows missing" deliberately: for a
+   * historical range the cache is exactly as fresh as the cron made it, so syncing on
+   * every partial range would fire a sync on each date-shift click for no gain.
+   * predicto_fb is included here (the mount version omitted it), since it is the Meta
+   * revenue feed and Meta accounts are equally affected.
+   */
+  const healIfFeedsOverdue = useCallback(
+    async (accts: SnapAdAccount[], start: string, end: string) => {
+      const OVERDUE_MIN = 75; // cron runs at :15 and :46, so >75 min means a miss
+      try {
+        const res = await fetch("/api/reporting/sync-status");
+        if (!res.ok) return;
+        const s = (await res.json()) as Record<string, { feedLastSynced: string | null } | undefined>;
+        const overdue = (ts: string | null | undefined) =>
+          typeof ts === "string" && (Date.now() - new Date(ts).getTime()) / 60_000 > OVERDUE_MIN;
+        const anyOverdue = ["visymo", "predicto", "predicto_fb"].some((k) => overdue(s[k]?.feedLastSynced));
+        if (anyOverdue) {
+          void syncAndReload(accts, start, end, true);
+        }
+      } catch {
+        // Best-effort heal — never block the render on it.
+      }
+    },
+    [syncAndReload]
+  );
+
   const loadSquadDetails = useCallback(async (accts: SnapAdAccount[]) => {
     type AccountSquads = {
       accountId: string;
@@ -368,16 +404,7 @@ export default function PerformancePage() {
           void syncAndReload(activeAccounts, startDate, endDate, true);
         } else {
           // Cron-miss safety net: auto-heal if any feed is overdue (>75 min).
-          void fetch("/api/reporting/sync-status")
-            .then((r) => r.json())
-            .then((s: { visymo: { feedLastSynced: string | null }; predicto: { feedLastSynced: string | null } }) => {
-              const overdue = (ts: string | null) =>
-                ts !== null && (Date.now() - new Date(ts).getTime()) / 60_000 > 75;
-              if (overdue(s.visymo.feedLastSynced) || overdue(s.predicto.feedLastSynced)) {
-                void syncAndReload(activeAccounts, startDate, endDate, true);
-              }
-            })
-            .catch(() => {});
+          void healIfFeedsOverdue(activeAccounts, startDate, endDate);
         }
       });
       void loadLast30Days(activeAccounts);
@@ -400,6 +427,10 @@ export default function PerformancePage() {
     void loadFromDb(activeAccounts, start, end).then((count) => {
       if (count === 0) {
         void syncAndReload(activeAccounts, start, end, true);
+      } else {
+        // DR-10: count > 0 no longer means "nothing to do" — a partially-populated
+        // range used to be served from cache forever. See healIfFeedsOverdue.
+        void healIfFeedsOverdue(activeAccounts, start, end);
       }
     });
   }

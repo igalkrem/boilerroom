@@ -256,9 +256,16 @@ export interface MetaAdPayload {
   creative_asset_groups_spec?: MetaCreativeAssetGroupsSpec;
 }
 
-export interface MetaAd extends MetaAdPayload {
+// META-5: MetaAd used to extend MetaAdPayload wholesale, which made it claim
+// `creative: { creative_id: string }` on reads. Graph returns `creative: { id }` when
+// reading an ad — `creative_id` is a WRITE-only field name — so all three read sites
+// (`meta/ads`, `meta/ad-media`, `meta/debug/test-launch`) had to cast the type away with
+// `ad.creative as { id?: string }`. Omitting and re-declaring the field lets the read
+// sites use it directly, and a cast that has to be repeated is a sign the type is wrong.
+export interface MetaAd extends Omit<MetaAdPayload, "creative"> {
   id: string;
   account_id?: string;
+  creative?: { id?: string; creative_id?: string };
 }
 
 // ─── Media uploads ──────────────────────────────────────────────────────────

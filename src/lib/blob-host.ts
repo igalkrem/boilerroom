@@ -22,13 +22,25 @@ function ownStoreId(): string | null {
   return parts[3]?.toLowerCase() || null;
 }
 
+// CR-8: the fallback warning fired once per URL, and callers like the catalogue delete
+// path check up to 50 URLs per request — 50 identical lines per request buries the signal
+// it exists to raise. Latch it so the condition is reported once per process instead.
+let warnedMissingToken = false;
+
 /**
  * True only for a URL whose host is a Vercel Blob host belonging to this project's
  * store. Never throws — a malformed URL is simply not ours.
  *
- * If the token can't be parsed we fall back to the suffix-only check rather than
- * rejecting every blob URL, since a hard failure here would break all uploads and
- * transcoding. The warning makes that state observable instead of silent.
+ * CR-8: this used to FAIL OPEN when the token was missing or unparseable, returning true
+ * for any `*.blob.vercel-storage.com` host — i.e. any Vercel customer's public store, not
+ * just ours. Callers then fetch that URL server-side and hand it to Snapchat/Meta as a
+ * file_url, so failing open is an SSRF-shaped hole, not a convenience.
+ *
+ * The old justification was that failing closed "would break all uploads and transcoding".
+ * That reasoning is inverted: writing to Blob REQUIRES this token, so if it is genuinely
+ * absent in production, uploads are already broken and rejecting reads costs nothing.
+ * Confirmed set for Production on Vercel. Development keeps the permissive fallback so a
+ * local checkout without the token still works.
  */
 export function isOwnBlobUrl(raw: string): boolean {
   let host: string;
@@ -41,8 +53,17 @@ export function isOwnBlobUrl(raw: string): boolean {
 
   const store = ownStoreId();
   if (!store) {
-    console.warn("[blob-host] BLOB_READ_WRITE_TOKEN missing/unparseable — falling back to suffix-only host check");
-    return true;
+    if (!warnedMissingToken) {
+      warnedMissingToken = true;
+      console.error(
+        "[blob-host] BLOB_READ_WRITE_TOKEN missing/unparseable — cannot identify this project's " +
+          "blob store." +
+          (process.env.NODE_ENV === "production"
+            ? " REJECTING all blob URLs; uploads require this token anyway, so it must be set."
+            : " Falling back to a suffix-only host check (development only).")
+      );
+    }
+    return process.env.NODE_ENV !== "production";
   }
   return host.startsWith(`${store}.`);
 }

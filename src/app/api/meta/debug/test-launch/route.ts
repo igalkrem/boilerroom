@@ -428,6 +428,9 @@ export async function POST(request: NextRequest) {
       {},
       token
     );
+    // Cast is genuinely needed here, unlike the MetaAd-typed read sites: this debug
+    // helper fetches into Record<string, unknown> on purpose, to dump whatever Graph
+    // returns without a type gating the field list.
     const creativeId = (ad.creative as { id?: string } | undefined)?.id;
     let creativeCore: unknown = null;
     let creativeExtra: unknown = null;

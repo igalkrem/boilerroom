@@ -37,12 +37,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  let accessToken: string;
-  try {
-    accessToken = await getValidAccessToken();
-  } catch {
-    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
-  }
+  // CR-13: mutate and save the session BEFORE fetching the token, so the token fetch is
+  // the LAST writer of the cookie.
+  //
+  // getValidAccessToken() takes its own getSession() and, on a refresh, writes new
+  // snapAccessToken/snapRefreshToken/snapExpiresAt and saves. This handler used to save
+  // its own older snapshot afterwards, overwriting those values — and because Snapchat
+  // ROTATES refresh tokens, discarding the rotation leaves the cookie holding a token
+  // Snapchat has already invalidated, breaking the Snap connection until the user
+  // reconnects.
+  //
+  // Ordering it this way rather than re-reading the session afterwards is deliberate: it
+  // does not depend on whether a second getSession() in the same request observes a
+  // cookie written earlier in that request (read-after-write on Next's cookie store),
+  // which is an assumption I could not verify. Last-writer-wins is unambiguous.
 
   // Use the server-pinned finalizePath stored at upload-init time — ignore the client-supplied value.
   const pinnedFinalizePath = session.pendingUploads?.[uploadId]?.finalizePath;
@@ -52,6 +60,13 @@ export async function POST(request: NextRequest) {
   // Clean up after use so the session doesn't grow unboundedly.
   delete session.pendingUploads![uploadId];
   await session.save();
+
+  let accessToken: string;
+  try {
+    accessToken = await getValidAccessToken();
+  } catch {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+  }
 
   const finalizeUrl = `https://adsapi.snapchat.com${pinnedFinalizePath}`;
 

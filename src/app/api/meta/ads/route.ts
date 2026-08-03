@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     if (!ad.account_id || !isMetaAdAccountAllowed(session, `act_${ad.account_id}`)) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
-    const creativeId = (ad.creative as { id?: string } | undefined)?.id;
+    const creativeId = ad.creative?.id;
     const creative = creativeId ? await getAdCreative(creativeId) : null;
     return NextResponse.json({ ad, creative });
   } catch (err) {

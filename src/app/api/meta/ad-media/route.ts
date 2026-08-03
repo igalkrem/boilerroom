@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
         statusByAdId.set(adId, { adId, error: "forbidden" });
         return;
       }
-      const creativeId = (ad.creative as { id?: string } | undefined)?.id;
+      const creativeId = ad.creative?.id;
       const creative = creativeId ? await getAdCreative(creativeId).catch(() => null) : null;
       adsByAdId.set(adId, { adId, ad, creative });
       statusByAdId.set(adId, { adId, adName: ad.name });
