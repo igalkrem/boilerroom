@@ -83,22 +83,86 @@ function getClientIp(req: NextRequest): string {
   );
 }
 
+// Per-request CSP nonce, replacing `script-src 'unsafe-inline'`.
+//
+// The CSP used to live in next.config.mjs, whose headers are static — a nonce has to be
+// fresh per request, so it can only be built here. The policy is now owned by this file
+// and must NOT be re-added to next.config.mjs: two CSP headers are enforced
+// independently and a script has to satisfy both, so a stray second policy silently
+// subtracts from this one.
+//
+// 'strict-dynamic' makes supporting browsers ignore 'self' for scripts and instead trust
+// whatever a nonced script loads, which is how the webpack chunks get through. 'self'
+// stays as the fallback for browsers that do not implement strict-dynamic.
+//
+// style-src keeps 'unsafe-inline' on purpose: Next injects inline <style> during
+// hydration and route transitions, those cannot be nonced the way scripts can, and
+// injected CSS does not execute — script execution is the risk this closes.
+function buildCsp(nonce: string): string {
+  const isDev = process.env.NODE_ENV === "development";
+  return [
+    "default-src 'self'",
+    // 'unsafe-eval' is dev-only: the webpack HMR client and React Fast Refresh need it.
+    isDev
+      ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval'`
+      : `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https://*.public.blob.vercel-storage.com https://lh3.googleusercontent.com",
+    "media-src 'self' blob: https://*.public.blob.vercel-storage.com",
+    // ws:/wss: are dev-only, for the HMR socket back to the dev server.
+    isDev
+      ? "connect-src 'self' ws: wss: https://adsapi.snapchat.com https://accounts.snapchat.com https://*.public.blob.vercel-storage.com https://blob.vercel-storage.com https://vercel.com"
+      : "connect-src 'self' https://adsapi.snapchat.com https://accounts.snapchat.com https://*.public.blob.vercel-storage.com https://blob.vercel-storage.com https://vercel.com",
+    "worker-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+  ].join("; ");
+}
+
 export function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
+
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  const nonce = btoa(String.fromCharCode(...bytes));
+  const csp = buildCsp(nonce);
+
+  const withCsp = (res: NextResponse) => {
+    res.headers.set("Content-Security-Policy", csp);
+    return res;
+  };
+
+  // Next stamps this nonce onto its own bootstrap/hydration <script> tags by reading the
+  // CSP off the REQUEST, which is why it goes on the request headers and not just the
+  // response. There are no hand-written inline scripts in src/, so nothing else needs it
+  // threaded through; a future one would read `headers().get('x-nonce')` and set `nonce`
+  // on the tag. Note this is also why the root layout forces dynamic rendering — a
+  // prerendered page would carry build-time HTML with no nonce and its scripts would be
+  // blocked.
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", csp);
+  const passThrough = () => withCsp(NextResponse.next({ request: { headers: requestHeaders } }));
 
   // Vercel Cron is the only caller and it is authenticated by CRON_SECRET. A false
   // 429 here means every tenant's reporting silently goes stale, which is a worse
   // outcome than anything the limit would prevent. No bucket matches it today; this
   // guard keeps that true if someone later adds a broad /api/reporting/ bucket.
-  if (path === "/api/reporting/cron-sync") return NextResponse.next();
+  if (path === "/api/reporting/cron-sync") return passThrough();
 
-  // Runs for every /api/* path in the matcher, not just rate-limited ones.
+  // Runs for every path in the matcher, not just rate-limited ones. Since the matcher
+  // widened to cover documents for the CSP, this now guards page POSTs too — there are
+  // no server actions today, so nothing legitimate is affected.
   if (isCrossSiteWrite(req)) {
-    return NextResponse.json({ error: "cross_site_request_blocked" }, { status: 403 });
+    return withCsp(
+      NextResponse.json({ error: "cross_site_request_blocked" }, { status: 403 })
+    );
   }
 
   const bucket = BUCKETS.find((b) => path.startsWith(b.prefix));
-  if (!bucket) return NextResponse.next();
+  if (!bucket) return passThrough();
 
   // Key on the bucket, not the raw path, so ids in the path cannot be varied to
   // mint a fresh allowance.
@@ -111,12 +175,14 @@ export function middleware(req: NextRequest) {
   } else {
     entry.count++;
     if (entry.count > bucket.limit) {
-      return NextResponse.json(
-        { error: "too_many_requests" },
-        {
-          status: 429,
-          headers: { "Retry-After": String(Math.ceil((entry.resetAt - now) / 1000)) },
-        }
+      return withCsp(
+        NextResponse.json(
+          { error: "too_many_requests" },
+          {
+            status: 429,
+            headers: { "Retry-After": String(Math.ceil((entry.resetAt - now) / 1000)) },
+          }
+        )
       );
     }
   }
@@ -126,13 +192,14 @@ export function middleware(req: NextRequest) {
     for (const [k, v] of rateMap) if (v.resetAt < now) rateMap.delete(k);
   }
 
-  return NextResponse.next();
+  return passThrough();
 }
 
-// All of /api/* — broader than BUCKETS on purpose. Paths with no matching bucket fall
-// straight through the rate limiter, but they still get the SEC-26 Origin check, which
-// only works if the middleware actually runs for them. The previous narrower list left
-// /api/feed-providers/*, /api/presets/* and others with no CSRF guard at all.
+// Everything except build assets. Wider than the old "/api/:path*" because the CSP nonce
+// has to reach document responses, and wider than BUCKETS because unbucketed paths still
+// need the SEC-26 Origin check, which only works if the middleware runs for them.
+// Excluding a document route here would leave it with NO CSP at all, which is worse than
+// the 'unsafe-inline' this replaced — extend the exclusions only for non-HTML assets.
 export const config = {
-  matcher: ["/api/:path*"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
