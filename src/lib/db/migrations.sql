@@ -90,7 +90,9 @@ CREATE INDEX IF NOT EXISTS fpc_ad_squad ON feed_provider_channels(ad_squad_snap_
 CREATE INDEX IF NOT EXISTS fpc_fp_status_source ON feed_provider_channels(feed_provider_id, status, traffic_source);
 
 -- Meta (Facebook) token storage — long-lived tokens (~60 days), no refresh token.
--- access_token_enc is AES-256-GCM encrypted using SESSION_SECRET, same as Snapchat tokens.
+-- access_token_enc is AES-256-GCM encrypted using TOKEN_ENCRYPTION_KEY, same as Snapchat
+-- tokens. See src/lib/db/token-crypto.ts — rows written before the SEC-15 backfill are in
+-- the legacy SESSION_SECRET-derived format and are distinguishable by the missing 'v2:' prefix.
 CREATE TABLE IF NOT EXISTS user_meta_tokens (
   google_user_id   TEXT        PRIMARY KEY,
   meta_user_id     TEXT        NOT NULL DEFAULT '',
