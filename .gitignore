@@ -42,3 +42,6 @@ yarn-error.log*
 next-env.d.ts
 public/ffmpeg/
 .env*
+
+# bundled one-shot migration scripts (built from scripts/*.ts by esbuild)
+scripts/.*.mjs
