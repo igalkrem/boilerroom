@@ -10,7 +10,7 @@ import type {
 } from "@/types/meta";
 import { buildAdvantagePlusCreativeFeatures } from "@/lib/meta/creative-features";
 import { updateMetaUpload } from "@/lib/silo";
-import { toRoasAverageFloor } from "@/lib/roas-floor";
+import { toRoasAverageFloorForProvider } from "@/lib/roas-floor";
 
 type OnStageChange = (stage: string) => void;
 
@@ -235,7 +235,19 @@ export async function runMetaSubmission(
       // through bid_amount instead (at *1000 and *10000 scale) and both failed
       // with "Bid Strategy Doesn't Support Value Optimization" — wrong field,
       // not wrong scale.
-      adSetPayload.bid_constraints = { roas_average_floor: toRoasAverageFloor(synthesis.adSet.roasFloor) };
+      //
+      // Scaled by the provider's roasDisplayDivisor: the preset holds a TRUE ratio, and
+      // providers whose pixel inflates reported conversion values need a proportionally
+      // larger stored floor to mean the same thing. This call used to omit the divisor, so
+      // the 0.9 preset launched at Predicto wrote a floor of 9000 against inflated values —
+      // no real floor at all, and 9 live ad sets ran at ~0.41x real ROAS because of it.
+      // See lib/roas-floor.ts for the measured per-pixel scales.
+      adSetPayload.bid_constraints = {
+        roas_average_floor: toRoasAverageFloorForProvider(
+          synthesis.adSet.roasFloor,
+          provider?.metaConfig?.roasDisplayDivisor
+        ),
+      };
     }
   }
 

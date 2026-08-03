@@ -760,14 +760,17 @@ export function PresetForm({ preset }: PresetFormProps) {
                   className={selectCls}
                 />
                 {/* Echo the entered ratio back as a percentage, so the ratio-vs-percent
-                    ambiguity is visible while typing. Informational only — deliberately
-                    NOT a validity judgement: the correct magnitude depends on the feed
-                    provider's roasDisplayDivisor, so a value like 90 is right for a
-                    divisor-100 provider and wrong for a divisor-1 one. See lib/roas-floor.ts. */}
+                    ambiguity is visible while typing. Enter a TRUE ratio (0.9 = break even)
+                    and leave it provider-independent — the launcher multiplies it by the
+                    target provider's roasDisplayDivisor, so one preset is now correct on
+                    every provider. This used to require hand-scaling the value per provider
+                    (hence two "WW" presets holding 0.9 and 90); it no longer does. The
+                    figure below is therefore the divisor-1 value, not necessarily what a
+                    given launch sends. See lib/roas-floor.ts. */}
                 {metaRoasGoal !== undefined && (
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    = {formatRoasPercent(metaRoasGoal)} return — sent as roas_average_floor{" "}
-                    {toRoasAverageFloor(metaRoasGoal)}
+                    = {formatRoasPercent(metaRoasGoal)} return — roas_average_floor{" "}
+                    {toRoasAverageFloor(metaRoasGoal)} before the provider&apos;s ROAS divisor
                   </p>
                 )}
               </div>

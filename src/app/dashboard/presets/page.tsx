@@ -55,10 +55,11 @@ function metaBidText(metaAdSet?: MetaAdSetPresetData): string {
     return `Cost cap $${(metaAdSet.bidAmountCents / 100).toFixed(2)}`;
   }
   if (metaAdSet.bidStrategy === "LOWEST_COST_WITH_MIN_ROAS" && metaAdSet.roasFloor) {
-    // Percentage of the stored RATIO. Note two conventions coexist across saved
-    // presets (0.9 and 90) because the orchestrator applies no roasDisplayDivisor —
-    // whether a value is right depends on the provider. Not flagged as an error here
-    // for that reason; see lib/roas-floor.ts.
+    // Percentage of the stored RATIO, which is now provider-independent — the launcher
+    // applies the provider's roasDisplayDivisor. A legacy hand-scaled value (>= 10, e.g.
+    // the "WW" preset holding 90) still reads as a huge percentage here even though
+    // roas-floor.ts normalises it at launch, so this label overstates those until the
+    // stored value is set back to a true ratio. See lib/roas-floor.ts.
     return `ROAS floor ${formatRoasPercent(metaAdSet.roasFloor)}`;
   }
   return "Lowest cost";

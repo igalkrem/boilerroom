@@ -718,17 +718,21 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
     return filtered.find(r => r.ad_squad_id === squadId)?.platform ?? "snap";
   }
 
-  // Some providers' Meta ad sets report bid_constraints.roas_average_floor at an inflated
-  // scale (e.g. Predicto's Meta pixel writes it 100x too high). This divisor, set per-provider
-  // in FeedProviderModal's Meta tab, divides on read (`/100/divisor`) and MULTIPLIES BACK IN
-  // on save (`pct * divisor * 100` in saveRoas).
+  // Providers whose pixel inflates reported conversion values need a proportionally larger
+  // roas_average_floor to express the same intent. This divisor, set per-provider in
+  // FeedProviderModal's Meta tab, divides on read (`/100/divisor`) and MULTIPLIES BACK IN on
+  // save (`pct * divisor * 100` in saveRoas), so a cell reading "90%" means break-even on
+  // every provider.
   //
   // It is therefore NOT display-only — the value written to Meta is always `divisor ×` the
-  // percentage shown in the cell. At divisor 100 a cell reading "90%" stores 900000. That is
-  // intentional only insofar as it preserves whatever scale a provider's ad sets already use;
-  // it does not correct anything, because Meta returns exactly what was stored. If the stored
-  // floors really are inflated, correct them once at the source and set the divisor back to 1
-  // rather than perpetuating the inflation on every save.
+  // percentage shown. At divisor 100 a cell reading "90%" stores 900000, and that is correct:
+  // measured live 2026-08-03, Predicto's pixel reports ~$37/conversion against ~$0.11 on the
+  // others, so 900000 and 9000 are both about break-even on their respective scales.
+  //
+  // AN EARLIER VERSION OF THIS COMMENT told the reader to "correct them once at the source and
+  // set the divisor back to 1". That was wrong — it assumed one true scale. Doing it would
+  // have taken 79 live ad sets returning $264,643 on $2,255 of spend from a binding ~90x
+  // floor to no effective floor. See lib/roas-floor.ts before touching any of this.
   function getRoasDivisor(row: { feed_provider_id: string; domain_name: string; ad_account_id: string }): number {
     const providerId = resolveProviderKey(row, providers);
     const provider = providers.find(p => p.id === providerId);
