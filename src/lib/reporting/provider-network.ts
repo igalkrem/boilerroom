@@ -1,7 +1,7 @@
-import { list, getDownloadUrl } from "@vercel/blob";
+import { readUserMetadata } from "@/lib/db/user-metadata";
 
 /**
- * Fetches the user's feed provider config from KV and returns a map of
+ * Fetches the user's feed provider config and returns a map of
  * adAccountId → "visymo" | "predicto" for accounts where revenueSource is set.
  * Non-fatal: returns an empty map on any error so callers fall back to DB joins.
  */
@@ -10,22 +10,14 @@ export async function getProviderNetworkMap(
 ): Promise<Map<string, "visymo" | "predicto">> {
   const map = new Map<string, "visymo" | "predicto">();
   try {
-    const path = `metadata/${googleUserId}/br_feed_providers.json`;
-    const { blobs } = await list({ prefix: path });
-    const blob = blobs.find((b) => b.pathname === path);
-    if (!blob) {
-      console.log(`[provider-network] no blob found at ${path} (${blobs.length} blobs with prefix)`);
+    const raw = await readUserMetadata(googleUserId, "br_feed_providers");
+    if (!Array.isArray(raw)) {
+      console.log(`[provider-network] no feed provider config stored for ${googleUserId}`);
       return map;
     }
-    const downloadUrl = getDownloadUrl(blob.url);
-    const res = await fetch(downloadUrl, { cache: "no-store" });
-    if (!res.ok) {
-      console.error(`[provider-network] fetch failed: ${res.status}`);
-      return map;
-    }
-    const providers: Array<{
+    const providers = raw as Array<{
       snapConfig?: { revenueSource?: string; allowedAdAccountIds?: string[] };
-    }> = await res.json();
+    }>;
     for (const p of providers) {
       const src = p.snapConfig?.revenueSource;
       // Accept the legacy "kingsroad" value too, in case this provider hasn't

@@ -1,7 +1,8 @@
-import { del, list, getDownloadUrl } from "@vercel/blob";
+import { del } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, isSessionValid } from "@/lib/session";
 import { isOwnBlobUrl } from "@/lib/blob-host";
+import { readUserMetadata } from "@/lib/db/user-metadata";
 import { z } from "zod";
 import type { CatalogueItem } from "@/types/catalogue";
 
@@ -11,20 +12,18 @@ const bodySchema = z.object({
   urls: z.array(z.string().min(1)).min(1).max(50),
 });
 
+// null means "could not establish ownership" → 500, NOT "owns nothing" → empty set.
+// See the same note in /api/silo/delete.
 async function fetchUserCatalogueUrls(googleUserId: string): Promise<Set<string> | null> {
+  let items: unknown;
   try {
-    const path = `metadata/${googleUserId}/br_catalogue_v1.json`;
-    const { blobs } = await list({ prefix: path });
-    const blob = blobs.find((b) => b.pathname === path);
-    if (!blob) return new Set();
-    const downloadUrl = await getDownloadUrl(blob.url);
-    const res = await fetch(downloadUrl, { cache: "no-store" });
-    if (!res.ok) return null;
-    const items = (await res.json()) as CatalogueItem[];
-    return new Set(items.map((i) => i.url));
+    items = await readUserMetadata(googleUserId, "br_catalogue_v1");
   } catch {
-    return null;
+    return null; // store unreachable — fail closed
   }
+  if (items === null) return new Set();
+  if (!Array.isArray(items)) return null; // malformed — fail closed
+  return new Set((items as CatalogueItem[]).map((i) => i.url));
 }
 
 export async function DELETE(request: NextRequest) {

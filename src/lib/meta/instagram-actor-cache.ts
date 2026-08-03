@@ -1,11 +1,13 @@
-import { put, list, getDownloadUrl } from "@vercel/blob";
+import { readUserMetadata, writeUserMetadata, GLOBAL_OWNER } from "@/lib/db/user-metadata";
 
 // A page's page-backed Instagram account never changes once created, so this
 // cache has no TTL (unlike ad-limits-cache.ts) — a page id is resolved via
 // Meta at most once, ever, regardless of user. Shared globally (not per-user)
-// since the value is a property of the Page itself, not of who's asking.
+// since the value is a property of the Page itself, not of who's asking — hence the
+// GLOBAL_OWNER sentinel rather than a real google_user_id (SEC-8 moved this out of the
+// public blob store along with the rest of the metadata).
 
-const CACHE_PATH = "metadata/global/meta_instagram_actor_cache.json";
+const CACHE_KEY = "meta_instagram_actor_cache";
 
 type CacheMap = Record<string, string>; // pageId -> instagramActorId
 
@@ -18,11 +20,7 @@ export async function writeInstagramActorCacheEntries(entries: Record<string, st
   try {
     const cache = await readCache();
     Object.assign(cache, entries);
-    await put(CACHE_PATH, JSON.stringify(cache), {
-      access: "public",
-      allowOverwrite: true,
-      addRandomSuffix: false,
-    });
+    await writeUserMetadata(GLOBAL_OWNER, CACHE_KEY, cache);
   } catch (err) {
     console.error("[meta/instagram-actor-cache] bulk write failed:", err);
   }
@@ -30,13 +28,7 @@ export async function writeInstagramActorCacheEntries(entries: Record<string, st
 
 async function readCache(): Promise<CacheMap> {
   try {
-    const { blobs } = await list({ prefix: CACHE_PATH });
-    const blob = blobs.find((b) => b.pathname === CACHE_PATH);
-    if (!blob) return {};
-    const downloadUrl = await getDownloadUrl(blob.url);
-    const res = await fetch(downloadUrl, { cache: "no-store" });
-    if (!res.ok) return {};
-    const data = (await res.json()) as CacheMap;
+    const data = (await readUserMetadata(GLOBAL_OWNER, CACHE_KEY)) as CacheMap | null;
     return data && typeof data === "object" ? data : {};
   } catch {
     return {};
@@ -52,11 +44,7 @@ export async function setCachedInstagramActorId(pageId: string, instagramActorId
   try {
     const cache = await readCache();
     cache[pageId] = instagramActorId;
-    await put(CACHE_PATH, JSON.stringify(cache), {
-      access: "public",
-      allowOverwrite: true,
-      addRandomSuffix: false,
-    });
+    await writeUserMetadata(GLOBAL_OWNER, CACHE_KEY, cache);
   } catch (err) {
     console.error("[meta/instagram-actor-cache] write failed:", err);
   }

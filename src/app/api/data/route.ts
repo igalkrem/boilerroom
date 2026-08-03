@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { put, list, getDownloadUrl } from "@vercel/blob";
 import { getSession, isSessionValid } from "@/lib/session";
+import { readUserMetadata, writeUserMetadata } from "@/lib/db/user-metadata";
 
 const VALID_KEYS = [
   "br_silo_assets",
@@ -25,19 +25,9 @@ function isValidKey(k: string): k is DataKey {
 
 const MAX_BODY_BYTES = 500_000; // 500 KB
 
-async function fetchBlob(path: string): Promise<unknown | null> {
-  try {
-    const { blobs } = await list({ prefix: path });
-    const blob = blobs.find((b) => b.pathname === path);
-    if (!blob) return null;
-    const downloadUrl = await getDownloadUrl(blob.url);
-    const res = await fetch(downloadUrl, { cache: "no-store" });
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
-}
+// SEC-8: this store is Postgres (`user_metadata`), not the public Vercel Blob store it
+// used to be. readUserMetadata still falls back to the legacy blob once per key and
+// self-heals into the DB, so no cutover was needed — see src/lib/db/user-metadata.ts.
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -51,26 +41,27 @@ export async function GET(request: NextRequest) {
   }
 
   const userId = session.googleUserId;
-  const newPath = `metadata/${userId}/${key}.json`;
 
-  // Try the Google-keyed path first
-  let data = await fetchBlob(newPath);
+  let data: unknown;
+  try {
+    data = await readUserMetadata(userId, key);
+  } catch (err) {
+    console.error("[/api/data] read error:", err);
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
+  }
 
-  // One-time migration: if not found and old snapUserId path exists, copy it over
+  // Legacy fallback for accounts whose data was written under the pre-Google snapUserId
+  // key. Reads through the same helper, so a hit is self-healed into the DB under the
+  // Google id and this branch never fires again for that key.
   if (data === null && session.snapUserId) {
-    const oldPath = `metadata/${session.snapUserId}/${key}.json`;
-    const oldData = await fetchBlob(oldPath);
-    if (oldData !== null) {
-      try {
-        await put(newPath, JSON.stringify(oldData), {
-          access: "public",
-          allowOverwrite: true,
-          addRandomSuffix: false,
-        });
-      } catch (err) {
-        console.warn("[/api/data] migration put failed:", err);
+    try {
+      const oldData = await readUserMetadata(session.snapUserId, key);
+      if (oldData !== null) {
+        await writeUserMetadata(userId, key, oldData);
+        data = oldData;
       }
-      data = oldData;
+    } catch (err) {
+      console.warn("[/api/data] snapUserId migration failed:", err);
     }
   }
 
@@ -105,14 +96,10 @@ export async function POST(request: NextRequest) {
   const userId = session.googleUserId;
 
   try {
-    await put(`metadata/${userId}/${key}.json`, JSON.stringify(data), {
-      access: "public",
-      allowOverwrite: true,
-      addRandomSuffix: false,
-    });
+    await writeUserMetadata(userId, key, data);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[/api/data] put error:", err);
+    console.error("[/api/data] write error:", err);
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
