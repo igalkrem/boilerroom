@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { loadBuildLog, updateSquadInLog, clearBuildLog } from "@/lib/build-log";
 import { hydrateFromKV } from "@/lib/kv-sync";
 import type { BuildLogSession, BuildLogSquad } from "@/types/build-log";
+import { microToUsd, usdToMicro } from "@/lib/money";
 
 function fmtDollars(micro?: number): string {
   if (micro == null) return "—";
-  return `$${(micro / 1_000_000).toFixed(2)}`;
+  return `$${microToUsd(micro).toFixed(2)}`;
 }
 
 function fmtDateOnly(iso: string): string {
@@ -283,7 +284,7 @@ function SquadRow({
       setError("Enter a positive number");
       return;
     }
-    const micro = Math.round(dollars * 1_000_000);
+    const micro = usdToMicro(dollars);
     setBusy(true);
     setError(null);
     try {
@@ -431,7 +432,7 @@ function SquadRow({
           <button
             disabled={disabled}
             onClick={() => {
-              setInputValue(squad.budgetMicro != null ? (squad.budgetMicro / 1_000_000).toFixed(2) : "");
+              setInputValue(squad.budgetMicro != null ? microToUsd(squad.budgetMicro).toFixed(2) : "");
               setEditing("budget");
             }}
             className="group inline-flex items-center gap-1 text-gray-200 hover:text-white disabled:cursor-not-allowed disabled:hover:text-gray-200"
@@ -469,7 +470,7 @@ function SquadRow({
           <button
             disabled={disabled}
             onClick={() => {
-              setInputValue(squad.bidMicro != null ? (squad.bidMicro / 1_000_000).toFixed(2) : "");
+              setInputValue(squad.bidMicro != null ? microToUsd(squad.bidMicro).toFixed(2) : "");
               setEditing("bid");
             }}
             className="group inline-flex items-center gap-1 text-gray-200 hover:text-white disabled:cursor-not-allowed disabled:hover:text-gray-200"

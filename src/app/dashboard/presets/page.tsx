@@ -14,6 +14,7 @@ import type { SavedPixel } from "@/types/pixel";
 import type { SavedMetaPixel } from "@/types/meta-pixel";
 import type { CountryGroup } from "@/types/country-group";
 import { formatRoasPercent } from "@/lib/roas-floor";
+import { centsToUsd } from "@/lib/money";
 
 function geoText(preset: CampaignPreset, groupMap: Record<string, CountryGroup>): string {
   if (preset.countryGroupId) {
@@ -52,7 +53,7 @@ function deviceText(sq?: AdSquadPresetData): string {
 function metaBidText(metaAdSet?: MetaAdSetPresetData): string {
   if (!metaAdSet) return "—";
   if (metaAdSet.bidStrategy === "COST_CAP" && metaAdSet.bidAmountCents) {
-    return `Cost cap $${(metaAdSet.bidAmountCents / 100).toFixed(2)}`;
+    return `Cost cap $${centsToUsd(metaAdSet.bidAmountCents).toFixed(2)}`;
   }
   if (metaAdSet.bidStrategy === "LOWEST_COST_WITH_MIN_ROAS" && metaAdSet.roasFloor) {
     // Percentage of the stored RATIO, which is now provider-independent — the launcher
@@ -67,7 +68,7 @@ function metaBidText(metaAdSet?: MetaAdSetPresetData): string {
 
 function metaBudgetText(metaAdSet?: MetaAdSetPresetData): string {
   if (!metaAdSet || !metaAdSet.dailyBudgetCents) return "—";
-  return `$${(metaAdSet.dailyBudgetCents / 100).toFixed(2)}/day`;
+  return `$${centsToUsd(metaAdSet.dailyBudgetCents).toFixed(2)}/day`;
 }
 
 interface FeedColumn {

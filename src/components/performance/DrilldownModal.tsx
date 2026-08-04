@@ -7,6 +7,7 @@ import { Spinner } from "@/components/ui";
 import { ColumnSelector } from "./ColumnSelector";
 import { addChangeEntry, getEntriesForSquad } from "@/lib/campaign-changelog";
 import { deriveMetrics, NO_BID_TARGET_STRATEGIES, ROAS_FLOOR_STRATEGY, type MetricInputs } from "@/lib/reporting/metrics";
+import { microToUsd as microToDollar, usdToMicro as dollarToMicro, usdToCents } from "@/lib/money";
 
 const DRILLDOWN_COLUMNS = [
   { key: "spend",                  label: "Spend" },
@@ -85,8 +86,6 @@ interface Props {
 function fmt$(n: number) { return `$${n.toFixed(2)}`; }
 function fmtPct(n: number | null) { return n === null ? "—" : n.toFixed(2) + "%"; }
 function fmtNum(n: number) { return n.toLocaleString(); }
-function microToDollar(micro: number) { return micro / 1_000_000; }
-function dollarToMicro(dollars: number) { return Math.round(dollars * 1_000_000); }
 
 function RoiPill({ pct }: { pct: number | null }) {
   if (pct === null) return <span className="text-gray-400">—</span>;
@@ -174,7 +173,7 @@ export function DrilldownModal({
     const res = platform === "meta"
       ? await fetch("/api/meta/adsets", {
           method: "PATCH", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ adAccountId, adSetId: adSquadId, updates: { daily_budget: Math.round(dollars * 100) } }),
+          body: JSON.stringify({ adAccountId, adSetId: adSquadId, updates: { daily_budget: usdToCents(dollars) } }),
         })
       : await fetch("/api/snapchat/adsquads", {
           method: "PATCH", headers: { "Content-Type": "application/json" },
@@ -200,7 +199,7 @@ export function DrilldownModal({
     const res = platform === "meta"
       ? await fetch("/api/meta/adsets", {
           method: "PATCH", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ adAccountId, adSetId: adSquadId, updates: { bid_amount: Math.round(dollars * 100) } }),
+          body: JSON.stringify({ adAccountId, adSetId: adSquadId, updates: { bid_amount: usdToCents(dollars) } }),
         })
       : await fetch("/api/snapchat/adsquads", {
           method: "PATCH", headers: { "Content-Type": "application/json" },

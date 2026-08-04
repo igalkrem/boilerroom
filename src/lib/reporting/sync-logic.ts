@@ -6,6 +6,7 @@ import { getAdSquadStats } from "@/lib/snapchat/stats";
 import { getAdSetsByAccount } from "@/lib/meta/adsets";
 import { getAccountInsights } from "@/lib/meta/stats";
 import { getAdAccountCurrency } from "@/lib/meta/adaccounts";
+import { usdToCents } from "@/lib/money";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -488,7 +489,7 @@ export async function syncMetaAccount(
       const statDate = row.date_start;
       const impressions = Number(row.impressions) || 0;
       const clicks = Number(row.clicks) || 0;
-      const spendCents = Math.round((Number(row.spend) || 0) * 100);
+      const spendCents = usdToCents(Number(row.spend) || 0);
 
       let purchases = 0;
       let purchaseValueCents = 0;
@@ -502,7 +503,7 @@ export async function syncMetaAccount(
       if (row.action_values) {
         for (const av of row.action_values) {
           if (av.action_type === "purchase" || av.action_type === "offsite_conversion.fb_pixel_purchase") {
-            purchaseValueCents += Math.round((Number(av.value) || 0) * 100);
+            purchaseValueCents += usdToCents(Number(av.value) || 0);
           }
         }
       }

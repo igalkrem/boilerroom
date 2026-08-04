@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getSession, isSessionValid, isAdAccountAllowed, isMetaAdAccountAllowed } from "@/lib/session";
 import { runMigrations, sql } from "@/lib/db";
 import { getEurToUsd, getRateToUsd } from "@/lib/fx-rate";
+import { microToUsd, centsToUsd } from "@/lib/money";
 import type { CombinedRow } from "@/app/api/reporting/combined/route";
 
 export async function GET(request: NextRequest) {
@@ -137,8 +138,8 @@ export async function GET(request: NextRequest) {
 
     const combined: CombinedRow[] = rows.map((r) => {
       const toUsd = metaRates.get(String(r.currency ?? "USD").toUpperCase()) ?? 1;
-      const spendUsd = (Number(r.spend_cents) / 100) * toUsd;
-      const purchaseValueUsd = (Number(r.purchase_value_cents) / 100) * toUsd;
+      const spendUsd = centsToUsd(Number(r.spend_cents)) * toUsd;
+      const purchaseValueUsd = centsToUsd(Number(r.purchase_value_cents)) * toUsd;
       const visymoUsd = Number(r.vsm_earnings_eur) * eurToUsd;
       const revenueEur = Number(r.vsm_earnings_eur);
       const revenueUsd = Number(r.pfb_revenue_usd) + visymoUsd;
@@ -284,7 +285,7 @@ export async function GET(request: NextRequest) {
   ]);
 
   const combined: CombinedRow[] = rows.map((r) => {
-    const spendUsd = Number(r.spend_micro) / 1_000_000;
+    const spendUsd = microToUsd(Number(r.spend_micro));
     const revenueEur = Number(r.earnings_eur);
     const revenueUsd = revenueEur * eurToUsd + Number(r.predicto_revenue_usd);
     const roiPct = spendUsd > 0 ? (revenueUsd / spendUsd) * 100 : null;
@@ -313,7 +314,7 @@ export async function GET(request: NextRequest) {
       domain_name: r.domain_name as string,
       feed_provider_id: r.feed_provider_id as string,
       snap_results: Number(r.conversion_purchases),
-      snap_purchase_value_usd: Number(r.conversion_purchase_value) / 1_000_000,
+      snap_purchase_value_usd: microToUsd(Number(r.conversion_purchase_value)),
       platform: "snap" as const,
     };
   });

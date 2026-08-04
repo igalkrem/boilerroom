@@ -8,6 +8,7 @@ import type { FeedProvider } from "@/types/feed-provider";
 import { resolveProviderKey } from "@/lib/reporting/provider-key";
 import { deriveMetrics, NO_BID_TARGET_STRATEGIES, ROAS_FLOOR_STRATEGY } from "@/lib/reporting/metrics";
 import { addChangeEntry, getEntriesForSquad } from "@/lib/campaign-changelog";
+import { microToUsd as microToDollar, usdToMicro as dollarToMicro, usdToCents } from "@/lib/money";
 import { DrilldownModal } from "./DrilldownModal";
 import { ColumnSelector } from "./ColumnSelector";
 
@@ -110,8 +111,6 @@ type SortKey =
   | "roi_1d" | "roi_2d" | "roi_3d"
   | "snap_results" | "snap_purchase_value_usd" | "snap_cost_per_result";
 
-function microToDollar(micro: number) { return micro / 1_000_000; }
-function dollarToMicro(dollars: number) { return Math.round(dollars * 1_000_000); }
 function fmt$(n: number) { return `$${n.toFixed(2)}`; }
 function fmtPct(n: number | null) { return n === null ? "—" : n.toFixed(2) + "%"; }
 function fmtPct0(n: number | null) { return n === null ? "—" : Math.round(n).toFixed(0) + "%"; }
@@ -768,7 +767,7 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
         ? await fetch("/api/meta/adsets", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ adAccountId: detail.ad_account_id, adSetId: squadId, updates: { daily_budget: Math.round(dollars * 100) } }),
+            body: JSON.stringify({ adAccountId: detail.ad_account_id, adSetId: squadId, updates: { daily_budget: usdToCents(dollars) } }),
           })
         : await fetch("/api/snapchat/adsquads", {
             method: "PATCH",
@@ -801,7 +800,7 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
         ? await fetch("/api/meta/adsets", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ adAccountId: detail.ad_account_id, adSetId: squadId, updates: { bid_amount: Math.round(dollars * 100) } }),
+            body: JSON.stringify({ adAccountId: detail.ad_account_id, adSetId: squadId, updates: { bid_amount: usdToCents(dollars) } }),
           })
         : await fetch("/api/snapchat/adsquads", {
             method: "PATCH",

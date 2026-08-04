@@ -7,6 +7,7 @@ import type {
 } from "@/types/wizard";
 import type { FeedProvider } from "@/types/feed-provider";
 import { uploadMediaToSnapchat, uploadBlobToSnapchat } from "@/lib/uploadMediaToSnapchat";
+import { usdToMicro } from "@/lib/money";
 import type {
   SnapCampaignPayload,
   SnapAdSquadPayload,
@@ -16,10 +17,6 @@ import type {
 } from "@/types/snapchat";
 
 type OnStageChange = (stage: SubmissionStage) => void;
-
-function usdToMicro(usd: number): number {
-  return Math.round(usd * 1_000_000);
-}
 
 function toIso(date: string): string {
   const d = new Date(date);

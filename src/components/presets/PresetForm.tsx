@@ -19,6 +19,7 @@ import type { SavedPixel } from "@/types/pixel";
 import type { SavedMetaPixel } from "@/types/meta-pixel";
 import type { FeedProvider } from "@/types/feed-provider";
 import { formatRoasPercent, toRoasAverageFloor } from "@/lib/roas-floor";
+import { usdToCents, centsToUsd } from "@/lib/money";
 import type { MetaOptimizationGoal, MetaBillingEvent, MetaPixelEvent, MetaBidStrategy } from "@/types/meta";
 import type { CountryGroup } from "@/types/country-group";
 
@@ -135,7 +136,7 @@ export function PresetForm({ preset }: PresetFormProps) {
   const [metaBillingEvent, setMetaBillingEvent] = useState<MetaBillingEvent>(existingMetaAdSet?.billingEvent ?? "IMPRESSIONS");
   const [metaPixelEvent, setMetaPixelEvent] = useState<MetaPixelEvent>(existingMetaAdSet?.pixelEvent ?? "PURCHASE");
   const [metaDailyBudgetUsd, setMetaDailyBudgetUsd] = useState<number>(
-    existingMetaAdSet?.dailyBudgetCents ? existingMetaAdSet.dailyBudgetCents / 100 : 20
+    existingMetaAdSet?.dailyBudgetCents ? centsToUsd(existingMetaAdSet.dailyBudgetCents) : 20
   );
   // Bidding strategy — two performance goals, each with an optional bid goal.
   // Any legacy optimizationGoal other than VALUE (e.g. old LINK_CLICKS/REACH
@@ -146,7 +147,7 @@ export function PresetForm({ preset }: PresetFormProps) {
   );
   const [metaCostPerResultUsd, setMetaCostPerResultUsd] = useState<number | undefined>(
     existingMetaAdSet?.bidStrategy === "COST_CAP" && existingMetaAdSet.bidAmountCents
-      ? existingMetaAdSet.bidAmountCents / 100
+      ? centsToUsd(existingMetaAdSet.bidAmountCents)
       : undefined
   );
   const [metaRoasGoal, setMetaRoasGoal] = useState<number | undefined>(
@@ -290,9 +291,9 @@ export function PresetForm({ preset }: PresetFormProps) {
           optimizationGoal: metaOptimizationGoal,
           billingEvent: metaBillingEvent,
           bidStrategy: metaBidStrategy,
-          bidAmountCents: metaBidStrategy === "COST_CAP" ? Math.round(metaCostPerResultUsd! * 100) : undefined,
+          bidAmountCents: metaBidStrategy === "COST_CAP" ? usdToCents(metaCostPerResultUsd!) : undefined,
           roasFloor: metaBidStrategy === "LOWEST_COST_WITH_MIN_ROAS" ? metaRoasGoal : undefined,
-          dailyBudgetCents: Math.round(metaDailyBudgetUsd * 100),
+          dailyBudgetCents: usdToCents(metaDailyBudgetUsd),
           status: data.status,
           pixelId: data.pixelId || undefined,
           pixelEvent: data.pixelId ? metaPixelEvent : undefined,
