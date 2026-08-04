@@ -20,28 +20,30 @@ git diff HEAD~1 --name-only
 
 Use the output to understand which files changed in the most recent commit(s).
 
-### Step 2 — Audit and update CLAUDE.md
+### Step 2 — Audit and update the docs
 
-Open `.claude/CLAUDE.md` and check each section below against what actually shipped. Edit the file inline for any section that is stale. Only change what is wrong or missing — do not rewrite correct sections.
+The detail that used to live in `.claude/CLAUDE.md` was split into `.claude/docs/` on 2026-08-04 (the root file had reached 272 KB and stopped loading reliably). **Open only the docs the shipped diff actually touches** — do not read all of them. Edit inline for anything stale; only change what is wrong or missing.
 
-**Sections to audit:**
+**Where each kind of change belongs:**
 
-- **`## Project Structure`** — Add any new routes, pages, components, hooks, or lib files. Remove entries for deleted files. Match the tree format and inline comment style already in the file.
-- **`## Architecture Notes`** — Update if submission orchestrator stages changed, new Zustand stores added, URL macro table changed, new modal tabs added, or any major data flow changed.
-- **`## Stack`** — Update if new packages were added (`package.json` changed) or infra changed (new Vercel product, new Postgres table, etc.).
-- **`## Security Notes`** — Update if new API routes were added, `isAdAccountAllowed` usage changed, new user-scoped data paths added, or CSP rules changed.
-- **`## Snapchat API Field Notes`** — Update if API field behavior changed, new payload constraints discovered, or new error codes handled.
-- **`## Deploy Workflow`** — Update if the deploy process itself changed.
+- **`docs/project-structure.md`** — new/deleted/moved routes, pages, components, hooks, lib modules. Match the tree format and inline comment style already there.
+- **`docs/canvas-wizard.md`** — orchestrator stages, Zustand stores, canvas nodes/edges, synthesis, URL or naming macros.
+- **`docs/campaign-config.md`** — feed providers, channel lifecycle, presets, Country Groups, articles.
+- **`docs/dashboard-reporting.md`** — metric formulas, attribution SQL, sync cadence, the ROAS divisor, FX.
+- **`docs/security.md`** — new API routes, authz/IDOR checks, user-scoped data paths, CSP, stored tokens.
+- **`docs/snapchat-api.md`** / **`docs/meta-api.md`** — payload fields, enums, numeric scales, newly discovered constraints or error subcodes for that platform.
+- **`docs/media-and-silo.md`** — Silo, upload/transcode, KV metadata store.
+- **`.claude/CLAUDE.md` itself** — ONLY for: stack/dependency changes, the deploy workflow, agents, env vars, tests, or how to run the app. **Do not add detail here.** Keep it under ~30 KB; if a topic has no home, add a `docs/` file plus a row in its Reference Docs table.
 
-If nothing in a section is stale, leave it untouched.
+If nothing in a doc is stale, leave it untouched.
 
-`Edit(.claude/CLAUDE.md)` is pre-authorized — no permission prompt will appear.
+`Edit` on `.claude/CLAUDE.md` and `.claude/docs/*.md` is pre-authorized — no permission prompt will appear.
 
-### Step 3 — Commit and push the updated CLAUDE.md
+### Step 3 — Commit and push the updated docs
 
-After editing CLAUDE.md, run:
+After editing, run:
 ```
-git add .claude/CLAUDE.md
+git add .claude
 git commit -m "docs: update CLAUDE.md post-deploy"
 git push
 ```

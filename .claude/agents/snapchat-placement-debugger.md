@@ -34,7 +34,7 @@ Read the ground-truth code (do not trust docs):
 - `src/types/snapchat.ts` (`placement_v2` type + comments)
 - `src/app/api/debug/placement-probe/route.ts` (the live experiment) and `src/app/dashboard/placement-probe/page.tsx` (its trigger UI)
 - `src/components/presets/PresetForm.tsx` `PLACEMENT_OPTIONS` + `placementConfig` enums in `src/types/preset.ts`, `src/types/wizard.ts`, `src/lib/validations/adsquad.schema.ts`
-- The `## Snapchat API Field Notes` `placement_v2` bullets in `.claude/CLAUDE.md`
+- The `placement_v2` bullets in `.claude/docs/snapchat-api.md`
 
 ### Phase 2 — Pull live evidence
 - Ask the user to run the probe (dashboard → **Smart Placement Probe** page → pick a test account → Run), OR confirm they already did.
