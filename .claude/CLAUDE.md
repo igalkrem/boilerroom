@@ -124,10 +124,24 @@ npm run test:watch
 
 Vitest, `environment: "node"`, config in `vitest.config.mts` (**`.mts`, not `.ts`** — Vite's native config loader treats a bare `.ts` config as CommonJS and warns about the ESM import). Path aliases resolve from tsconfig via `resolve.tsconfigPaths: true` — do **not** re-add the `vite-tsconfig-paths` plugin, it is now redundant and warns. Test files are `src/**/*.test.ts`, colocated with what they test.
 
-**Coverage is deliberately narrow: the money math only** (`money.test.ts`, `roas-floor.test.ts` — 25 assertions). This is not an attempt at broad coverage; it is a guard on the arithmetic that moves real ad spend, chosen because that is exactly where the 2026-08-03 ROAS bug lived. Two properties worth preserving if these are extended:
+**Coverage is deliberately narrow — 75 assertions over five pure modules, every one of which has already produced a real bug.** This is not an attempt at broad coverage; there is no component, integration or e2e layer. What is covered and the specific regression each file pins:
 
-- **Assert the premise, not just the conclusion.** `money.test.ts` asserts `2.01 * 1_000_000 !== 2_010_000` *before* asserting the function rounds it correctly. That line caught a wrong example while these tests were being written: `8.15 * 1e6` was assumed inexact and is in fact exact. Without the premise assertion, the test would have passed while documenting a falsehood. Float error here is **intermittent** — most values are exact — so spot-checking proves nothing; see the test for values that actually fail.
-- **The ROAS tests are the durable form of a verification that was previously thrown away.** The eight preset/provider combinations were originally checked with a temp script that was then deleted, so the check existed nowhere. `roas-floor.test.ts` pins those cases plus the two near-misses: the divisor-less call that produced 9 mis-scaled live ad sets, and the missing normalisation that would have sent a legacy preset to 90,000,000.
+| File | Pins |
+|---|---|
+| `money.test.ts` | dollar↔micro/cent factors; float truncation |
+| `roas-floor.test.ts` | the 8 preset/provider ROAS cases; the divisor-less call; the legacy 90,000,000 near-miss |
+| `reporting/metrics.test.ts` | `cpc` divides by `swipes` (platform) and `rpc` by `clicks` (sell-side) — the table/drilldown disagreement; `rpr` NOT gated on funnel clicks; every zero denominator → `null`, never `NaN` |
+| `date-utils.test.ts` | the UTC-vs-local rollover that rendered a blank day; month/year/leap boundaries; DST |
+| `reporting/provider-key.test.ts` | tier-1 precedence; the `"." + base` domain boundary (a bare suffix test would misattribute revenue); tier 3 checking `metaConfig`, the bug that sent Meta rows to "Unknown" |
+
+Three practices worth keeping if these are extended:
+
+- **Mutation-test new tests before trusting them.** Break the source deliberately and confirm the suite goes red. Doing this caught a claim that was simply wrong: the DST tests were commented as demonstrating why `shiftDateStr` anchors at local noon, and they pass with a midnight anchor too — `setDate()` is calendar-field arithmetic, so the anchor is not the mechanism. Four of five mutations were caught; the one that wasn't led to correcting the docs rather than to a false sense of coverage.
+- **Timezone tests must set `process.env.TZ`.** `date-utils.test.ts` runs in `America/Los_Angeles` because the bug is only reachable west of UTC. Node re-reads `TZ` mid-process (verified), so `beforeAll` is sufficient. These assertions are self-verifying: they fail in a UTC+ zone, so a TZ that silently failed to apply would not pass quietly.
+
+- **Assert the premise, not just the conclusion.** `money.test.ts` asserts `2.01 * 1_000_000 !== 2_010_000` *before* asserting the function rounds it correctly. That line caught a wrong example while these tests were being written: `8.15 * 1e6` was assumed inexact and is in fact exact. Without the premise assertion, the test would have passed while documenting a falsehood. Float error here is **intermittent** — most values are exact — so spot-checking proves nothing; see the test for values that actually fail. Give fixtures distinct values for the same reason: `metrics.test.ts` uses `swipes: 200, clicks: 50` so a formula reaching for the wrong field produces a visibly wrong number instead of coincidentally matching.
+
+The ROAS tests are also the durable form of a verification that was previously thrown away — the eight preset/provider combinations were originally checked with a temp script that was then deleted, so the check existed nowhere.
 
 `normalizePresetRoasFloor`'s threshold is pinned from both sides (`9.99` untouched, `10` normalised). When the legacy shim is finally deleted, the "cannot express a true ratio of 10 or more" test is the one that should fail and be removed with it.
 

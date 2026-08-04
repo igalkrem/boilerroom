@@ -32,8 +32,21 @@ export function localDaysAgoStr(n: number): string {
 }
 
 /**
- * Shift a YYYY-MM-DD string by a number of days. Parsed as local noon so the
- * arithmetic cannot be flipped across a day boundary by a DST transition.
+ * Shift a YYYY-MM-DD string by a number of days.
+ *
+ * DST-safe because `setDate()` does calendar-FIELD arithmetic, not epoch arithmetic —
+ * it changes the day-of-month and leaves the local time-of-day alone, so an offset
+ * change cannot move the result across a day boundary. **That, not the noon anchor, is
+ * why this works** — an earlier version of this comment credited the noon anchor, which
+ * measurement contradicts: parsing at midnight instead passes every test, and a 6-year
+ * scan of the midnight-transition zones (Santiago, Asuncion, Havana, Beirut, Lord Howe,
+ * Apia, …) found no date where the two anchors disagree on a ±1-day shift. Even where
+ * local midnight does not exist (Beirut, 2026-03-29) it normalises to 01:00 the *same*
+ * day, so the date survives.
+ *
+ * Keep the noon anchor regardless: it costs nothing and it becomes load-bearing the
+ * moment someone rewrites this as `getTime() + days * 86400000`, which is genuinely
+ * DST-unsafe. See date-utils.test.ts.
  */
 export function shiftDateStr(dateStr: string, days: number): string {
   const [y, m, d] = dateStr.split("-").map(Number);
