@@ -36,7 +36,9 @@ When asked for a link or URL, provide the actual deployed URL, not a local file 
 After completing **any code change session**, always execute these steps in this exact order — no authorization required, run them automatically without asking:
 
 1. **TypeScript type-check:** `source ~/.nvm/nvm.sh && npx tsc --noEmit` — fix any errors (no-explicit-any, temporal dead zone, etc.) before proceeding.
-2. **Tests:** `npm test` — must be green before deploying. The suite is small and fast (~100 ms); a failure here means the money math is wrong, which is never acceptable to ship.
+2. **Tests:** `npm test` — must be green before deploying. The suite is small and fast (~150 ms); a failure here means the money math is wrong, which is never acceptable to ship.
+
+   **`npm run lint` is deliberately NOT a gate.** `next lint` was removed in Next 16 and `next build` no longer lints, so lint became an explicit step — and the Next 16 `eslint-config-next` added React-Compiler-aware rules that surface **57 pre-existing findings** (38 of them one rule, `react-hooks/set-state-in-effect`, mostly the load-from-localStorage-in-useEffect pattern across the dashboard and canvas). None of them are upgrade regressions and none block the build. Do not wire lint into this workflow until those are triaged, or every deploy fails on day-one noise.
 3. **Deploy to Vercel:** `source ~/.nvm/nvm.sh && npx vercel --prod` — confirm the live deployment URL.
 4. **Commit and push to GitHub:** `git add -A && git commit -m "<meaningful description of changes>" && git push`
 5. **Update the docs:** If new routes, components, hooks, patterns, or architectural decisions were introduced, update the relevant `.claude/docs/` file (see Reference Docs) — not this root file. See `.claude/rules/post-deploy-update.md` for which doc owns what.
@@ -75,7 +77,7 @@ Do not skip any step. Do not ask for confirmation before running these commands.
 
 ## Stack
 
-- **Framework:** Next.js 14 (App Router), TypeScript, Tailwind CSS — **permanent dark mode**: `darkMode: 'class'` in `tailwind.config.ts`, `<html class="dark">` set in `src/app/layout.tsx` (no toggle). All components use `dark:` Tailwind variants alongside their light classes. `src/app/globals.css` defines `--node-bg: #1f2937` (dark canvas background color used by nodes), a safety-net rule that forces dark backgrounds/text on any native input/select/textarea without explicit Tailwind dark classes, and a React Flow attribution override. Never remove the `dark` class from `<html>` and never add a light/dark toggle — the platform is dark-only.
+- **Framework:** Next.js **16.3.0** (App Router) + **React 19.2**, TypeScript, Tailwind CSS. Upgraded from 14.2.35/React 18 on 2026-08-04; that closed all 5 remaining high npm advisories (`npm audit` is now clean) and patched the CSP-nonce XSS the middleware had been mitigating by hand. **Turbopack is the default for both `next dev` and `next build`** — dev cold start dropped to ~300 ms, and there is no custom webpack config to migrate. `next build` **no longer lints**; lint is a separate explicit step (`npm run lint`). Three things about this upgrade are load-bearing and easy to undo by accident: (1) `src/middleware.ts` stays named `middleware`, NOT `proxy` — see the middleware note in docs/security.md; (2) `params` in `page.tsx`/`route.ts` is a **Promise** and the synchronous fallback is gone, so `params.foo` silently yields `undefined` instead of throwing; (3) `serverExternalPackages` (formerly `experimental.serverComponentsExternalPackages`) must keep listing `@ffmpeg-installer/ffmpeg` or Turbopack tries to bundle an 80 MB native binary. Also **permanent dark mode**: `darkMode: 'class'` in `tailwind.config.ts`, `<html class="dark">` set in `src/app/layout.tsx` (no toggle). All components use `dark:` Tailwind variants alongside their light classes. `src/app/globals.css` defines `--node-bg: #1f2937` (dark canvas background color used by nodes), a safety-net rule that forces dark backgrounds/text on any native input/select/textarea without explicit Tailwind dark classes, and a React Flow attribution override. Never remove the `dark` class from `<html>` and never add a light/dark toggle — the platform is dark-only.
 - **Canvas:** `@xyflow/react` (React Flow v12) + `@dagrejs/dagre` for auto-layout
 - **Auth:** Google OAuth2 (primary login) + Snapchat OAuth2 (traffic source, optional) + Meta OAuth2 (traffic source, optional, Phase 0 complete) + iron-session (encrypted HttpOnly cookies). Session type (`src/types/session.ts`) includes `pendingUploads?: Record<string, { addPath: string; finalizePath: string }>` for server-pinned chunked upload paths (see docs/security.md). Meta session fields (`metaAccessToken`, `metaExpiresAt`, `metaUserId`, `metaOAuthState`, `metaAllowedAdAccountIds`) and helpers (`isMetaConnected`, `isMetaAdAccountAllowed` in `session.ts`) are live. Meta tokens are long-lived (~60 days, Graph API v25.0) — no refresh mechanism; users must reconnect after expiry. `expires_at` persisted in `user_meta_tokens` DB table; the Traffic Sources page shows an expiry warning when ≤7 days remain.
 - **Forms:** react-hook-form + Zod
@@ -180,6 +182,15 @@ ENABLE_DEBUG_ROUTES      # optional, set to 1 to expose /api/debug/placement-pro
 - **OAuth flow:** `/api/auth/*` routes handle token exchange and refresh; tokens live in an iron-session HttpOnly cookie.
 
 The rest of this section was split by topic on 2026-08-04 — see Reference Docs.
+
+## Generated agent files — do not hand-edit or delete
+
+`next dev` (Next 16+) writes two files at the repo root and **re-creates them if removed**, so they are committed to keep the tree clean:
+
+- **`AGENTS.md`** — a managed block warning agents that this Next version differs from their training data and pointing at the version-matched docs bundled in `node_modules/next/dist/docs/`. Regenerated by `node_modules/next/dist/server/lib/generate-agent-files.js`.
+- **`CLAUDE.md` (root)** — one line, `@AGENTS.md`. Note this is a *second* instruction entry point: Claude Code auto-loads a root `CLAUDE.md`, so both it and this file (`.claude/CLAUDE.md`) are in play. **Project instructions belong here, not there** — anything added to the root file will be overwritten on the next `next dev`.
+
+Nothing outside the managed block should be added to either file.
 
 ## Reference Docs
 

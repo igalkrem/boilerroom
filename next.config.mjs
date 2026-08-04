@@ -1,8 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ["@ffmpeg-installer/ffmpeg"],
-  },
+  // Renamed from experimental.serverComponentsExternalPackages in Next 15 (now stable).
+  // Keeps webpack/Turbopack from trying to bundle the ~80 MB native FFmpeg binary that
+  // /api/silo/transcode shells out to.
+  serverExternalPackages: ["@ffmpeg-installer/ffmpeg"],
   async headers() {
     return [
       {
