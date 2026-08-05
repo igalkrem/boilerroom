@@ -77,6 +77,26 @@ function normalizePresetRoasFloor(ratio: number): number {
 }
 
 /**
+ * The only divisors the preset scaling above is correct for.
+ *
+ * 1 needs no scaling at all, and 100 is the value `LEGACY_PRESCALE_FACTOR` cancels against.
+ * Anything else silently mis-scales every ROAS floor launched at that provider, so it is
+ * refused rather than accepted — a rejected input is recoverable, a live ad set holding a
+ * floor 10x off is not. Audited across every metadata row on 2026-08-05: the only stored
+ * values are 100 (Predicto) and unset (Vizymo), so nothing in production trips this.
+ *
+ * If a provider genuinely needs another divisor, fix the double-scaling first (see
+ * `normalizePresetRoasFloor`) — do NOT just widen this list.
+ */
+export const SUPPORTED_ROAS_DIVISORS = [1, 100] as const;
+
+/** Whether a divisor can be scaled correctly. `undefined`/unset means 1, which is fine. */
+export function isSupportedRoasDivisor(divisor: number | undefined | null): boolean {
+  if (divisor === undefined || divisor === null) return true;
+  return (SUPPORTED_ROAS_DIVISORS as readonly number[]).includes(divisor);
+}
+
+/**
  * Ratio -> the value Meta stores, scaled for the provider whose pixel will measure it.
  *
  * The orchestrator previously called `toRoasAverageFloor` with no divisor, so launching a
@@ -97,6 +117,21 @@ function normalizePresetRoasFloor(ratio: number): number {
  */
 export function toRoasAverageFloorForProvider(ratio: number, roasDisplayDivisor?: number): number {
   const divisor = roasDisplayDivisor && roasDisplayDivisor > 0 ? roasDisplayDivisor : 1;
+
+  // Refuse rather than mis-scale. An unsupported divisor cannot produce a correct floor here
+  // (see SUPPORTED_ROAS_DIVISORS), and the wrong value is unnoticeable once live: the ad set
+  // just underperforms or stops delivering. Throwing aborts the launch in WizardShell's
+  // handleLaunch catch, which surfaces this message and still persists the build log, so the
+  // operator sees why nothing launched. Unreachable via the UI — MetaTab rejects the input —
+  // so this only fires for a value written directly to metadata.
+  if (!isSupportedRoasDivisor(divisor)) {
+    throw new Error(
+      `Unsupported roasDisplayDivisor ${divisor}: ROAS floors can only be scaled correctly ` +
+        `for ${SUPPORTED_ROAS_DIVISORS.join(" or ")}. Launch refused rather than writing a ` +
+        `mis-scaled floor. See src/lib/roas-floor.ts before changing this provider's divisor.`
+    );
+  }
+
   return toRoasAverageFloor(normalizePresetRoasFloor(ratio) * divisor);
 }
 

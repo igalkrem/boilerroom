@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { FeedProvider, FeedProviderDomain, UrlConfig, ChannelConfig } from "@/types/feed-provider";
 import { loadAdAccountConfigs } from "@/lib/adAccounts";
 import { loadMetaPixels } from "@/lib/meta-pixels";
+import { SUPPORTED_ROAS_DIVISORS, isSupportedRoasDivisor } from "@/lib/roas-floor";
 import { UrlParametersTab } from "./UrlParametersTab";
 import { ChannelsTab } from "./ChannelsTab";
 import { DomainsTab } from "./DomainsTab";
@@ -102,25 +103,46 @@ export function MetaTab({ metaConfig, onChange, domains, onDomainsChange, feedPr
       <div>
         <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Dashboard ROAS Display</p>
         <div className="flex items-center gap-2">
-          <input
-            type="number"
-            min={1}
-            step={1}
+          {/* A select, not a free number input: only 1 and 100 can be scaled correctly when a
+              preset's ROAS floor is converted at launch, and any other value silently writes
+              a mis-scaled floor to live ad sets. Making the bad value unexpressible beats
+              validating it after the fact. See src/lib/roas-floor.ts. */}
+          <select
             value={metaConfig.roasDisplayDivisor ?? 1}
             onChange={(e) => {
               const n = parseFloat(e.target.value);
               onChange({ ...metaConfig, roasDisplayDivisor: isNaN(n) || n < 1 ? 1 : n });
             }}
-            className="w-20 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm text-center bg-white dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+            className="w-24 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            {SUPPORTED_ROAS_DIVISORS.map((d) => (
+              <option key={d} value={d}>
+                {d}×
+              </option>
+            ))}
+            {/* Keep an already-stored unsupported value visible instead of silently coercing
+                it to 1 on the next save — the warning below tells the operator to fix it. */}
+            {!isSupportedRoasDivisor(metaConfig.roasDisplayDivisor) && (
+              <option value={metaConfig.roasDisplayDivisor}>
+                {metaConfig.roasDisplayDivisor}× (unsupported)
+              </option>
+            )}
+          </select>
           <span className="text-xs text-gray-400">divides the ROAS % shown on the Performance dashboard</span>
         </div>
+        {!isSupportedRoasDivisor(metaConfig.roasDisplayDivisor) && (
+          <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+            <strong>{metaConfig.roasDisplayDivisor}× is not supported.</strong> Launching this provider will be
+            refused rather than write a mis-scaled ROAS floor. Change it to {SUPPORTED_ROAS_DIVISORS.join(" or ")}.
+          </p>
+        )}
         <p className="text-xs text-gray-400 mt-1">
           Some providers&rsquo; ad sets report a ROAS target that&rsquo;s inflated by a fixed factor (e.g. Predicto&rsquo;s
           Meta pixel writes it 100x too high). This divides the value shown in the dashboard&rsquo;s Bid column, and
           multiplies it back when you save — so editing a cell writes <strong>{metaConfig.roasDisplayDivisor ?? 1}×</strong>{" "}
           the percentage you type. That keeps the ad set on the scale it already uses; it does not fix the inflation.
-          To actually fix it, correct the ROAS floors at the source and set this back to 1.
+          Only 1× and 100× are selectable, because those are the only values a preset&rsquo;s ROAS floor can be
+          converted correctly for at launch.
         </p>
       </div>
 

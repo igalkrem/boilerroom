@@ -3,6 +3,8 @@ import {
   toRoasAverageFloor,
   toRoasAverageFloorForProvider,
   formatRoasPercent,
+  isSupportedRoasDivisor,
+  SUPPORTED_ROAS_DIVISORS,
 } from "./roas-floor";
 
 // The divisors that actually exist in the live data, named so the cases below read as
@@ -71,6 +73,53 @@ describe("toRoasAverageFloorForProvider", () => {
     it("falls back to 1 for zero and negative divisors", () => {
       expect(toRoasAverageFloorForProvider(0.9, 0)).toBe(9000);
       expect(toRoasAverageFloorForProvider(0.9, -100)).toBe(9000);
+    });
+  });
+
+  // The double-scaling in this module (multiply by the divisor, normalise back down by a
+  // hardcoded 100) only cancels when the two factors are equal, so 1 and 100 are the only
+  // correct divisors. Every other value is refused rather than silently mis-scaled: a live
+  // ad set holding a floor 10x off just quietly underperforms.
+  describe("unsupported divisors are refused, not mis-scaled", () => {
+    it("accepts exactly the divisors present in live data", () => {
+      expect([...SUPPORTED_ROAS_DIVISORS]).toEqual([1, 100]);
+      // Audited across every user_metadata row on 2026-08-05: only 100 and unset exist.
+      expect(isSupportedRoasDivisor(100)).toBe(true);
+      expect(isSupportedRoasDivisor(1)).toBe(true);
+      expect(isSupportedRoasDivisor(undefined)).toBe(true);
+      expect(isSupportedRoasDivisor(null)).toBe(true);
+    });
+
+    it("rejects divisors the scaling cannot express correctly", () => {
+      for (const d of [10, 1000, 2, 50, 99, 101]) {
+        expect(isSupportedRoasDivisor(d)).toBe(false);
+        expect(() => toRoasAverageFloorForProvider(0.9, d)).toThrow(/Unsupported roasDisplayDivisor/);
+      }
+    });
+
+    // The concrete harm, pinned so the guard cannot be quietly removed. Without it, a
+    // provider at divisor 10 mis-scales in OPPOSITE directions either side of the
+    // normalisation threshold, which is why no plausibility bound can police these values.
+    it("would have mis-scaled in both directions at divisor 10", () => {
+      // 0.9 authored in provider scale is 9 -- under the threshold, so never normalised:
+      // 9 * 10 * 10000 = 900000, but the correct floor is 9 * 10000 = 90000. 10x too high.
+      expect(9 * 10 * 10_000).toBe(900_000);
+      expect(9 * 10_000).toBe(90_000);
+      // 1.0 authored in provider scale is 10 -- trips the threshold, so normalised to 0.1:
+      // 0.1 * 10 * 10000 = 10000, but the correct floor is 100000. 10x too low.
+      expect(0.1 * 10 * 10_000).toBe(10_000);
+      expect(10 * 10_000).toBe(100_000);
+      // Both are now unreachable.
+      expect(() => toRoasAverageFloorForProvider(9, 10)).toThrow();
+      expect(() => toRoasAverageFloorForProvider(10, 10)).toThrow();
+    });
+
+    // Zero and negative still coerce to 1 rather than throwing -- they are "unset-ish"
+    // rather than a deliberate unsupported scale, and aborting a launch over them would be
+    // a regression against the case directly above.
+    it("does not throw for the zero/negative fallback", () => {
+      expect(() => toRoasAverageFloorForProvider(0.9, 0)).not.toThrow();
+      expect(() => toRoasAverageFloorForProvider(0.9, -100)).not.toThrow();
     });
   });
 
