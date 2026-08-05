@@ -150,13 +150,28 @@ export async function updateAdSquad(
   const merged: Record<string, unknown> = { ...stripForPut(current), ...cleanUpdates };
   // Echo the locked squad's own placement_v2 verbatim. Omitting it is what triggers E2025.
   if (placementV2) merged.placement_v2 = placementV2;
-  const data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
-    `/campaigns/${current.campaign_id}/adsquads`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ adsquads: [merged] }),
+  let data: { adsquads: Array<SnapApiItem<SnapAdSquad>> };
+  try {
+    data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
+      `/campaigns/${current.campaign_id}/adsquads`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ adsquads: [merged] }),
+      }
+    );
+  } catch (err) {
+    // The catalogVertical check below only runs for HTTP 200 + a batch-item error. Catalogue
+    // (DPA/Collection) squads instead return **HTTP 500** with E4001 in the envelope, so
+    // snapFetch throws and that check was unreachable — the user got the opaque
+    // "snapchat_request_failed" with no explanation. Confirmed live 2026-08-05 on a real DPA
+    // campaign: {"error_code":"E4001","debug_message":"Failed to copy over @DaoImmutable
+    // property productProperties.catalogVertical"}. Same Snapchat-side bug, different transport.
+    const raw = err instanceof Error ? err.message : String(err);
+    if (raw.includes("catalogVertical")) {
+      throw new Error("catalogue_squad_readonly: Budget, bid, and status edits are not supported for Catalogue (Collection) campaigns via the Snapchat API.");
     }
-  );
+    throw err;
+  }
   const item = data.adsquads?.[0];
   if (!item) throw new Error("Ad squad update failed: empty response");
   if (item.sub_request_status !== "SUCCESS") {
