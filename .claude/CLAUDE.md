@@ -141,6 +141,11 @@ Vitest, `environment: "node"`, config in `vitest.config.mts` (**`.mts`, not `.ts
 | `date-utils.test.ts` | the UTC-vs-local rollover that rendered a blank day; month/year/leap boundaries; DST |
 | `reporting/provider-key.test.ts` | tier-1 precedence; the `"." + base` domain boundary (a bare suffix test would misattribute revenue); tier 3 checking `metaConfig`, the bug that sent Meta rows to "Unknown" |
 | `app/api/meta/route-schemas.test.ts` | **the Zod-strip class** — every Meta payload the orchestrator builds is round-tripped through its route's real schema and asserted byte-identical |
+| `synthesize-campaign.test.ts` | **the launch path up to the network calls** — the ROAS chain end to end (preset ratio → synthesis → provider divisor → `900000`/`9000` → through the ad set schema), Worldwide auto-excluding TH/SG/TW, the `geoIsWorldwide` snapshot read-back, the catalogue id guards, and ACTIVE-ad-set/PAUSED-ad |
+
+**`synthesize-campaign.test.ts` runs with no `window`, deliberately.** `loadCountryGroups`/`loadAssets` guard on `typeof window === "undefined"` and return empty, so a `countryGroupId` cannot resolve — which means these tests exercise the **snapshot fallback** path. That is the more valuable half: those snapshot fields were once write-only, so deleting a Worldwide country group left every linked Meta preset targeting nobody. To cover the live-linked-group path you would need a jsdom environment and a seeded localStorage.
+
+**Still not covered by any test, and only ever exercised by a real launch:** channel assignment and `{{channel.id}}` resolution, media upload, the Snapchat batch-response matching, and the orchestrators' own stage sequencing. The Meta create path was confirmed live on Next 16 on 2026-08-04; the **Snapchat create path has never been exercised on Next 16**.
 
 **`route-schemas.test.ts` is the guard on the most expensive failure mode in this codebase.** A closed `z.object` silently `.strip()`s any field it doesn't name: the request still returns 200 and the field is simply absent on the created object, so the only symptom appears days later in Ads Manager. It has happened at least three times — `is_adset_budget_sharing_enabled`, `creative_asset_groups_spec`, and `degrees_of_freedom_spec`. Each route's `postSchema` is now **exported** for this (Next accepts the extra named export from `route.ts`; verified by build). **When you add a field to any Meta payload in `meta-submission-orchestrator.ts`, add it to the fixture in this test file** — a round-trip failure there means production would have dropped it.
 
@@ -193,6 +198,17 @@ DEV_LOGIN_EMAIL          # optional — display-only, defaults to dev@adcore.com
 - **OAuth flow:** `/api/auth/*` routes handle token exchange and refresh; tokens live in an iron-session HttpOnly cookie.
 
 The rest of this section was split by topic on 2026-08-04 — see Reference Docs.
+
+## This repo lives in an iCloud-synced folder, and it breaks tooling
+
+`~/Desktop` is iCloud-synced on this machine (`defaults read com.apple.finder FXICloudDriveDesktop` → `1`) and the repo is at `~/Desktop/BoilerRoom`. iCloud resolves what it thinks are concurrent writes by creating **`"<name> 2.<ext>"` conflict copies**, which a build directory and a git repo trigger constantly. This has broken three separate things in one day:
+
+- **`git pull`/`fetch` failed** with `fatal: bad object refs/remotes/origin/main 2` — a stray file in `.git/refs/remotes/origin/`. Git treats every file under `refs/` as a ref. Also four `.DS_Store` files inside `.git/`, one in `refs/`, producing `badRefName` from `git fsck`.
+- **`tsc` failed twice** with duplicate-identifier errors from `.next/types/routes.d 2.ts` and `cache-life.d 2.ts`, because `tsconfig.json` includes `.next/types/**/*.ts`. It recurred within an hour of being cleaned.
+
+**Mitigation in place:** `tsconfig.json` excludes `**/* 2.ts`, `**/* 2.tsx`, `**/* 2.d.ts`, verified by planting a duplicate and confirming `tsc` still passes. That covers TypeScript only.
+
+**The real fix is to move the repo out of the synced folder** (e.g. `~/dev/BoilerRoom`) — nothing else immunises `.git`. Until then: if git starts reporting a bad object or an unexplained duplicate-symbol error appears, run `find . -name "* 2.*" -not -path "./node_modules/*"` before investigating anything else.
 
 ## Generated agent files — do not hand-edit or delete
 
