@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Per-IP rate limiting. Module-level Map persists within a single Edge runtime
-// instance — not a distributed guarantee across Vercel instances, but effective
-// against sustained single-IP abuse, which is the realistic threat here.
+// Per-IP rate limiting. Module-level Map persists within a single runtime instance —
+// not a distributed guarantee across Vercel instances, but effective against sustained
+// single-IP abuse, which is the realistic threat here.
+//
+// This file was `src/middleware.ts` on the Edge runtime until 2026-08-05. Next 16
+// deprecated the `middleware` convention in favour of `proxy`, and PROXY IS NODE-RUNTIME
+// ONLY: the `runtime` config option is not available here and setting it throws, so Edge
+// is not recoverable without reverting the rename. The in-memory Map is therefore now
+// per-Node-instance rather than per-Edge-instance. Same guarantee in kind, but the
+// instance lifetime and count differ, so observed limits may be looser or tighter than
+// before — if this ever needs to be exact, it has to move to a shared store (Postgres or
+// Vercel KV), which was already true on Edge.
 //
 // Previously this covered /api/auth/* only, leaving every expensive endpoint
 // unmetered: native FFmpeg at 300 s, third-party sync fan-out, in-memory zipping,
@@ -120,7 +129,7 @@ function buildCsp(nonce: string): string {
   ].join("; ");
 }
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
 
   const bytes = new Uint8Array(16);
@@ -196,7 +205,12 @@ export function middleware(req: NextRequest) {
 
 // Everything except build assets. Wider than the old "/api/:path*" because the CSP nonce
 // has to reach document responses, and wider than BUCKETS because unbucketed paths still
-// need the SEC-26 Origin check, which only works if the middleware runs for them.
+// need the SEC-26 Origin check, which only works if the proxy runs for them.
+//
+// Cost note now that this is Node-runtime rather than Edge: this matcher puts a Node
+// function in front of very nearly every request. Narrowing it is NOT a safe optimisation —
+// excluding a document route leaves it with no CSP at all, and excluding an API route drops
+// its Origin check. Trim only genuinely non-HTML, non-API assets.
 // Excluding a document route here would leave it with NO CSP at all, which is worse than
 // the 'unsafe-inline' this replaced — extend the exclusions only for non-HTML assets.
 export const config = {

@@ -5,7 +5,7 @@ Source tree with per-file notes. Referenced from CLAUDE.md.
 
 ```
 src/
-├── middleware.ts                      # Edge middleware, matcher = all non-asset paths. Owns THREE things: the Content-Security-Policy incl. the per-request script nonce (moved here from next.config.mjs — headers there are static), the SEC-26 cross-site Origin check, and per-prefix rate limiting (BUCKETS)
+├── proxy.ts                           # Next 16 proxy (was middleware.ts until 2026-08-05; NODE runtime only, Edge not available here). Matcher = all non-asset paths. Owns THREE things: the Content-Security-Policy incl. the per-request script nonce (moved here from next.config.mjs — headers there are static), the SEC-26 cross-site Origin check, and per-prefix rate limiting (BUCKETS)
 ├── app/
 │   ├── (auth)/                        # Login & OAuth callback pages
 │   ├── api/
