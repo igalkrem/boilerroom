@@ -116,9 +116,13 @@ export interface SnapAdSquadPayload {
   start_time?: string;
   end_time?: string;
   pixel_id?: string;
-  // Catalogue (Dynamic Collection Ads) — set at creation only; omit from PUT (not in ADSQUAD_PUT_ALLOWED_FIELDS).
-  // Snapchat auto-sets child_ad_type and catalog_vertical from the creative type — do not send them in POST (E1001).
-  product_properties?: { product_set_id: string };
+  // Catalogue (Dynamic Collection Ads). On POST send ONLY product_set_id — Snapchat auto-sets
+  // child_ad_type and catalog_vertical from the creative type and rejects them if you send them
+  // (E1001). On PUT the whole object MUST be echoed back exactly as GET returned it, including
+  // the catalog_vertical Snapchat added itself: omitting it fails with HTTP 500 E4001 "Failed to
+  // copy over @DaoImmutable property productProperties.catalogVertical" (confirmed live
+  // 2026-08-05). So this is write-once-then-echo, not "omit from PUT" as previously documented.
+  product_properties?: { product_set_id: string; catalog_vertical?: string };
   // Server-computed — returned by GET, must never be sent in PUT (causes E2025 / sub_request_status ERROR)
   effective_status?: string;
   delivery_status?: string[];

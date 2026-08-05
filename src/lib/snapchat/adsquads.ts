@@ -150,6 +150,21 @@ export async function updateAdSquad(
   const merged: Record<string, unknown> = { ...stripForPut(current), ...cleanUpdates };
   // Echo the locked squad's own placement_v2 verbatim. Omitting it is what triggers E2025.
   if (placementV2) merged.placement_v2 = placementV2;
+  // Same class of bug for Catalogue (DPA/Collection) squads: omitting product_properties makes
+  // Snapchat fail with HTTP 500 E4001 "Failed to copy over @DaoImmutable property
+  // productProperties.catalogVertical". Echo it back and the edit applies.
+  //
+  // Note `catalog_vertical` is a field Snapchat ADDS itself — it is rejected on create (E1001,
+  // read-only) but returned on GET and then required on PUT. Echoing whatever GET returned is
+  // therefore correct; do not try to construct or filter this object.
+  //
+  // A squad can need BOTH echoes, and each only fixes its own error. Confirmed live 2026-08-05 on
+  // a real ACTIVE DPA campaign, same squad, four same-value no-op PUTs:
+  //   neither echoed             -> HTTP 500 E4001
+  //   product_properties only    -> HTTP 200 E2025
+  //   placement_v2 only          -> HTTP 500 E4001
+  //   both echoed                -> SUCCESS
+  if (current.product_properties) merged.product_properties = current.product_properties;
   let data: { adsquads: Array<SnapApiItem<SnapAdSquad>> };
   try {
     data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
@@ -168,7 +183,7 @@ export async function updateAdSquad(
     // property productProperties.catalogVertical"}. Same Snapchat-side bug, different transport.
     const raw = err instanceof Error ? err.message : String(err);
     if (raw.includes("catalogVertical")) {
-      throw new Error("catalogue_squad_readonly: Budget, bid, and status edits are not supported for Catalogue (Collection) campaigns via the Snapchat API.");
+      throw new Error("catalogue_squad_readonly: Snapchat rejected this Catalogue (Collection) edit because it could not carry over the ad set's catalogue settings. This is unexpected — catalogue ad sets are normally editable here. Try again, and if it persists change it in Snapchat Ads Manager and report it.");
     }
     throw err;
   }
@@ -181,7 +196,7 @@ export async function updateAdSquad(
     // E4001: Snapchat server-side bug — fails to copy immutable catalogVertical on Collection ad squads.
     // Budget/bid/status changes to Catalogue campaigns are not supported via the API.
     if (typeof msg === "string" && msg.includes("catalogVertical")) {
-      throw new Error("catalogue_squad_readonly: Budget, bid, and status edits are not supported for Catalogue (Collection) campaigns via the Snapchat API.");
+      throw new Error("catalogue_squad_readonly: Snapchat rejected this Catalogue (Collection) edit because it could not carry over the ad set's catalogue settings. This is unexpected — catalogue ad sets are normally editable here. Try again, and if it persists change it in Snapchat Ads Manager and report it.");
     }
     const composed = [detail, msg].filter(Boolean).join(": ") || "Snapchat rejected the update";
     throw new Error(composed);

@@ -707,7 +707,7 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
       return "Snapchat rejected this edit because it could not read the ad set's placement settings. This is unexpected — Smart-placement ad sets are normally editable here. Try again, and if it keeps failing, change it in Snapchat Ads Manager and report it.";
     }
     if (raw.includes("catalogue_squad_readonly") || raw.toLowerCase().includes("catalogue") || raw.toLowerCase().includes("collection")) {
-      return "Catalogue (Collection) campaigns cannot be edited via the Snapchat API — budget, bid, and status changes must be made in Snapchat Ads Manager directly.";
+      return "Snapchat rejected this edit because it could not carry over the ad set's catalogue settings. This is unexpected — Catalogue (Collection) ad sets are normally editable here. Try again, and if it keeps failing, change it in Snapchat Ads Manager and report it.";
     }
     return raw;
   }
