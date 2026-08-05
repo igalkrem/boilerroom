@@ -199,16 +199,20 @@ DEV_LOGIN_EMAIL          # optional — display-only, defaults to dev@adcore.com
 
 The rest of this section was split by topic on 2026-08-04 — see Reference Docs.
 
-## This repo lives in an iCloud-synced folder, and it breaks tooling
+## The repo is at `~/dev/BoilerRoom` — do NOT move it back under `~/Desktop`
 
-`~/Desktop` is iCloud-synced on this machine (`defaults read com.apple.finder FXICloudDriveDesktop` → `1`) and the repo is at `~/Desktop/BoilerRoom`. iCloud resolves what it thinks are concurrent writes by creating **`"<name> 2.<ext>"` conflict copies**, which a build directory and a git repo trigger constantly. This has broken three separate things in one day:
+**Canonical path: `/Users/igalkremer/dev/BoilerRoom`.** `~/Desktop/BoilerRoom` is now a symlink to it, kept only as a convenience shortcut. **Work from the real path**; the symlinked root was never verified against Turbopack's file watcher.
+
+`~/Desktop` is iCloud-synced on this machine (`defaults read com.apple.finder FXICloudDriveDesktop` → `1`). iCloud resolves what it thinks are concurrent writes by creating **`"<name> N.<ext>"` conflict copies** — and a build directory plus a git repo trigger that constantly. While the repo lived there it broke three separate things in a single day:
 
 - **`git pull`/`fetch` failed** with `fatal: bad object refs/remotes/origin/main 2` — a stray file in `.git/refs/remotes/origin/`. Git treats every file under `refs/` as a ref. Also four `.DS_Store` files inside `.git/`, one in `refs/`, producing `badRefName` from `git fsck`.
-- **`tsc` failed twice** with duplicate-identifier errors from `.next/types/routes.d 2.ts` and `cache-life.d 2.ts`, because `tsconfig.json` includes `.next/types/**/*.ts`. It recurred within an hour of being cleaned.
+- **`tsc` failed twice** with duplicate-identifier errors from `.next/types/routes.d 2.ts` and `cache-life.d 2.ts`, because `tsconfig.json` includes `.next/types/**/*.ts`. It recurred within an hour of being cleaned, and the suffix escalated from `" 2"` to `" 3"` the next day.
 
-**Mitigation in place:** `tsconfig.json` excludes `**/* 2.ts`, `**/* 2.tsx`, `**/* 2.d.ts`, verified by planting a duplicate and confirming `tsc` still passes. That covers TypeScript only.
+**Moved out on 2026-08-05.** The sweep done at that point found **186 conflict copies**: 161 in `node_modules`, 17 in `.next`, and — the part that justified the move — **8 inside `.git`**, `index 2` through `index 9`, timestamped **May 4 to Aug 5**. iCloud had been duplicating the git index for three months, twice on the final day alone. `.git/index` is the staging area; git only ever reads the unsuffixed name, so those copies were inert, but they are proof that iCloud writes inside `.git` and that no application-level setting can prevent it. All 186 removed, `git fsck` clean apart from normal dangling objects.
 
-**The real fix is to move the repo out of the synced folder** (e.g. `~/dev/BoilerRoom`) — nothing else immunises `.git`. Until then: if git starts reporting a bad object or an unexplained duplicate-symbol error appears, run `find . -name "* 2.*" -not -path "./node_modules/*"` before investigating anything else.
+**`tsconfig.json` still excludes `**/* ?.ts`, `**/* ?.tsx`, `**/* ?.d.ts` and the two-digit variants**, verified by planting a duplicate. Keep them: they are now a spare safety net rather than load-bearing, and they cost nothing.
+
+If a duplicate-symbol error or a bad git object ever appears again, check the repo has not been moved back under a synced folder, then run `find . \( -name "* [0-9]" -o -name "* [0-9].*" \)` before investigating anything else.
 
 ## Generated agent files — do not hand-edit or delete
 
