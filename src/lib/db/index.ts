@@ -1,22 +1,102 @@
-import { sql } from "@vercel/postgres";
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { readFileSync } from "fs";
 import path from "path";
 import { encryptToken, decryptToken } from "./token-crypto";
 
-export { sql };
+// Migrated off `@vercel/postgres` (deprecated) on 2026-08-05. That package was a thin
+// wrapper whose `sql` template tag called `neon(connectionString, { fullResults: true })`
+// internally — this is the same driver and the same HTTP transport, called directly, so
+// query semantics and result shapes are unchanged. `fullResults: true` is what keeps
+// `{ rows }` on the result; without it the driver returns a bare array and every
+// destructuring call site in this file would silently see `rows === undefined`.
+//
+// Deliberately LAZY, mirroring the Proxy `@vercel/postgres` used. Resolving the
+// connection string at module scope would turn a missing POSTGRES_URL into a hard failure
+// at import time — including during `next build`, which imports this module — instead of
+// at first query.
+type NeonSql = NeonQueryFunction<false, true>;
+
+/**
+ * The `sql` tag's public type, kept deliberately compatible with the `@vercel/postgres`
+ * one so the ~13 `sql<RowType>`...`` call sites did not have to change.
+ *
+ * `NeonQueryFunction`'s own tagged-template signature takes no type parameter and yields
+ * `Record<string, any>[]`, which would have forced a cast at every read site — strictly
+ * worse, since a cast is easy to get wrong silently and loses the row shape at the point
+ * where it is actually being used.
+ *
+ * The generic is an ASSERTION, not a validation, exactly as it was under
+ * `@vercel/postgres`: nothing checks that the columns you select match `T`. Naming the
+ * wrong shape here still compiles and still yields undefined fields at runtime.
+ */
+interface SqlTag {
+  <T = Record<string, unknown>>(
+    strings: TemplateStringsArray,
+    ...params: unknown[]
+  ): Promise<{ rows: T[]; rowCount: number }>;
+  query<T = Record<string, unknown>>(
+    queryWithPlaceholders: string,
+    params?: unknown[]
+  ): Promise<{ rows: T[]; rowCount: number }>;
+}
+
+let client: NeonSql | undefined;
+
+function getClient(): NeonSql {
+  if (!client) {
+    const connectionString = process.env.POSTGRES_URL;
+    if (!connectionString) {
+      throw new Error("POSTGRES_URL is not set — cannot connect to Postgres.");
+    }
+    client = neon(connectionString, { fullResults: true });
+  }
+  return client;
+}
+
+// Supports both call forms the codebase uses: the tagged template (`sql`...``) and
+// `sql.query(stmt)` for the raw statements read out of migrations.sql.
+export const sql = new Proxy((() => {}) as unknown as SqlTag, {
+  apply(_target, _thisArg, args: unknown[]) {
+    return (getClient() as unknown as (...a: unknown[]) => unknown)(...args);
+  },
+  get(_target, prop) {
+    const c = getClient();
+    const value = Reflect.get(c, prop);
+    return typeof value === "function" ? value.bind(c) : value;
+  },
+}) as SqlTag;
 
 let migrated = false;
 
-// SEC-21: serialise the DDL across concurrent cold starts.
+// SEC-21 (INTENT) : serialise the DDL across concurrent cold starts.
 //
 // `migrated` is per-instance, so a deploy that wakes N serverless instances at once
 // runs this whole block N times in parallel. "IF NOT EXISTS" is not atomic against a
 // concurrent identical CREATE — Postgres raises duplicate_table/duplicate_object, and
 // the ALTER TABLE RENAME above is outright racy: two instances can both observe
 // kingsroad_report present and visymo_report absent, and the loser's rename fails.
-// A session-level advisory lock makes one instance do the work while the others wait,
-// then find everything already in place. The key is an arbitrary constant, unique to
-// this migration routine.
+//
+// ⚠️ THIS LOCK DOES NOT ACTUALLY WORK, AND NEVER HAS. Measured against the live database
+// on 2026-08-05, immediately after `SELECT pg_advisory_lock(key)` on this same `sql`:
+//
+//   locks visible in pg_locks for the key : 0
+//   pg_try_advisory_lock(key)             : true   (acquired instantly — nothing blocks)
+//   pg_advisory_unlock(key)               : false  (there was nothing to release)
+//
+// The cause is the transport, not the SQL: this driver sends every query over Neon's HTTP
+// endpoint, which does not preserve session state between statements. `pg_advisory_lock`
+// is a SESSION-level lock, so it is discarded the moment the statement returns. It was
+// equally inert under `@vercel/postgres`, whose `sql` tag used the same HTTP path — the
+// 2026-08-05 driver migration did not cause this and does not change it.
+//
+// Kept rather than deleted because the hazard above is real and this records the intent;
+// the two round-trips are harmless. To make it real, the lock and the DDL must share one
+// pinned session — a `Client` from @neondatabase/serverless over WebSocket, not the HTTP
+// callable. That needs a `ws` constructor on Node 20 and belongs in its own change, not
+// bundled into a dependency swap. Until then, treat concurrent-deploy DDL as UNPROTECTED:
+// the realistic symptom is a logged duplicate_object error on one instance during a
+// deploy, not data loss.
+//
 // Plain number, not a BigInt literal: tsconfig targets below ES2020. Comfortably
 // inside Number.MAX_SAFE_INTEGER and inside Postgres bigint.
 const MIGRATION_LOCK_KEY = 8274512930001;
@@ -29,8 +109,9 @@ export async function runMigrations(): Promise<void> {
     await runMigrationsLocked();
     migrated = true;
   } finally {
-    // Always release: a serverless instance can be reused, and @vercel/postgres
-    // pools connections, so a held session lock would deadlock the next cold start.
+    // Kept for when the lock is made real (see MIGRATION_LOCK_KEY). Today this is a
+    // no-op that returns false, because there is no session lock to release — do not
+    // read its result as confirmation that anything was held.
     await sql`SELECT pg_advisory_unlock(${String(MIGRATION_LOCK_KEY)}::bigint)`;
   }
 }

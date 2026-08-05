@@ -21,7 +21,7 @@
  *   - The UPDATE is guarded on the old ciphertext still being present, so a token
  *     rewritten by a live OAuth callback mid-run is never clobbered with a stale value.
  */
-import { sql } from "@vercel/postgres";
+import { sql } from "@/lib/db";
 import { encryptToken, encryptTokenLegacy, decryptToken, isV2Encrypted } from "@/lib/db/token-crypto";
 
 const WRITE = process.argv.includes("--write");

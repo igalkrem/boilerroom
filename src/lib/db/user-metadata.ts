@@ -95,8 +95,9 @@ export async function writeUserMetadata(
 ): Promise<void> {
   await runMigrations();
 
-  // JSON.stringify + ::jsonb rather than passing the object: @vercel/postgres would
-  // otherwise serialise a plain object to "[object Object]".
+  // JSON.stringify + ::jsonb rather than passing the object: the driver would otherwise
+  // serialise a plain object to "[object Object]". Still true on @neondatabase/serverless
+  // (2026-08-05) — it is the same driver @vercel/postgres wrapped.
   await sql`
     INSERT INTO user_metadata (google_user_id, key, data, updated_at)
     VALUES (${owner}, ${key}, ${JSON.stringify(data)}::jsonb, NOW())
