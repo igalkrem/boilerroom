@@ -7,7 +7,9 @@ import { invalidRequest } from "@/lib/api/validation-error";
 
 export const maxDuration = 60;
 
-const postSchema = z.object({
+// Exported for schema round-trip tests (route-schemas.test.ts): these closed z.objects
+// silently .strip() any field not named here, which has twice dropped a shipped field.
+export const postSchema = z.object({
   adAccountId: z.string().min(1),
   campaign: z.object({
     name: z.string().min(1),

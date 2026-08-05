@@ -18,7 +18,9 @@ const degreesOfFreedomSpecSchema = z.object({
   creative_features_spec: z.record(z.string(), z.object({ enroll_status: z.enum(["OPT_IN", "OPT_OUT"]) })),
 });
 
-const postSchema = z.object({
+// Exported for schema round-trip tests (route-schemas.test.ts): these closed z.objects
+// silently .strip() any field not named here, which has twice dropped a shipped field.
+export const postSchema = z.object({
   adAccountId: z.string().min(1),
   creative: z.object({
     name: z.string().min(1),

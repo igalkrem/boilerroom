@@ -43,7 +43,9 @@ const adSetShape = z
   })
   .passthrough();
 
-const postSchema = z.object({
+// Exported for schema round-trip tests (route-schemas.test.ts): these closed z.objects
+// silently .strip() any field not named here, which has twice dropped a shipped field.
+export const postSchema = z.object({
   adAccountId: z.string().min(1),
   adSet: adSetShape,
 });
