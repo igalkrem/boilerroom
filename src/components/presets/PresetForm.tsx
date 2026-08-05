@@ -604,13 +604,13 @@ export function PresetForm({ preset }: PresetFormProps) {
         </div>
 
         {trafficSource === "snap" && (
-          <div className="sm:col-span-2 rounded-lg border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-900/10 p-3">
+          <div className="sm:col-span-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3">
             <label className="flex items-start gap-2 cursor-pointer">
               <input type="checkbox" {...register("smartPlacement")} className="mt-0.5 accent-yellow-500" />
               <span className="text-sm">
                 <span className="font-medium text-gray-800 dark:text-gray-200">Smart placement (let Snapchat auto-optimize where ads run)</span>
-                <span className="mt-1 block text-xs text-amber-700 dark:text-amber-400">
-                  ⚠ Ad sets launched with Smart placement are locked by Snapchat — you must change their budget, bid, or pause them in Snapchat Ads Manager, not in this app. Leave this off to keep full in-app editing (uses Snapchat&apos;s default placement).
+                <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+                  Budget, bid and pause/activate all stay editable in this app. (Smart-placement ad sets used to be uneditable here — that was an API payload bug on our side, fixed 2026-08-05.)
                 </span>
               </span>
             </label>

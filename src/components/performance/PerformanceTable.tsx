@@ -699,13 +699,12 @@ export const PerformanceTable = forwardRef<PerformanceTableHandle, Props>(functi
   }
 
   function friendlyPatchError(raw: string): string {
-    // updateAdSquad refuses a campaign-level status change it can't apply cleanly, and its
-    // messages are already user-facing — just drop the machine-readable prefix.
-    const lockedStatusPrefix = ["placement_locked_squad_paused: ", "placement_locked_shared_campaign: "]
-      .find(p => raw.startsWith(p));
-    if (lockedStatusPrefix) return raw.slice(lockedStatusPrefix.length);
+    // E2025 should no longer be reachable: updateAdSquad echoes a Smart-placement ad set's own
+    // placement_v2 back on every PUT, which is what E2025 actually complains about. If it shows
+    // up here, that echo failed (e.g. the flagged GET returned nothing) — say so plainly rather
+    // than repeating the old "manage it in Ads Manager" advice, which is no longer true.
     if (raw.includes("E2025") || raw.toLowerCase().includes("placement v2")) {
-      return "This ad set's placements were customized (either Smart placement, or a manual placement edit in Snapchat Ads Manager), which locks its budget and bid against API edits. Budget and bid can only be changed in Snapchat Ads Manager directly. Pause/activate is applied to the wrapping campaign instead, which works when that campaign holds only this ad set and the ad set isn't already paused at its own level.";
+      return "Snapchat rejected this edit because it could not read the ad set's placement settings. This is unexpected — Smart-placement ad sets are normally editable here. Try again, and if it keeps failing, change it in Snapchat Ads Manager and report it.";
     }
     if (raw.includes("catalogue_squad_readonly") || raw.toLowerCase().includes("catalogue") || raw.toLowerCase().includes("collection")) {
       return "Catalogue (Collection) campaigns cannot be edited via the Snapchat API — budget, bid, and status changes must be made in Snapchat Ads Manager directly.";

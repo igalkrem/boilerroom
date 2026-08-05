@@ -1,6 +1,5 @@
 import { snapFetch } from "./client";
 import type { SnapAdSquadPayload, SnapAdSquad, SnapBatchResponse, SnapApiItem } from "@/types/snapchat";
-import { updateCampaignStatus } from "./campaigns";
 
 export async function getAdSquads(campaignId: string, token?: string): Promise<SnapAdSquad[]> {
   const data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
@@ -24,6 +23,37 @@ export async function getAdSquad(adSquadId: string, token?: string): Promise<Sna
   return item.adsquad;
 }
 
+/**
+ * Reads the REAL placement_v2 object of a Smart/Custom-placement squad.
+ *
+ * `placement_v2` is invisible to a plain GET — it is only returned when
+ * `?return_placement_v2=true` is passed. That parameter is undocumented publicly; it came from
+ * Snapchat TAS via support on 2026-08-05 and is the key to editing locked squads at all
+ * (see updateAdSquad below).
+ *
+ * ONLY call this for a squad already known to be locked (`placement === "UNSUPPORTED"`).
+ * For an ordinary squad the flagged GET does NOT return "no placement" — it returns a
+ * SYNTHESISED object, confirmed live 2026-08-05 on a squad created with no placement_v2 at all:
+ *   {"config":"CUSTOM","platforms":["SNAPCHAT"],
+ *    "snapchat_positions":["INTERSTITIAL_USER","INTERSTITIAL_CONTENT","INSTREAM"]}
+ * That is Snapchat's placement_v2 translation of the legacy SNAP_ADS default, NOT the squad's
+ * own config. Echoing it back on a PIXEL_PURCHASE squad fails with E21011 (CHAT_FEED required),
+ * and anywhere it did succeed it would convert a fully editable squad into a locked
+ * CUSTOM-placement one. Hence the lock check must come first, and must use the PLAIN GET —
+ * the flagged GET omits the legacy `placement` field entirely.
+ */
+export async function getAdSquadPlacementV2(
+  adSquadId: string,
+  token?: string
+): Promise<SnapAdSquad["placement_v2"] | undefined> {
+  const data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
+    `/adsquads/${adSquadId}?return_placement_v2=true`,
+    {},
+    token
+  );
+  return data.adsquads?.[0]?.adsquad?.placement_v2;
+}
+
 export async function getAdSquadsByAccount(adAccountId: string, token?: string): Promise<SnapAdSquad[]> {
   const data = await snapFetch<{ adsquads?: Array<SnapApiItem<SnapAdSquad>> }>(
     `/adaccounts/${adAccountId}/adsquads`,
@@ -41,10 +71,12 @@ export async function getAdSquadsForAccount(adAccountId: string, token?: string)
 
 // Fields Snapchat will accept on a PUT /adsquads/{id} body. Anything else
 // (created_at, updated_at, delivery_status, effective_status, forced_view_eligibility,
-// auto_bid, ranking_score, placement_v2, etc.) is server-computed or locked and causes
-// sub_request_status: "ERROR" or E2025 when echoed back.
-// placement_v2 is intentionally excluded: squads created with placement_v2 return E2025
-// ("Update is not supported for this entity") when it appears in the PUT body.
+// auto_bid, ranking_score, etc.) is server-computed and causes sub_request_status: "ERROR"
+// when echoed back.
+// placement_v2 is absent from this list on purpose, but NOT because it must never be sent —
+// it is added explicitly in updateAdSquad for locked squads, sourced from the flagged GET.
+// A plain GET never returns it, so stripForPut (which operates on a plain-GET squad) could
+// not populate it anyway.
 const ADSQUAD_PUT_ALLOWED_FIELDS = [
   "id",
   "campaign_id",
@@ -90,51 +122,34 @@ export async function updateAdSquad(
     throw new Error("forbidden: ad squad does not belong to the specified ad account");
   }
 
-  // Smart-placement squads are locked against direct edits (E2025) — but only the squad itself.
-  // The wrapping campaign is not locked, and campaign status can substitute for squad
-  // activate/deactivate, because delivery requires campaign status ACTIVE AND squad status ACTIVE.
-  // Budget has NO campaign-level substitute — campaign-level daily_budget_micro is a spend ceiling
-  // on top of the squad's own (frozen) budget, not a replacement for it, so it stays blocked and
-  // falls through to the normal squad PUT below, same as bid. Confirmed live 2026-07-27.
+  // Smart-placement squads ARE editable. E2025 was never an entity lock — it fires because the
+  // PUT body OMITS placement_v2, which Snapchat reads as an attempt to clear the field. Echo the
+  // squad's own placement_v2 back and budget, bid and status all apply normally.
   //
-  // Only `placement === "UNSUPPORTED"` is a verified lock signal. placement_v2 is echoed back by
-  // GET, so treating any truthy value as a lock risks misclassifying ordinary editable squads and
-  // silently converting their squad-level status toggles into campaign-wide ones.
+  // Confirmed live 2026-08-05 on the same squad seconds apart: PUT with placement_v2 echoed ->
+  // SUCCESS (budget 5,000,000 -> 6,000,000, verified by fresh GET); the identical PUT with that
+  // one field removed -> "E2025: Update is not supported for this entity : [AdSquad was created
+  // with placement v2, please update the placement in Ads Manager]". Re-confirmed for bid_micro
+  // and status on a squad with an explicit bid strategy. The `return_placement_v2=true` GET
+  // parameter that makes this possible came from Snapchat TAS via support; a plain GET does not
+  // return placement_v2 at all, which is why this went undiagnosed for so long.
+  //
+  // Order matters and is load-bearing:
+  //   1. Lock detection uses the PLAIN GET's legacy `placement` field. The flagged GET omits
+  //      `placement` entirely, so it cannot be used for this.
+  //   2. Only then fetch placement_v2, and only for a locked squad — see getAdSquadPlacementV2
+  //      for why calling it on an ordinary squad would corrupt that squad's placement.
   const isLocked = current.placement === "UNSUPPORTED";
-  if (isLocked && updates.status !== undefined) {
-    // The AND-gate cuts both ways. Pausing the campaign reliably stops delivery, but activating it
-    // only starts delivery when the squad's own (frozen) status is already ACTIVE — otherwise the
-    // campaign goes live and the squad still blocks it. Reporting success there would show
-    // "Active" in the dashboard for a squad that can never serve.
-    if (updates.status === "ACTIVE" && current.status !== "ACTIVE") {
-      throw new Error(
-        "placement_locked_squad_paused: This ad set's placements were customized, which freezes its own status at PAUSED. Activating its campaign cannot start delivery on its own — reactivate the ad set in Snapchat Ads Manager."
-      );
-    }
-    // Campaign status applies to EVERY squad under the campaign, so only take this path when the
-    // campaign wraps this squad alone. Otherwise it would silently pause or resume siblings the
-    // user never touched. App-created campaigns are 1:1, but squads created in Ads Manager are not.
-    const siblings = await getAdSquads(current.campaign_id);
-    if (siblings.length > 1) {
-      throw new Error(
-        `placement_locked_shared_campaign: This ad set's placements were customized, so its status can only be changed at the campaign level — but its campaign holds ${siblings.length} ad sets and that would change all of them. Change it in Snapchat Ads Manager instead.`
-      );
-    }
-    await updateCampaignStatus(current.campaign_id, updates.status, expectedAdAccountId);
-    // The squad's own fields are unchanged; only report the status we actually achieved.
-    if (updates.daily_budget_micro === undefined && updates.bid_micro === undefined) {
-      return { ...current, status: updates.status };
-    }
-    // A combined edit got its status applied above; budget/bid are still locked, so fall through
-    // to the squad PUT and let them fail loudly (E2025) rather than silently dropping them.
-  }
+  const placementV2 = isLocked ? await getAdSquadPlacementV2(adSquadId) : undefined;
 
   // Filter undefined values — spreading undefined overrides valid values from stripForPut,
   // causing bid_micro to disappear from the PUT body and triggering E2771 on non-auto-bid squads.
   const cleanUpdates = Object.fromEntries(
     Object.entries(updates).filter(([, v]) => v !== undefined)
   );
-  const merged = { ...stripForPut(current), ...cleanUpdates };
+  const merged: Record<string, unknown> = { ...stripForPut(current), ...cleanUpdates };
+  // Echo the locked squad's own placement_v2 verbatim. Omitting it is what triggers E2025.
+  if (placementV2) merged.placement_v2 = placementV2;
   const data = await snapFetch<{ adsquads: Array<SnapApiItem<SnapAdSquad>> }>(
     `/campaigns/${current.campaign_id}/adsquads`,
     {
