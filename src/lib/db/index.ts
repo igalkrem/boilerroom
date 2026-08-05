@@ -570,6 +570,38 @@ export async function getAllUserMetaTokens(): Promise<UserMetaTokenRow[]> {
 }
 
 /**
+ * The stored Meta token for ONE user, or null.
+ *
+ * Deliberately not `getAllUserMetaTokens().find(...)`: that decrypts every tenant's
+ * token to answer a question about one of them, which is both wasted work and a wider
+ * blast radius than the caller needs. A decryption failure here is that user's problem
+ * only, so it throws rather than being swallowed — the caller decides what to do.
+ */
+export async function getUserMetaTokenRow(
+  googleUserId: string
+): Promise<UserMetaTokenRow | null> {
+  const { rows } = await sql<{
+    google_user_id: string;
+    meta_user_id: string;
+    access_token_enc: string;
+    ad_account_ids: Array<{ id: string; currency: string; timezone_name: string }>;
+    expires_at: number;
+  }>`
+    SELECT google_user_id, meta_user_id, access_token_enc, ad_account_ids, expires_at
+    FROM user_meta_tokens WHERE google_user_id = ${googleUserId}
+  `;
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    google_user_id: r.google_user_id,
+    meta_user_id: r.meta_user_id,
+    access_token: decryptToken(r.access_token_enc),
+    ad_account_ids: r.ad_account_ids ?? [],
+    expires_at: Number(r.expires_at),
+  };
+}
+
+/**
  * The ad account id lists PERSISTED for one user, ids only — no token decryption.
  *
  * **NOT AN ALLOW-LIST.** `report_sync_log` and the stats tables are keyed by the
