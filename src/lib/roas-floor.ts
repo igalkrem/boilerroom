@@ -40,21 +40,34 @@ export function toRoasAverageFloor(ratio: number): number {
 }
 
 /**
- * Legacy presets stored `roasFloor` ALREADY MULTIPLIED by Predicto's divisor, because the
- * orchestrator applied no divisor and the value had to be pre-scaled by hand to work
- * there. Live data (2026-08-03) holds exactly two such presets, both named "WW": one at
- * 0.9 (a true ratio) and one at 90 (0.9 pre-scaled by 100).
+ * Cancels the divisor multiplication back out for a preset that was authored in its
+ * provider's own pixel scale rather than as a true ratio.
  *
- * Without this shim, adding the divisor multiplication would take the 90 preset to
- * 90 x 100 x 10000 = 90,000,000 — far worse than the bug being fixed. Normalising on read
- * instead means the code is correct against the data as it actually exists, rather than
- * depending on a manual migration having been run first.
+ * DO NOT DELETE THIS AS DEAD LEGACY CODE. An earlier version of this comment called the
+ * >= 10 values "legacy hand-scaled" and said to delete the function once none remained.
+ * That was wrong. A preset belongs to exactly one provider (`feedProviderId` is required,
+ * and CampaignCanvas only attaches a preset to an article of the same provider), so
+ * authoring in that provider's scale is the natural thing to do and the live data does
+ * exactly that. Measured 2026-08-05:
  *
- * The 100 is not arbitrary: it is the only divisor any provider uses, so it is the only
- * factor a hand-scaled preset can have been multiplied by. A real floor is a small ratio
- * (observed live: 0.45–1.17), so the threshold of 10 sits far from any legitimate value in
- * either direction. Once no stored preset holds a value above 10, delete this function and
- * call `toRoasAverageFloor(ratio * divisor)` directly.
+ *   WW / Vizymo   (divisor   1) -> roasFloor  0.9    both break-even for their own pixel
+ *   WW / Predicto (divisor 100) -> roasFloor 90
+ *
+ * Removing this shim would send Predicto's preset to 90 x 100 x 10000 = 90,000,000.
+ *
+ * KNOWN LANDMINE — correct only while 100 is the sole non-unity divisor. The value is
+ * scaled by the provider's divisor AND normalised back down by a hardcoded 100, so the two
+ * cancel only when they are equal. Authoring 0.9 x D in provider scale at any other D:
+ *
+ *   D =   10  -> authored   9, below the threshold, unnormalised -> 10x TOO HIGH
+ *   D = 1000  -> authored 900, normalised by 100                 -> 10x TOO HIGH
+ *   D =   10, floor 1.0 -> authored 10, trips the threshold      -> 10x TOO LOW
+ *
+ * The threshold makes the error discontinuous, so at one provider a 0.9 floor and a 1.0
+ * floor break in opposite directions, silently. Before adding a provider whose
+ * roasDisplayDivisor is neither 1 nor 100, resolve the double-scaling instead of extending
+ * this: either presets store a TRUE ratio and the divisor adapts it, or presets store
+ * provider-scale values and no divisor is applied — not both.
  */
 const LEGACY_PRESCALED_THRESHOLD = 10;
 const LEGACY_PRESCALE_FACTOR = 100;
@@ -66,13 +79,14 @@ function normalizePresetRoasFloor(ratio: number): number {
 /**
  * Ratio -> the value Meta stores, scaled for the provider whose pixel will measure it.
  *
- * A preset's `roasFloor` is a TRUE ratio (0.9 = break even) and is provider-independent;
- * the divisor adapts it to the target pixel's scale. The orchestrator previously called
- * `toRoasAverageFloor` with no divisor, so a preset was implicitly bound to one provider's
- * scale: launching the 0.9 preset at Predicto wrote 9000 against inflated values — no real
- * floor — which is how 9 ad sets ended up running at ~0.41x real ROAS. It also forced two
- * near-duplicate "WW" presets holding 0.9 and 90 for identical intent. With this, one
- * preset covers every provider and the mis-scaled combination cannot be expressed.
+ * The orchestrator previously called `toRoasAverageFloor` with no divisor, so launching a
+ * preset holding 0.9 at Predicto wrote 9000 against inflated values — no real floor — which
+ * is how 9 ad sets ended up running at ~0.41x real ROAS.
+ *
+ * The two live "WW" presets are NOT duplicates: presets are provider-scoped, so there is
+ * one per provider by design, each authored in its own provider's pixel scale (0.9 at
+ * Vizymo, 90 at Predicto). `normalizePresetRoasFloor` is what makes both land correctly
+ * here — see its comment, including the divisor landmine.
  *
  * Verified against the two live presets and both live providers:
  *

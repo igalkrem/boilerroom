@@ -67,7 +67,7 @@ export function KVHydrationProvider({ children }: { children: React.ReactNode })
     } else {
       hydrate(); // blocking — show spinner until KV hydrated
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // mount-only on purpose: hydration must run exactly once per page load
 
   if (!ready) {
     return (

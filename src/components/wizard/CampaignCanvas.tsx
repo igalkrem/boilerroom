@@ -682,7 +682,7 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
   // pitfalls listed there were each found the hard way.
   // eslint-disable-next-line react-hooks/refs
   const [nodes, setNodes] = useNodesState(buildNodes());
-  // eslint-disable-next-line react-hooks/refs
+  // No disable needed here: buildEdges() does not read nodePositionsRef.
   const [edges, setEdges] = useEdgesState(buildEdges());
 
   useEffect(() => { setNodes(buildNodes()); }, [buildNodes, setNodes]);
