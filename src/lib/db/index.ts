@@ -68,52 +68,80 @@ export const sql = new Proxy((() => {}) as unknown as SqlTag, {
 
 let migrated = false;
 
-// SEC-21 (INTENT) : serialise the DDL across concurrent cold starts.
+// SEC-21: survive concurrent cold starts running this DDL at the same time.
 //
-// `migrated` is per-instance, so a deploy that wakes N serverless instances at once
-// runs this whole block N times in parallel. "IF NOT EXISTS" is not atomic against a
-// concurrent identical CREATE — Postgres raises duplicate_table/duplicate_object, and
-// the ALTER TABLE RENAME above is outright racy: two instances can both observe
-// kingsroad_report present and visymo_report absent, and the loser's rename fails.
+// `migrated` is per-instance, so a deploy that wakes N serverless instances at once runs
+// this whole block N times in parallel. Every statement in migrations.sql is already
+// written `IF NOT EXISTS` (10 CREATE TABLE, 9 ADD COLUMN, 4 CREATE INDEX), but those are
+// check-then-act inside Postgres and NOT atomic against a concurrent identical statement:
+// both instances can see "absent" and both proceed, and the loser gets an error.
 //
-// ⚠️ THIS LOCK DOES NOT ACTUALLY WORK, AND NEVER HAS. Measured against the live database
-// on 2026-08-05, immediately after `SELECT pg_advisory_lock(key)` on this same `sql`:
+// THIS REPLACED A pg_advisory_lock THAT NEVER WORKED. Measured on the live database
+// 2026-08-05, immediately after `SELECT pg_advisory_lock(key)` on this same `sql`:
+// 0 locks visible in pg_locks, `pg_try_advisory_lock` returned true instantly, and
+// `pg_advisory_unlock` returned false. The driver sends every query over Neon's HTTP
+// endpoint, which does not preserve session state between statements, so a SESSION-level
+// advisory lock is discarded the moment the statement returns. It was equally inert under
+// `@vercel/postgres` (same HTTP path), so this was never protecting anything.
 //
-//   locks visible in pg_locks for the key : 0
-//   pg_try_advisory_lock(key)             : true   (acquired instantly — nothing blocks)
-//   pg_advisory_unlock(key)               : false  (there was nothing to release)
+// Tolerating the race is preferred over restoring a real lock. A working lock needs the
+// lock and the DDL to share one pinned session — a WebSocket `Client` rather than the HTTP
+// callable — which would add a `ws` dependency on Node 20 and, worse, a new way for
+// database initialisation to fail. Serialising N instances also makes the slowest cold
+// start wait on the others. The DDL is already idempotent by construction; the only gap
+// was the error on the losing instance, and that is what this closes. Net effect is the
+// same (one instance does the work, the rest find it done) with nothing new to break.
 //
-// The cause is the transport, not the SQL: this driver sends every query over Neon's HTTP
-// endpoint, which does not preserve session state between statements. `pg_advisory_lock`
-// is a SESSION-level lock, so it is discarded the moment the statement returns. It was
-// equally inert under `@vercel/postgres`, whose `sql` tag used the same HTTP path — the
-// 2026-08-05 driver migration did not cause this and does not change it.
+// SQLSTATEs measured against this database on 2026-08-05, not taken from documentation —
+// note that a duplicate CONSTRAINT reports 42P07 (duplicate_table), not the 42710 you
+// would expect, because a UNIQUE constraint creates a backing index:
 //
-// Kept rather than deleted because the hazard above is real and this records the intent;
-// the two round-trips are harmless. To make it real, the lock and the DDL must share one
-// pinned session — a `Client` from @neondatabase/serverless over WebSocket, not the HTTP
-// callable. That needs a `ws` constructor on Node 20 and belongs in its own change, not
-// bundled into a dependency swap. Until then, treat concurrent-deploy DDL as UNPROTECTED:
-// the realistic symptom is a logged duplicate_object error on one instance during a
-// deploy, not data loss.
+//   CREATE TABLE  on an existing table      -> 42P07 relation already exists
+//   ADD CONSTRAINT on an existing constraint -> 42P07 relation already exists
+//   ADD COLUMN    on an existing column      -> 42701 column already exists
 //
-// Plain number, not a BigInt literal: tsconfig targets below ES2020. Comfortably
-// inside Number.MAX_SAFE_INTEGER and inside Postgres bigint.
-const MIGRATION_LOCK_KEY = 8274512930001;
+// The list is deliberately narrow. 42P01 (undefined_table) and 42601 (syntax_error) were
+// confirmed to fall outside it: a typo or a statement referencing a missing table must
+// still fail loudly, because those are bugs in migrations.sql, not races.
+const CONCURRENT_DDL_SQLSTATES = new Set([
+  "42P07", // duplicate_table — covers tables, indexes and unique constraints
+  "42701", // duplicate_column
+  "42710", // duplicate_object — not observed above, included for types/other objects
+]);
+
+/** Exported for tests only — not part of the module's intended API. */
+export function isConcurrentDdlRace(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null | undefined)?.code;
+  return typeof code === "string" && CONCURRENT_DDL_SQLSTATES.has(code);
+}
+
+/**
+ * Runs one idempotent DDL step, treating "another instance already did this" as success.
+ *
+ * Only the SQLSTATEs above are swallowed; anything else rethrows. Do not widen this to a
+ * bare catch — that would hide real migration bugs until something failed much later, far
+ * from the cause.
+ */
+export async function applyIdempotentDdl(
+  label: string,
+  run: () => Promise<unknown>
+): Promise<void> {
+  try {
+    await run();
+  } catch (err) {
+    if (!isConcurrentDdlRace(err)) throw err;
+    const code = (err as { code: string }).code;
+    console.info(
+      `[db] ${label}: already applied by a concurrent instance (SQLSTATE ${code}) — continuing`
+    );
+  }
+}
 
 export async function runMigrations(): Promise<void> {
   if (migrated) return;
-
-  await sql`SELECT pg_advisory_lock(${String(MIGRATION_LOCK_KEY)}::bigint)`;
-  try {
-    await runMigrationsLocked();
-    migrated = true;
-  } finally {
-    // Kept for when the lock is made real (see MIGRATION_LOCK_KEY). Today this is a
-    // no-op that returns false, because there is no session lock to release — do not
-    // read its result as confirmation that anything was held.
-    await sql`SELECT pg_advisory_unlock(${String(MIGRATION_LOCK_KEY)}::bigint)`;
-  }
+  await runMigrationsLocked();
+  // Only after every step has either succeeded or been confirmed already-applied.
+  migrated = true;
 }
 
 async function runMigrationsLocked(): Promise<void> {
@@ -128,7 +156,13 @@ async function runMigrationsLocked(): Promise<void> {
   const hasOldReportTable = renameCheck.some((r) => r.table_name === "kingsroad_report");
   const hasNewReportTable = renameCheck.some((r) => r.table_name === "visymo_report");
   if (hasOldReportTable && !hasNewReportTable) {
-    await sql`ALTER TABLE IF EXISTS kingsroad_report RENAME TO visymo_report`;
+    // Unreachable against the current database — kingsroad_report no longer exists, so
+    // this branch cannot fire. Kept for environments restored from an older snapshot, and
+    // wrapped because two instances can both observe old-present/new-absent and race, in
+    // which case the loser's RENAME hits an existing visymo_report.
+    await applyIdempotentDdl("rename kingsroad_report -> visymo_report", () =>
+      sql`ALTER TABLE IF EXISTS kingsroad_report RENAME TO visymo_report`
+    );
   }
 
   const migrationsPath = path.join(process.cwd(), "src/lib/db/migrations.sql");
@@ -137,8 +171,13 @@ async function runMigrationsLocked(): Promise<void> {
     .split(";")
     .map((s) => s.trim())
     .filter(Boolean);
-  for (const stmt of statements) {
-    await sql.query(stmt);
+  for (const [i, stmt] of statements.entries()) {
+    // The label carries the statement's opening words rather than its index alone, so a
+    // rethrown error points at the offending line in migrations.sql without counting.
+    await applyIdempotentDdl(
+      `migrations.sql statement ${i + 1} (${stmt.slice(0, 60).replace(/\s+/g, " ")})`,
+      () => sql.query(stmt)
+    );
   }
 
   // Dedup + unique constraint — cannot use DO $$ ... $$ in the SQL file because
@@ -171,11 +210,16 @@ async function runMigrationsLocked(): Promise<void> {
         )
     `;
     await sql`ALTER TABLE feed_provider_channels DROP CONSTRAINT IF EXISTS feed_provider_channels_unique_channel`;
-    await sql`
-      ALTER TABLE feed_provider_channels
-        ADD CONSTRAINT feed_provider_channels_unique_channel_v2
-        UNIQUE (channel_id, feed_provider_id, google_user_id, traffic_source)
-    `;
+    // The one step here that is not already self-guarding: the pg_constraint check above
+    // is check-then-act, so two instances can both see it absent and both try to add it.
+    // The DELETE is a dedup that is harmless to repeat and the DROP has IF EXISTS.
+    await applyIdempotentDdl("add feed_provider_channels_unique_channel_v2", () =>
+      sql`
+        ALTER TABLE feed_provider_channels
+          ADD CONSTRAINT feed_provider_channels_unique_channel_v2
+          UNIQUE (channel_id, feed_provider_id, google_user_id, traffic_source)
+      `
+    );
   }
 }
 
