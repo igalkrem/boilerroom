@@ -673,7 +673,16 @@ export function CampaignCanvas({ onReview }: CampaignCanvasProps) {
     providerColorMap, articles, allAccounts, presets,
   ]);
 
+  // react-hooks/refs correctly notices that buildNodes() reads nodePositionsRef.current
+  // during render. That ref-read is DELIBERATE and load-bearing: subscribing to
+  // store.nodePositions instead is what caused React error #185 infinite loops here
+  // (setNodePositions → new store → buildNodes changes → setNodes → repeat). The ref lets
+  // buildNodes see current positions without depending on them. See the "React Flow
+  // render-loop hazards" section in docs/canvas-wizard.md before changing this — the four
+  // pitfalls listed there were each found the hard way.
+  // eslint-disable-next-line react-hooks/refs
   const [nodes, setNodes] = useNodesState(buildNodes());
+  // eslint-disable-next-line react-hooks/refs
   const [edges, setEdges] = useEdgesState(buildEdges());
 
   useEffect(() => { setNodes(buildNodes()); }, [buildNodes, setNodes]);

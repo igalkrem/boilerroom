@@ -145,10 +145,18 @@ export default function TrafficSourcesPage() {
     }
   };
 
-  // Days until Meta token expires (long-lived tokens last ~60 days, no refresh).
-  const metaTokenDaysLeft = metaExpiresAt
-    ? Math.ceil((metaExpiresAt - Date.now()) / (1000 * 60 * 60 * 24))
-    : null;
+  // Days until the Meta token expires (long-lived, ~60 days, no refresh mechanism).
+  //
+  // `now` is captured once on mount rather than read during render. Calling Date.now()
+  // in the render body is impure — it returns something different on every incidental
+  // re-render — and at day granularity that bought nothing. Wall-clock time is an
+  // external system, which is what effects are for.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => { setNow(Date.now()); }, []);
+  const metaTokenDaysLeft =
+    metaExpiresAt && now !== null
+      ? Math.ceil((metaExpiresAt - now) / (1000 * 60 * 60 * 24))
+      : null;
 
   const getConfig = (accountId: string, platform: "snap" | "meta" = "snap"): AdAccountConfig => {
     const existing = adAccountConfigs.find((c) => c.id === accountId);

@@ -19,12 +19,11 @@ interface Bucket {
 // Two collisions to preserve if you edit this:
 //   - "/api/reporting/sync" is a prefix of "/api/reporting/sync-status", and
 //     sync-status is a cheap UI poll from SyncStatusBar, not a sync trigger.
-//   - "/api/meta/debug/" must precede any general "/api/meta/" bucket.
+//   - If a diagnostic route under /api/…/debug/ is ever re-added, its bucket must
+//     precede any general bucket for the same family (e.g. "/api/meta/debug/" before
+//     any "/api/meta/"). The two 3-per-5-min diagnostic buckets were removed on
+//     2026-08-04 along with the routes themselves.
 const BUCKETS: Bucket[] = [
-  // Diagnostics create real ad objects. Also gated by ENABLE_DEBUG_ROUTES.
-  { prefix: "/api/debug/", limit: 3, windowMs: 300_000 },
-  { prefix: "/api/meta/debug/", limit: 3, windowMs: 300_000 },
-
   // Native FFmpeg on untrusted media, maxDuration 300.
   { prefix: "/api/silo/transcode", limit: 5, windowMs: 60_000 },
 

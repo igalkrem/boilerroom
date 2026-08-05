@@ -47,8 +47,7 @@ interface Outcome {
 }
 
 async function convert(
-  table: "user_snapchat_tokens" | "user_meta_tokens",
-  column: "refresh_token_enc" | "access_token_enc"
+  table: "user_snapchat_tokens" | "user_meta_tokens"
 ): Promise<Outcome> {
   const out: Outcome = { table, total: 0, alreadyV2: 0, converted: 0, failed: [] };
 
@@ -129,8 +128,8 @@ async function main() {
   console.log(WRITE ? "MODE: WRITE (will update rows)\n" : "MODE: DRY RUN (no writes)\n");
 
   const results = [
-    await convert("user_snapchat_tokens", "refresh_token_enc"),
-    await convert("user_meta_tokens", "access_token_enc"),
+    await convert("user_snapchat_tokens"),
+    await convert("user_meta_tokens"),
   ];
 
   let anyFailed = false;

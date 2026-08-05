@@ -37,11 +37,21 @@ export function ReviewAndPost({ onBack, onLaunch, launching, launchProgress }: R
   const articles = useMemo(() => loadArticles(), []);
   const presets = useMemo(() => loadPresets(), []);
 
-  // Stable per-row preview IDs — only regenerate when matrix length changes
+  // Placeholder IDs standing in for {{unique_id_4}}, which is only generated for real at
+  // launch time by generateUniqueId4(). Derived deterministically from the row index
+  // rather than Math.random(): calling an impure function during render is a React rules
+  // violation (the value can change on any incidental re-render), and this is exactly the
+  // case where that does not buy anything — the surrounding comment already wanted these
+  // STABLE. Same shape as the real thing, 4 chars of [A-Z0-9], just reproducible.
   const previewIds = useMemo(
-    () => matrix.map(() => Math.random().toString(36).slice(2, 6).toUpperCase()),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [matrix.length]
+    () =>
+      matrix.map((_, i) => {
+        // Multiply by a large odd constant so adjacent rows look unrelated rather than
+        // counting up, then take 4 base-36 digits.
+        const scrambled = ((i + 1) * 2_654_435_761) % 1_679_616; // 36^4
+        return scrambled.toString(36).toUpperCase().padStart(4, "0");
+      }),
+    [matrix]
   );
 
   const hasProviderTemplates = providers.some(

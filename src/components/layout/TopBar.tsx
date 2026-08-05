@@ -20,7 +20,11 @@ export function TopBar() {
 
   const handleDisconnect = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
-    window.location.href = "/login";
+    // Deliberately a hard navigation, not router.push: logging out must discard all
+    // client state (Zustand stores, the localStorage-hydrated caches), and a soft
+    // navigation preserves it. Resolved against the current origin because assigning a
+    // bare relative path is ambiguous enough that Next lints against it.
+    window.location.assign(new URL("/login", window.location.origin));
   };
 
   const initials = googleName

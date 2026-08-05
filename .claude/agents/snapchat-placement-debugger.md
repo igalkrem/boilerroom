@@ -32,15 +32,19 @@ Read the ground-truth code (do not trust docs):
 - `src/lib/submission-orchestrator.ts` (ad-squad payload builder, ~lines 276–310 — where `placement_v2` would be wired)
 - `src/lib/snapchat/adsquads.ts` (`ADSQUAD_PUT_ALLOWED_FIELDS`, `stripForPut`, `updateAdSquad`, `setAdSquadPlacement`, `createAdSquads`)
 - `src/types/snapchat.ts` (`placement_v2` type + comments)
-- `src/app/api/debug/placement-probe/route.ts` (the live experiment) and `src/app/dashboard/placement-probe/page.tsx` (its trigger UI)
+- **The probe is GONE.** `src/app/api/debug/placement-probe/route.ts` and `src/app/dashboard/placement-probe/page.tsx` were deleted on 2026-08-04, after the questions they existed to answer had been answered. Restore them from git history (`git log --all -- src/app/api/debug/placement-probe`) only if a genuinely NEW placement question arises that the recorded truth table below cannot answer.
 - `src/components/presets/PresetForm.tsx` `PLACEMENT_OPTIONS` + `placementConfig` enums in `src/types/preset.ts`, `src/types/wizard.ts`, `src/lib/validations/adsquad.schema.ts`
 - The `placement_v2` bullets in `.claude/docs/snapchat-api.md`
 
-### Phase 2 — Pull live evidence
-- Ask the user to run the probe (dashboard → **Smart Placement Probe** page → pick a test account → Run), OR confirm they already did.
-- Pull the probe report from Vercel: `mcp__vercel__get_runtime_logs` with `query: "placement-probe"`, scoped to the latest deployment (`mcp__vercel__list_deployments` → newest production id) and a narrow `since` window (logs are purged fast — use the freshest deploy). Also grep for `[createAdSquads] payload` / `[updateAdSquad] Snapchat ERROR` / `E2025`.
-- If the Vercel log tools are not directly available, load them via ToolSearch (`select:mcp__vercel__get_runtime_logs,...`). Project = `prj_mZCm5K3NtzY7e1ovs6PzYocoLy4a`, team = `team_bsWmg48wjhHqbCtPwDKEtlk4` (or read `.vercel/project.json`).
-- If no probe evidence exists yet, STOP and instruct the user to run it — do not guess.
+### Phase 2 — Start from the recorded evidence, not a new experiment
+**The truth table is already established and is in `.claude/docs/snapchat-api.md` under the `placement_v2` PROVEN-behaviour bullets** (live probe, ad account `082c59b3…`, 2026-07-06). It covers: omit → `SNAP_ADS`, editable · `AUTOMATIC` → creates then permanently locks (E2025) · `CONTENT` → rejected at create (E39400) · `CUSTOM` → needs `CHAT_FEED` (E21011) and also locks · editing placements in Ads Manager also locks. Read that first; most incoming questions are answered there without touching a live account.
+
+For a **production** placement problem (a squad that froze, an unexpected `E2025`), pull live evidence instead of re-running an experiment:
+- `mcp__vercel__get_runtime_logs`, grepping `[createAdSquads] payload` / `[updateAdSquad] Snapchat ERROR` / `E2025`, scoped to the newest production deployment (`mcp__vercel__list_deployments`) with a narrow `since` window — logs are purged fast.
+- If the Vercel log tools are not loaded, get them via ToolSearch (`select:mcp__vercel__get_runtime_logs,...`). Project = `prj_mZCm5K3NtzY7e1ovs6PzYocoLy4a`, team = `team_bsWmg48wjhHqbCtPwDKEtlk4` (or read `.vercel/project.json`).
+- Read the squad's current state directly: `GET /api/snapchat/adsquads?adAccountId=…&adSquadId=…`. A locked squad reports `placement === "UNSUPPORTED"`, which is the **only** signal `updateAdSquad` uses to detect the lock — do not widen it to `Boolean(placement_v2)`, which GET echoes back for ordinary editable squads too.
+
+Only if a genuinely new variant needs testing: restore the probe from git history, run it, then delete it again. **Do not guess at placement behaviour** — every line in that truth table cost a real experiment.
 
 ### Phase 3 — Build the truth table
 For each variant (A omit / B AUTOMATIC / C CONTENT / D CUSTOM / E AUTOMATIC+PIXEL_PURCHASE), record: **created?** × **resolved placement (from the GET)** × **editable after create? (budget PUT succeeded or E2025)**. Note any create-time error codes (E21011 CHAT_FEED-mandatory, E2840, etc.).

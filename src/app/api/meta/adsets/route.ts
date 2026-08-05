@@ -74,7 +74,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "meta_not_connected" }, { status: 403 });
   }
 
-  // Single ad set by ID (used by the meta-debug "Inspect Ad Set" tool).
+  // Single ad set by ID. Its only in-app consumer was the meta-debug page, deleted
+  // 2026-08-04; kept because it is the documented way to inspect a live ad set from the
+  // browser when diagnosing a payload (see docs/meta-api.md).
   // The id alone carries no account, so fetch first and then authorize against the
   // session's allow-list. Note account_id comes back BARE while
   // metaAllowedAdAccountIds stores the act_ prefix.
